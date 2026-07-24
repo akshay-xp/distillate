@@ -2,13 +2,53 @@
   "name": "siftr",
   "version": "0.0.0",
   "description": "Modern approximate-membership toolkit for JavaScript. The next-generation successor to Bloom filter packages.",
-  "type": "module",
+  "keywords": [
+    "bloom-filter",
+    "cuckoo-filter",
+    "binary-fuse",
+    "xor-filter",
+    "amq",
+    "approximate-membership",
+    "probabilistic",
+    "set",
+    "filter"
+  ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akshay-xp/siftr.git"
+  },
+  "homepage": "https://github.com/akshay-xp/siftr#readme",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts"
+      },
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "tsdown"
+    "build": "tsdown",
+    "publint": "publint --strict",
+    "check": "publint --strict"
   },
   "devDependencies": {
+    "publint": "^0.3.22",
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
