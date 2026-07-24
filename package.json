@@ -1,0 +1,14 @@
+{
+  "name": "siftr",
+  "version": "0.0.0",
+  "description": "Modern approximate-membership toolkit for JavaScript. The next-generation successor to Bloom filter packages.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsdown"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.14",
+    "typescript": "^7.0.2"
+  }
+}
