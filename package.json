@@ -41,9 +41,11 @@
   "scripts": {
     "build": "tsdown",
     "publint": "publint --strict",
-    "check": "publint --strict"
+    "check": "publint --strict && attw --pack .",
+    "attw": "attw --pack ."
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
     "publint": "^0.3.22",
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2"
