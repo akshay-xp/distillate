@@ -3,7 +3,9 @@
 import { VERSION } from "../dist/index.js";
 
 if (typeof VERSION !== "string") {
-  console.error(`smoke: expected VERSION to be a string, got ${typeof VERSION}`);
+  console.error(
+    `smoke: expected VERSION to be a string, got ${typeof VERSION}`,
+  );
   process.exit(1);
 }
 

@@ -27,7 +27,10 @@ Pure-JS MurmurHash3_x64_128, single pass, sliced into two 64-bit lanes (h1, h2) 
 
 ```ts
 interface Hasher {
-  hash64(key: Uint8Array, seed: number): { h1: number, h2: number, hi1: number, hi2: number };
+  hash64(
+    key: Uint8Array,
+    seed: number,
+  ): { h1: number; h2: number; hi1: number; hi2: number };
 }
 ```
 
