@@ -13,3 +13,14 @@ test("normalize returns a Uint8Array view's bytes without over-reading", () => {
   const view = buf.subarray(1, 4);
   expect(normalize(view)).toEqual(new Uint8Array([1, 2, 3]));
 });
+
+test("normalize wraps an ArrayBuffer and matches other input forms", () => {
+  const ab = Uint8Array.of(65, 66).buffer;
+  expect(normalize(ab)).toEqual(new Uint8Array([65, 66]));
+
+  const fromString = normalize("AB");
+  const fromArray = normalize(Uint8Array.of(65, 66));
+  const fromBuffer = normalize(ab);
+  expect(fromString).toEqual(fromArray);
+  expect(fromArray).toEqual(fromBuffer);
+});
