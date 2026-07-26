@@ -1,5 +1,3 @@
-import fc from "fast-check";
-
 import type { BytesLike } from "../../src/core/bytes.js";
 
 export interface Membership {
@@ -7,9 +5,15 @@ export interface Membership {
   has(key: BytesLike): boolean;
 }
 
-/** Deterministic key sample for a given seed. */
+/**
+ * Deterministic sample of `count` distinct keys for a given seed. Distinct
+ * within a seed (so a filter loads to exactly `count`) and disjoint across
+ * seeds (distinct seeds share no keys), which is what FPR measurement needs.
+ */
 export function sampleStrings(seed: number, count: number): string[] {
-  return fc.sample(fc.string(), { seed, numRuns: count });
+  const out = new Array<string>(count);
+  for (let i = 0; i < count; i++) out[i] = `${String(seed)}:${String(i)}`;
+  return out;
 }
 
 /** Observed false-positive rate: fraction of `absent` keys the target reports present. */
