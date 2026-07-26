@@ -30,6 +30,14 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./bloom": {
+      "types": {
+        "import": "./dist/bloom/index.d.ts",
+        "require": "./dist/bloom/index.d.cts"
+      },
+      "import": "./dist/bloom/index.js",
+      "require": "./dist/bloom/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",
@@ -41,8 +49,8 @@
   "scripts": {
     "build": "tsdown",
     "publint": "publint --strict",
-    "check": "publint --strict && attw --pack .",
-    "attw": "attw --pack .",
+    "check": "publint --strict && attw --pack . --profile node16",
+    "attw": "attw --pack . --profile node16",
     "test": "vitest run",
     "bench": "tsx bench/core.bench.ts",
     "typecheck": "tsc --noEmit",
