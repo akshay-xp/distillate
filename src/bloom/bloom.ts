@@ -6,6 +6,10 @@ import { optimal } from "../core/sizing.js";
 
 const TYPE = 1;
 
+export class BloomParamMismatchError extends Error {
+  override readonly name = "BloomParamMismatchError";
+}
+
 export interface BloomParams {
   m: number;
   k: number;
@@ -61,6 +65,15 @@ export class BloomFilter {
   }
 
   union(other: BloomFilter): BloomFilter {
+    if (
+      this.#m !== other.#m ||
+      this.#k !== other.#k ||
+      this.#seed !== other.#seed
+    ) {
+      throw new BloomParamMismatchError(
+        "cannot union Bloom filters whose parameters do not match",
+      );
+    }
     const a = this.#bits.bytes;
     const b = other.#bits.bytes;
     const merged = new Uint8Array(a.length);

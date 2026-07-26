@@ -135,3 +135,22 @@ test("union has every key from either input (property)", () => {
     ),
   );
 });
+
+test("union rejects mismatched params with a typed error", () => {
+  const base = new BloomFilter({ m: 64, k: 7, seed: 0 });
+
+  let caught: Error | undefined;
+  try {
+    base.union(new BloomFilter({ m: 128, k: 7, seed: 0 }));
+  } catch (e) {
+    caught = e as Error;
+  }
+  expect(caught?.name).toBe("BloomParamMismatchError");
+
+  expect(() => base.union(new BloomFilter({ m: 64, k: 5, seed: 0 }))).toThrow(
+    /do not match/i,
+  );
+  expect(() => base.union(new BloomFilter({ m: 64, k: 7, seed: 1 }))).toThrow(
+    /do not match/i,
+  );
+});
