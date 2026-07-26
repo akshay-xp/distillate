@@ -14,9 +14,12 @@ export class BloomFilter {
   readonly #m: number;
   readonly #k: number;
   readonly #seed: number;
+  #n: number;
 
   static create(n: number, epsilon: number): BloomFilter {
-    return new BloomFilter(optimal(n, epsilon));
+    const f = new BloomFilter(optimal(n, epsilon));
+    f.#n = n;
+    return f;
   }
 
   constructor({ m, k, seed = 0 }: BloomParams) {
@@ -24,6 +27,12 @@ export class BloomFilter {
     this.#m = m;
     this.#k = k;
     this.#seed = seed;
+    this.#n = Math.round((m * Math.LN2) / k);
+  }
+
+  /** Analytic design bits-per-key `m / n`. */
+  get bitsPerKey(): number {
+    return this.#m / this.#n;
   }
 
   add(key: BytesLike): void {

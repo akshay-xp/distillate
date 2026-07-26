@@ -1,6 +1,7 @@
 import fc from "fast-check";
 import { expect, test } from "vitest";
 
+import { optimal } from "../../src/core/sizing.js";
 import { BloomFilter } from "../../src/bloom/bloom.js";
 import { measureFpr, sampleStrings } from "../helpers/fpr.js";
 
@@ -42,4 +43,12 @@ test("create(n, epsilon) sizes so observed FPR tracks epsilon", () => {
     const obs = measureFpr(f, present, absent);
     expect(Math.abs(obs - epsilon) / epsilon).toBeLessThan(0.4);
   }
+});
+
+test("bitsPerKey reports analytic m / n", () => {
+  const raw = new BloomFilter({ m: 1000, k: 7 });
+  expect(raw.bitsPerKey).toBe(1000 / Math.round((1000 * Math.LN2) / 7));
+
+  const { m } = optimal(100000, 0.01);
+  expect(BloomFilter.create(100000, 0.01).bitsPerKey).toBe(m / 100000);
 });
