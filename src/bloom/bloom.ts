@@ -1,7 +1,7 @@
 import { BitSet } from "../core/bitset.js";
 import type { BytesLike } from "../core/bytes.js";
 import { probes } from "../core/hasher.js";
-import { FORMAT_VERSION, writeHeader } from "../core/serialize.js";
+import { FORMAT_VERSION, readHeader, writeHeader } from "../core/serialize.js";
 import { optimal } from "../core/sizing.js";
 
 const TYPE = 1;
@@ -22,6 +22,17 @@ export class BloomFilter {
   static create(n: number, epsilon: number): BloomFilter {
     const f = new BloomFilter(optimal(n, epsilon));
     f.#n = n;
+    return f;
+  }
+
+  static fromBytes(bytes: Uint8Array): BloomFilter {
+    const { body } = readHeader(bytes);
+    const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
+    const m = dv.getUint32(0, true);
+    const k = body[4] ?? 0;
+    const seed = dv.getUint32(5, true);
+    const f = new BloomFilter({ m, k, seed });
+    f.#bits.bytes.set(body.subarray(9));
     return f;
   }
 

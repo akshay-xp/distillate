@@ -1,7 +1,7 @@
 import fc from "fast-check";
 import { expect, test } from "vitest";
 
-import { readHeader } from "../../src/core/serialize.js";
+import { readHeader, SerializationError } from "../../src/core/serialize.js";
 import { optimal } from "../../src/core/sizing.js";
 import { BloomFilter } from "../../src/bloom/bloom.js";
 import { measureFpr, sampleStrings } from "../helpers/fpr.js";
@@ -68,4 +68,37 @@ test("toBytes emits an AMQF type-1 frame with LE params + payload", () => {
   expect(body[4]).toBe(3);
   expect(dv.getUint32(5, true)).toBe(7);
   expect(body).toHaveLength(9 + Math.ceil(64 / 8));
+});
+
+test("fromBytes round-trips params and membership (property)", () => {
+  fc.assert(
+    fc.property(fc.uniqueArray(fc.string()), (keys) => {
+      const f = new BloomFilter({ m: 1 << 12, k: 7 });
+      for (const key of keys) f.add(key);
+      const g = BloomFilter.fromBytes(f.toBytes());
+      for (const key of keys) expect(g.has(key)).toBe(true);
+      expect(g.toBytes()).toEqual(f.toBytes());
+    }),
+  );
+});
+
+test("fromBytes preserves membership answers for absent keys", () => {
+  const f = new BloomFilter({ m: 1 << 12, k: 7, seed: 3 });
+  for (const key of sampleStrings(1, 200)) f.add(key);
+  const g = BloomFilter.fromBytes(f.toBytes());
+  for (const key of sampleStrings(2, 50)) expect(g.has(key)).toBe(f.has(key));
+});
+
+test("fromBytes throws SerializationError on corrupt or foreign input", () => {
+  expect(() => BloomFilter.fromBytes(new Uint8Array(3))).toThrow(
+    SerializationError,
+  );
+
+  const badMagic = new BloomFilter({ m: 64, k: 3 }).toBytes();
+  badMagic[0] ^= 0xff;
+  expect(() => BloomFilter.fromBytes(badMagic)).toThrow(SerializationError);
+
+  const badCrc = new BloomFilter({ m: 64, k: 3 }).toBytes();
+  badCrc[9] ^= 0xff;
+  expect(() => BloomFilter.fromBytes(badCrc)).toThrow(SerializationError);
 });
