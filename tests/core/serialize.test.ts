@@ -2,8 +2,13 @@ import fc from "fast-check";
 import { expect, test } from "vitest";
 
 import {
+  BadMagicError,
+  ChecksumError,
   FORMAT_VERSION,
   readHeader,
+  SerializationError,
+  TruncatedError,
+  UnknownVersionError,
   writeHeader,
 } from "../../src/core/serialize.js";
 
@@ -37,4 +42,51 @@ test("readHeader(writeHeader(...)) is identity (property)", () => {
       },
     ),
   );
+});
+
+const validFrame = (): Uint8Array =>
+  writeHeader({ version: 1, type: 5, flags: 3 }, Uint8Array.of(1, 2, 3));
+
+test("readHeader throws TruncatedError on too-short input", () => {
+  expect(() => readHeader(new Uint8Array(5))).toThrow(TruncatedError);
+});
+
+test("readHeader throws BadMagicError on wrong magic", () => {
+  const f = validFrame();
+  f[0] ^= 0xff;
+  expect(() => readHeader(f)).toThrow(BadMagicError);
+});
+
+test("readHeader throws UnknownVersionError on unsupported version", () => {
+  const f = writeHeader({ version: 2, type: 0, flags: 0 }, new Uint8Array(0));
+  expect(() => readHeader(f)).toThrow(UnknownVersionError);
+});
+
+test("readHeader throws ChecksumError on a corrupted body", () => {
+  const f = validFrame();
+  f[8] ^= 0xff;
+  expect(() => readHeader(f)).toThrow(ChecksumError);
+});
+
+test("readHeader never throws a non-typed error (fuzz)", () => {
+  fc.assert(
+    fc.property(fc.uint8Array({ maxLength: 80 }), (bytes) => {
+      try {
+        readHeader(bytes);
+      } catch (err) {
+        expect(err).toBeInstanceOf(SerializationError);
+      }
+    }),
+  );
+});
+
+test("readHeader handles every truncated prefix of a valid frame (fuzz)", () => {
+  const f = validFrame();
+  for (let len = 0; len <= f.length; len++) {
+    try {
+      readHeader(f.subarray(0, len));
+    } catch (err) {
+      expect(err).toBeInstanceOf(SerializationError);
+    }
+  }
 });
