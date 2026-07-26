@@ -33,3 +33,22 @@ test("indexing is unsigned for indices >= 2^31", () => {
   expect(bs.get(2 ** 31 + 3)).toBe(true);
   expect(bs.get(2 ** 31 + 2)).toBe(false);
 });
+
+test("count returns the number of set bits", () => {
+  const bs = new BitSet(64);
+  expect(bs.count()).toBe(0);
+  bs.set(1);
+  bs.set(1);
+  bs.set(63);
+  expect(bs.count()).toBe(2);
+});
+
+test("count equals the number of distinct set indices (property)", () => {
+  fc.assert(
+    fc.property(fc.uniqueArray(fc.nat({ max: 2 ** 20 - 1 })), (indices) => {
+      const bs = new BitSet(2 ** 20);
+      for (const i of indices) bs.set(i);
+      expect(bs.count()).toBe(indices.length);
+    }),
+  );
+});
