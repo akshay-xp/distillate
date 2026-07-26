@@ -21,10 +21,12 @@ Space is stated as overhead over the information-theoretic floor of `log2(1/epsi
 One cache line per lookup vs k cache misses for classic. Space penalty ~20-30% over classic, bought back in speed. SIMD-friendly for a later WASM path.
 Putze, Sanders, Singler, JEA 2009.
 
-### Classic Bloom (mutable, migration)
+### Classic Bloom (mutable, migration): Shipped
 
 1.44x floor (+44% overhead), fixed forever. Ubiquitous, zero build risk, mergeable at equal params. Kept for familiarity and the migration path.
 Bloom, CACM 1970.
+
+Shipped at `siftr/bloom`: `BloomFilter.create(n, epsilon)` (or `new BloomFilter({ m, k, seed })`), `add` / `has`, `union` (OR-merge of equal-param filters), `toBytes` / `fromBytes` (AMQF), `bitsPerKey`.
 
 ### Counting + Scalable Bloom (mutable, migration)
 
