@@ -1,6 +1,7 @@
 import { BitSet } from "../core/bitset.js";
 import type { BytesLike } from "../core/bytes.js";
 import { probes } from "../core/hasher.js";
+import { optimal } from "../core/sizing.js";
 
 export interface BloomParams {
   m: number;
@@ -13,6 +14,10 @@ export class BloomFilter {
   readonly #m: number;
   readonly #k: number;
   readonly #seed: number;
+
+  static create(n: number, epsilon: number): BloomFilter {
+    return new BloomFilter(optimal(n, epsilon));
+  }
 
   constructor({ m, k, seed = 0 }: BloomParams) {
     this.#bits = new BitSet(m);
