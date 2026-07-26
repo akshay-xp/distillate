@@ -251,19 +251,29 @@ function reduce(x: number, range: number): number {
  * Kirsch-Mitzenmacher enhanced double hashing `g_i = h1 + i*h2 + i^2`
  * (the RocksDB `+i^2` fix), reduced into range with Lemire multiply-shift.
  */
+export function probeInto(
+  key: BytesLike,
+  count: number,
+  range: number,
+  seed: number,
+  out: Uint32Array,
+): void {
+  const { h1lo, h1hi, h2lo, h2hi } = hash128(normalize(key), seed);
+  const a = (h1lo ^ h1hi) >>> 0;
+  const b = (h2lo ^ h2hi) >>> 0;
+  for (let i = 0; i < count; i++) {
+    const x = (a + Math.imul(i, b) + i * i) >>> 0;
+    out[i] = reduce(x, range);
+  }
+}
+
 export function probes(
   key: BytesLike,
   count: number,
   range: number,
   seed = 0,
 ): Uint32Array {
-  const { h1lo, h1hi, h2lo, h2hi } = hash128(normalize(key), seed);
-  const a = (h1lo ^ h1hi) >>> 0;
-  const b = (h2lo ^ h2hi) >>> 0;
   const out = new Uint32Array(count);
-  for (let i = 0; i < count; i++) {
-    const x = (a + Math.imul(i, b) + i * i) >>> 0;
-    out[i] = reduce(x, range);
-  }
+  probeInto(key, count, range, seed, out);
   return out;
 }

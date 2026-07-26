@@ -1,6 +1,7 @@
+import fc from "fast-check";
 import { expect, test } from "vitest";
 
-import { hash128, probes } from "../../src/core/hasher.js";
+import { hash128, probeInto, probes } from "../../src/core/hasher.js";
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
@@ -92,6 +93,22 @@ test("probes spans the full range across keys", () => {
   }
   expect(lowSeen).toBe(true);
   expect(highSeen).toBe(true);
+});
+
+test("probeInto fills a caller array identically to probes (property)", () => {
+  fc.assert(
+    fc.property(
+      fc.string(),
+      fc.integer({ min: 1, max: 16 }),
+      fc.integer({ min: 1, max: 1 << 24 }),
+      fc.integer({ min: 0, max: 0xffffffff }),
+      (key, count, range, seed) => {
+        const out = new Uint32Array(count);
+        probeInto(key, count, range, seed, out);
+        expect(out).toEqual(probes(key, count, range, seed));
+      },
+    ),
+  );
 });
 
 const patternBytes = (n: number): Uint8Array =>
