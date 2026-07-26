@@ -1,6 +1,6 @@
 import { BitSet } from "../core/bitset.js";
 import type { BytesLike } from "../core/bytes.js";
-import { probes } from "../core/hasher.js";
+import { probeInto } from "../core/hasher.js";
 import { FORMAT_VERSION, readHeader, writeHeader } from "../core/serialize.js";
 import { optimal } from "../core/sizing.js";
 
@@ -21,6 +21,7 @@ export class BloomFilter {
   readonly #m: number;
   readonly #k: number;
   readonly #seed: number;
+  readonly #scratch: Uint32Array;
   #n: number;
 
   static create(n: number, epsilon: number): BloomFilter {
@@ -45,6 +46,7 @@ export class BloomFilter {
     this.#m = m;
     this.#k = k;
     this.#seed = seed;
+    this.#scratch = new Uint32Array(k);
     this.#n = Math.round((m * Math.LN2) / k);
   }
 
@@ -84,13 +86,14 @@ export class BloomFilter {
   }
 
   add(key: BytesLike): void {
-    for (const i of probes(key, this.#k, this.#m, this.#seed))
-      this.#bits.set(i);
+    probeInto(key, this.#k, this.#m, this.#seed, this.#scratch);
+    for (let i = 0; i < this.#k; i++) this.#bits.set(this.#scratch[i] ?? 0);
   }
 
   has(key: BytesLike): boolean {
-    for (const i of probes(key, this.#k, this.#m, this.#seed)) {
-      if (!this.#bits.get(i)) return false;
+    probeInto(key, this.#k, this.#m, this.#seed, this.#scratch);
+    for (let i = 0; i < this.#k; i++) {
+      if (!this.#bits.get(this.#scratch[i] ?? 0)) return false;
     }
     return true;
   }
