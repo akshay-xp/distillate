@@ -1,3 +1,5 @@
+import { normalize, type BytesLike } from "./bytes.js";
+
 export interface Hash128 {
   h1lo: number;
   h1hi: number;
@@ -185,4 +187,41 @@ export function hash128(bytes: Uint8Array, seed = 0): Hash128 {
     h2lo: h2.lo >>> 0,
     h2hi: h2.hi >>> 0,
   };
+}
+
+// Lemire multiply-shift: map x in [0, 2^32) to [0, range) via the high 32 bits
+// of x * range, computed with 16-bit partial products (no 64-bit overflow).
+function reduce(x: number, range: number): number {
+  const xlo = x & 0xffff;
+  const xhi = x >>> 16;
+  const rlo = range & 0xffff;
+  const rhi = range >>> 16;
+  const lolo = xlo * rlo;
+  const lohi = xlo * rhi;
+  const hilo = xhi * rlo;
+  const hihi = xhi * rhi;
+  const carry = (lolo >>> 16) + (lohi & 0xffff) + (hilo & 0xffff);
+  return (hihi + (lohi >>> 16) + (hilo >>> 16) + (carry >>> 16)) >>> 0;
+}
+
+/**
+ * Derive `count` bucket indices in `[0, range)` from a key using
+ * Kirsch-Mitzenmacher enhanced double hashing `g_i = h1 + i*h2 + i^2`
+ * (the RocksDB `+i^2` fix), reduced into range with Lemire multiply-shift.
+ */
+export function probes(
+  key: BytesLike,
+  count: number,
+  range: number,
+  seed = 0,
+): Uint32Array {
+  const { h1lo, h1hi, h2lo, h2hi } = hash128(normalize(key), seed);
+  const a = (h1lo ^ h1hi) >>> 0;
+  const b = (h2lo ^ h2hi) >>> 0;
+  const out = new Uint32Array(count);
+  for (let i = 0; i < count; i++) {
+    const x = (a + Math.imul(i, b) + i * i) >>> 0;
+    out[i] = reduce(x, range);
+  }
+  return out;
 }
