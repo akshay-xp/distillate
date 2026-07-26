@@ -20,6 +20,7 @@ Kirsch and Mitzenmacher, "Less Hashing, Same Performance" (2006); RocksDB issue 
 Pure-JS MurmurHash3_x64_128, single pass, sliced into two 64-bit lanes (h1, h2) or four 32-bit lanes. Zero deps, synchronous, universal. Chosen because AMQ keys are usually short (IDs, URLs, tokens) where pure-JS beats the WASM call-boundary + marshaling overhead.
 
 - Carry 64-bit as two 32-bit lanes (hi/lo as Numbers). Never `BigInt` in hot paths (heap-allocated, ~10x slower).
+- `hash128` is allocation-free: flat number locals (no lane objects), inline little-endian byte reads (no `DataView`), lane helpers write to reused module-scope scratch registers. Zero per-call heap allocation beyond the returned lanes, so steady-state hashing adds no GC pressure. The 64-bit-lane arithmetic (16-bit partial-product multiply) is the cost floor, not allocation.
 - All lane math unsigned: `>>> 0`. This is the #1 source of JS hash-port bugs.
 - Hash once, reuse across all probes. (Incumbent recomputes per op; see bloom-filters issue #60.)
 
