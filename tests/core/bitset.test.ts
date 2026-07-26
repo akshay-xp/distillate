@@ -67,3 +67,18 @@ test("bytes exposes the backing array reflecting set bits", () => {
   expect(bs.bytes[0]).toBe(0b0000_0001);
   expect(bs.bytes[1]).toBe(0b0000_0010);
 });
+
+test("fromBytes reconstructs an identical, decoupled BitSet", () => {
+  const a = new BitSet(64);
+  for (const i of [0, 7, 8, 40, 63]) a.set(i);
+
+  const b = BitSet.fromBytes(a.bytes);
+  for (let i = 0; i < 64; i++) expect(b.get(i)).toBe(a.get(i));
+  expect(b.count()).toBe(a.count());
+
+  expect(b.bytes).toEqual(a.bytes);
+  expect(b.bytes).not.toBe(a.bytes);
+
+  a.set(1);
+  expect(b.get(1)).toBe(false);
+});

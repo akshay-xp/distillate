@@ -7,6 +7,12 @@ const MAX_BITS = 2 ** 32;
 export class BitSet {
   readonly #bits: Uint8Array;
 
+  static fromBytes(bytes: Uint8Array): BitSet {
+    const bs = new BitSet(bytes.length * 8);
+    bs.#bits.set(bytes);
+    return bs;
+  }
+
   constructor(nbits: number) {
     if (nbits > MAX_BITS) {
       throw new BitSetRangeError(
