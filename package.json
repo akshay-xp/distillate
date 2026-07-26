@@ -48,13 +48,23 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix --no-warn-ignored",
+      "prettier --write"
+    ],
+    "*.{js,mjs,cjs,json,md,yml,yaml}": "prettier --write"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
     "@eslint/js": "^10.0.1",
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.2.0",
     "prettier": "^3.9.6",
     "publint": "^0.3.22",
     "tsdown": "^0.22.14",
