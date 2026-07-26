@@ -102,3 +102,36 @@ test("fromBytes throws SerializationError on corrupt or foreign input", () => {
   badCrc[9] ^= 0xff;
   expect(() => BloomFilter.fromBytes(badCrc)).toThrow(SerializationError);
 });
+
+test("union merges two filters without mutating inputs", () => {
+  const a = new BloomFilter({ m: 1 << 12, k: 7 });
+  const b = new BloomFilter({ m: 1 << 12, k: 7 });
+  a.add("x");
+  b.add("y");
+  const snapA = a.toBytes();
+  const snapB = b.toBytes();
+
+  const u = a.union(b);
+  expect(u.has("x")).toBe(true);
+  expect(u.has("y")).toBe(true);
+  expect(u).not.toBe(a);
+  expect(a.toBytes()).toEqual(snapA);
+  expect(b.toBytes()).toEqual(snapB);
+});
+
+test("union has every key from either input (property)", () => {
+  fc.assert(
+    fc.property(
+      fc.uniqueArray(fc.string()),
+      fc.uniqueArray(fc.string()),
+      (ka, kb) => {
+        const a = new BloomFilter({ m: 1 << 13, k: 7 });
+        const b = new BloomFilter({ m: 1 << 13, k: 7 });
+        for (const key of ka) a.add(key);
+        for (const key of kb) b.add(key);
+        const u = a.union(b);
+        for (const key of [...ka, ...kb]) expect(u.has(key)).toBe(true);
+      },
+    ),
+  );
+});

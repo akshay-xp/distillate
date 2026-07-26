@@ -60,6 +60,16 @@ export class BloomFilter {
     return writeHeader({ version: FORMAT_VERSION, type: TYPE, flags: 0 }, body);
   }
 
+  union(other: BloomFilter): BloomFilter {
+    const a = this.#bits.bytes;
+    const b = other.#bits.bytes;
+    const merged = new Uint8Array(a.length);
+    for (let i = 0; i < a.length; i++) merged[i] = (a[i] ?? 0) | (b[i] ?? 0);
+    const r = new BloomFilter({ m: this.#m, k: this.#k, seed: this.#seed });
+    r.#bits.bytes.set(merged);
+    return r;
+  }
+
   add(key: BytesLike): void {
     for (const i of probes(key, this.#k, this.#m, this.#seed))
       this.#bits.set(i);
