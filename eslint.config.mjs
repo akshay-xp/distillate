@@ -3,7 +3,16 @@ import prettier from "eslint-config-prettier";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "coverage", "node_modules", "**/*.config.*", "scripts"] },
+  {
+    ignores: [
+      "dist",
+      "coverage",
+      "node_modules",
+      "**/*.config.*",
+      "scripts",
+      "bench",
+    ],
+  },
   {
     files: ["src/**/*.ts", "tests/**/*.ts"],
     extends: [
