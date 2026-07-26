@@ -57,3 +57,13 @@ test("constructing above 2^32 bits throws a typed range error", () => {
   expect(() => new BitSet(2 ** 32 + 1)).toThrow(RangeError);
   expect(() => new BitSet(2 ** 32 + 1)).toThrow(/2\^32|4294967296/);
 });
+
+test("bytes exposes the backing array reflecting set bits", () => {
+  const bs = new BitSet(16);
+  bs.set(0);
+  bs.set(9);
+  expect(bs.bytes).toBeInstanceOf(Uint8Array);
+  expect(bs.bytes).toHaveLength(2);
+  expect(bs.bytes[0]).toBe(0b0000_0001);
+  expect(bs.bytes[1]).toBe(0b0000_0010);
+});

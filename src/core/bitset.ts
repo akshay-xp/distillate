@@ -25,6 +25,10 @@ export class BitSet {
     return ((this.#bits[i >>> 3] ?? 0) & (1 << (i & 7))) !== 0;
   }
 
+  get bytes(): Uint8Array {
+    return this.#bits;
+  }
+
   count(): number {
     let total = 0;
     for (let byte of this.#bits) {
