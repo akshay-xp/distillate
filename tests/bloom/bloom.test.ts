@@ -1,0 +1,26 @@
+import fc from "fast-check";
+import { expect, test } from "vitest";
+
+import { BloomFilter } from "../../src/bloom/bloom.js";
+
+test("add then has returns true across BytesLike forms", () => {
+  const f = new BloomFilter({ m: 4096, k: 7 });
+  f.add("alice");
+  expect(f.has("alice")).toBe(true);
+  f.add(Uint8Array.of(1, 2, 3));
+  expect(f.has(Uint8Array.of(1, 2, 3))).toBe(true);
+
+  f.add("AB");
+  expect(f.has(Uint8Array.of(65, 66))).toBe(true);
+  expect(f.has(Uint8Array.of(65, 66).buffer)).toBe(true);
+});
+
+test("no false negatives for any added key (property)", () => {
+  fc.assert(
+    fc.property(fc.uniqueArray(fc.string()), (keys) => {
+      const f = new BloomFilter({ m: 1 << 16, k: 7 });
+      for (const key of keys) f.add(key);
+      for (const key of keys) expect(f.has(key)).toBe(true);
+    }),
+  );
+});
