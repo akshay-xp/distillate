@@ -1,6 +1,7 @@
 import fc from "fast-check";
 import { expect, test } from "vitest";
 
+import { readHeader } from "../../src/core/serialize.js";
 import { optimal } from "../../src/core/sizing.js";
 import { BloomFilter } from "../../src/bloom/bloom.js";
 import { measureFpr, sampleStrings } from "../helpers/fpr.js";
@@ -51,4 +52,20 @@ test("bitsPerKey reports analytic m / n", () => {
 
   const { m } = optimal(100000, 0.01);
   expect(BloomFilter.create(100000, 0.01).bitsPerKey).toBe(m / 100000);
+});
+
+test("toBytes emits an AMQF type-1 frame with LE params + payload", () => {
+  const f = new BloomFilter({ m: 64, k: 3, seed: 7 });
+  f.add("x");
+  const frame = f.toBytes();
+
+  const { version, type, body } = readHeader(frame);
+  expect(type).toBe(1);
+  expect(version).toBe(1);
+
+  const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
+  expect(dv.getUint32(0, true)).toBe(64);
+  expect(body[4]).toBe(3);
+  expect(dv.getUint32(5, true)).toBe(7);
+  expect(body).toHaveLength(9 + Math.ceil(64 / 8));
 });
