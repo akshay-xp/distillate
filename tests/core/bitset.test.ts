@@ -52,3 +52,8 @@ test("count equals the number of distinct set indices (property)", () => {
     }),
   );
 });
+
+test("constructing above 2^32 bits throws a typed range error", () => {
+  expect(() => new BitSet(2 ** 32 + 1)).toThrow(RangeError);
+  expect(() => new BitSet(2 ** 32 + 1)).toThrow(/2\^32|4294967296/);
+});

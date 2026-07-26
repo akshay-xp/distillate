@@ -1,7 +1,18 @@
+export class BitSetRangeError extends RangeError {
+  override readonly name = "BitSetRangeError";
+}
+
+const MAX_BITS = 2 ** 32;
+
 export class BitSet {
   readonly #bits: Uint8Array;
 
   constructor(nbits: number) {
+    if (nbits > MAX_BITS) {
+      throw new BitSetRangeError(
+        `BitSet capacity ${String(nbits)} exceeds the 2^32-bit limit`,
+      );
+    }
     this.#bits = new Uint8Array(Math.ceil(nbits / 8));
   }
 
