@@ -1,6 +1,6 @@
 import { normalize, type BytesLike } from "../core/bytes.js";
 import { hash128 } from "../core/hasher.js";
-import { FORMAT_VERSION, writeHeader } from "../core/serialize.js";
+import { FORMAT_VERSION, readHeader, writeHeader } from "../core/serialize.js";
 
 const ARITY = 3;
 const TYPE_FUSE8 = 3;
@@ -262,6 +262,30 @@ function buildState(
   return { fp, seed, params, size };
 }
 
+function fuseStateFromBytes(
+  bytes: Uint8Array,
+  expectedType: number,
+): FuseState {
+  const { body } = readHeader(bytes);
+  const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
+  const seed = dv.getUint32(0, true);
+  const seg = dv.getUint32(4, true);
+  const segCountLen = dv.getUint32(8, true);
+  const size = dv.getUint32(12, true);
+  const laneBytes = body.subarray(16);
+  const bpe = expectedType === TYPE_FUSE8 ? 1 : 2;
+  const arrayLength = laneBytes.length / bpe;
+  const fp =
+    bpe === 1 ? new Uint8Array(arrayLength) : new Uint16Array(arrayLength);
+  new Uint8Array(fp.buffer).set(laneBytes);
+  return {
+    fp,
+    seed,
+    params: { seg, segMask: seg - 1, segCountLen, arrayLength },
+    size,
+  };
+}
+
 abstract class BinaryFuse {
   readonly #fp: Uint8Array | Uint16Array;
   readonly #seed: number;
@@ -334,10 +358,18 @@ export class BinaryFuse8 extends BinaryFuse {
   static from(keys: Iterable<BytesLike>): BinaryFuse8 {
     return new BinaryFuse8(buildState(keys, (n) => new Uint8Array(n)));
   }
+
+  static fromBytes(bytes: Uint8Array): BinaryFuse8 {
+    return new BinaryFuse8(fuseStateFromBytes(bytes, TYPE_FUSE8));
+  }
 }
 
 export class BinaryFuse16 extends BinaryFuse {
   static from(keys: Iterable<BytesLike>): BinaryFuse16 {
     return new BinaryFuse16(buildState(keys, (n) => new Uint16Array(n)));
+  }
+
+  static fromBytes(bytes: Uint8Array): BinaryFuse16 {
+    return new BinaryFuse16(fuseStateFromBytes(bytes, TYPE_FUSE16));
   }
 }

@@ -8,7 +8,11 @@ import {
   buildFingerprints,
   computeParams,
 } from "../../src/fuse/fuse.js";
-import { readHeader, FORMAT_VERSION } from "../../src/core/serialize.js";
+import {
+  readHeader,
+  FORMAT_VERSION,
+  SerializationError,
+} from "../../src/core/serialize.js";
 import { sampleStrings } from "../helpers/fpr.js";
 
 const disjoint = (present: readonly string[], absent: string[]): string[] => {
@@ -104,6 +108,35 @@ test("toBytes emits an AMQF type-3 frame for fuse8 and type-4 for fuse16", () =>
 
   const f16 = BinaryFuse16.from(sampleStrings(1, 500));
   expect(readHeader(f16.toBytes()).type).toBe(4);
+});
+
+test.each([
+  ["fuse8", BinaryFuse8],
+  ["fuse16", BinaryFuse16],
+] as const)("fromBytes round-trips %s", (_name, Variant) => {
+  const present = sampleStrings(1, 500);
+  const f = Variant.from(present);
+  const g = Variant.fromBytes(f.toBytes());
+
+  expect(g.toBytes()).toEqual(f.toBytes());
+  for (const key of present) expect(g.has(key)).toBe(true);
+  for (const key of sampleStrings(2, 200)) expect(g.has(key)).toBe(f.has(key));
+  expect(g.size).toBe(f.size);
+  expect(g.bitsPerKey).toBe(f.bitsPerKey);
+});
+
+test("fromBytes rejects truncated, bad-magic, and corrupt-CRC frames", () => {
+  expect(() => BinaryFuse8.fromBytes(new Uint8Array(3))).toThrow(
+    SerializationError,
+  );
+
+  const badMagic = BinaryFuse8.from(sampleStrings(1, 100)).toBytes();
+  badMagic[0] ^= 0xff;
+  expect(() => BinaryFuse8.fromBytes(badMagic)).toThrow(SerializationError);
+
+  const badCrc = BinaryFuse8.from(sampleStrings(1, 100)).toBytes();
+  badCrc[12] ^= 0xff;
+  expect(() => BinaryFuse8.fromBytes(badCrc)).toThrow(SerializationError);
 });
 
 test("exhausted construction attempts throw BinaryFuseBuildError", () => {
