@@ -1,5 +1,9 @@
 # siftr
 
+[![CI](https://github.com/akshay-xp/siftr/actions/workflows/ci.yml/badge.svg)](https://github.com/akshay-xp/siftr/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/siftr)](https://www.npmjs.com/package/siftr)
+[![license](https://img.shields.io/npm/l/siftr)](./LICENSE)
+
 Modern approximate-membership toolkit for JavaScript. The next-generation successor to Bloom filter packages: TypeScript-first, zero dependencies, and the right structure per workload, not just a Bloom filter.
 
 > **Pre-release (0.x).** The published structures are correct, tested, and benchmarked, but the public API may still change before `1.0`, and more structures (Cuckoo, Scalable Bloom) are on the way. Pin a version if you depend on it.
@@ -21,6 +25,16 @@ npm install siftr
 ```
 
 Requires Node 20+ (or any modern Bun/Deno/browser/edge runtime).
+
+## Runtime support
+
+`siftr` targets ES2022 with zero runtime dependencies and no `eval`, so it runs on every modern JavaScript runtime:
+
+- **Node.js** 20, 22, 24 (LTS and current)
+- **Bun** and **Deno**
+- Browsers and Cloudflare/Vercel edge
+
+Every push runs a CI smoke matrix that imports the built package on Node 20/22/24, Bun, and Deno, so cross-runtime support is verified, not assumed.
 
 ## Structures
 
