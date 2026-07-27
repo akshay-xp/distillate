@@ -139,6 +139,14 @@ test("fromBytes rejects truncated, bad-magic, and corrupt-CRC frames", () => {
   expect(() => BinaryFuse8.fromBytes(badCrc)).toThrow(SerializationError);
 });
 
+test("fromBytes rejects a frame of the wrong fuse type", () => {
+  const frame16 = BinaryFuse16.from(sampleStrings(1, 100)).toBytes();
+  expect(() => BinaryFuse8.fromBytes(frame16)).toThrow(SerializationError);
+
+  const frame8 = BinaryFuse8.from(sampleStrings(1, 100)).toBytes();
+  expect(() => BinaryFuse16.fromBytes(frame8)).toThrow(SerializationError);
+});
+
 test("exhausted construction attempts throw BinaryFuseBuildError", () => {
   const params = computeParams(2);
   const hashes = Uint32Array.of(1, 2, 3, 4);

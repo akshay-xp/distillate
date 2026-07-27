@@ -1,6 +1,11 @@
 import { normalize, type BytesLike } from "../core/bytes.js";
 import { hash128 } from "../core/hasher.js";
-import { FORMAT_VERSION, readHeader, writeHeader } from "../core/serialize.js";
+import {
+  FORMAT_VERSION,
+  readHeader,
+  SerializationError,
+  writeHeader,
+} from "../core/serialize.js";
 
 const ARITY = 3;
 const TYPE_FUSE8 = 3;
@@ -266,7 +271,12 @@ function fuseStateFromBytes(
   bytes: Uint8Array,
   expectedType: number,
 ): FuseState {
-  const { body } = readHeader(bytes);
+  const { type, body } = readHeader(bytes);
+  if (type !== expectedType) {
+    throw new SerializationError(
+      `expected AMQF type ${String(expectedType)}, got ${String(type)}`,
+    );
+  }
   const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
   const seed = dv.getUint32(0, true);
   const seg = dv.getUint32(4, true);
