@@ -20,6 +20,50 @@ const SALT = Uint32Array.of(
  * `outBits` (both length 8, caller-owned so no per-call allocation). A block is
  * 256 bits = 8 contiguous 32-bit lanes; word `block*8 + i` gets one bit set.
  */
+export interface BlockedBloomParams {
+  bitsPerKey: number;
+  capacity: number;
+  seed?: number;
+}
+
+export class BlockedBloomFilter {
+  readonly #lanes: Uint32Array;
+  readonly #numBlocks: number;
+  readonly #seed: number;
+  readonly #n: number;
+  readonly #words = new Uint32Array(8);
+  readonly #bits = new Uint32Array(8);
+
+  constructor({ bitsPerKey, capacity, seed = 0 }: BlockedBloomParams) {
+    this.#numBlocks = Math.max(1, Math.ceil((bitsPerKey * capacity) / 256));
+    this.#lanes = new Uint32Array(this.#numBlocks * 8);
+    this.#seed = seed;
+    this.#n = capacity;
+  }
+
+  get bitsPerKey(): number {
+    return (this.#numBlocks * 256) / this.#n;
+  }
+
+  add(key: BytesLike): void {
+    fillBlock(key, this.#numBlocks, this.#seed, this.#words, this.#bits);
+    for (let i = 0; i < 8; i++) {
+      const w = this.#words[i] ?? 0;
+      this.#lanes[w] = (this.#lanes[w] ?? 0) | (this.#bits[i] ?? 0);
+    }
+  }
+
+  has(key: BytesLike): boolean {
+    fillBlock(key, this.#numBlocks, this.#seed, this.#words, this.#bits);
+    for (let i = 0; i < 8; i++) {
+      const bit = this.#bits[i] ?? 0;
+      if (((this.#lanes[this.#words[i] ?? 0] ?? 0) & bit) >>> 0 !== bit)
+        return false;
+    }
+    return true;
+  }
+}
+
 export function fillBlock(
   key: BytesLike,
   numBlocks: number,
