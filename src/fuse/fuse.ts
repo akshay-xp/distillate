@@ -315,3 +315,9 @@ export class BinaryFuse8 extends BinaryFuse {
     return new BinaryFuse8(buildState(keys, (n) => new Uint8Array(n)));
   }
 }
+
+export class BinaryFuse16 extends BinaryFuse {
+  static from(keys: Iterable<BytesLike>): BinaryFuse16 {
+    return new BinaryFuse16(buildState(keys, (n) => new Uint16Array(n)));
+  }
+}

@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 
 import {
   BinaryFuse8,
+  BinaryFuse16,
   BinaryFuseBuildError,
   buildFingerprints,
   computeParams,
@@ -55,6 +56,35 @@ test("size and bitsPerKey report deduped count and per-key cost", () => {
   const empty = BinaryFuse8.from([]);
   expect(empty.size).toBe(0);
   expect(empty.bitsPerKey).toBe(0);
+});
+
+test("fuse16 has no false negatives (property)", () => {
+  fc.assert(
+    fc.property(fc.uniqueArray(fc.string(), { minLength: 2 }), (keys) => {
+      const f = BinaryFuse16.from(keys);
+      for (const key of keys) expect(f.has(key)).toBe(true);
+    }),
+  );
+});
+
+test("fuse16 has no false negatives at 10k keys", () => {
+  const keys = sampleStrings(1, 10000);
+  const f = BinaryFuse16.from(keys);
+  for (const key of keys) expect(f.has(key)).toBe(true);
+});
+
+test("fuse16 false-positive rate stays at or below 1e-4 at n=100k", () => {
+  const present = sampleStrings(1, 100000);
+  const absent = disjoint(present, sampleStrings(2, 100000));
+  const f = BinaryFuse16.from(present);
+  let hits = 0;
+  for (const key of absent) if (f.has(key)) hits++;
+  expect(hits / absent.length).toBeLessThanOrEqual(1e-4);
+});
+
+test("fuse16 handles empty and single-key inputs", () => {
+  expect(BinaryFuse16.from([]).has("anything")).toBe(false);
+  expect(BinaryFuse16.from(["only"]).has("only")).toBe(true);
 });
 
 test("exhausted construction attempts throw BinaryFuseBuildError", () => {
