@@ -46,6 +46,14 @@
       "import": "./dist/blocked/index.js",
       "require": "./dist/blocked/index.cjs"
     },
+    "./fuse": {
+      "types": {
+        "import": "./dist/fuse/index.d.ts",
+        "require": "./dist/fuse/index.d.cts"
+      },
+      "import": "./dist/fuse/index.js",
+      "require": "./dist/fuse/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",
