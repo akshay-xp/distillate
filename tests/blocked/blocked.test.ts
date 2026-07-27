@@ -1,7 +1,7 @@
 import fc from "fast-check";
 import { expect, test } from "vitest";
 
-import { readHeader } from "../../src/core/serialize.js";
+import { readHeader, SerializationError } from "../../src/core/serialize.js";
 import {
   BlockedBloomFilter,
   BlockedBloomParamMismatchError,
@@ -175,4 +175,39 @@ test("toBytes emits an AMQF type-2 frame with LE params + payload", () => {
   expect(dv.getUint32(4, true)).toBe(7);
   expect(dv.getUint32(8, true)).toBe(100);
   expect(body).toHaveLength(12 + numBlocks * 32);
+});
+
+test("fromBytes round-trips params and membership", () => {
+  const f = BlockedBloomFilter.create(2000, 0.01);
+  const keys = sampleStrings(1, 500);
+  for (const key of keys) f.add(key);
+
+  const g = BlockedBloomFilter.fromBytes(f.toBytes());
+  expect(g.toBytes()).toEqual(f.toBytes());
+  for (const key of keys) expect(g.has(key)).toBe(true);
+  expect(g.bitsPerKey).toBe(f.bitsPerKey);
+});
+
+test("fromBytes throws SerializationError on corrupt or foreign input", () => {
+  expect(() => BlockedBloomFilter.fromBytes(new Uint8Array(3))).toThrow(
+    SerializationError,
+  );
+
+  const badMagic = new BlockedBloomFilter({
+    bitsPerKey: 12,
+    capacity: 100,
+  }).toBytes();
+  badMagic[0] ^= 0xff;
+  expect(() => BlockedBloomFilter.fromBytes(badMagic)).toThrow(
+    SerializationError,
+  );
+
+  const badCrc = new BlockedBloomFilter({
+    bitsPerKey: 12,
+    capacity: 100,
+  }).toBytes();
+  badCrc[12] ^= 0xff;
+  expect(() => BlockedBloomFilter.fromBytes(badCrc)).toThrow(
+    SerializationError,
+  );
 });

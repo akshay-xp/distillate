@@ -1,6 +1,6 @@
 import { normalize, type BytesLike } from "../core/bytes.js";
 import { hash128, reduce } from "../core/hasher.js";
-import { FORMAT_VERSION, writeHeader } from "../core/serialize.js";
+import { FORMAT_VERSION, readHeader, writeHeader } from "../core/serialize.js";
 
 const TYPE = 2;
 
@@ -37,7 +37,7 @@ export class BlockedBloomFilter {
   readonly #lanes: Uint32Array;
   readonly #numBlocks: number;
   readonly #seed: number;
-  readonly #n: number;
+  #n: number;
   readonly #words = new Uint32Array(8);
   readonly #bits = new Uint32Array(8);
 
@@ -75,6 +75,24 @@ export class BlockedBloomFilter {
 
   get bitsPerKey(): number {
     return (this.#numBlocks * 256) / this.#n;
+  }
+
+  static fromBytes(bytes: Uint8Array): BlockedBloomFilter {
+    const { body } = readHeader(bytes);
+    const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
+    const numBlocks = dv.getUint32(0, true);
+    const seed = dv.getUint32(4, true);
+    const n = dv.getUint32(8, true);
+    // bitsPerKey 256 with capacity=numBlocks reconstructs exactly numBlocks
+    // blocks (256*numBlocks/256); #n is then restored to the stored capacity.
+    const f = new BlockedBloomFilter({
+      bitsPerKey: 256,
+      capacity: numBlocks,
+      seed,
+    });
+    f.#n = n;
+    new Uint8Array(f.#lanes.buffer).set(body.subarray(12));
+    return f;
   }
 
   toBytes(): Uint8Array {
