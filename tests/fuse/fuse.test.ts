@@ -24,6 +24,13 @@ test("no false negatives at 10k keys", () => {
   for (const key of keys) expect(f.has(key)).toBe(true);
 });
 
+test("duplicate keys in the input are tolerated", () => {
+  const base = sampleStrings(1, 500);
+  const withDupes = [...base, ...base, ...base];
+  const f = BinaryFuse8.from(withDupes);
+  for (const key of base) expect(f.has(key)).toBe(true);
+});
+
 test("false-positive rate stays at or below 0.6% at n=100k", () => {
   const present = sampleStrings(1, 100000);
   const absent = disjoint(present, sampleStrings(2, 100000));

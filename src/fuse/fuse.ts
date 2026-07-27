@@ -242,9 +242,15 @@ export class BinaryFuse8 {
 
   static from(keys: Iterable<BytesLike>): BinaryFuse8 {
     const hashList: number[] = [];
+    const seen = new Set<string>();
     for (const key of keys) {
       const { h1lo, h1hi } = hash128(normalize(key), 0);
-      hashList.push(h1lo >>> 0, h1hi >>> 0);
+      const lo = h1lo >>> 0;
+      const hi = h1hi >>> 0;
+      const id = `${String(lo)},${String(hi)}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      hashList.push(lo, hi);
     }
     const size = hashList.length / 2;
     const hashes = Uint32Array.from(hashList);
