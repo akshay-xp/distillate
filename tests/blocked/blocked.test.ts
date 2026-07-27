@@ -1,6 +1,7 @@
 import fc from "fast-check";
 import { expect, test } from "vitest";
 
+import { readHeader } from "../../src/core/serialize.js";
 import {
   BlockedBloomFilter,
   BlockedBloomParamMismatchError,
@@ -157,4 +158,21 @@ test("union rejects mismatched params with a typed error", () => {
       new BlockedBloomFilter({ bitsPerKey: 12, capacity: 1000, seed: 1 }),
     ),
   ).toThrow(/do not match/i);
+});
+
+test("toBytes emits an AMQF type-2 frame with LE params + payload", () => {
+  const f = new BlockedBloomFilter({ bitsPerKey: 12, capacity: 100, seed: 7 });
+  f.add("x");
+  const frame = f.toBytes();
+
+  const { version, type, body } = readHeader(frame);
+  expect(type).toBe(2);
+  expect(version).toBe(1);
+
+  const numBlocks = Math.ceil((12 * 100) / 256);
+  const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
+  expect(dv.getUint32(0, true)).toBe(numBlocks);
+  expect(dv.getUint32(4, true)).toBe(7);
+  expect(dv.getUint32(8, true)).toBe(100);
+  expect(body).toHaveLength(12 + numBlocks * 32);
 });

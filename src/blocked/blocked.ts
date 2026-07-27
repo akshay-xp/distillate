@@ -1,5 +1,8 @@
 import { normalize, type BytesLike } from "../core/bytes.js";
 import { hash128, reduce } from "../core/hasher.js";
+import { FORMAT_VERSION, writeHeader } from "../core/serialize.js";
+
+const TYPE = 2;
 
 // Canonical split-block bit-position multipliers (Parquet/Impala): odd 32-bit
 // constants that spread one 32-bit hash across the 8 lanes of a block.
@@ -72,6 +75,21 @@ export class BlockedBloomFilter {
 
   get bitsPerKey(): number {
     return (this.#numBlocks * 256) / this.#n;
+  }
+
+  toBytes(): Uint8Array {
+    const lanes = new Uint8Array(
+      this.#lanes.buffer,
+      this.#lanes.byteOffset,
+      this.#lanes.byteLength,
+    );
+    const body = new Uint8Array(12 + lanes.length);
+    const dv = new DataView(body.buffer);
+    dv.setUint32(0, this.#numBlocks, true);
+    dv.setUint32(4, this.#seed, true);
+    dv.setUint32(8, this.#n, true);
+    body.set(lanes, 12);
+    return writeHeader({ version: FORMAT_VERSION, type: TYPE, flags: 0 }, body);
   }
 
   union(other: BlockedBloomFilter): BlockedBloomFilter {
