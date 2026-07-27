@@ -253,14 +253,16 @@ export class BinaryFuse8 {
       hashList.push(lo, hi);
     }
     const size = hashList.length / 2;
-    const hashes = Uint32Array.from(hashList);
     const params = computeParams(size);
+    if (size === 0) return new BinaryFuse8(new Uint8Array(0), 0, params);
+    const hashes = Uint32Array.from(hashList);
     const fp = new Uint8Array(params.arrayLength);
     const seed = buildFingerprints(fp, hashes, params);
     return new BinaryFuse8(fp, seed, params);
   }
 
   has(key: BytesLike): boolean {
+    if (this.#fp.length === 0) return false;
     const { h1lo, h1hi } = hash128(normalize(key), 0);
     mixSeed(h1lo >>> 0, h1hi >>> 0, this.#seed);
     const mlo = RLO;

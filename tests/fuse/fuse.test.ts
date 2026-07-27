@@ -31,6 +31,16 @@ test("duplicate keys in the input are tolerated", () => {
   for (const key of base) expect(f.has(key)).toBe(true);
 });
 
+test("empty filter reports non-membership for every key", () => {
+  const f = BinaryFuse8.from([]);
+  for (const key of sampleStrings(2, 5000)) expect(f.has(key)).toBe(false);
+});
+
+test("single-key input finds its member", () => {
+  const f = BinaryFuse8.from(["only"]);
+  expect(f.has("only")).toBe(true);
+});
+
 test("false-positive rate stays at or below 0.6% at n=100k", () => {
   const present = sampleStrings(1, 100000);
   const absent = disjoint(present, sampleStrings(2, 100000));
