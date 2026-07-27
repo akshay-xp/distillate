@@ -3,6 +3,7 @@
 import { VERSION } from "../dist/index.js";
 import { BlockedBloomFilter } from "../dist/blocked/index.js";
 import { BloomFilter } from "../dist/bloom/index.js";
+import { BinaryFuse8 } from "../dist/fuse/index.js";
 
 if (typeof VERSION !== "string") {
   console.error(
@@ -25,4 +26,12 @@ if (!bf.has("smoke")) {
   process.exit(1);
 }
 
-console.log(`smoke ok: VERSION = ${VERSION}, siftr/bloom + siftr/blocked work`);
+const ff = BinaryFuse8.from(["smoke", "a", "b"]);
+if (!ff.has("smoke")) {
+  console.error("smoke: BinaryFuse8.has failed for a built key");
+  process.exit(1);
+}
+
+console.log(
+  `smoke ok: VERSION = ${VERSION}, siftr/bloom + siftr/blocked + siftr/fuse work`,
+);
