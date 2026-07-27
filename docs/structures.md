@@ -41,10 +41,14 @@ Counting: 4-bit counters enable delete at ~4x space. Scalable: chain of Blooms f
 Fingerprints in a cuckoo table, buckets of 4, partial-key hashing. ~log2(1/epsilon)+3 bpk, two bucket probes, load cap ~95% (insert can fail; must signal, never corrupt). Ships correct: no-false-negative property test is a headline vs the incumbent bug.
 Fan, Andersen, Kaminsky, Mitzenmacher, CoNEXT 2014.
 
-### Binary Fuse 8/16 (static, headline feature)
+### Binary Fuse 8/16 (static, headline feature): Shipped
 
 Peeling-built, 3 cache-local probes. ~1.08-1.13x floor (~9% overhead), smaller and faster than XOR, low build failure and peak memory. 8-bit -> epsilon ~0.39%; 16-bit -> ~1/65536. The best static AMQ and the thing nobody ships in JS.
 Graf and Lemire, JEA 2022 (arXiv 2201.01174). Reference: FastFilter/xorfilter.
+
+Shipped at `siftr/fuse`: `BinaryFuse8` / `BinaryFuse16` (static, immutable) via `.from(keys)`; `has`, `toBytes` / `fromBytes` (AMQF type=3 Fuse8, type=4 Fuse16; rejects a mismatched type), `size`, `bitsPerKey`. No `add` / `delete` / `union`. Builds hash each key once via `hash128` (64-bit), dedupe by hash, then a split-construction peel over a shared width-generic core; a bumped-seed retry budget throws `BinaryFuseBuildError` on the (astronomically rare) stall rather than corrupting. Fingerprints are `Uint8Array` (8-bit) / `Uint16Array` (16-bit); native AMQF only, no Parquet/xorfilter byte interop. Observed ~9 bpk @ ~0.39% (8-bit), ~19 bpk @ ~1/65536 (16-bit).
+
+Bench (n=100k, 8-bit): build ~70 ms, has ~212 ns (hit) / ~218 ns (miss).
 
 ### XOR 8/16 (optional, comparison)
 
