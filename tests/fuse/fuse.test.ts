@@ -41,6 +41,17 @@ test("single-key input finds its member", () => {
   expect(f.has("only")).toBe(true);
 });
 
+test("size and bitsPerKey report deduped count and per-key cost", () => {
+  const f = BinaryFuse8.from(sampleStrings(1, 100000));
+  expect(f.size).toBe(100000);
+  expect(f.bitsPerKey).toBeGreaterThanOrEqual(9);
+  expect(f.bitsPerKey).toBeLessThan(10);
+
+  const empty = BinaryFuse8.from([]);
+  expect(empty.size).toBe(0);
+  expect(empty.bitsPerKey).toBe(0);
+});
+
 test("false-positive rate stays at or below 0.6% at n=100k", () => {
   const present = sampleStrings(1, 100000);
   const absent = disjoint(present, sampleStrings(2, 100000));

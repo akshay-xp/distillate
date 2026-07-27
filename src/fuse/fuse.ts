@@ -230,14 +230,29 @@ export class BinaryFuse8 {
   readonly #seg: number;
   readonly #segMask: number;
   readonly #segCountLen: number;
+  readonly #size: number;
   readonly #pos = new Uint32Array(3);
 
-  private constructor(fp: Uint8Array, seed: number, params: FuseParams) {
+  private constructor(
+    fp: Uint8Array,
+    seed: number,
+    params: FuseParams,
+    size: number,
+  ) {
     this.#fp = fp;
     this.#seed = seed;
     this.#seg = params.seg;
     this.#segMask = params.segMask;
     this.#segCountLen = params.segCountLen;
+    this.#size = size;
+  }
+
+  get size(): number {
+    return this.#size;
+  }
+
+  get bitsPerKey(): number {
+    return this.#size === 0 ? 0 : (this.#fp.length * 8) / this.#size;
   }
 
   static from(keys: Iterable<BytesLike>): BinaryFuse8 {
@@ -254,11 +269,11 @@ export class BinaryFuse8 {
     }
     const size = hashList.length / 2;
     const params = computeParams(size);
-    if (size === 0) return new BinaryFuse8(new Uint8Array(0), 0, params);
+    if (size === 0) return new BinaryFuse8(new Uint8Array(0), 0, params, 0);
     const hashes = Uint32Array.from(hashList);
     const fp = new Uint8Array(params.arrayLength);
     const seed = buildFingerprints(fp, hashes, params);
-    return new BinaryFuse8(fp, seed, params);
+    return new BinaryFuse8(fp, seed, params, size);
   }
 
   has(key: BytesLike): boolean {
