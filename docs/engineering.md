@@ -56,3 +56,14 @@ Versioning and the changelog are driven by [Changesets](https://github.com/chang
 - Every user-facing change adds a changeset: run `pnpm changeset`, pick the bump (patch/minor/major), and write a one-line summary. Commit the generated `.changeset/*.md` file with the change.
 - Non-user-facing changes (docs, CI, internal refactors) add an empty changeset: `pnpm changeset add --empty`. CI requires one or the other on every PR.
 - Do not hand-edit `package.json` version or `CHANGELOG.md`. `pnpm version` (`changeset version`) consumes pending changesets, bumps semver, and writes the changelog; the release workflow runs this and publishes.
+
+### Pre-publish checklist
+
+Before cutting a release, confirm:
+
+- [ ] `pnpm build` succeeds and `pnpm test` is green.
+- [ ] `pnpm check` (publint + attw `--profile node16`) passes.
+- [ ] `npm publish --dry-run` lists `dist/` plus `package.json`/`README.md`/`LICENSE` only (no `src/`, `tests/`, `bench/`, `.changeset/`).
+- [ ] Version and `CHANGELOG.md` were bumped by changesets, not by hand.
+- [ ] CI is green on `main` (test matrix + cross-runtime smoke).
+- [ ] For the first publish only: npm Trusted Publishing is configured for the package (GitHub Actions, `akshay-xp/siftr`, `release.yml`).
