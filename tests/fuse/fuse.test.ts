@@ -8,6 +8,7 @@ import {
   buildFingerprints,
   computeParams,
 } from "../../src/fuse/fuse.js";
+import { readHeader, FORMAT_VERSION } from "../../src/core/serialize.js";
 import { sampleStrings } from "../helpers/fpr.js";
 
 const disjoint = (present: readonly string[], absent: string[]): string[] => {
@@ -92,6 +93,17 @@ test("fuse16 reports size and ~18-19 bits per key", () => {
   expect(f.size).toBe(100000);
   expect(f.bitsPerKey).toBeGreaterThanOrEqual(18);
   expect(f.bitsPerKey).toBeLessThan(20);
+});
+
+test("toBytes emits an AMQF type-3 frame for fuse8 and type-4 for fuse16", () => {
+  const f8 = BinaryFuse8.from(sampleStrings(1, 500));
+  const h8 = readHeader(f8.toBytes());
+  expect(h8.type).toBe(3);
+  expect(h8.version).toBe(FORMAT_VERSION);
+  expect(h8.body.length).toBeGreaterThan(16);
+
+  const f16 = BinaryFuse16.from(sampleStrings(1, 500));
+  expect(readHeader(f16.toBytes()).type).toBe(4);
 });
 
 test("exhausted construction attempts throw BinaryFuseBuildError", () => {

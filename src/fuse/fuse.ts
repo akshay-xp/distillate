@@ -1,7 +1,10 @@
 import { normalize, type BytesLike } from "../core/bytes.js";
 import { hash128 } from "../core/hasher.js";
+import { FORMAT_VERSION, writeHeader } from "../core/serialize.js";
 
 const ARITY = 3;
+const TYPE_FUSE8 = 3;
+const TYPE_FUSE16 = 4;
 
 export class BinaryFuseBuildError extends Error {
   override readonly name = "BinaryFuseBuildError";
@@ -283,6 +286,23 @@ abstract class BinaryFuse {
 
   get bitsPerKey(): number {
     return this.#size === 0 ? 0 : (this.#fp.byteLength * 8) / this.#size;
+  }
+
+  toBytes(): Uint8Array {
+    const laneBytes = new Uint8Array(
+      this.#fp.buffer,
+      this.#fp.byteOffset,
+      this.#fp.byteLength,
+    );
+    const body = new Uint8Array(16 + laneBytes.length);
+    const dv = new DataView(body.buffer);
+    dv.setUint32(0, this.#seed, true);
+    dv.setUint32(4, this.#seg, true);
+    dv.setUint32(8, this.#segCountLen, true);
+    dv.setUint32(12, this.#size, true);
+    body.set(laneBytes, 16);
+    const type = this.#fp.BYTES_PER_ELEMENT === 1 ? TYPE_FUSE8 : TYPE_FUSE16;
+    return writeHeader({ version: FORMAT_VERSION, type, flags: 0 }, body);
   }
 
   has(key: BytesLike): boolean {
