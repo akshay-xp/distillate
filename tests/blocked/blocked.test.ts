@@ -104,3 +104,34 @@ test("create picks bits-per-key monotonically with tighter epsilon", () => {
   const tight = BlockedBloomFilter.create(100000, 0.0001).bitsPerKey;
   expect(tight).toBeGreaterThan(loose);
 });
+
+test("union merges two filters without mutating inputs", () => {
+  const a = new BlockedBloomFilter({ bitsPerKey: 12, capacity: 1000 });
+  const b = new BlockedBloomFilter({ bitsPerKey: 12, capacity: 1000 });
+  a.add("x");
+  b.add("y");
+
+  const u = a.union(b);
+  expect(u.has("x")).toBe(true);
+  expect(u.has("y")).toBe(true);
+  expect(u).not.toBe(a);
+  expect(a.has("y")).toBe(false);
+  expect(b.has("x")).toBe(false);
+});
+
+test("union has every key from either input (property)", () => {
+  fc.assert(
+    fc.property(
+      fc.uniqueArray(fc.string()),
+      fc.uniqueArray(fc.string()),
+      (ka, kb) => {
+        const a = new BlockedBloomFilter({ bitsPerKey: 12, capacity: 2000 });
+        const b = new BlockedBloomFilter({ bitsPerKey: 12, capacity: 2000 });
+        for (const key of ka) a.add(key);
+        for (const key of kb) b.add(key);
+        const u = a.union(b);
+        for (const key of [...ka, ...kb]) expect(u.has(key)).toBe(true);
+      },
+    ),
+  );
+});

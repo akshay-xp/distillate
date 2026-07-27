@@ -70,6 +70,17 @@ export class BlockedBloomFilter {
     return (this.#numBlocks * 256) / this.#n;
   }
 
+  union(other: BlockedBloomFilter): BlockedBloomFilter {
+    const r = new BlockedBloomFilter({
+      bitsPerKey: this.bitsPerKey,
+      capacity: this.#n,
+      seed: this.#seed,
+    });
+    for (let i = 0; i < this.#lanes.length; i++)
+      r.#lanes[i] = (this.#lanes[i] ?? 0) | (other.#lanes[i] ?? 0);
+    return r;
+  }
+
   add(key: BytesLike): void {
     fillBlock(key, this.#numBlocks, this.#seed, this.#words, this.#bits);
     for (let i = 0; i < 8; i++) {
