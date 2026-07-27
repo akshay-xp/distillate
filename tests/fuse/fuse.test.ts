@@ -87,6 +87,13 @@ test("fuse16 handles empty and single-key inputs", () => {
   expect(BinaryFuse16.from(["only"]).has("only")).toBe(true);
 });
 
+test("fuse16 reports size and ~18-19 bits per key", () => {
+  const f = BinaryFuse16.from(sampleStrings(1, 100000));
+  expect(f.size).toBe(100000);
+  expect(f.bitsPerKey).toBeGreaterThanOrEqual(18);
+  expect(f.bitsPerKey).toBeLessThan(20);
+});
+
 test("exhausted construction attempts throw BinaryFuseBuildError", () => {
   const params = computeParams(2);
   const hashes = Uint32Array.of(1, 2, 3, 4);

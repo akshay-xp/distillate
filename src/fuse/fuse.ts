@@ -282,7 +282,7 @@ abstract class BinaryFuse {
   }
 
   get bitsPerKey(): number {
-    return this.#size === 0 ? 0 : (this.#fp.length * 8) / this.#size;
+    return this.#size === 0 ? 0 : (this.#fp.byteLength * 8) / this.#size;
   }
 
   has(key: BytesLike): boolean {
