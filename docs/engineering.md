@@ -48,3 +48,11 @@ Keep each subpath a separate bundler entry (independent chunks; no barrel pullin
 ## Semver
 
 Pre-1.0 during Phase 0/1. 1.0 is the lean production commitment (see overview.md). Serialization format version is independent of package semver; bump only on incompatible layout changes.
+
+## Releasing (Changesets)
+
+Versioning and the changelog are driven by [Changesets](https://github.com/changesets/changesets).
+
+- Every user-facing change adds a changeset: run `pnpm changeset`, pick the bump (patch/minor/major), and write a one-line summary. Commit the generated `.changeset/*.md` file with the change.
+- Non-user-facing changes (docs, CI, internal refactors) add an empty changeset: `pnpm changeset add --empty`. CI requires one or the other on every PR.
+- Do not hand-edit `package.json` version or `CHANGELOG.md`. `pnpm version` (`changeset version`) consumes pending changesets, bumps semver, and writes the changelog; the release workflow runs this and publishes.
