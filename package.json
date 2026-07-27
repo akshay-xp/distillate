@@ -1,6 +1,6 @@
 {
   "name": "siftr",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Modern approximate-membership toolkit for JavaScript. The next-generation successor to Bloom filter packages.",
   "keywords": [
     "bloom-filter",
