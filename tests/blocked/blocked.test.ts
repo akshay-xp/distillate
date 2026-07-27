@@ -1,7 +1,11 @@
 import fc from "fast-check";
 import { expect, test } from "vitest";
 
-import { BlockedBloomFilter, fillBlock } from "../../src/blocked/blocked.js";
+import {
+  BlockedBloomFilter,
+  BlockedBloomParamMismatchError,
+  fillBlock,
+} from "../../src/blocked/blocked.js";
 import { measureFpr, sampleStrings } from "../helpers/fpr.js";
 
 const disjoint = (present: readonly string[], absent: string[]): string[] => {
@@ -134,4 +138,23 @@ test("union has every key from either input (property)", () => {
       },
     ),
   );
+});
+
+test("union rejects mismatched params with a typed error", () => {
+  const base = new BlockedBloomFilter({ bitsPerKey: 12, capacity: 1000 });
+
+  let caught: Error | undefined;
+  try {
+    base.union(new BlockedBloomFilter({ bitsPerKey: 12, capacity: 2000 }));
+  } catch (e) {
+    caught = e as Error;
+  }
+  expect(caught?.name).toBe("BlockedBloomParamMismatchError");
+  expect(caught).toBeInstanceOf(BlockedBloomParamMismatchError);
+
+  expect(() =>
+    base.union(
+      new BlockedBloomFilter({ bitsPerKey: 12, capacity: 1000, seed: 1 }),
+    ),
+  ).toThrow(/do not match/i);
 });

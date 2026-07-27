@@ -20,6 +20,10 @@ const SALT = Uint32Array.of(
  * `outBits` (both length 8, caller-owned so no per-call allocation). A block is
  * 256 bits = 8 contiguous 32-bit lanes; word `block*8 + i` gets one bit set.
  */
+export class BlockedBloomParamMismatchError extends Error {
+  override readonly name = "BlockedBloomParamMismatchError";
+}
+
 export interface BlockedBloomParams {
   bitsPerKey: number;
   capacity: number;
@@ -71,6 +75,11 @@ export class BlockedBloomFilter {
   }
 
   union(other: BlockedBloomFilter): BlockedBloomFilter {
+    if (this.#numBlocks !== other.#numBlocks || this.#seed !== other.#seed) {
+      throw new BlockedBloomParamMismatchError(
+        "cannot union blocked Bloom filters whose parameters do not match",
+      );
+    }
     const r = new BlockedBloomFilter({
       bitsPerKey: this.bitsPerKey,
       capacity: this.#n,
