@@ -1,10 +1,10 @@
-# siftr
+# distillate
 
 [![CI](https://github.com/akshay-xp/siftr/actions/workflows/ci.yml/badge.svg)](https://github.com/akshay-xp/siftr/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/siftr)](https://www.npmjs.com/package/siftr)
-[![license](https://img.shields.io/npm/l/siftr)](./LICENSE)
+[![npm](https://img.shields.io/npm/v/distillate)](https://www.npmjs.com/package/distillate)
+[![license](https://img.shields.io/npm/l/distillate)](./LICENSE)
 
-Modern approximate-membership toolkit for JavaScript. The next-generation successor to Bloom filter packages: TypeScript-first, zero dependencies, and the right structure per workload, not just a Bloom filter.
+Probabilistic data structures for JavaScript: space-efficient, approximate answers with tunable error and zero false negatives. TypeScript-first, zero dependencies, and the right structure per workload. It opens with a family of membership filters (the next-generation successor to Bloom filter packages) and is built to grow into other sketches.
 
 > **Pre-release (0.x).** The published structures are correct, tested, and benchmarked, but the public API may still change before `1.0`, and more structures (Cuckoo, Scalable Bloom) are on the way. Pin a version if you depend on it.
 
@@ -20,15 +20,15 @@ An approximate-membership query (AMQ) filter answers "is this in the set?" with 
 ## Install
 
 ```sh
-npm install siftr
-# or: pnpm add siftr / bun add siftr / deno add npm:siftr
+npm install distillate
+# or: pnpm add distillate / bun add distillate / deno add npm:distillate
 ```
 
 Requires Node 20+ (or any modern Bun/Deno/browser/edge runtime).
 
 ## Runtime support
 
-`siftr` targets ES2022 with zero runtime dependencies and no `eval`, so it runs on every modern JavaScript runtime:
+`distillate` targets ES2022 with zero runtime dependencies and no `eval`, so it runs on every modern JavaScript runtime:
 
 - **Node.js** 20, 22, 24 (LTS and current)
 - **Bun** and **Deno**
@@ -40,16 +40,16 @@ Every push runs a CI smoke matrix that imports the built package on Node 20/22/2
 
 Each structure ships as its own subpath, so you only bundle what you import.
 
-| Import          | Structure     | Mutable? | Use for                                              |
-| --------------- | ------------- | -------- | ---------------------------------------------------- |
-| `siftr/bloom`   | Classic Bloom | yes      | Familiar default, migration from `bloom-filters`     |
-| `siftr/blocked` | Blocked Bloom | yes      | Streaming inserts, speed-first, cache-friendly       |
-| `siftr/fuse`    | Binary Fuse   | no       | Static set built once and queried a lot; least space |
+| Import               | Structure     | Mutable? | Use for                                              |
+| -------------------- | ------------- | -------- | ---------------------------------------------------- |
+| `distillate/bloom`   | Classic Bloom | yes      | Familiar default, migration from `bloom-filters`     |
+| `distillate/blocked` | Blocked Bloom | yes      | Streaming inserts, speed-first, cache-friendly       |
+| `distillate/fuse`    | Binary Fuse   | no       | Static set built once and queried a lot; least space |
 
-### Classic Bloom (`siftr/bloom`)
+### Classic Bloom (`distillate/bloom`)
 
 ```ts
-import { BloomFilter } from "siftr/bloom";
+import { BloomFilter } from "distillate/bloom";
 
 const filter = BloomFilter.create(100_000, 0.01); // capacity, target FPR
 filter.add("alice");
@@ -62,10 +62,10 @@ const restored = BloomFilter.fromBytes(bytes);
 
 Also: `union(other)` (merge equal-parameter filters), `bitsPerKey`, and a low-level `new BloomFilter({ m, k, seed })`.
 
-### Blocked Bloom (`siftr/blocked`)
+### Blocked Bloom (`distillate/blocked`)
 
 ```ts
-import { BlockedBloomFilter } from "siftr/blocked";
+import { BlockedBloomFilter } from "distillate/blocked";
 
 const filter = BlockedBloomFilter.create(100_000, 0.01);
 filter.add("alice");
@@ -74,12 +74,12 @@ filter.has("alice"); // true
 
 Same surface as Classic Bloom (`add` / `has` / `union` / `toBytes` / `fromBytes` / `bitsPerKey`). Confines every lookup to one cache line, trading ~20-30% more space for cache-friendly throughput.
 
-### Binary Fuse (`siftr/fuse`)
+### Binary Fuse (`distillate/fuse`)
 
 A **static** filter: built once from the full key set, then immutable. The most space-efficient option (~9 bits/key at ~0.39% FPR for 8-bit; ~19 bits/key at ~1/65536 for 16-bit).
 
 ```ts
-import { BinaryFuse8, BinaryFuse16 } from "siftr/fuse";
+import { BinaryFuse8, BinaryFuse16 } from "distillate/fuse";
 
 const filter = BinaryFuse8.from(["alice", "bob", "carol"]);
 filter.has("alice"); // true

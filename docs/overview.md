@@ -1,10 +1,10 @@
-# siftr
+# distillate
 
 Modern approximate-membership toolkit for JavaScript. Successor to aging Bloom filter packages.
 
 ## What
 
-A filter answers set membership with a tunable false-positive rate and zero false negatives, in a fraction of the space of storing the set. `siftr` ships the right structure per workload (not just a Bloom filter), TS-first, dependency-free, universal.
+A filter answers set membership with a tunable false-positive rate and zero false negatives, in a fraction of the space of storing the set. `distillate` ships the right structure per workload (not just a Bloom filter), TS-first, dependency-free, universal.
 
 ## Why (market gap, 2026)
 

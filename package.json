@@ -1,7 +1,7 @@
 {
-  "name": "siftr",
+  "name": "distillate",
   "version": "0.1.0",
-  "description": "Modern approximate-membership toolkit for JavaScript. The next-generation successor to Bloom filter packages.",
+  "description": "Probabilistic data structures for JavaScript. Space-efficient, approximate-membership filters (Bloom, Blocked Bloom, Binary Fuse) with tunable error and a portable binary format; zero dependencies, universal.",
   "keywords": [
     "bloom-filter",
     "cuckoo-filter",
@@ -10,6 +10,7 @@
     "amq",
     "approximate-membership",
     "probabilistic",
+    "probabilistic-data-structures",
     "set",
     "filter"
   ],

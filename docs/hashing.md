@@ -35,7 +35,7 @@ interface Hasher {
 }
 ```
 
-Users may inject their own. Ship `xxhash-wasm` as an optional fast path for throughput-bound Node/Bun over large keys. Never the default: `WebAssembly.compile` is blocked on some edge runtimes, the exact portability siftr sells.
+Users may inject their own. Ship `xxhash-wasm` as an optional fast path for throughput-bound Node/Bun over large keys. Never the default: `WebAssembly.compile` is blocked on some edge runtimes, the exact portability distillate sells.
 
 ## Reduction to range
 

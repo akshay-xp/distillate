@@ -33,5 +33,5 @@ if (!ff.has("smoke")) {
 }
 
 console.log(
-  `smoke ok: VERSION = ${VERSION}, siftr/bloom + siftr/blocked + siftr/fuse work`,
+  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse work`,
 );
