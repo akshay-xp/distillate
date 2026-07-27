@@ -233,7 +233,7 @@ export function hash128(bytes: Uint8Array, seed = 0): Hash128 {
 
 // Lemire multiply-shift: map x in [0, 2^32) to [0, range) via the high 32 bits
 // of x * range, computed with 16-bit partial products (no 64-bit overflow).
-function reduce(x: number, range: number): number {
+export function reduce(x: number, range: number): number {
   const xlo = x & 0xffff;
   const xhi = x >>> 16;
   const rlo = range & 0xffff;
