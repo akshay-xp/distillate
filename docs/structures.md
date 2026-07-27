@@ -16,10 +16,14 @@ Space is stated as overhead over the information-theoretic floor of `log2(1/epsi
 
 ## v1.0 lineup
 
-### Blocked Bloom (mutable default)
+### Blocked Bloom (mutable default): Shipped
 
 One cache line per lookup vs k cache misses for classic. Space penalty ~20-30% over classic, bought back in speed. SIMD-friendly for a later WASM path.
 Putze, Sanders, Singler, JEA 2009.
+
+Shipped at `siftr/blocked`: `BlockedBloomFilter.create(n, epsilon)` (or `new BlockedBloomFilter({ bitsPerKey, capacity, seed })`), `add` / `has`, `union` (OR-merge of equal-param filters), `toBytes` / `fromBytes` (AMQF type=2), `bitsPerKey`. Split-block layout (Parquet/Impala): 256-bit blocks = 8x u32 lanes, k=8 fixed (one bit per lane); reuses `hash128` + Lemire `reduce`, no XXH64/Parquet-byte-compat (native only). `create` maps epsilon to bits-per-key (~11 @ 1e-2, ~17 @ 1e-3, ~27 @ 1e-4).
+
+Bench (single hot key, n=100k eps=1%): add ~265 ns, has ~263 ns, vs Classic Bloom add ~269 / has ~267. Even here because a single resident key keeps classic's k probes in L1; blocked's one-cache-line advantage only shows under a large random working set (cache-miss-bound), not this microbench. A working-set bench is future work.
 
 ### Classic Bloom (mutable, migration): Shipped
 

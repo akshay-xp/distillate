@@ -60,7 +60,7 @@
     "check": "publint --strict && attw --pack . --profile node16",
     "attw": "attw --pack . --profile node16",
     "test": "vitest run",
-    "bench": "tsx bench/core.bench.ts && tsx bench/bloom.bench.ts",
+    "bench": "tsx bench/core.bench.ts && tsx bench/bloom.bench.ts && tsx bench/blocked.bench.ts",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
