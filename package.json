@@ -68,6 +68,9 @@
     "check": "publint --strict && attw --pack . --profile node16",
     "attw": "attw --pack . --profile node16",
     "test": "vitest run",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "changeset publish",
     "bench": "tsx bench/core.bench.ts && tsx bench/bloom.bench.ts && tsx bench/blocked.bench.ts && tsx bench/fuse.bench.ts",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
@@ -85,6 +88,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
+    "@changesets/cli": "^2.31.1",
     "@commitlint/cli": "^21.2.1",
     "@commitlint/config-conventional": "^21.2.0",
     "@eslint/js": "^10.0.1",
