@@ -17,9 +17,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/akshay-xp/siftr.git"
+    "url": "git+https://github.com/akshay-xp/distillate.git"
   },
-  "homepage": "https://github.com/akshay-xp/siftr#readme",
+  "homepage": "https://github.com/akshay-xp/distillate#readme",
   "type": "module",
   "sideEffects": false,
   "exports": {

@@ -66,4 +66,4 @@ Before cutting a release, confirm:
 - [ ] `npm publish --dry-run` lists `dist/` plus `package.json`/`README.md`/`LICENSE` only (no `src/`, `tests/`, `bench/`, `.changeset/`).
 - [ ] Version and `CHANGELOG.md` were bumped by changesets, not by hand.
 - [ ] CI is green on `main` (test matrix + cross-runtime smoke).
-- [ ] For the first publish only: npm Trusted Publishing is configured for the package (GitHub Actions, `akshay-xp/siftr`, `release.yml`).
+- [ ] For the first publish only: npm Trusted Publishing is configured for the package (GitHub Actions, `akshay-xp/distillate`, `release.yml`).

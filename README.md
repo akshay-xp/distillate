@@ -1,6 +1,6 @@
 # distillate
 
-[![CI](https://github.com/akshay-xp/siftr/actions/workflows/ci.yml/badge.svg)](https://github.com/akshay-xp/siftr/actions/workflows/ci.yml)
+[![CI](https://github.com/akshay-xp/distillate/actions/workflows/ci.yml/badge.svg)](https://github.com/akshay-xp/distillate/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/distillate)](https://www.npmjs.com/package/distillate)
 [![license](https://img.shields.io/npm/l/distillate)](./LICENSE)
 
