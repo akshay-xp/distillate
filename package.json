@@ -38,6 +38,14 @@
       "import": "./dist/bloom/index.js",
       "require": "./dist/bloom/index.cjs"
     },
+    "./blocked": {
+      "types": {
+        "import": "./dist/blocked/index.d.ts",
+        "require": "./dist/blocked/index.d.cts"
+      },
+      "import": "./dist/blocked/index.js",
+      "require": "./dist/blocked/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",
