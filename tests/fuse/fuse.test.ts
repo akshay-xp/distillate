@@ -1,7 +1,12 @@
 import fc from "fast-check";
 import { expect, test } from "vitest";
 
-import { BinaryFuse8 } from "../../src/fuse/fuse.js";
+import {
+  BinaryFuse8,
+  BinaryFuseBuildError,
+  buildFingerprints,
+  computeParams,
+} from "../../src/fuse/fuse.js";
 import { sampleStrings } from "../helpers/fpr.js";
 
 const disjoint = (present: readonly string[], absent: string[]): string[] => {
@@ -50,6 +55,21 @@ test("size and bitsPerKey report deduped count and per-key cost", () => {
   const empty = BinaryFuse8.from([]);
   expect(empty.size).toBe(0);
   expect(empty.bitsPerKey).toBe(0);
+});
+
+test("exhausted construction attempts throw BinaryFuseBuildError", () => {
+  const params = computeParams(2);
+  const hashes = Uint32Array.of(1, 2, 3, 4);
+  const fp = new Uint8Array(params.arrayLength);
+
+  let caught: Error | undefined;
+  try {
+    buildFingerprints(fp, hashes, params, 0);
+  } catch (e) {
+    caught = e as Error;
+  }
+  expect(caught?.name).toBe("BinaryFuseBuildError");
+  expect(caught).toBeInstanceOf(BinaryFuseBuildError);
 });
 
 test("false-positive rate stays at or below 0.6% at n=100k", () => {

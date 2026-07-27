@@ -2,7 +2,10 @@ import { normalize, type BytesLike } from "../core/bytes.js";
 import { hash128 } from "../core/hasher.js";
 
 const ARITY = 3;
-const MAX_ATTEMPTS = 100;
+
+export class BinaryFuseBuildError extends Error {
+  override readonly name = "BinaryFuseBuildError";
+}
 
 export interface FuseParams {
   seg: number;
@@ -143,6 +146,7 @@ export function buildFingerprints(
   fp: Uint8Array,
   hashes: Uint32Array,
   params: FuseParams,
+  maxAttempts = 100,
 ): number {
   const size = hashes.length / 2;
   const { seg, segMask, segCountLen, arrayLength } = params;
@@ -155,7 +159,7 @@ export function buildFingerprints(
   const orderIdx = new Uint32Array(size);
   const pos = new Uint32Array(3);
 
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const seed = attempt;
     counts.fill(0);
     xorLo.fill(0);
@@ -221,7 +225,7 @@ export function buildFingerprints(
     }
   }
 
-  throw new Error("binary fuse construction failed");
+  throw new BinaryFuseBuildError("binary fuse construction failed");
 }
 
 export class BinaryFuse8 {
