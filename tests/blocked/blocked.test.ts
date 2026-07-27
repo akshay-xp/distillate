@@ -2,6 +2,12 @@ import fc from "fast-check";
 import { expect, test } from "vitest";
 
 import { BlockedBloomFilter, fillBlock } from "../../src/blocked/blocked.js";
+import { measureFpr, sampleStrings } from "../helpers/fpr.js";
+
+const disjoint = (present: readonly string[], absent: string[]): string[] => {
+  const seen = new Set(present);
+  return absent.filter((k) => !seen.has(k));
+};
 
 const popcount = (x: number): number => {
   let n = x >>> 0;
@@ -77,4 +83,24 @@ test("bitsPerKey reports numBlocks * 256 / capacity", () => {
   const f = new BlockedBloomFilter({ bitsPerKey: 12, capacity: 1000 });
   const numBlocks = Math.ceil((12 * 1000) / 256);
   expect(f.bitsPerKey).toBe((numBlocks * 256) / 1000);
+});
+
+test("create(n, epsilon) sizes so observed FPR stays at or below epsilon", () => {
+  const present = sampleStrings(1, 5000);
+  for (const [epsilon, count] of [
+    [1e-2, 20000],
+    [1e-3, 60000],
+    [1e-4, 200000],
+  ] as const) {
+    const absent = disjoint(present, sampleStrings(2, count));
+    const f = BlockedBloomFilter.create(5000, epsilon);
+    const obs = measureFpr(f, present, absent);
+    expect(obs).toBeLessThanOrEqual(epsilon * 1.3);
+  }
+});
+
+test("create picks bits-per-key monotonically with tighter epsilon", () => {
+  const loose = BlockedBloomFilter.create(100000, 0.01).bitsPerKey;
+  const tight = BlockedBloomFilter.create(100000, 0.0001).bitsPerKey;
+  expect(tight).toBeGreaterThan(loose);
 });

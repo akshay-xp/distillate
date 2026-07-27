@@ -34,6 +34,31 @@ export class BlockedBloomFilter {
   readonly #words = new Uint32Array(8);
   readonly #bits = new Uint32Array(8);
 
+  // Bits-per-key vs target FPR for split-block (8 lanes, 256-bit blocks),
+  // as (log10(1/epsilon), bitsPerKey). Carries the clustering penalty of
+  // confining all probes to one block. Source: Parquet split-block table.
+  static #ANCHORS: readonly [number, number][] = [
+    [2, 10.5],
+    [3, 16.9],
+    [4, 26.4],
+  ];
+
+  static create(n: number, epsilon: number): BlockedBloomFilter {
+    const t = Math.log10(1 / epsilon);
+    const a = BlockedBloomFilter.#ANCHORS;
+    // Segment to interpolate on: the first whose upper anchor is >= t;
+    // clamped to a real segment so t outside the anchors extrapolates.
+    let seg = a.findIndex((p) => t <= p[0]);
+    if (seg < 1) seg = seg === -1 ? a.length - 1 : 1;
+    const [t0, b0] = a[seg - 1] ?? [0, 0];
+    const [t1, b1] = a[seg] ?? [0, 0];
+    const bitsPerKey = b0 + ((b1 - b0) / (t1 - t0)) * (t - t0);
+    return new BlockedBloomFilter({
+      bitsPerKey: Math.ceil(bitsPerKey),
+      capacity: n,
+    });
+  }
+
   constructor({ bitsPerKey, capacity, seed = 0 }: BlockedBloomParams) {
     this.#numBlocks = Math.max(1, Math.ceil((bitsPerKey * capacity) / 256));
     this.#lanes = new Uint32Array(this.#numBlocks * 8);
