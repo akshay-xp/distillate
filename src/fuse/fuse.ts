@@ -143,7 +143,7 @@ export function computeParams(size: number): FuseParams {
  * the seed that succeeded.
  */
 export function buildFingerprints(
-  fp: Uint8Array,
+  fp: Uint8Array | Uint16Array,
   hashes: Uint32Array,
   params: FuseParams,
   maxAttempts = 100,
@@ -228,8 +228,39 @@ export function buildFingerprints(
   throw new BinaryFuseBuildError("binary fuse construction failed");
 }
 
-export class BinaryFuse8 {
-  readonly #fp: Uint8Array;
+interface FuseState {
+  fp: Uint8Array | Uint16Array;
+  seed: number;
+  params: FuseParams;
+  size: number;
+}
+
+function buildState(
+  keys: Iterable<BytesLike>,
+  alloc: (n: number) => Uint8Array | Uint16Array,
+): FuseState {
+  const hashList: number[] = [];
+  const seen = new Set<string>();
+  for (const key of keys) {
+    const { h1lo, h1hi } = hash128(normalize(key), 0);
+    const lo = h1lo >>> 0;
+    const hi = h1hi >>> 0;
+    const id = `${String(lo)},${String(hi)}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    hashList.push(lo, hi);
+  }
+  const size = hashList.length / 2;
+  const params = computeParams(size);
+  if (size === 0) return { fp: alloc(0), seed: 0, params, size: 0 };
+  const hashes = Uint32Array.from(hashList);
+  const fp = alloc(params.arrayLength);
+  const seed = buildFingerprints(fp, hashes, params);
+  return { fp, seed, params, size };
+}
+
+abstract class BinaryFuse {
+  readonly #fp: Uint8Array | Uint16Array;
   readonly #seed: number;
   readonly #seg: number;
   readonly #segMask: number;
@@ -237,18 +268,13 @@ export class BinaryFuse8 {
   readonly #size: number;
   readonly #pos = new Uint32Array(3);
 
-  private constructor(
-    fp: Uint8Array,
-    seed: number,
-    params: FuseParams,
-    size: number,
-  ) {
-    this.#fp = fp;
-    this.#seed = seed;
-    this.#seg = params.seg;
-    this.#segMask = params.segMask;
-    this.#segCountLen = params.segCountLen;
-    this.#size = size;
+  protected constructor(state: FuseState) {
+    this.#fp = state.fp;
+    this.#seed = state.seed;
+    this.#seg = state.params.seg;
+    this.#segMask = state.params.segMask;
+    this.#segCountLen = state.params.segCountLen;
+    this.#size = state.size;
   }
 
   get size(): number {
@@ -257,27 +283,6 @@ export class BinaryFuse8 {
 
   get bitsPerKey(): number {
     return this.#size === 0 ? 0 : (this.#fp.length * 8) / this.#size;
-  }
-
-  static from(keys: Iterable<BytesLike>): BinaryFuse8 {
-    const hashList: number[] = [];
-    const seen = new Set<string>();
-    for (const key of keys) {
-      const { h1lo, h1hi } = hash128(normalize(key), 0);
-      const lo = h1lo >>> 0;
-      const hi = h1hi >>> 0;
-      const id = `${String(lo)},${String(hi)}`;
-      if (seen.has(id)) continue;
-      seen.add(id);
-      hashList.push(lo, hi);
-    }
-    const size = hashList.length / 2;
-    const params = computeParams(size);
-    if (size === 0) return new BinaryFuse8(new Uint8Array(0), 0, params, 0);
-    const hashes = Uint32Array.from(hashList);
-    const fp = new Uint8Array(params.arrayLength);
-    const seed = buildFingerprints(fp, hashes, params);
-    return new BinaryFuse8(fp, seed, params, size);
   }
 
   has(key: BytesLike): boolean {
@@ -302,5 +307,11 @@ export class BinaryFuse8 {
       ((mlo ^ mhi) & mask) ===
       (((this.#fp[p0] ?? 0) ^ (this.#fp[p1] ?? 0) ^ (this.#fp[p2] ?? 0)) & mask)
     );
+  }
+}
+
+export class BinaryFuse8 extends BinaryFuse {
+  static from(keys: Iterable<BytesLike>): BinaryFuse8 {
+    return new BinaryFuse8(buildState(keys, (n) => new Uint8Array(n)));
   }
 }
