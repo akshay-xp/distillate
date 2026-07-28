@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 
-import { cycle, hitMissPools } from "../../bench/harness.js";
+import { BloomFilter } from "../../src/bloom/bloom.js";
+import { cycle, hitMissPools, measureFpr } from "../../bench/harness.js";
 
 test("hitMissPools returns disjoint hit and miss pools", () => {
   const { hit, miss } = hitMissPools(1000);
@@ -14,4 +15,17 @@ test("cycle walks the pool in order and wraps", () => {
   expect(next()).toBe("a");
   expect(next()).toBe("b");
   expect(next()).toBe("a");
+});
+
+test("measureFpr reports the miss-set positive rate of a built filter", () => {
+  const miss = hitMissPools(100).miss;
+  expect(measureFpr({ has: () => true }, miss)).toBe(1);
+  expect(measureFpr({ has: () => false }, miss)).toBe(0);
+
+  const { hit, miss: absent } = hitMissPools(1000);
+  const f = BloomFilter.create(1000, 0.01);
+  for (const k of hit) f.add(k);
+  const fpr = measureFpr(f, absent);
+  expect(fpr).toBeGreaterThan(0);
+  expect(fpr).toBeLessThan(0.05);
 });

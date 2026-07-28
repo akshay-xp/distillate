@@ -8,7 +8,16 @@ export function hitMissPools(n: number): { hit: string[]; miss: string[] } {
   return { hit, miss };
 }
 
+export function measureFpr(
+  filter: { has(key: string): boolean },
+  miss: readonly string[],
+): number {
+  let hits = 0;
+  for (const key of miss) if (filter.has(key)) hits++;
+  return hits / miss.length;
+}
+
 export function cycle<T>(pool: readonly T[]): () => T {
   let i = 0;
-  return () => pool[i++ % pool.length];
+  return () => pool[i++ % pool.length]!;
 }
