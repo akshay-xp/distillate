@@ -32,9 +32,12 @@ Keep each subpath a separate bundler entry (independent chunks; no barrel pullin
 
 ## Benchmarking
 
-- mitata (deopt/GC-aware) is authoritative; run on Node + Bun + Deno. tinybench for quick local checks.
-- Metrics: insert and `has()` ops/sec (hit and miss paths separate); construction throughput + Cuckoo failure rate; analytic bits/key (`backing.byteLength * 8 / n`, not `process.memoryUsage`); empirical FPR-vs-space curve.
-- Traps: consume results (avoid dead-code elimination), discard warmup, keep monomorphic (one type per bench), pre-allocate keys outside the timed loop, use non-constant inputs.
+`pnpm bench` runs the suite; mitata is the timing engine, and every script prints `envBanner()` (runtime + version + CPU) first.
+
+- Harness (`bench/harness.ts`): shared primitives so every bench measures by identical code: `hitMissPools` (disjoint hit/miss pools), `cycle`, `benchLookup` (cycle keys through `has()`, consume via `do_not_optimize`), `measureFpr` (empirical FPR of a built filter over a disjoint miss set).
+- Metrics, space/accuracy first: `bench/accuracy.bench.ts` reports target vs measured FPR (over a >= 1e6 disjoint miss set) and analytic bits/key (`backing.byteLength * 8 / n`, not `process.memoryUsage`) across a 1e4/1e5/1e6 sweep; then throughput as separate `add` / `has (hit)` / `has (miss)` benches plus build for static filters.
+- Anti-optimization: distinct-key pools (never a constant key), keys cycled so V8 can't constant-fold, results consumed with `do_not_optimize`, distinct-key inserts.
+- Machine disclosure: absolute throughput is machine-relative, so published numbers must state the machine and lead with the machine-independent metrics (bits/key, measured FPR).
 
 ## CI (GitHub Actions)
 
