@@ -1,3 +1,19 @@
+/// <reference types="node" />
+import * as os from "node:os";
+
+function runtime(): string {
+  const versions = process.versions as Record<string, string | undefined>;
+  if (versions.bun) return `bun v${versions.bun}`;
+  if (versions.deno) return `deno v${versions.deno}`;
+  return `node v${process.versions.node}`;
+}
+
+export function envBanner(): string {
+  const cpus = os.cpus();
+  const model = cpus[0]?.model ?? "unknown CPU";
+  return `distillate bench | ${runtime()} | ${process.arch} | ${model} | ${String(cpus.length)} cores`;
+}
+
 export function hitMissPools(n: number): { hit: string[]; miss: string[] } {
   const hit = new Array<string>(n);
   const miss = new Array<string>(n);

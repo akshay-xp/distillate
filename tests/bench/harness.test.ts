@@ -1,7 +1,12 @@
 import { expect, test } from "vitest";
 
 import { BloomFilter } from "../../src/bloom/bloom.js";
-import { cycle, hitMissPools, measureFpr } from "../../bench/harness.js";
+import {
+  cycle,
+  envBanner,
+  hitMissPools,
+  measureFpr,
+} from "../../bench/harness.js";
 
 test("hitMissPools returns disjoint hit and miss pools", () => {
   const { hit, miss } = hitMissPools(1000);
@@ -28,4 +33,10 @@ test("measureFpr reports the miss-set positive rate of a built filter", () => {
   const fpr = measureFpr(f, absent);
   expect(fpr).toBeGreaterThan(0);
   expect(fpr).toBeLessThan(0.05);
+});
+
+test("envBanner names the runtime and reports core count", () => {
+  const banner = envBanner();
+  expect(banner).toMatch(/(node|bun|deno) v/);
+  expect(banner).toMatch(/\d+ cores/);
 });
