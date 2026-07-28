@@ -2,11 +2,19 @@ import { bench, run } from "mitata";
 
 import { BloomFilter } from "../src/bloom/bloom.js";
 
-const f = BloomFilter.create(100_000, 0.01);
-const key = "user:benchmark:42";
-f.add(key);
+import { benchLookup, cycle, envBanner, hitMissPools } from "./harness.js";
 
-bench("bloom add", () => f.add(key));
-bench("bloom has (hit)", () => f.has(key));
+const { hit, miss } = hitMissPools(100_000);
+const f = BloomFilter.create(100_000, 0.01);
+for (const k of hit) f.add(k);
+
+console.log(envBanner());
+
+const nextAdd = cycle(hit);
+bench("bloom add", () => {
+  f.add(nextAdd());
+});
+benchLookup("bloom has (hit)", f, hit);
+benchLookup("bloom has (miss)", f, miss);
 
 await run();
