@@ -1,5 +1,10 @@
 /// <reference types="node" />
+import { bench, do_not_optimize } from "mitata";
 import * as os from "node:os";
+
+export interface Queryable {
+  has(key: string): boolean;
+}
 
 function runtime(): string {
   const versions = process.versions as Record<string, string | undefined>;
@@ -24,10 +29,7 @@ export function hitMissPools(n: number): { hit: string[]; miss: string[] } {
   return { hit, miss };
 }
 
-export function measureFpr(
-  filter: { has(key: string): boolean },
-  miss: readonly string[],
-): number {
+export function measureFpr(filter: Queryable, miss: readonly string[]): number {
   let hits = 0;
   for (const key of miss) if (filter.has(key)) hits++;
   return hits / miss.length;
@@ -36,4 +38,25 @@ export function measureFpr(
 export function cycle<T>(pool: readonly T[]): () => T {
   let i = 0;
   return () => pool[i++ % pool.length]!;
+}
+
+export function lookupThunk(
+  filter: Queryable,
+  pool: readonly string[],
+): () => void {
+  const next = cycle(pool);
+  return () => {
+    do_not_optimize(filter.has(next()));
+  };
+}
+
+export function benchLookup(
+  name: string,
+  filter: Queryable,
+  pool: readonly string[],
+): void {
+  const run = lookupThunk(filter, pool);
+  bench(name, () => {
+    run();
+  });
 }

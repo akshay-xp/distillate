@@ -5,6 +5,7 @@ import {
   cycle,
   envBanner,
   hitMissPools,
+  lookupThunk,
   measureFpr,
 } from "../../bench/harness.js";
 
@@ -39,4 +40,20 @@ test("envBanner names the runtime and reports core count", () => {
   const banner = envBanner();
   expect(banner).toMatch(/(node|bun|deno) v/);
   expect(banner).toMatch(/\d+ cores/);
+});
+
+test("lookupThunk queries successive cycling keys", () => {
+  const seen: string[] = [];
+  const filter = {
+    has(key: string) {
+      seen.push(key);
+      return false;
+    },
+  };
+  const run = lookupThunk(filter, ["a", "b", "c"]);
+  run();
+  run();
+  run();
+  run();
+  expect(seen).toEqual(["a", "b", "c", "a"]);
 });
