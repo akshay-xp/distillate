@@ -2,7 +2,7 @@ import { BlockedBloomFilter } from "../src/blocked/blocked.js";
 import { BloomFilter } from "../src/bloom/bloom.js";
 import { BinaryFuse16, BinaryFuse8 } from "../src/fuse/fuse.js";
 
-import { hitMissPools } from "./harness.js";
+import { hitMissPools, measureFpr } from "./harness.js";
 
 export const MISS = 1_000_000;
 export const BLOOM_FPR = 0.01;
@@ -19,6 +19,7 @@ export interface AccuracyRow {
 
 export function accuracyRows(sizes: number[]): AccuracyRow[] {
   const rows: AccuracyRow[] = [];
+  const miss = hitMissPools(MISS).miss;
   for (const n of sizes) {
     const hit = hitMissPools(n).hit;
 
@@ -36,28 +37,28 @@ export function accuracyRows(sizes: number[]): AccuracyRow[] {
         structure: "bloom",
         n,
         targetFpr: BLOOM_FPR,
-        measuredFpr: 0,
+        measuredFpr: measureFpr(bloom, miss),
         bitsPerKey: bloom.bitsPerKey,
       },
       {
         structure: "blocked",
         n,
         targetFpr: BLOOM_FPR,
-        measuredFpr: 0,
+        measuredFpr: measureFpr(blocked, miss),
         bitsPerKey: blocked.bitsPerKey,
       },
       {
         structure: "fuse8",
         n,
         targetFpr: FUSE8_FPR,
-        measuredFpr: 0,
+        measuredFpr: measureFpr(fuse8, miss),
         bitsPerKey: fuse8.bitsPerKey,
       },
       {
         structure: "fuse16",
         n,
         targetFpr: FUSE16_FPR,
-        measuredFpr: 0,
+        measuredFpr: measureFpr(fuse16, miss),
         bitsPerKey: fuse16.bitsPerKey,
       },
     );
