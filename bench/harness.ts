@@ -7,3 +7,8 @@ export function hitMissPools(n: number): { hit: string[]; miss: string[] } {
   }
   return { hit, miss };
 }
+
+export function cycle<T>(pool: readonly T[]): () => T {
+  let i = 0;
+  return () => pool[i++ % pool.length];
+}
