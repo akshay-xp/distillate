@@ -65,3 +65,26 @@ export function accuracyRows(sizes: number[]): AccuracyRow[] {
   }
   return rows;
 }
+
+const COLS: { header: string; of: (r: AccuracyRow) => string }[] = [
+  { header: "structure", of: (r) => r.structure },
+  { header: "n", of: (r) => r.n.toLocaleString("en-US") },
+  { header: "target", of: (r) => r.targetFpr.toExponential(2) },
+  { header: "measured", of: (r) => r.measuredFpr.toExponential(2) },
+  { header: "bits/key", of: (r) => r.bitsPerKey.toFixed(2) },
+];
+
+export function formatRows(rows: AccuracyRow[]): string {
+  const lines = [
+    COLS.map((c) => c.header),
+    ...rows.map((r) => COLS.map((c) => c.of(r))),
+  ];
+  const widths = COLS.map((_, i) =>
+    Math.max(...lines.map((line) => line[i]?.length ?? 0)),
+  );
+  return lines
+    .map((line) =>
+      line.map((cell, i) => cell.padEnd(widths[i] ?? 0)).join("  "),
+    )
+    .join("\n");
+}

@@ -72,7 +72,7 @@
     "changeset": "changeset",
     "version": "changeset version",
     "release": "changeset publish",
-    "bench": "tsx bench/core.bench.ts && tsx bench/bloom.bench.ts && tsx bench/blocked.bench.ts && tsx bench/fuse.bench.ts",
+    "bench": "tsx bench/core.bench.ts && tsx bench/bloom.bench.ts && tsx bench/blocked.bench.ts && tsx bench/fuse.bench.ts && tsx bench/accuracy.bench.ts",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

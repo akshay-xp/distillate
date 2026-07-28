@@ -1,6 +1,11 @@
 import { expect, test } from "vitest";
 
-import { accuracyRows, FUSE16_FPR, FUSE8_FPR } from "../../bench/accuracy.js";
+import {
+  accuracyRows,
+  formatRows,
+  FUSE16_FPR,
+  FUSE8_FPR,
+} from "../../bench/accuracy.js";
 
 test("accuracyRows reports design fields for all four structures", () => {
   const rows = accuracyRows([10000]);
@@ -51,4 +56,14 @@ test("measured FPR tracks theory over a 1e6 miss set", () => {
   const fuse16 = by("fuse16");
   expect(fuse16.measuredFpr).toBeGreaterThan(0);
   expect(fuse16.measuredFpr).toBeLessThan(FUSE8_FPR);
+});
+
+test("formatRows renders a table with headers and every structure", () => {
+  const table = formatRows(accuracyRows([10000]));
+  for (const header of ["structure", "n", "target", "measured", "bits/key"]) {
+    expect(table).toContain(header);
+  }
+  for (const name of ["bloom", "blocked", "fuse8", "fuse16"]) {
+    expect(table).toContain(name);
+  }
 });
