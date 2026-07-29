@@ -351,3 +351,8 @@ test("hash128Key equals hash128(normalize(key)) for string and byte keys", () =>
     hash128(enc("abc"), 0),
   );
 });
+
+test("hash128Key grows its buffer for keys longer than the initial size", () => {
+  const long = "a".repeat(300);
+  expect(hash128Key(long, 0)).toEqual(hash128(enc(long), 0));
+});

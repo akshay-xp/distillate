@@ -235,12 +235,14 @@ export function hash128(
 }
 
 const keyEncoder = new TextEncoder();
-const keyBuf = new Uint8Array(256);
+let keyBuf = new Uint8Array(256);
 
 // Hash a key with zero per-call allocation: strings encode into a reused
 // buffer (grown on demand) instead of a fresh Uint8Array per call.
 export function hash128Key(key: BytesLike, seed = 0): Hash128 {
   if (typeof key === "string") {
+    const cap = key.length * 3;
+    if (keyBuf.length < cap) keyBuf = new Uint8Array(cap);
     const { written } = keyEncoder.encodeInto(key, keyBuf);
     return hash128(keyBuf, seed, written);
   }
