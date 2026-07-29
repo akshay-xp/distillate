@@ -1,5 +1,5 @@
-import { normalize, type BytesLike } from "../core/bytes.js";
-import { hash128 } from "../core/hasher.js";
+import { type BytesLike } from "../core/bytes.js";
+import { hash128Key } from "../core/hasher.js";
 import {
   FORMAT_VERSION,
   readHeader,
@@ -250,7 +250,7 @@ function buildState(
   const hashList: number[] = [];
   const seen = new Set<string>();
   for (const key of keys) {
-    const { h1lo, h1hi } = hash128(normalize(key), 0);
+    const { h1lo, h1hi } = hash128Key(key, 0);
     const lo = h1lo >>> 0;
     const hi = h1hi >>> 0;
     const id = `${String(lo)},${String(hi)}`;
@@ -341,7 +341,7 @@ abstract class BinaryFuse {
 
   has(key: BytesLike): boolean {
     if (this.#fp.length === 0) return false;
-    const { h1lo, h1hi } = hash128(normalize(key), 0);
+    const { h1lo, h1hi } = hash128Key(key, 0);
     mixSeed(h1lo >>> 0, h1hi >>> 0, this.#seed);
     const mlo = RLO;
     const mhi = RHI;

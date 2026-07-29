@@ -277,7 +277,7 @@ export function probeInto(
   seed: number,
   out: Uint32Array,
 ): void {
-  const { h1lo, h1hi, h2lo, h2hi } = hash128(normalize(key), seed);
+  const { h1lo, h1hi, h2lo, h2hi } = hash128Key(key, seed);
   const a = (h1lo ^ h1hi) >>> 0;
   const b = (h2lo ^ h2hi) >>> 0;
   for (let i = 0; i < count; i++) {

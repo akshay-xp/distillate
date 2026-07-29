@@ -1,5 +1,5 @@
-import { normalize, type BytesLike } from "../core/bytes.js";
-import { hash128, reduce } from "../core/hasher.js";
+import { type BytesLike } from "../core/bytes.js";
+import { hash128Key, reduce } from "../core/hasher.js";
 import { FORMAT_VERSION, readHeader, writeHeader } from "../core/serialize.js";
 
 const TYPE = 2;
@@ -152,7 +152,7 @@ export function fillBlock(
   outWords: Uint32Array,
   outBits: Uint32Array,
 ): void {
-  const { h1lo, h1hi, h2lo, h2hi } = hash128(normalize(key), seed);
+  const { h1lo, h1hi, h2lo, h2hi } = hash128Key(key, seed);
   const block = reduce((h1lo ^ h1hi) >>> 0, numBlocks);
   const x = (h2lo ^ h2hi) >>> 0;
   const base = block * 8;
