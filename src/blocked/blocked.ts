@@ -1,5 +1,5 @@
 import { type BytesLike } from "../core/bytes.js";
-import { hash128Key, reduce } from "../core/hasher.js";
+import { type Hash128, hash128KeyInto, reduce } from "../core/hasher.js";
 import { FORMAT_VERSION, readHeader, writeHeader } from "../core/serialize.js";
 
 const TYPE = 2;
@@ -16,6 +16,10 @@ const SALT = Uint32Array.of(
   0x9efc4947,
   0x5c6bfb31,
 );
+
+// Reused across fillBlock calls; safe because hashing is synchronous and
+// non-reentrant (same rationale as the hasher's own scratch registers).
+const scratchHash: Hash128 = { h1lo: 0, h1hi: 0, h2lo: 0, h2hi: 0 };
 
 /**
  * Split-block probe: derive one block index and 8 single-bit lane masks for
@@ -152,9 +156,9 @@ export function fillBlock(
   outWords: Uint32Array,
   outBits: Uint32Array,
 ): void {
-  const { h1lo, h1hi, h2lo, h2hi } = hash128Key(key, seed);
-  const block = reduce((h1lo ^ h1hi) >>> 0, numBlocks);
-  const x = (h2lo ^ h2hi) >>> 0;
+  hash128KeyInto(key, seed, scratchHash);
+  const block = reduce((scratchHash.h1lo ^ scratchHash.h1hi) >>> 0, numBlocks);
+  const x = (scratchHash.h2lo ^ scratchHash.h2hi) >>> 0;
   const base = block * 8;
   for (let i = 0; i < 8; i++) {
     outWords[i] = base + i;

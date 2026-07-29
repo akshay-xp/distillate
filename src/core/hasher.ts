@@ -304,9 +304,9 @@ export function probeInto(
   seed: number,
   out: Uint32Array,
 ): void {
-  const { h1lo, h1hi, h2lo, h2hi } = hash128Key(key, seed);
-  const a = (h1lo ^ h1hi) >>> 0;
-  const b = (h2lo ^ h2hi) >>> 0;
+  keyToLanes(key, seed);
+  const a = (LANES.h1lo ^ LANES.h1hi) >>> 0;
+  const b = (LANES.h2lo ^ LANES.h2hi) >>> 0;
   for (let i = 0; i < count; i++) {
     const x = (a + Math.imul(i, b) + i * i) >>> 0;
     out[i] = reduce(x, range);

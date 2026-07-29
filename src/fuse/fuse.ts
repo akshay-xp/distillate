@@ -1,5 +1,5 @@
 import { type BytesLike } from "../core/bytes.js";
-import { hash128Key } from "../core/hasher.js";
+import { type Hash128, hash128KeyInto } from "../core/hasher.js";
 import {
   FORMAT_VERSION,
   readHeader,
@@ -27,6 +27,9 @@ export interface FuseParams {
 // non-recursive, and each caller captures RLO/RHI before the next helper runs.
 let RLO = 0;
 let RHI = 0;
+
+// Reused across key hashing (build + lookup); same non-reentrant rationale.
+const scratchHash: Hash128 = { h1lo: 0, h1hi: 0, h2lo: 0, h2hi: 0 };
 
 function mul64(alo: number, ahi: number, blo: number, bhi: number): void {
   const a0 = alo & 0xffff;
@@ -250,9 +253,9 @@ function buildState(
   const hashList: number[] = [];
   const seen = new Set<string>();
   for (const key of keys) {
-    const { h1lo, h1hi } = hash128Key(key, 0);
-    const lo = h1lo >>> 0;
-    const hi = h1hi >>> 0;
+    hash128KeyInto(key, 0, scratchHash);
+    const lo = scratchHash.h1lo >>> 0;
+    const hi = scratchHash.h1hi >>> 0;
     const id = `${String(lo)},${String(hi)}`;
     if (seen.has(id)) continue;
     seen.add(id);
@@ -341,8 +344,8 @@ abstract class BinaryFuse {
 
   has(key: BytesLike): boolean {
     if (this.#fp.length === 0) return false;
-    const { h1lo, h1hi } = hash128Key(key, 0);
-    mixSeed(h1lo >>> 0, h1hi >>> 0, this.#seed);
+    hash128KeyInto(key, 0, scratchHash);
+    mixSeed(scratchHash.h1lo >>> 0, scratchHash.h1hi >>> 0, this.#seed);
     const mlo = RLO;
     const mhi = RHI;
     positionsInto(

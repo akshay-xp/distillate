@@ -24,6 +24,7 @@ Pure-JS MurmurHash3_x64_128, single pass, sliced into two 64-bit lanes (h1, h2) 
 - All lane math unsigned: `>>> 0`. This is the #1 source of JS hash-port bugs.
 - Hash once, reuse across all probes. (Incumbent recomputes per op; see bloom-filters issue #60.)
 - String keys are hashed via `hash128Key`, which `TextEncoder.encodeInto`s the key into a reused, grow-on-demand buffer and calls the length-aware `hash128(buf, seed, written)`, so steady-state string hashing allocates nothing (no per-op `Uint8Array`). The bytes hashed are the same UTF-8 as `encode()`, so serialized filters stay cross-language readable; portability is unchanged.
+- Hot paths (bloom/blocked/fuse `has`/`add`) call `hash128KeyInto(key, seed, out)`, which writes lanes into a caller-owned struct instead of returning a fresh object, so membership ops allocate nothing per call. `hash128`/`hash128Key` keep returning fresh objects for external/test use.
 
 ## Pluggable
 
