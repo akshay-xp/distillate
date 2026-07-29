@@ -1,7 +1,12 @@
 import fc from "fast-check";
 import { expect, test } from "vitest";
 
-import { hash128, probeInto, probes } from "../../src/core/hasher.js";
+import {
+  hash128,
+  hash128Key,
+  probeInto,
+  probes,
+} from "../../src/core/hasher.js";
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
@@ -333,5 +338,16 @@ test("hash128(b, seed, len) equals hash128(b.subarray(0, len), seed)", () => {
       const len = Math.min(k, b.length);
       expect(hash128(b, 0, len)).toEqual(hash128(b.subarray(0, len), 0));
     }),
+  );
+});
+
+test("hash128Key equals hash128(normalize(key)) for string and byte keys", () => {
+  for (const s of ["", "hi", "héllo", "🎉"]) {
+    expect(hash128Key(s, 0)).toEqual(hash128(enc(s), 0));
+  }
+  expect(hash128Key("abc", 42)).toEqual(hash128(enc("abc"), 42));
+  expect(hash128Key(enc("abc"), 0)).toEqual(hash128(enc("abc"), 0));
+  expect(hash128Key(enc("abc").buffer as ArrayBuffer, 0)).toEqual(
+    hash128(enc("abc"), 0),
   );
 });

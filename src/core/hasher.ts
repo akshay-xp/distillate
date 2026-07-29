@@ -234,6 +234,20 @@ export function hash128(
   };
 }
 
+const keyEncoder = new TextEncoder();
+const keyBuf = new Uint8Array(256);
+
+// Hash a key with zero per-call allocation: strings encode into a reused
+// buffer (grown on demand) instead of a fresh Uint8Array per call.
+export function hash128Key(key: BytesLike, seed = 0): Hash128 {
+  if (typeof key === "string") {
+    const { written } = keyEncoder.encodeInto(key, keyBuf);
+    return hash128(keyBuf, seed, written);
+  }
+  const bytes = normalize(key);
+  return hash128(bytes, seed);
+}
+
 // Lemire multiply-shift: map x in [0, 2^32) to [0, range) via the high 32 bits
 // of x * range, computed with 16-bit partial products (no 64-bit overflow).
 export function reduce(x: number, range: number): number {
