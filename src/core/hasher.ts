@@ -263,6 +263,20 @@ export function hash128Key(key: BytesLike, seed = 0): Hash128 {
   return { ...LANES };
 }
 
+// Zero-alloc key hashing for hot paths: fills a caller-owned struct instead of
+// returning a fresh object.
+export function hash128KeyInto(
+  key: BytesLike,
+  seed: number,
+  out: Hash128,
+): void {
+  keyToLanes(key, seed);
+  out.h1lo = LANES.h1lo;
+  out.h1hi = LANES.h1hi;
+  out.h2lo = LANES.h2lo;
+  out.h2hi = LANES.h2hi;
+}
+
 // Lemire multiply-shift: map x in [0, 2^32) to [0, range) via the high 32 bits
 // of x * range, computed with 16-bit partial products (no 64-bit overflow).
 export function reduce(x: number, range: number): number {

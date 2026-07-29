@@ -1,9 +1,12 @@
 import fc from "fast-check";
 import { expect, test } from "vitest";
 
+import { type BytesLike } from "../../src/core/bytes.js";
 import {
   hash128,
+  type Hash128,
   hash128Key,
+  hash128KeyInto,
   probeInto,
   probes,
 } from "../../src/core/hasher.js";
@@ -355,4 +358,26 @@ test("hash128Key equals hash128(normalize(key)) for string and byte keys", () =>
 test("hash128Key grows its buffer for keys longer than the initial size", () => {
   const long = "a".repeat(300);
   expect(hash128Key(long, 0)).toEqual(hash128(enc(long), 0));
+});
+
+test("hash128KeyInto fills out identically to hash128Key", () => {
+  const cases: [BytesLike, number][] = [
+    ["", 0],
+    ["abc", 0],
+    ["héllo", 0],
+    ["🎉", 0],
+    [enc("abc"), 0],
+    ["abc", 42],
+  ];
+  for (const [key, seed] of cases) {
+    const out: Hash128 = { h1lo: 0, h1hi: 0, h2lo: 0, h2hi: 0 };
+    hash128KeyInto(key, seed, out);
+    expect(out).toEqual(hash128Key(key, seed));
+  }
+});
+
+test("hash128/hash128Key return independent objects (no aliasing)", () => {
+  const a = hash128Key("abc", 0);
+  hash128Key("xyz", 0);
+  expect(a).toEqual(hash128(enc("abc"), 0));
 });
