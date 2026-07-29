@@ -90,8 +90,11 @@ function fmix64(lo: number, hi: number): void {
   RHI = h;
 }
 
-export function hash128(bytes: Uint8Array, seed = 0): Hash128 {
-  const len = bytes.length;
+export function hash128(
+  bytes: Uint8Array,
+  seed = 0,
+  len: number = bytes.length,
+): Hash128 {
   const nblocks = len >>> 4;
 
   let h1lo = seed >>> 0;

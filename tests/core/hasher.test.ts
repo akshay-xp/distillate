@@ -319,3 +319,19 @@ test("hash128 matches the reference across all tail lengths and multi-block", ()
     });
   }
 });
+
+test("hash128 with len ignores bytes past len (reused-buffer safe)", () => {
+  const data = enc("hello");
+  const padded = new Uint8Array(64).fill(0xff);
+  padded.set(data);
+  expect(hash128(padded, 0, data.length)).toEqual(hash128(data, 0));
+});
+
+test("hash128(b, seed, len) equals hash128(b.subarray(0, len), seed)", () => {
+  fc.assert(
+    fc.property(fc.uint8Array({ maxLength: 40 }), fc.nat(40), (b, k) => {
+      const len = Math.min(k, b.length);
+      expect(hash128(b, 0, len)).toEqual(hash128(b.subarray(0, len), 0));
+    }),
+  );
+});
