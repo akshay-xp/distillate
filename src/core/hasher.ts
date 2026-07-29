@@ -18,6 +18,10 @@ const C2HI = 0x4cf5ad43;
 let RLO = 0;
 let RHI = 0;
 
+// Reused output struct for the final hash lanes, same non-reentrant rationale
+// as RLO/RHI. computeLanes writes it; the allocating wrappers copy it out.
+const LANES: Hash128 = { h1lo: 0, h1hi: 0, h2lo: 0, h2hi: 0 };
+
 function mul64(alo: number, ahi: number, blo: number, bhi: number): void {
   const a0 = alo & 0xffff;
   const a1 = alo >>> 16;
@@ -90,11 +94,7 @@ function fmix64(lo: number, hi: number): void {
   RHI = h;
 }
 
-export function hash128(
-  bytes: Uint8Array,
-  seed = 0,
-  len: number = bytes.length,
-): Hash128 {
+function computeLanes(bytes: Uint8Array, seed: number, len: number): void {
   const nblocks = len >>> 4;
 
   let h1lo = seed >>> 0;
@@ -226,28 +226,41 @@ export function hash128(
   h2lo = RLO;
   h2hi = RHI;
 
-  return {
-    h1lo: h1lo >>> 0,
-    h1hi: h1hi >>> 0,
-    h2lo: h2lo >>> 0,
-    h2hi: h2hi >>> 0,
-  };
+  LANES.h1lo = h1lo >>> 0;
+  LANES.h1hi = h1hi >>> 0;
+  LANES.h2lo = h2lo >>> 0;
+  LANES.h2hi = h2hi >>> 0;
+}
+
+export function hash128(
+  bytes: Uint8Array,
+  seed = 0,
+  len: number = bytes.length,
+): Hash128 {
+  computeLanes(bytes, seed, len);
+  return { ...LANES };
 }
 
 const keyEncoder = new TextEncoder();
 let keyBuf = new Uint8Array(256);
 
-// Hash a key with zero per-call allocation: strings encode into a reused
-// buffer (grown on demand) instead of a fresh Uint8Array per call.
-export function hash128Key(key: BytesLike, seed = 0): Hash128 {
+// Encode a key into LANES with zero per-call allocation: strings encode into a
+// reused buffer (grown on demand) instead of a fresh Uint8Array per call.
+function keyToLanes(key: BytesLike, seed: number): void {
   if (typeof key === "string") {
     const cap = key.length * 3;
     if (keyBuf.length < cap) keyBuf = new Uint8Array(cap);
     const { written } = keyEncoder.encodeInto(key, keyBuf);
-    return hash128(keyBuf, seed, written);
+    computeLanes(keyBuf, seed, written);
+    return;
   }
   const bytes = normalize(key);
-  return hash128(bytes, seed);
+  computeLanes(bytes, seed, bytes.length);
+}
+
+export function hash128Key(key: BytesLike, seed = 0): Hash128 {
+  keyToLanes(key, seed);
+  return { ...LANES };
 }
 
 // Lemire multiply-shift: map x in [0, 2^32) to [0, range) via the high 32 bits
