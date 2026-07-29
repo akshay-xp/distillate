@@ -36,6 +36,9 @@ jobs:
         with:
           version: pnpm run version
           publish: pnpm run release
+          # Conventional-commit message so the local commitlint hook accepts
+          # the bot's version commit.
+          commit: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
