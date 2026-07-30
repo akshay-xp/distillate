@@ -92,6 +92,19 @@ const precise = BinaryFuse16.from(["alice", "bob", "carol"]);
 
 Also: `toBytes` / `fromBytes`. No `add` / `delete`; rebuild `from` the new set to change membership.
 
+## Performance
+
+Classic Bloom head-to-head at a **matched 1% false-positive rate** over the same 100k keys, measured by identical code (Node, Apple M5):
+
+| Classic Bloom  | bits/key | measured FPR | `has` throughput |
+| -------------- | -------- | ------------ | ---------------- |
+| **distillate** | 9.59     | 1.03%        | ~7.0 M ops/s     |
+| bloom-filters  | 9.59     | 0.99%        | ~0.29 M ops/s    |
+
+Same space, same accuracy, **~24x the lookup throughput** of [`bloom-filters`](https://www.npmjs.com/package/bloom-filters) (the package distillate replaces), while hashing UTF-8 bytes with MurmurHash3 so filters stay portable and cross-language readable.
+
+These are a point-in-time snapshot on one machine. The full report (blocked/fuse, 1M capacity, the `bloomfilter` micro-package) and exactly how it is measured live in the [distillate-bench](https://github.com/akshay-xp/distillate-bench) repo: [RESULTS.md](https://github.com/akshay-xp/distillate-bench/blob/main/RESULTS.md), [METHODOLOGY.md](https://github.com/akshay-xp/distillate-bench/blob/main/METHODOLOGY.md).
+
 ## Docs
 
 Design notes, the structure decision matrix, hashing, and the binary format live in [`docs/`](./docs):
