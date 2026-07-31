@@ -1,0 +1,80 @@
+# Contributing to distillate
+
+Thanks for your interest in improving distillate. This guide takes you from a fresh clone to a green pull request.
+
+By participating you agree to abide by the [Code of Conduct](./CODE_OF_CONDUCT.md).
+
+## Prerequisites
+
+- **Node.js 20+** (20, 22, or 24).
+- **pnpm** — the repo pins its version via the `packageManager` field. Enable [Corepack](https://nodejs.org/api/corepack.html) so the right pnpm is used automatically:
+
+  ```sh
+  corepack enable
+  ```
+
+## Setup
+
+```sh
+git clone https://github.com/akshay-xp/distillate.git
+cd distillate
+pnpm install
+```
+
+`pnpm install` sets up Husky git hooks, so commits are linted and formatted locally before they reach CI.
+
+## Commands
+
+| Command             | What it does                                           |
+| ------------------- | ------------------------------------------------------ |
+| `pnpm build`        | Build the package with tsdown                          |
+| `pnpm test`         | Run the test suite once (Vitest)                       |
+| `pnpm coverage`     | Run tests with a v8 coverage report and threshold gate |
+| `pnpm typecheck`    | Type-check without emitting (`tsc --noEmit`)           |
+| `pnpm lint`         | ESLint (type-aware)                                    |
+| `pnpm format`       | Format the tree with Prettier                          |
+| `pnpm format:check` | Check formatting without writing                       |
+| `pnpm bench`        | Run the benchmarks                                     |
+
+Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm format:check` before opening a PR; CI runs all of them.
+
+## Tests and coverage
+
+- Every behavior change needs a test. Bug fixes start with a failing test that the fix turns green.
+- Correctness invariants (no false negatives, false-positive rates track theory) are property-tested with fast-check; extend those when you touch a structure.
+- Coverage is gated in CI. There is a global floor, and **new code must be at least 90% covered** (enforced per-PR on the diff). Keep the lines you add tested.
+
+## Commit messages
+
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/) and are enforced by commitlint. Use a type, an optional scope, and an imperative subject:
+
+```
+feat(fuse): add BinaryFuse16 serialization
+fix(bloom): correct bit index on union of unequal seeds
+docs: clarify blocked-bloom tradeoffs
+```
+
+Common types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`, `perf`.
+
+## Changesets
+
+If your change affects the published package (any `src/` behavior, types, or exports), add a changeset:
+
+```sh
+pnpm changeset
+```
+
+Pick the bump (patch/minor/major) and describe the change for the changelog. Docs-only, test-only, or internal tooling changes do not need one. Releases are automated: merging the "Version Packages" PR publishes to npm.
+
+## Pull requests
+
+1. Fork and branch from `main`.
+2. Keep PRs focused; one logical change per PR is easier to review.
+3. Link the issue the PR addresses (`Closes #123`).
+4. Make sure CI is green: typecheck, lint, format, coverage (including new-code coverage), and the cross-runtime smoke tests.
+5. Add a changeset if the change is user-facing.
+
+## Reporting bugs and vulnerabilities
+
+- Functional bugs: open an issue with the bug report form.
+- Security vulnerabilities: **do not** open a public issue. Follow the [security policy](./SECURITY.md).
