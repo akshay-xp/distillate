@@ -75,7 +75,9 @@ jobs:
 
   changeset:
     name: changeset
-    if: github.event_name == 'pull_request'
+    # Dependabot only bumps dev dependencies (zero runtime deps), so its PRs
+    # never need a changeset.
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
