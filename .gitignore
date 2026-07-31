@@ -1,6 +1,7 @@
 .claude/specs/
 node_modules/
 dist/
+coverage/
 
 # Sibling comparison repo (its own git repo)
 distillate-bench/
