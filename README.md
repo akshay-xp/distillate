@@ -112,6 +112,7 @@ Design notes, the structure decision matrix, hashing, and the binary format live
 - [overview](./docs/overview.md): what and why
 - [structures](./docs/structures.md): decision matrix and the full lineup
 - [architecture](./docs/architecture.md), [hashing](./docs/hashing.md), [serialization](./docs/serialization.md)
+- [versioning](./docs/versioning.md): SemVer policy and supported-runtime baseline
 
 ## License
 
