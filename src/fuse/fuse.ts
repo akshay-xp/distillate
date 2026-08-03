@@ -11,7 +11,9 @@ const ARITY = 3;
 const TYPE_FUSE8 = 3;
 const TYPE_FUSE16 = 4;
 
+/** Thrown when binary fuse construction fails to converge on the key set. */
 export class BinaryFuseBuildError extends Error {
+  /** Discriminates this error from other `Error`s. */
   override readonly name = "BinaryFuseBuildError";
 }
 
@@ -299,6 +301,10 @@ function fuseStateFromBytes(
   };
 }
 
+/**
+ * Shared behavior for the static binary fuse filters: an immutable,
+ * space-efficient membership filter built once from a fixed key set.
+ */
 abstract class BinaryFuse {
   readonly #fp: Uint8Array | Uint16Array;
   readonly #seed: number;
@@ -317,14 +323,21 @@ abstract class BinaryFuse {
     this.#size = state.size;
   }
 
+  /** Number of distinct keys the filter was built from. */
   get size(): number {
     return this.#size;
   }
 
+  /** Actual bits stored per key (`0` for an empty filter). */
   get bitsPerKey(): number {
     return this.#size === 0 ? 0 : (this.#fp.byteLength * 8) / this.#size;
   }
 
+  /**
+   * Serializes the filter to a portable little-endian byte layout.
+   *
+   * @returns The serialized filter, readable by the matching `fromBytes`.
+   */
   toBytes(): Uint8Array {
     const laneBytes = new Uint8Array(
       this.#fp.buffer,
@@ -342,6 +355,12 @@ abstract class BinaryFuse {
     return writeHeader({ version: FORMAT_VERSION, type, flags: 0 }, body);
   }
 
+  /**
+   * Tests whether a key is in the set.
+   *
+   * @param key - The key to test.
+   * @returns `true` if present (possibly a false positive); `false` guarantees absence.
+   */
   has(key: BytesLike): boolean {
     if (this.#fp.length === 0) return false;
     hash128KeyInto(key, 0, scratchHash);
@@ -367,21 +386,68 @@ abstract class BinaryFuse {
   }
 }
 
+/**
+ * A static 8-bit binary fuse filter: built once from a key set, then immutable.
+ * The most space-efficient option (~9 bits/key at ~0.39% false-positive rate).
+ *
+ * @example
+ * ```ts
+ * const filter = BinaryFuse8.from(["alice", "bob", "carol"]);
+ * filter.has("alice"); // true
+ * filter.size; // 3
+ * ```
+ */
 export class BinaryFuse8 extends BinaryFuse {
+  /**
+   * Builds a filter from the given keys; duplicates are ignored.
+   *
+   * @param keys - The complete set of keys to store.
+   * @returns A new immutable filter.
+   * @throws {@link BinaryFuseBuildError} if construction fails to converge.
+   */
   static from(keys: Iterable<BytesLike>): BinaryFuse8 {
     return new BinaryFuse8(buildState(keys, (n) => new Uint8Array(n)));
   }
 
+  /**
+   * Restores a filter from its {@link BinaryFuse8.toBytes} serialization.
+   *
+   * @param bytes - The serialized filter.
+   * @returns The reconstructed filter.
+   */
   static fromBytes(bytes: Uint8Array): BinaryFuse8 {
     return new BinaryFuse8(fuseStateFromBytes(bytes, TYPE_FUSE8));
   }
 }
 
+/**
+ * A static 16-bit binary fuse filter: like {@link BinaryFuse8} but twice the
+ * space (~18 bits/key) for a far lower false-positive rate (~1/65536).
+ *
+ * @example
+ * ```ts
+ * const filter = BinaryFuse16.from(["alice", "bob", "carol"]);
+ * filter.has("alice"); // true
+ * ```
+ */
 export class BinaryFuse16 extends BinaryFuse {
+  /**
+   * Builds a filter from the given keys; duplicates are ignored.
+   *
+   * @param keys - The complete set of keys to store.
+   * @returns A new immutable filter.
+   * @throws {@link BinaryFuseBuildError} if construction fails to converge.
+   */
   static from(keys: Iterable<BytesLike>): BinaryFuse16 {
     return new BinaryFuse16(buildState(keys, (n) => new Uint16Array(n)));
   }
 
+  /**
+   * Restores a filter from its {@link BinaryFuse16.toBytes} serialization.
+   *
+   * @param bytes - The serialized filter.
+   * @returns The reconstructed filter.
+   */
   static fromBytes(bytes: Uint8Array): BinaryFuse16 {
     return new BinaryFuse16(fuseStateFromBytes(bytes, TYPE_FUSE16));
   }

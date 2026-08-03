@@ -4,25 +4,20 @@
 
 ```ts
 
-// @public (undocumented)
+// @public
 export class BinaryFuse16 extends BinaryFuse {
-    // (undocumented)
     static from(keys: Iterable<BytesLike>): BinaryFuse16;
-    // (undocumented)
     static fromBytes(bytes: Uint8Array): BinaryFuse16;
 }
 
-// @public (undocumented)
+// @public
 export class BinaryFuse8 extends BinaryFuse {
-    // (undocumented)
     static from(keys: Iterable<BytesLike>): BinaryFuse8;
-    // (undocumented)
     static fromBytes(bytes: Uint8Array): BinaryFuse8;
 }
 
-// @public (undocumented)
+// @public
 export class BinaryFuseBuildError extends Error {
-    // (undocumented)
     override readonly name = "BinaryFuseBuildError";
 }
 
