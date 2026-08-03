@@ -5,7 +5,7 @@
 ```ts
 
 // @public
-export const VERSION = "0.1.1";
+export const VERSION: string;
 
 // (No @packageDocumentation comment for this package)
 
