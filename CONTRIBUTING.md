@@ -88,6 +88,12 @@ Public (exported) API members carry [TSDoc](https://tsdoc.org/) comments, valida
 - Keep them concise: a one-line summary, `@param`/`@returns`, and a short `@example` on the primary types. Long-form narrative, guides, and tutorials belong on the docs site, not in code comments.
 - Internal (non-exported) helpers keep the usual minimal-comment style.
 
+The committed API reference under [`docs/api`](./docs/api) is generated from these comments. After any public-API or doc-comment change, regenerate it and commit the result; CI fails if it is missing docs or out of date:
+
+```sh
+pnpm docs:api
+```
+
 ## Pull requests
 
 1. Fork and branch from `main`.
