@@ -9,6 +9,7 @@
     "isolatedDeclarations": true,
     "declaration": true,
     "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
     "rootDir": "src",
