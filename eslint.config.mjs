@@ -1,5 +1,6 @@
 import js from "@eslint/js";
 import prettier from "eslint-config-prettier";
+import tsdoc from "eslint-plugin-tsdoc";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
@@ -25,6 +26,13 @@ export default tseslint.config(
         project: "./tsconfig.eslint.json",
         tsconfigRootDir: import.meta.dirname,
       },
+    },
+  },
+  {
+    files: ["src/**/*.ts"],
+    plugins: { tsdoc },
+    rules: {
+      "tsdoc/syntax": "error",
     },
   },
   {
