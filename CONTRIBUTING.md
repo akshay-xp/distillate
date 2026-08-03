@@ -81,6 +81,13 @@ pnpm api:report
 
 Commit the updated `etc/*.api.md` alongside your change. An unexpected report change means you exported or broke something you didn't intend to. See [versioning](./docs/versioning.md) for the SemVer policy.
 
+## Documentation comments
+
+Public (exported) API members carry [TSDoc](https://tsdoc.org/) comments, validated by `eslint-plugin-tsdoc`. This is a deliberate exception to the "comment only when the why is non-obvious" rule: these are consumer-facing API docs, and they feed both the API reports and the documentation site.
+
+- Keep them concise: a one-line summary, `@param`/`@returns`, and a short `@example` on the primary types. Long-form narrative, guides, and tutorials belong on the docs site, not in code comments.
+- Internal (non-exported) helpers keep the usual minimal-comment style.
+
 ## Pull requests
 
 1. Fork and branch from `main`.

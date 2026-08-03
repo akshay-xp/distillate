@@ -20,6 +20,8 @@ Packaging, testing, benchmarking, CI, release. Targets 2026 tooling.
 
 Keep each subpath a separate bundler entry (independent chunks; no barrel pulling everything in). No top-level side effects.
 
+Shipped `dist/*.js` is **not minified** (tsdown default). Consumers bundle and minify downstream, so TSDoc comments never reach their runtime bundle; the `.d.ts` files keep the comments for IntelliSense, and readable installed source aids debugging. Minifying here would only trade that away for no consumer benefit.
+
 ## Testing
 
 - Framework runs unmodified on Node/Bun/Deno: tests written against `Uint8Array` and Web APIs, no Node `Buffer`/`fs` in core.

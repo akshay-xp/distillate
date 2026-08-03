@@ -4,7 +4,7 @@
 
 ```ts
 
-// @public (undocumented)
+// @public
 export const VERSION = "0.1.1";
 
 // (No @packageDocumentation comment for this package)
