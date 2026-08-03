@@ -4,37 +4,27 @@
 
 ```ts
 
-// @public (undocumented)
+// @public
 export class BloomFilter {
     constructor(input: BloomParams);
-    // (undocumented)
     add(key: BytesLike): void;
     get bitsPerKey(): number;
-    // (undocumented)
     static create(n: number, epsilon: number): BloomFilter;
-    // (undocumented)
     static fromBytes(bytes: Uint8Array): BloomFilter;
-    // (undocumented)
     has(key: BytesLike): boolean;
-    // (undocumented)
     toBytes(): Uint8Array;
-    // (undocumented)
     union(other: BloomFilter): BloomFilter;
 }
 
-// @public (undocumented)
+// @public
 export class BloomParamMismatchError extends Error {
-    // (undocumented)
     override readonly name = "BloomParamMismatchError";
 }
 
-// @public (undocumented)
+// @public
 export interface BloomParams {
-    // (undocumented)
     k: number;
-    // (undocumented)
     m: number;
-    // (undocumented)
     seed?: number;
 }
 
