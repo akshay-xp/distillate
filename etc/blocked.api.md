@@ -4,38 +4,27 @@
 
 ```ts
 
-// @public (undocumented)
+// @public
 export class BlockedBloomFilter {
     constructor(input: BlockedBloomParams);
-    // (undocumented)
     add(key: BytesLike): void;
-    // (undocumented)
     get bitsPerKey(): number;
-    // (undocumented)
     static create(n: number, epsilon: number): BlockedBloomFilter;
-    // (undocumented)
     static fromBytes(bytes: Uint8Array): BlockedBloomFilter;
-    // (undocumented)
     has(key: BytesLike): boolean;
-    // (undocumented)
     toBytes(): Uint8Array;
-    // (undocumented)
     union(other: BlockedBloomFilter): BlockedBloomFilter;
 }
 
 // @public
 export class BlockedBloomParamMismatchError extends Error {
-    // (undocumented)
     override readonly name = "BlockedBloomParamMismatchError";
 }
 
-// @public (undocumented)
+// @public
 export interface BlockedBloomParams {
-    // (undocumented)
     bitsPerKey: number;
-    // (undocumented)
     capacity: number;
-    // (undocumented)
     seed?: number;
 }
 
