@@ -6,8 +6,8 @@
 
 # Variable: VERSION
 
-> `const` **VERSION**: `"0.1.1"` = `"0.1.1"`
+> `const` **VERSION**: `string` = `pkg.version`
 
-Defined in: [src/index.ts:2](https://github.com/akshay-xp/distillate/blob/main/src/index.ts#L2)
+Defined in: [src/index.ts:4](https://github.com/akshay-xp/distillate/blob/main/src/index.ts#L4)
 
 The installed `distillate` package version.
