@@ -3,6 +3,7 @@ import { type Hash128, hash128KeyInto, reduce } from "../core/hasher.js";
 import {
   assertPositiveFinite,
   assertPositiveInt,
+  assertProbability,
   assertUint32,
 } from "../core/params.js";
 import { FORMAT_VERSION, readHeader, writeHeader } from "../core/serialize.js";
@@ -78,6 +79,8 @@ export class BlockedBloomFilter {
    * @returns A new, empty filter.
    */
   static create(n: number, epsilon: number): BlockedBloomFilter {
+    assertPositiveInt(n, "n");
+    assertProbability(epsilon, "epsilon");
     const t = Math.log10(1 / epsilon);
     const a = BlockedBloomFilter.#ANCHORS;
     // Segment to interpolate on: the first whose upper anchor is >= t;
@@ -88,7 +91,7 @@ export class BlockedBloomFilter {
     const [t1, b1] = a[seg] ?? [0, 0];
     const bitsPerKey = b0 + ((b1 - b0) / (t1 - t0)) * (t - t0);
     return new BlockedBloomFilter({
-      bitsPerKey: Math.ceil(bitsPerKey),
+      bitsPerKey: Math.max(1, Math.ceil(bitsPerKey)),
       capacity: n,
     });
   }

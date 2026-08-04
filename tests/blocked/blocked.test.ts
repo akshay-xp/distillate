@@ -34,6 +34,36 @@ test("constructor rejects invalid bitsPerKey, capacity, and seed", () => {
   expect(f.has("x")).toBe(false);
 });
 
+test("create rejects invalid n and epsilon", () => {
+  for (const n of [0, 1.5, -5]) {
+    expect(() => BlockedBloomFilter.create(n, 0.01)).toThrow(ParamError);
+  }
+  for (const epsilon of [1, 0, -0.1, NaN]) {
+    expect(() => BlockedBloomFilter.create(100, epsilon)).toThrow(ParamError);
+  }
+});
+
+test("create builds for any valid epsilon (bits-per-key floored to 1)", () => {
+  const f = BlockedBloomFilter.create(1000, 0.5);
+  f.add("alice");
+  expect(f.has("alice")).toBe(true);
+});
+
+test("no false negatives for any valid create params (property)", () => {
+  fc.assert(
+    fc.property(
+      fc.integer({ min: 1, max: 5000 }),
+      fc.double({ min: 0.001, max: 0.5, noNaN: true }),
+      fc.uniqueArray(fc.string()),
+      (n, epsilon, keys) => {
+        const f = BlockedBloomFilter.create(n, epsilon);
+        for (const key of keys) f.add(key);
+        for (const key of keys) expect(f.has(key)).toBe(true);
+      },
+    ),
+  );
+});
+
 const disjoint = (present: readonly string[], absent: string[]): string[] => {
   const seen = new Set(present);
   return absent.filter((k) => !seen.has(k));
