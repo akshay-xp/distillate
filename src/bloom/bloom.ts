@@ -2,7 +2,7 @@ import { BitSet } from "../core/bitset.js";
 import type { BytesLike } from "../core/bytes.js";
 import { probeInto } from "../core/hasher.js";
 import { FORMAT_VERSION, readHeader, writeHeader } from "../core/serialize.js";
-import { assertPositiveInt } from "../core/params.js";
+import { assertPositiveInt, assertUint32 } from "../core/params.js";
 import { optimal } from "../core/sizing.js";
 
 const TYPE = 1;
@@ -80,6 +80,7 @@ export class BloomFilter {
   constructor({ m, k, seed = 0 }: BloomParams) {
     assertPositiveInt(m, "m");
     assertPositiveInt(k, "k");
+    assertUint32(seed, "seed");
     this.#bits = new BitSet(m);
     this.#m = m;
     this.#k = k;

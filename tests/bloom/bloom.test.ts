@@ -23,6 +23,16 @@ test("constructor rejects non-positive-integer m and k", () => {
   expect(f.has("x")).toBe(false);
 });
 
+test("constructor rejects out-of-range seed", () => {
+  for (const seed of [-1, 2 ** 32, 1.5]) {
+    expect(() => new BloomFilter({ m: 1000, k: 7, seed })).toThrow(ParamError);
+  }
+  expect(() => new BloomFilter({ m: 1000, k: 7, seed: 0 })).not.toThrow();
+  expect(
+    () => new BloomFilter({ m: 1000, k: 7, seed: 0xffffffff }),
+  ).not.toThrow();
+});
+
 test("add then has returns true across BytesLike forms", () => {
   const f = new BloomFilter({ m: 4096, k: 7 });
   f.add("alice");
