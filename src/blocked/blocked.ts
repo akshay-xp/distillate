@@ -1,5 +1,10 @@
 import { type BytesLike } from "../core/bytes.js";
 import { type Hash128, hash128KeyInto, reduce } from "../core/hasher.js";
+import {
+  assertPositiveFinite,
+  assertPositiveInt,
+  assertUint32,
+} from "../core/params.js";
 import { FORMAT_VERSION, readHeader, writeHeader } from "../core/serialize.js";
 
 const TYPE = 2;
@@ -93,6 +98,9 @@ export class BlockedBloomFilter {
    * {@link BlockedBloomFilter.create} unless restoring a specific configuration.
    */
   constructor({ bitsPerKey, capacity, seed = 0 }: BlockedBloomParams) {
+    assertPositiveFinite(bitsPerKey, "bitsPerKey");
+    assertPositiveInt(capacity, "capacity");
+    assertUint32(seed, "seed");
     this.#numBlocks = Math.max(1, Math.ceil((bitsPerKey * capacity) / 256));
     this.#lanes = new Uint32Array(this.#numBlocks * 8);
     this.#seed = seed;
