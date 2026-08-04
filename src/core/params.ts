@@ -18,3 +18,12 @@ export function assertUint32(value: number, label: string): void {
     throw new ParamError(`${label} must be a uint32, got ${String(value)}`);
   }
 }
+
+/** Asserts `value` is a finite number in the open interval `(0, 1)`. */
+export function assertProbability(value: number, label: string): void {
+  if (!Number.isFinite(value) || value <= 0 || value >= 1) {
+    throw new ParamError(
+      `${label} must be in the open interval (0, 1), got ${String(value)}`,
+    );
+  }
+}

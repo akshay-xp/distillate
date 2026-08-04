@@ -2,7 +2,11 @@ import { BitSet } from "../core/bitset.js";
 import type { BytesLike } from "../core/bytes.js";
 import { probeInto } from "../core/hasher.js";
 import { FORMAT_VERSION, readHeader, writeHeader } from "../core/serialize.js";
-import { assertPositiveInt, assertUint32 } from "../core/params.js";
+import {
+  assertPositiveInt,
+  assertProbability,
+  assertUint32,
+} from "../core/params.js";
 import { optimal } from "../core/sizing.js";
 
 const TYPE = 1;
@@ -51,6 +55,8 @@ export class BloomFilter {
    * @returns A new, empty filter.
    */
   static create(n: number, epsilon: number): BloomFilter {
+    assertPositiveInt(n, "n");
+    assertProbability(epsilon, "epsilon");
     const f = new BloomFilter(optimal(n, epsilon));
     f.#n = n;
     return f;
