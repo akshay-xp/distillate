@@ -8,6 +8,31 @@ import {
   fillBlock,
 } from "../../src/blocked/blocked.js";
 import { measureFpr, sampleStrings } from "../helpers/fpr.js";
+import { ParamError } from "../../src/core/params.js";
+
+test("constructor rejects invalid bitsPerKey, capacity, and seed", () => {
+  const bad = [
+    { bitsPerKey: 0, capacity: 1000 },
+    { bitsPerKey: -5, capacity: 1000 },
+    { bitsPerKey: Infinity, capacity: 1000 },
+    { bitsPerKey: NaN, capacity: 1000 },
+    { bitsPerKey: 12, capacity: 0 },
+    { bitsPerKey: 12, capacity: -5 },
+    { bitsPerKey: 12, capacity: 1.5 },
+    { bitsPerKey: 12, capacity: 1000, seed: -1 },
+    { bitsPerKey: 12, capacity: 1000, seed: 2 ** 32 },
+  ];
+  for (const params of bad) {
+    expect(() => new BlockedBloomFilter(params)).toThrow(ParamError);
+  }
+  // bitsPerKey is a density, not a count: a fractional value is valid, and
+  // union reconstructs from exactly such a value (numBlocks * 256 / capacity).
+  expect(
+    () => new BlockedBloomFilter({ bitsPerKey: 12.032, capacity: 1000 }),
+  ).not.toThrow();
+  const f = new BlockedBloomFilter({ bitsPerKey: 12, capacity: 1000 });
+  expect(f.has("x")).toBe(false);
+});
 
 const disjoint = (present: readonly string[], absent: string[]): string[] => {
   const seen = new Set(present);

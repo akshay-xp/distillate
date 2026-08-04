@@ -13,6 +13,15 @@ export function assertPositiveInt(value: number, label: string): void {
   }
 }
 
+/** Asserts `value` is a finite number greater than 0 (a positive real). */
+export function assertPositiveFinite(value: number, label: string): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new ParamError(
+      `${label} must be a positive number, got ${String(value)}`,
+    );
+  }
+}
+
 /** Asserts `value` is an integer in the uint32 range `[0, 2^32 - 1]`. */
 export function assertUint32(value: number, label: string): void {
   if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
