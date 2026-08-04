@@ -45,6 +45,12 @@ test("create rejects invalid n and epsilon", () => {
   expect(f.has("alice")).toBe(true);
 });
 
+test("ParamError is exported from the bloom subpath", async () => {
+  const mod = await import("../../src/bloom/index.js");
+  expect(mod.ParamError).toBeDefined();
+  expect(() => new BloomFilter({ m: 1000, k: 0 })).toThrow(mod.ParamError);
+});
+
 test("no false negatives for any valid create params (property)", () => {
   fc.assert(
     fc.property(

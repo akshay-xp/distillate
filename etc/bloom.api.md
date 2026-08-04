@@ -28,6 +28,11 @@ export interface BloomParams {
     seed?: number;
 }
 
+// @public
+export class ParamError extends RangeError {
+    override readonly name = "ParamError";
+}
+
 // (No @packageDocumentation comment for this package)
 
 ```

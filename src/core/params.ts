@@ -1,5 +1,6 @@
 /** Thrown when a structure is constructed with invalid parameters. */
 export class ParamError extends RangeError {
+  /** Discriminates this error from other `Error`s. */
   override readonly name = "ParamError";
 }
 
