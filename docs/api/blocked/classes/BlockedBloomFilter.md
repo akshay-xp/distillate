@@ -6,7 +6,7 @@
 
 # Class: BlockedBloomFilter
 
-Defined in: [src/blocked/blocked.ts:51](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L51)
+Defined in: [src/blocked/blocked.ts:57](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L57)
 
 A blocked (split-block) Bloom filter: confines every lookup to a single cache
 line, trading ~20-30% more space for cache-friendly throughput.
@@ -25,7 +25,7 @@ filter.has("alice"); // true
 
 > **new BlockedBloomFilter**(`__namedParameters`): `BlockedBloomFilter`
 
-Defined in: [src/blocked/blocked.ts:95](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L95)
+Defined in: [src/blocked/blocked.ts:103](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L103)
 
 Constructs a filter from low-level [BlockedBloomParams](../interfaces/BlockedBloomParams.md). Prefer
 [BlockedBloomFilter.create](#create) unless restoring a specific configuration.
@@ -48,7 +48,7 @@ Constructs a filter from low-level [BlockedBloomParams](../interfaces/BlockedBlo
 
 > **get** **bitsPerKey**(): `number`
 
-Defined in: [src/blocked/blocked.ts:103](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L103)
+Defined in: [src/blocked/blocked.ts:114](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L114)
 
 Actual bits allocated per key (`total bits / capacity`).
 
@@ -62,7 +62,7 @@ Actual bits allocated per key (`total bits / capacity`).
 
 > **add**(`key`): `void`
 
-Defined in: [src/blocked/blocked.ts:179](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L179)
+Defined in: [src/blocked/blocked.ts:190](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L190)
 
 Adds a key to the set.
 
@@ -84,7 +84,7 @@ The key to insert, as a string or bytes.
 
 > **has**(`key`): `boolean`
 
-Defined in: [src/blocked/blocked.ts:193](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L193)
+Defined in: [src/blocked/blocked.ts:204](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L204)
 
 Tests whether a key is in the set.
 
@@ -108,7 +108,7 @@ The key to test.
 
 > **toBytes**(): `Uint8Array`
 
-Defined in: [src/blocked/blocked.ts:136](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L136)
+Defined in: [src/blocked/blocked.ts:147](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L147)
 
 Serializes the filter to a portable little-endian byte layout.
 
@@ -124,7 +124,7 @@ The serialized filter, readable by [BlockedBloomFilter.fromBytes](#frombytes).
 
 > **union**(`other`): `BlockedBloomFilter`
 
-Defined in: [src/blocked/blocked.ts:158](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L158)
+Defined in: [src/blocked/blocked.ts:169](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L169)
 
 Returns a new filter containing the union of this filter and `other`.
 
@@ -152,7 +152,7 @@ A new filter reporting membership for keys in either input.
 
 > `static` **create**(`n`, `epsilon`): `BlockedBloomFilter`
 
-Defined in: [src/blocked/blocked.ts:75](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L75)
+Defined in: [src/blocked/blocked.ts:81](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L81)
 
 Creates a filter sized for `n` expected keys at a target false-positive rate.
 
@@ -182,7 +182,7 @@ A new, empty filter.
 
 > `static` **fromBytes**(`bytes`): `BlockedBloomFilter`
 
-Defined in: [src/blocked/blocked.ts:113](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L113)
+Defined in: [src/blocked/blocked.ts:124](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L124)
 
 Restores a filter from its [BlockedBloomFilter.toBytes](#tobytes) serialization.
 

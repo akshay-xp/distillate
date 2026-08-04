@@ -64,6 +64,14 @@ test("no false negatives for any valid create params (property)", () => {
   );
 });
 
+test("ParamError is exported from the blocked subpath", async () => {
+  const mod = await import("../../src/blocked/index.js");
+  expect(mod.ParamError).toBeDefined();
+  expect(
+    () => new BlockedBloomFilter({ bitsPerKey: 0, capacity: 1000 }),
+  ).toThrow(mod.ParamError);
+});
+
 const disjoint = (present: readonly string[], absent: string[]): string[] => {
   const seen = new Set(present);
   return absent.filter((k) => !seen.has(k));
