@@ -10,6 +10,7 @@
 
 - [BloomFilter](classes/BloomFilter.md)
 - [BloomParamMismatchError](classes/BloomParamMismatchError.md)
+- [ParamError](classes/ParamError.md)
 
 ## Interfaces
 
