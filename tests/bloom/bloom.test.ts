@@ -33,6 +33,33 @@ test("constructor rejects out-of-range seed", () => {
   ).not.toThrow();
 });
 
+test("create rejects invalid n and epsilon", () => {
+  for (const n of [0, 1.5, -5]) {
+    expect(() => BloomFilter.create(n, 0.01)).toThrow(ParamError);
+  }
+  for (const epsilon of [1, 0, -0.1, NaN]) {
+    expect(() => BloomFilter.create(100, epsilon)).toThrow(ParamError);
+  }
+  const f = BloomFilter.create(100000, 0.01);
+  f.add("alice");
+  expect(f.has("alice")).toBe(true);
+});
+
+test("no false negatives for any valid create params (property)", () => {
+  fc.assert(
+    fc.property(
+      fc.integer({ min: 1, max: 5000 }),
+      fc.double({ min: 0.001, max: 0.5, noNaN: true }),
+      fc.uniqueArray(fc.string()),
+      (n, epsilon, keys) => {
+        const f = BloomFilter.create(n, epsilon);
+        for (const key of keys) f.add(key);
+        for (const key of keys) expect(f.has(key)).toBe(true);
+      },
+    ),
+  );
+});
+
 test("add then has returns true across BytesLike forms", () => {
   const f = new BloomFilter({ m: 4096, k: 7 });
   f.add("alice");
