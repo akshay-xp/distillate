@@ -14,3 +14,9 @@
 ## Interfaces
 
 - [BlockedBloomParams](interfaces/BlockedBloomParams.md)
+
+## References
+
+### ParamError
+
+Re-exports [ParamError](../bloom/classes/ParamError.md)
