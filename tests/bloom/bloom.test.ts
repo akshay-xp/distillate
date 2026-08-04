@@ -5,6 +5,23 @@ import { readHeader, SerializationError } from "../../src/core/serialize.js";
 import { optimal } from "../../src/core/sizing.js";
 import { BloomFilter } from "../../src/bloom/bloom.js";
 import { measureFpr, sampleStrings } from "../helpers/fpr.js";
+import { ParamError } from "../../src/core/params.js";
+
+test("constructor rejects non-positive-integer m and k", () => {
+  for (const params of [
+    { m: 1000, k: 0 },
+    { m: 1000, k: 2.7 },
+    { m: 0, k: 7 },
+    { m: -5, k: 7 },
+    { m: 1.5, k: 7 },
+  ]) {
+    expect(() => new BloomFilter(params)).toThrow(ParamError);
+  }
+  expect(() => new BloomFilter({ m: 1000, k: 0 })).toThrow(RangeError);
+
+  const f = new BloomFilter({ m: 1000, k: 7 });
+  expect(f.has("x")).toBe(false);
+});
 
 test("add then has returns true across BytesLike forms", () => {
   const f = new BloomFilter({ m: 4096, k: 7 });
