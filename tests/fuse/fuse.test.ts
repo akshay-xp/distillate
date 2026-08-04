@@ -15,6 +15,26 @@ import {
 } from "../../src/core/serialize.js";
 import { sampleStrings } from "../helpers/fpr.js";
 
+test("from([]) is a well-defined empty filter, stable across serialization", () => {
+  const f8 = BinaryFuse8.from([]);
+  const g8 = BinaryFuse8.fromBytes(f8.toBytes());
+  const f16 = BinaryFuse16.from([]);
+  const g16 = BinaryFuse16.fromBytes(f16.toBytes());
+  for (const f of [f8, g8, f16, g16]) {
+    expect(f.size).toBe(0);
+    for (const key of ["a", "alice", "", "xyz"]) {
+      expect(f.has(key)).toBe(false);
+    }
+  }
+});
+
+test("from with keys is unaffected by the empty-set guard", () => {
+  const f = BinaryFuse8.from(["alice", "bob"]);
+  expect(f.size).toBe(2);
+  expect(f.has("alice")).toBe(true);
+  expect(f.has("bob")).toBe(true);
+});
+
 const disjoint = (present: readonly string[], absent: string[]): string[] => {
   const seen = new Set(present);
   return absent.filter((k) => !seen.has(k));
