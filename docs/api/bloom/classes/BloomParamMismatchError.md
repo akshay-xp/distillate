@@ -6,7 +6,7 @@
 
 # Class: BloomParamMismatchError
 
-Defined in: [src/bloom/bloom.ts:22](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L22)
+Defined in: [src/bloom/bloom.ts:24](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L24)
 
 Thrown when an operation requires two filters built with identical parameters.
 
@@ -90,7 +90,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 > `readonly` **name**: `"BloomParamMismatchError"` = `"BloomParamMismatchError"`
 
-Defined in: [src/bloom/bloom.ts:24](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L24)
+Defined in: [src/bloom/bloom.ts:26](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L26)
 
 Discriminates this error from other `Error`s.
 
