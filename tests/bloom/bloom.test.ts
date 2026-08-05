@@ -129,9 +129,9 @@ test("toBytes emits an AMQF type-1 frame with LE params + payload", () => {
 
   const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
   expect(dv.getUint32(0, true)).toBe(64);
-  expect(body[4]).toBe(3);
-  expect(dv.getUint32(5, true)).toBe(7);
-  expect(body).toHaveLength(9 + Math.ceil(64 / 8));
+  expect(dv.getUint16(4, true)).toBe(3);
+  expect(dv.getUint32(6, true)).toBe(7);
+  expect(body).toHaveLength(14 + Math.ceil(64 / 8));
 });
 
 test("fromBytes round-trips params and membership (property)", () => {
@@ -241,7 +241,7 @@ test("length reports the number of bits currently set", () => {
   for (const key of sampleStrings(1, 200)) f.add(key);
 
   const { body } = readHeader(f.toBytes());
-  const payload = body.subarray(9);
+  const payload = body.subarray(14);
   let bits = 0;
   for (const byte of payload) {
     let b = byte;
@@ -281,4 +281,20 @@ test("rate() is non-decreasing as keys are added (property)", () => {
       },
     ),
   );
+});
+
+test("serializes k > 255 and keeps params roundtrip-stable (format v2)", () => {
+  const f = new BloomFilter({ m: 4_000_000, k: 300, seed: 9 });
+  const g = BloomFilter.fromBytes(f.toBytes());
+  expect(g.k).toBe(300);
+  expect(g.m).toBe(4_000_000);
+  expect(g.seed).toBe(9);
+  expect(() => f.union(g)).not.toThrow();
+
+  const c = BloomFilter.create(100_000, 0.01);
+  const r = BloomFilter.fromBytes(c.toBytes());
+  expect(r.m).toBe(c.m);
+  expect(r.k).toBe(c.k);
+  expect(r.seed).toBe(c.seed);
+  expect(r.bitsPerKey).toBe(c.bitsPerKey);
 });
