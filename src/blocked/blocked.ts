@@ -1,5 +1,5 @@
 import { type BytesLike } from "../core/bytes.js";
-import { type Hash128, hash128KeyInto, reduce } from "../core/hasher.js";
+import { hash32x2Into, reduce } from "../core/hasher.js";
 import {
   assertPositiveFinite,
   assertPositiveInt,
@@ -10,8 +10,10 @@ import {
   assertBodyLength,
   assertMinBodyLength,
   FORMAT_VERSION,
+  HASH_MURMUR32,
   readHeader,
   SerializationError,
+  UnknownHashVariantError,
   writeHeader,
 } from "../core/serialize.js";
 
@@ -30,9 +32,9 @@ const SALT = Uint32Array.of(
   0x5c6bfb31,
 );
 
-// Reused across fillBlock calls; safe because hashing is synchronous and
-// non-reentrant (same rationale as the hasher's own scratch registers).
-const scratchHash: Hash128 = { h1lo: 0, h1hi: 0, h2lo: 0, h2hi: 0 };
+// Reused two-word hash output across fillBlock calls; safe because hashing is
+// synchronous and non-reentrant (same rationale as the hasher's scratch).
+const scratch2 = new Uint32Array(2);
 
 /** Thrown when an operation requires two filters built with identical parameters. */
 export class BlockedBloomParamMismatchError extends Error {
@@ -153,10 +155,15 @@ export class BlockedBloomFilter {
    * @returns The reconstructed filter.
    */
   static fromBytes(bytes: Uint8Array): BlockedBloomFilter {
-    const { type, body } = readHeader(bytes);
+    const { type, flags, body } = readHeader(bytes);
     if (type !== TYPE) {
       throw new SerializationError(
         `expected AMQF type ${String(TYPE)}, got ${String(type)}`,
+      );
+    }
+    if ((flags & 0x0f) !== HASH_MURMUR32) {
+      throw new UnknownHashVariantError(
+        `unsupported hash variant ${String(flags & 0x0f)}`,
       );
     }
     assertMinBodyLength(body.length, 12, "blocked");
@@ -194,7 +201,10 @@ export class BlockedBloomFilter {
     dv.setUint32(4, this.#seed, true);
     dv.setUint32(8, this.#n, true);
     body.set(lanes, 12);
-    return writeHeader({ version: FORMAT_VERSION, type: TYPE, flags: 0 }, body);
+    return writeHeader(
+      { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR32 },
+      body,
+    );
   }
 
   /**
@@ -261,9 +271,9 @@ export function fillBlock(
   outWords: Uint32Array,
   outBits: Uint32Array,
 ): void {
-  hash128KeyInto(key, seed, scratchHash);
-  const block = reduce((scratchHash.h1lo ^ scratchHash.h1hi) >>> 0, numBlocks);
-  const x = (scratchHash.h2lo ^ scratchHash.h2hi) >>> 0;
+  hash32x2Into(key, seed, scratch2);
+  const block = reduce(scratch2[0] ?? 0, numBlocks);
+  const x = scratch2[1] ?? 0;
   const base = block * 8;
   for (let i = 0; i < 8; i++) {
     outWords[i] = base + i;

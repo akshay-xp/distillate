@@ -329,25 +329,25 @@ test("fromBytes rejects a frame belonging to another structure", () => {
 });
 
 test("fromBytes rejects a frame whose body length disagrees with declared params", () => {
-  const { type, body } = readHeader(
+  const { type, flags, body } = readHeader(
     BlockedBloomFilter.create(1000, 0.01).toBytes(),
   );
   const truncated = body.subarray(0, body.length - 4);
   const frame = writeHeader(
-    { version: FORMAT_VERSION, type, flags: 0 },
+    { version: FORMAT_VERSION, type, flags },
     truncated,
   );
   expect(() => BlockedBloomFilter.fromBytes(frame)).toThrow(TruncatedError);
 
   const short = writeHeader(
-    { version: FORMAT_VERSION, type, flags: 0 },
+    { version: FORMAT_VERSION, type, flags },
     body.subarray(0, 5),
   );
   expect(() => BlockedBloomFilter.fromBytes(short)).toThrow(TruncatedError);
 });
 
 const GOLDEN_V2 =
-  "QU1RRgICAAAFAAAAKgAAAGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAgAAABAAAAAAABAAAAABAAEAAAEAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAEAAAABAQAAAAAAAQAAAgAAAAABAAAIAAAIAAAAAAAAAQAAAAAgAAAAQAAAAIAAAABAAAAEAAAAEAIxbWKA==";
+  "QU1RRgICAQAFAAAAKgAAAGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAQAAIAAAAEAAAAABAAAgAAAAQAAAAAAAIAAAEAEAAQAAAAAAQEAIAAgAAQAAgEAAACAAiAAAAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADVRVuw==";
 
 test("reads a committed v2 golden frame (locks the format)", () => {
   const f = BlockedBloomFilter.fromBytes(fromBase64(GOLDEN_V2));
@@ -360,4 +360,17 @@ test("reads a committed v2 golden frame (locks the format)", () => {
   });
   for (const key of ["alice", "bob", "carol"]) fresh.add(key);
   expect(fresh.toBytes()).toEqual(fromBase64(GOLDEN_V2));
+});
+
+test("fromBytes rejects a frame built with the old hash variant", () => {
+  const f = BlockedBloomFilter.create(1000, 0.01);
+  const { type, body } = readHeader(f.toBytes());
+  const variant0 = writeHeader(
+    { version: FORMAT_VERSION, type, flags: 0 },
+    body,
+  );
+  expect(() => BlockedBloomFilter.fromBytes(variant0)).toThrow(
+    SerializationError,
+  );
+  expect(() => BlockedBloomFilter.fromBytes(variant0)).toThrow(/hash variant/i);
 });
