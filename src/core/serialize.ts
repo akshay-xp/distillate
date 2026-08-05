@@ -52,6 +52,38 @@ export class ChecksumError extends SerializationError {
   override readonly name = "ChecksumError";
 }
 
+/**
+ * Asserts a frame body is long enough to hold its fixed params block, so the
+ * params can be read without running off the end.
+ */
+export function assertMinBodyLength(
+  actual: number,
+  min: number,
+  context: string,
+): void {
+  if (actual < min) {
+    throw new TruncatedError(
+      `${context}: body of ${String(actual)} bytes is shorter than the ${String(min)}-byte params block`,
+    );
+  }
+}
+
+/**
+ * Asserts a frame body is exactly the length its declared params imply, so a
+ * hostile or truncated frame is rejected before any backing store is allocated.
+ */
+export function assertBodyLength(
+  actual: number,
+  expected: number,
+  context: string,
+): void {
+  if (actual !== expected) {
+    throw new TruncatedError(
+      `${context}: body of ${String(actual)} bytes does not match the declared params (expected ${String(expected)})`,
+    );
+  }
+}
+
 export function readHeader(frame: Uint8Array): ReadResult {
   if (frame.length < HEADER_SIZE + TRAILER_SIZE) {
     throw new TruncatedError(
