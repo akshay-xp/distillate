@@ -294,3 +294,23 @@ test("length reports the number of bits currently set across lanes", () => {
 
   expect(f.length).toBe(bits);
 });
+
+test("rate() estimates the current false-positive rate from actual fill", () => {
+  const empty = new BlockedBloomFilter({ bitsPerKey: 12, capacity: 1000 });
+  expect(empty.rate()).toBe(0);
+});
+
+test("rate() equals (fill) ** 8, the split-block query width (property)", () => {
+  const CAP = 1000;
+  fc.assert(
+    fc.property(
+      fc.array(fc.string(), { minLength: 1, maxLength: 500 }),
+      (keys) => {
+        const f = new BlockedBloomFilter({ bitsPerKey: 12, capacity: CAP });
+        for (const key of keys) f.add(key);
+        const totalBits = f.bitsPerKey * CAP;
+        expect(f.rate()).toBeCloseTo((f.length / totalBits) ** 8, 12);
+      },
+    ),
+  );
+});

@@ -128,6 +128,18 @@ export class BlockedBloomFilter {
   }
 
   /**
+   * Estimates the current false-positive rate from the actual fill,
+   * `(length / totalBits) ** 8`. A split-block query checks exactly 8 lane-bits,
+   * so the exponent is 8 rather than a classic probe count `k`. This reflects
+   * how full the filter is right now, not the design target.
+   *
+   * @returns The estimated false-positive rate, `0` for an empty filter.
+   */
+  rate(): number {
+    return (this.length / (this.#numBlocks * 256)) ** 8;
+  }
+
+  /**
    * Restores a filter from its {@link BlockedBloomFilter.toBytes} serialization.
    *
    * @param bytes - The serialized filter.
