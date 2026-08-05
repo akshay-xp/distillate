@@ -229,3 +229,24 @@ test("m, k, seed accessors report the params the filter was built with", () => {
   expect(g.k).toBe(p.k);
   expect(g.seed).toBe(0);
 });
+
+test("length reports the number of bits currently set", () => {
+  const f = new BloomFilter({ m: 4096, k: 7 });
+  expect(f.length).toBe(0);
+
+  for (const key of sampleStrings(1, 200)) f.add(key);
+
+  const { body } = readHeader(f.toBytes());
+  const payload = body.subarray(9);
+  let bits = 0;
+  for (const byte of payload) {
+    let b = byte;
+    while (b) {
+      b &= b - 1;
+      bits++;
+    }
+  }
+
+  expect(f.length).toBe(bits);
+  expect(f.length).toBeLessThanOrEqual(f.m);
+});
