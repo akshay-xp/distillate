@@ -6,7 +6,7 @@
 
 # Class: BinaryFuseBuildError
 
-Defined in: [src/fuse/fuse.ts:17](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L17)
+Defined in: [src/fuse/fuse.ts:24](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L24)
 
 Thrown when binary fuse construction fails to converge on the key set.
 
@@ -90,7 +90,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 > `readonly` **name**: `"BinaryFuseBuildError"` = `"BinaryFuseBuildError"`
 
-Defined in: [src/fuse/fuse.ts:19](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L19)
+Defined in: [src/fuse/fuse.ts:26](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L26)
 
 Discriminates this error from other `Error`s.
 

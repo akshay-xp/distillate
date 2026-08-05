@@ -6,7 +6,7 @@
 
 # Class: BlockedBloomParamMismatchError
 
-Defined in: [src/blocked/blocked.ts:38](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L38)
+Defined in: [src/blocked/blocked.ts:40](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L40)
 
 Thrown when an operation requires two filters built with identical parameters.
 
@@ -90,7 +90,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 > `readonly` **name**: `"BlockedBloomParamMismatchError"` = `"BlockedBloomParamMismatchError"`
 
-Defined in: [src/blocked/blocked.ts:40](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L40)
+Defined in: [src/blocked/blocked.ts:42](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L42)
 
 Discriminates this error from other `Error`s.
 
