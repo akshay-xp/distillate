@@ -309,25 +309,25 @@ test("fromBytes rejects a frame belonging to another structure", () => {
 });
 
 test("fromBytes rejects a frame whose body length disagrees with declared params", () => {
-  const { type, body } = readHeader(
+  const { type, flags, body } = readHeader(
     new BloomFilter({ m: 4096, k: 7 }).toBytes(),
   );
   const truncated = body.subarray(0, body.length - 4);
   const frame = writeHeader(
-    { version: FORMAT_VERSION, type, flags: 0 },
+    { version: FORMAT_VERSION, type, flags },
     truncated,
   );
   expect(() => BloomFilter.fromBytes(frame)).toThrow(TruncatedError);
 
   const short = writeHeader(
-    { version: FORMAT_VERSION, type, flags: 0 },
+    { version: FORMAT_VERSION, type, flags },
     body.subarray(0, 5),
   );
   expect(() => BloomFilter.fromBytes(short)).toThrow(TruncatedError);
 });
 
 const GOLDEN_V2 =
-  "QU1RRgIBAAAABAAABwAqAAAAZQAAAAAAAAAAACAAAAAAgAAAAAAAAAAAAAAAAAAAAAEAAAAACAQAAAAAAAAAAAAACAAABAAAAAAAEAAAAAEAAAAAAAAAAAAAABAAAABAAAgEAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAEAAAAAAAAAAAAAACgAAAgIBAAAAAAAAAAEgxsyFA==";
+  "QU1RRgIBAQAABAAABwAqAAAAZQAAAAAAAAAACAACAAAAEAAAAAQEAAAAAAAAAAAGAQAAAAAAAAAIAQAAAIAAAAAIAAAAAAAAAAAQAAgAAAAAAAAgAAAAAAAABAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAIAIAAAAAAAAAAAABAAAAAAL3+yiw==";
 
 test("reads a committed v2 golden frame (locks the format)", () => {
   const f = BloomFilter.fromBytes(fromBase64(GOLDEN_V2));
@@ -339,4 +339,15 @@ test("reads a committed v2 golden frame (locks the format)", () => {
   const fresh = new BloomFilter({ m: 1024, k: 7, seed: 42 });
   for (const key of ["alice", "bob", "carol"]) fresh.add(key);
   expect(fresh.toBytes()).toEqual(fromBase64(GOLDEN_V2));
+});
+
+test("fromBytes rejects a frame built with the old hash variant", () => {
+  const f = BloomFilter.create(1000, 0.01);
+  const { type, body } = readHeader(f.toBytes());
+  const variant0 = writeHeader(
+    { version: FORMAT_VERSION, type, flags: 0 },
+    body,
+  );
+  expect(() => BloomFilter.fromBytes(variant0)).toThrow(SerializationError);
+  expect(() => BloomFilter.fromBytes(variant0)).toThrow(/hash variant/i);
 });
