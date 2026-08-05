@@ -15,14 +15,19 @@ const C2HI = 0x4cf5ad43;
 // Scratch output registers for the 64-bit-lane helpers below. Reused across
 // calls (zero per-call allocation); safe because hash128 is synchronous and
 // non-recursive, so no call observes another's registers mid-computation.
-let RLO = 0;
-let RHI = 0;
+export let RLO = 0;
+export let RHI = 0;
 
 // Reused output struct for the final hash lanes, same non-reentrant rationale
 // as RLO/RHI. computeLanes writes it; the allocating wrappers copy it out.
 const LANES: Hash128 = { h1lo: 0, h1hi: 0, h2lo: 0, h2hi: 0 };
 
-function mul64(alo: number, ahi: number, blo: number, bhi: number): void {
+export function mul64(
+  alo: number,
+  ahi: number,
+  blo: number,
+  bhi: number,
+): void {
   const a0 = alo & 0xffff;
   const a1 = alo >>> 16;
   const a2 = ahi & 0xffff;
@@ -77,7 +82,7 @@ function add64(alo: number, ahi: number, blo: number, bhi: number): void {
   RLO = lo >>> 0;
 }
 
-function fmix64(lo: number, hi: number): void {
+export function fmix64(lo: number, hi: number): void {
   let l = lo;
   let h = hi;
   // k ^= k >>> 33: since 33 >= 32, the shifted low word is (hi >>> 1), high 0.
