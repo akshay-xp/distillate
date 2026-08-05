@@ -7,6 +7,8 @@ import {
   assertUint32,
 } from "../core/params.js";
 import {
+  assertBodyLength,
+  assertMinBodyLength,
   FORMAT_VERSION,
   readHeader,
   SerializationError,
@@ -157,10 +159,12 @@ export class BlockedBloomFilter {
         `expected AMQF type ${String(TYPE)}, got ${String(type)}`,
       );
     }
+    assertMinBodyLength(body.length, 12, "blocked");
     const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
     const numBlocks = dv.getUint32(0, true);
     const seed = dv.getUint32(4, true);
     const n = dv.getUint32(8, true);
+    assertBodyLength(body.length, 12 + numBlocks * 32, "blocked");
     // bitsPerKey 256 with capacity=numBlocks reconstructs exactly numBlocks
     // blocks (256*numBlocks/256); #n is then restored to the stored capacity.
     const f = new BlockedBloomFilter({

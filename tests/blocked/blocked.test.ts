@@ -5,6 +5,8 @@ import {
   FORMAT_VERSION,
   readHeader,
   SerializationError,
+  TruncatedError,
+  writeHeader,
 } from "../../src/core/serialize.js";
 import {
   BlockedBloomFilter,
@@ -323,4 +325,22 @@ test("rate() equals (fill) ** 8, the split-block query width (property)", () => 
 test("fromBytes rejects a frame belonging to another structure", () => {
   const bloom = BloomFilter.create(1000, 0.01).toBytes();
   expect(() => BlockedBloomFilter.fromBytes(bloom)).toThrow(SerializationError);
+});
+
+test("fromBytes rejects a frame whose body length disagrees with declared params", () => {
+  const { type, body } = readHeader(
+    BlockedBloomFilter.create(1000, 0.01).toBytes(),
+  );
+  const truncated = body.subarray(0, body.length - 4);
+  const frame = writeHeader(
+    { version: FORMAT_VERSION, type, flags: 0 },
+    truncated,
+  );
+  expect(() => BlockedBloomFilter.fromBytes(frame)).toThrow(TruncatedError);
+
+  const short = writeHeader(
+    { version: FORMAT_VERSION, type, flags: 0 },
+    body.subarray(0, 5),
+  );
+  expect(() => BlockedBloomFilter.fromBytes(short)).toThrow(TruncatedError);
 });

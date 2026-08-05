@@ -2,6 +2,8 @@ import { BitSet } from "../core/bitset.js";
 import type { BytesLike } from "../core/bytes.js";
 import { probeInto } from "../core/hasher.js";
 import {
+  assertBodyLength,
+  assertMinBodyLength,
   FORMAT_VERSION,
   readHeader,
   SerializationError,
@@ -80,11 +82,13 @@ export class BloomFilter {
         `expected AMQF type ${String(TYPE)}, got ${String(type)}`,
       );
     }
+    assertMinBodyLength(body.length, 14, "bloom");
     const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
     const m = dv.getUint32(0, true);
     const k = dv.getUint16(4, true);
     const seed = dv.getUint32(6, true);
     const n = dv.getUint32(10, true);
+    assertBodyLength(body.length, 14 + Math.ceil(m / 8), "bloom");
     const f = new BloomFilter({ m, k, seed });
     f.#n = n;
     f.#bits.bytes.set(body.subarray(14));

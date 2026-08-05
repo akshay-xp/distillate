@@ -12,6 +12,8 @@ import {
   readHeader,
   FORMAT_VERSION,
   SerializationError,
+  TruncatedError,
+  writeHeader,
 } from "../../src/core/serialize.js";
 import { sampleStrings } from "../helpers/fpr.js";
 
@@ -189,4 +191,22 @@ test("false-positive rate stays at or below 0.6% at n=100k", () => {
   let hits = 0;
   for (const key of absent) if (f.has(key)) hits++;
   expect(hits / absent.length).toBeLessThanOrEqual(0.006);
+});
+
+test("fromBytes rejects a frame whose body length disagrees with declared params", () => {
+  const { type, body } = readHeader(
+    BinaryFuse8.from(sampleStrings(1, 500)).toBytes(),
+  );
+  const truncated = body.subarray(0, body.length - 4);
+  const frame = writeHeader(
+    { version: FORMAT_VERSION, type, flags: 0 },
+    truncated,
+  );
+  expect(() => BinaryFuse8.fromBytes(frame)).toThrow(TruncatedError);
+
+  const short = writeHeader(
+    { version: FORMAT_VERSION, type, flags: 0 },
+    body.subarray(0, 5),
+  );
+  expect(() => BinaryFuse8.fromBytes(short)).toThrow(TruncatedError);
 });

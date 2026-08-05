@@ -5,6 +5,8 @@ import {
   FORMAT_VERSION,
   readHeader,
   SerializationError,
+  TruncatedError,
+  writeHeader,
 } from "../../src/core/serialize.js";
 import { optimal } from "../../src/core/sizing.js";
 import { BloomFilter } from "../../src/bloom/bloom.js";
@@ -303,4 +305,22 @@ test("serializes k > 255 and keeps params roundtrip-stable (format v2)", () => {
 test("fromBytes rejects a frame belonging to another structure", () => {
   const blocked = BlockedBloomFilter.create(1000, 0.01).toBytes();
   expect(() => BloomFilter.fromBytes(blocked)).toThrow(SerializationError);
+});
+
+test("fromBytes rejects a frame whose body length disagrees with declared params", () => {
+  const { type, body } = readHeader(
+    new BloomFilter({ m: 4096, k: 7 }).toBytes(),
+  );
+  const truncated = body.subarray(0, body.length - 4);
+  const frame = writeHeader(
+    { version: FORMAT_VERSION, type, flags: 0 },
+    truncated,
+  );
+  expect(() => BloomFilter.fromBytes(frame)).toThrow(TruncatedError);
+
+  const short = writeHeader(
+    { version: FORMAT_VERSION, type, flags: 0 },
+    body.subarray(0, 5),
+  );
+  expect(() => BloomFilter.fromBytes(short)).toThrow(TruncatedError);
 });

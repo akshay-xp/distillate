@@ -1,6 +1,8 @@
 import { type BytesLike } from "../core/bytes.js";
 import { type Hash128, hash128KeyInto } from "../core/hasher.js";
 import {
+  assertBodyLength,
+  assertMinBodyLength,
   FORMAT_VERSION,
   readHeader,
   SerializationError,
@@ -282,13 +284,18 @@ function fuseStateFromBytes(
       `expected AMQF type ${String(expectedType)}, got ${String(type)}`,
     );
   }
+  assertMinBodyLength(body.length, 16, "fuse");
   const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
   const seed = dv.getUint32(0, true);
   const seg = dv.getUint32(4, true);
   const segCountLen = dv.getUint32(8, true);
   const size = dv.getUint32(12, true);
-  const laneBytes = body.subarray(16);
   const bpe = expectedType === TYPE_FUSE8 ? 1 : 2;
+  // An empty filter carries params but zero fingerprints; otherwise the array
+  // length is fixed by the segment geometry (arrayLength = segCountLen + 2*seg).
+  const expectedArrayLength = size === 0 ? 0 : segCountLen + 2 * seg;
+  assertBodyLength(body.length, 16 + expectedArrayLength * bpe, "fuse");
+  const laneBytes = body.subarray(16);
   const arrayLength = laneBytes.length / bpe;
   const fp =
     bpe === 1 ? new Uint8Array(arrayLength) : new Uint16Array(arrayLength);
