@@ -115,6 +115,18 @@ export class BlockedBloomFilter {
     return (this.#numBlocks * 256) / this.#n;
   }
 
+  /** Number of bits currently set across all lanes. */
+  get length(): number {
+    let bits = 0;
+    for (let w of this.#lanes) {
+      while (w) {
+        w &= w - 1;
+        bits++;
+      }
+    }
+    return bits;
+  }
+
   /**
    * Restores a filter from its {@link BlockedBloomFilter.toBytes} serialization.
    *

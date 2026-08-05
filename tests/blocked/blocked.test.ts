@@ -274,3 +274,23 @@ test("fromBytes throws SerializationError on corrupt or foreign input", () => {
     SerializationError,
   );
 });
+
+test("length reports the number of bits currently set across lanes", () => {
+  const f = new BlockedBloomFilter({ bitsPerKey: 12, capacity: 1000 });
+  expect(f.length).toBe(0);
+
+  for (const key of sampleStrings(1, 200)) f.add(key);
+
+  const { body } = readHeader(f.toBytes());
+  const payload = body.subarray(12);
+  let bits = 0;
+  for (const byte of payload) {
+    let b = byte;
+    while (b) {
+      b &= b - 1;
+      bits++;
+    }
+  }
+
+  expect(f.length).toBe(bits);
+});
