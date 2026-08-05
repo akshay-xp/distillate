@@ -14,13 +14,13 @@ import {
 
 test("writeHeader frames magic, reserved byte, and round-trips fields", () => {
   const frame = writeHeader(
-    { version: 1, type: 5, flags: 3 },
+    { version: FORMAT_VERSION, type: 5, flags: 3 },
     Uint8Array.of(1, 2, 3),
   );
   expect(Array.from(frame.subarray(0, 4))).toEqual([0x41, 0x4d, 0x51, 0x46]);
   expect(frame[7]).toBe(0);
   expect(readHeader(frame)).toEqual({
-    version: 1,
+    version: FORMAT_VERSION,
     type: 5,
     flags: 3,
     body: Uint8Array.of(1, 2, 3),
@@ -45,7 +45,10 @@ test("readHeader(writeHeader(...)) is identity (property)", () => {
 });
 
 const validFrame = (): Uint8Array =>
-  writeHeader({ version: 1, type: 5, flags: 3 }, Uint8Array.of(1, 2, 3));
+  writeHeader(
+    { version: FORMAT_VERSION, type: 5, flags: 3 },
+    Uint8Array.of(1, 2, 3),
+  );
 
 test("readHeader throws TruncatedError on too-short input", () => {
   expect(() => readHeader(new Uint8Array(5))).toThrow(TruncatedError);
@@ -58,7 +61,7 @@ test("readHeader throws BadMagicError on wrong magic", () => {
 });
 
 test("readHeader throws UnknownVersionError on unsupported version", () => {
-  const f = writeHeader({ version: 2, type: 0, flags: 0 }, new Uint8Array(0));
+  const f = writeHeader({ version: 255, type: 0, flags: 0 }, new Uint8Array(0));
   expect(() => readHeader(f)).toThrow(UnknownVersionError);
 });
 
@@ -89,4 +92,12 @@ test("readHeader handles every truncated prefix of a valid frame (fuzz)", () => 
       expect(err).toBeInstanceOf(SerializationError);
     }
   }
+});
+
+test("readHeader rejects a version-1 frame", () => {
+  const frame = writeHeader(
+    { version: 1, type: 1, flags: 0 },
+    Uint8Array.of(1, 2, 3),
+  );
+  expect(() => readHeader(frame)).toThrow(UnknownVersionError);
 });

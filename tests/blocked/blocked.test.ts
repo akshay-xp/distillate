@@ -1,7 +1,11 @@
 import fc from "fast-check";
 import { expect, test } from "vitest";
 
-import { readHeader, SerializationError } from "../../src/core/serialize.js";
+import {
+  FORMAT_VERSION,
+  readHeader,
+  SerializationError,
+} from "../../src/core/serialize.js";
 import {
   BlockedBloomFilter,
   BlockedBloomParamMismatchError,
@@ -230,7 +234,7 @@ test("toBytes emits an AMQF type-2 frame with LE params + payload", () => {
 
   const { version, type, body } = readHeader(frame);
   expect(type).toBe(2);
-  expect(version).toBe(1);
+  expect(version).toBe(FORMAT_VERSION);
 
   const numBlocks = Math.ceil((12 * 100) / 256);
   const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
