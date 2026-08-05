@@ -34,6 +34,8 @@ function buildBinaryFuse8(keys: Iterable<BytesLike>, opts?: BuildOpts): Filter;
 
 Each structure also exposes `fromBytes(bytes: Uint8Array): Filter` (static method).
 
+Introspection accessors sit alongside the narrow interface, not in it: Bloom exposes `m`/`k`/`seed`/`length`/`rate()`, Blocked exposes `length`/`rate()`. They read back build params and current fill (`rate()` is a fill-based FPR estimate); Fuse needs none of them since it is static and reports `size`.
+
 ## Sizing helpers (first-class)
 
 `optimal(n, epsilon)` returns the params for a target count and false-positive rate. Incumbents force manual computation; this is a core ergonomics win.

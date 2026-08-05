@@ -12,6 +12,11 @@ export class BloomFilter {
     static create(n: number, epsilon: number): BloomFilter;
     static fromBytes(bytes: Uint8Array): BloomFilter;
     has(key: BytesLike): boolean;
+    get k(): number;
+    get length(): number;
+    get m(): number;
+    rate(): number;
+    get seed(): number;
     toBytes(): Uint8Array;
     union(other: BloomFilter): BloomFilter;
 }
