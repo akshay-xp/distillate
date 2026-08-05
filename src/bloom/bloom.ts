@@ -72,10 +72,12 @@ export class BloomFilter {
     const { body } = readHeader(bytes);
     const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
     const m = dv.getUint32(0, true);
-    const k = body[4] ?? 0;
-    const seed = dv.getUint32(5, true);
+    const k = dv.getUint16(4, true);
+    const seed = dv.getUint32(6, true);
+    const n = dv.getUint32(10, true);
     const f = new BloomFilter({ m, k, seed });
-    f.#bits.bytes.set(body.subarray(9));
+    f.#n = n;
+    f.#bits.bytes.set(body.subarray(14));
     return f;
   }
 
@@ -138,12 +140,13 @@ export class BloomFilter {
    */
   toBytes(): Uint8Array {
     const payload = this.#bits.bytes;
-    const body = new Uint8Array(9 + payload.length);
+    const body = new Uint8Array(14 + payload.length);
     const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
     dv.setUint32(0, this.#m, true);
-    body[4] = this.#k;
-    dv.setUint32(5, this.#seed, true);
-    body.set(payload, 9);
+    dv.setUint16(4, this.#k, true);
+    dv.setUint32(6, this.#seed, true);
+    dv.setUint32(10, this.#n, true);
+    body.set(payload, 14);
     return writeHeader({ version: FORMAT_VERSION, type: TYPE, flags: 0 }, body);
   }
 
