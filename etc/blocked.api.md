@@ -12,6 +12,8 @@ export class BlockedBloomFilter {
     static create(n: number, epsilon: number): BlockedBloomFilter;
     static fromBytes(bytes: Uint8Array): BlockedBloomFilter;
     has(key: BytesLike): boolean;
+    get length(): number;
+    rate(): number;
     toBytes(): Uint8Array;
     union(other: BlockedBloomFilter): BlockedBloomFilter;
 }
