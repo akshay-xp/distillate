@@ -95,6 +95,21 @@ export class BloomFilter {
     this.#n = Math.round((m * Math.LN2) / k);
   }
 
+  /** Number of bits in the filter. */
+  get m(): number {
+    return this.#m;
+  }
+
+  /** Number of hash probes per key. */
+  get k(): number {
+    return this.#k;
+  }
+
+  /** Hash seed. */
+  get seed(): number {
+    return this.#seed;
+  }
+
   /** Analytic design bits-per-key `m / n`. */
   get bitsPerKey(): number {
     return this.#m / this.#n;

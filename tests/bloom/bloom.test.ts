@@ -214,3 +214,18 @@ test("union rejects mismatched params with a typed error", () => {
     /do not match/i,
   );
 });
+
+test("m, k, seed accessors report the params the filter was built with", () => {
+  const f = new BloomFilter({ m: 1000, k: 7, seed: 42 });
+  expect(f.m).toBe(1000);
+  expect(f.k).toBe(7);
+  expect(f.seed).toBe(42);
+
+  expect(new BloomFilter({ m: 1000, k: 7 }).seed).toBe(0);
+
+  const g = BloomFilter.create(100_000, 0.01);
+  const p = optimal(100_000, 0.01);
+  expect(g.m).toBe(p.m);
+  expect(g.k).toBe(p.k);
+  expect(g.seed).toBe(0);
+});
