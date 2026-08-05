@@ -6,7 +6,12 @@ import {
   assertProbability,
   assertUint32,
 } from "../core/params.js";
-import { FORMAT_VERSION, readHeader, writeHeader } from "../core/serialize.js";
+import {
+  FORMAT_VERSION,
+  readHeader,
+  SerializationError,
+  writeHeader,
+} from "../core/serialize.js";
 
 const TYPE = 2;
 
@@ -146,7 +151,12 @@ export class BlockedBloomFilter {
    * @returns The reconstructed filter.
    */
   static fromBytes(bytes: Uint8Array): BlockedBloomFilter {
-    const { body } = readHeader(bytes);
+    const { type, body } = readHeader(bytes);
+    if (type !== TYPE) {
+      throw new SerializationError(
+        `expected AMQF type ${String(TYPE)}, got ${String(type)}`,
+      );
+    }
     const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
     const numBlocks = dv.getUint32(0, true);
     const seed = dv.getUint32(4, true);

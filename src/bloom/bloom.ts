@@ -1,7 +1,12 @@
 import { BitSet } from "../core/bitset.js";
 import type { BytesLike } from "../core/bytes.js";
 import { probeInto } from "../core/hasher.js";
-import { FORMAT_VERSION, readHeader, writeHeader } from "../core/serialize.js";
+import {
+  FORMAT_VERSION,
+  readHeader,
+  SerializationError,
+  writeHeader,
+} from "../core/serialize.js";
 import {
   assertPositiveInt,
   assertProbability,
@@ -69,7 +74,12 @@ export class BloomFilter {
    * @returns The reconstructed filter.
    */
   static fromBytes(bytes: Uint8Array): BloomFilter {
-    const { body } = readHeader(bytes);
+    const { type, body } = readHeader(bytes);
+    if (type !== TYPE) {
+      throw new SerializationError(
+        `expected AMQF type ${String(TYPE)}, got ${String(type)}`,
+      );
+    }
     const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
     const m = dv.getUint32(0, true);
     const k = dv.getUint16(4, true);

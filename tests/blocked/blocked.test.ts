@@ -13,6 +13,7 @@ import {
 } from "../../src/blocked/blocked.js";
 import { measureFpr, sampleStrings } from "../helpers/fpr.js";
 import { ParamError } from "../../src/core/params.js";
+import { BloomFilter } from "../../src/bloom/bloom.js";
 
 test("constructor rejects invalid bitsPerKey, capacity, and seed", () => {
   const bad = [
@@ -317,4 +318,9 @@ test("rate() equals (fill) ** 8, the split-block query width (property)", () => 
       },
     ),
   );
+});
+
+test("fromBytes rejects a frame belonging to another structure", () => {
+  const bloom = BloomFilter.create(1000, 0.01).toBytes();
+  expect(() => BlockedBloomFilter.fromBytes(bloom)).toThrow(SerializationError);
 });

@@ -8,6 +8,7 @@ import {
 } from "../../src/core/serialize.js";
 import { optimal } from "../../src/core/sizing.js";
 import { BloomFilter } from "../../src/bloom/bloom.js";
+import { BlockedBloomFilter } from "../../src/blocked/blocked.js";
 import { measureFpr, sampleStrings } from "../helpers/fpr.js";
 import { ParamError } from "../../src/core/params.js";
 
@@ -297,4 +298,9 @@ test("serializes k > 255 and keeps params roundtrip-stable (format v2)", () => {
   expect(r.k).toBe(c.k);
   expect(r.seed).toBe(c.seed);
   expect(r.bitsPerKey).toBe(c.bitsPerKey);
+});
+
+test("fromBytes rejects a frame belonging to another structure", () => {
+  const blocked = BlockedBloomFilter.create(1000, 0.01).toBytes();
+  expect(() => BloomFilter.fromBytes(blocked)).toThrow(SerializationError);
 });
