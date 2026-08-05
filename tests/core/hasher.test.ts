@@ -7,6 +7,7 @@ import {
   type Hash128,
   hash128Key,
   hash128KeyInto,
+  murmur32,
   probeInto,
   probes,
 } from "../../src/core/hasher.js";
@@ -380,4 +381,12 @@ test("hash128/hash128Key return independent objects (no aliasing)", () => {
   const a = hash128Key("abc", 0);
   hash128Key("xyz", 0);
   expect(a).toEqual(hash128(enc("abc"), 0));
+});
+
+test("murmur32 matches canonical murmur3_x86_32 vectors", () => {
+  expect(murmur32(new Uint8Array(0), 0)).toBe(0x00000000);
+  expect(murmur32(Uint8Array.of(0, 0, 0, 0), 0)).toBe(0x2362f9de);
+  expect(murmur32(enc("test"), 0)).toBe(0xba6bd213);
+  expect(murmur32(enc("hello"), 0)).toBe(0x248bfa47);
+  expect(murmur32(enc("test"), 1)).toBe(0x99c02ae2);
 });
