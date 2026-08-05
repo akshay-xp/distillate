@@ -293,18 +293,28 @@ export function hash128(
 const keyEncoder = new TextEncoder();
 let keyBuf = new Uint8Array(256);
 
-// Encode a key into LANES with zero per-call allocation: strings encode into a
-// reused buffer (grown on demand) instead of a fresh Uint8Array per call.
-function keyToLanes(key: BytesLike, seed: number): void {
+// Reused view of the encoded key, set by encodeKey; zero per-call allocation.
+let encBytes: Uint8Array = keyBuf;
+let encLen = 0;
+
+// Encode a key to bytes with zero per-call allocation: strings encode into a
+// reused buffer (grown on demand); byte inputs are used directly. Result is
+// exposed via the module-scope encBytes/encLen, read immediately by callers.
+function encodeKey(key: BytesLike): void {
   if (typeof key === "string") {
     const cap = key.length * 3;
     if (keyBuf.length < cap) keyBuf = new Uint8Array(cap);
-    const { written } = keyEncoder.encodeInto(key, keyBuf);
-    computeLanes(keyBuf, seed, written);
+    encLen = keyEncoder.encodeInto(key, keyBuf).written;
+    encBytes = keyBuf;
     return;
   }
-  const bytes = normalize(key);
-  computeLanes(bytes, seed, bytes.length);
+  encBytes = normalize(key);
+  encLen = encBytes.length;
+}
+
+function keyToLanes(key: BytesLike, seed: number): void {
+  encodeKey(key);
+  computeLanes(encBytes, seed, encLen);
 }
 
 export function hash128Key(key: BytesLike, seed = 0): Hash128 {
@@ -346,6 +356,22 @@ export function reduce(x: number, range: number): number {
  * Kirsch-Mitzenmacher enhanced double hashing `g_i = h1 + i*h2 + i^2`
  * (the RocksDB `+i^2` fix), reduced into range with Lemire multiply-shift.
  */
+// Second seed for the murmur32 double hash; the golden ratio constant keeps the
+// two 32-bit words independent enough for enhanced double hashing.
+const SEED2 = 0x9e3779b1;
+
+// Two independent 32-bit hashes of `key`, written to out[0]/out[1]. One key
+// encode, two murmur32 passes. Zero per-call allocation.
+export function hash32x2Into(
+  key: BytesLike,
+  seed: number,
+  out: Uint32Array,
+): void {
+  encodeKey(key);
+  out[0] = murmur32(encBytes, seed, encLen);
+  out[1] = murmur32(encBytes, (seed ^ SEED2) >>> 0, encLen);
+}
+
 export function probeInto(
   key: BytesLike,
   count: number,
@@ -353,9 +379,9 @@ export function probeInto(
   seed: number,
   out: Uint32Array,
 ): void {
-  keyToLanes(key, seed);
-  const a = (LANES.h1lo ^ LANES.h1hi) >>> 0;
-  const b = (LANES.h2lo ^ LANES.h2hi) >>> 0;
+  encodeKey(key);
+  const a = murmur32(encBytes, seed, encLen);
+  const b = murmur32(encBytes, (seed ^ SEED2) >>> 0, encLen);
   for (let i = 0; i < count; i++) {
     const x = (a + Math.imul(i, b) + i * i) >>> 0;
     out[i] = reduce(x, range);

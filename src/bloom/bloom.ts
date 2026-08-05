@@ -5,8 +5,10 @@ import {
   assertBodyLength,
   assertMinBodyLength,
   FORMAT_VERSION,
+  HASH_MURMUR32,
   readHeader,
   SerializationError,
+  UnknownHashVariantError,
   writeHeader,
 } from "../core/serialize.js";
 import {
@@ -76,10 +78,15 @@ export class BloomFilter {
    * @returns The reconstructed filter.
    */
   static fromBytes(bytes: Uint8Array): BloomFilter {
-    const { type, body } = readHeader(bytes);
+    const { type, flags, body } = readHeader(bytes);
     if (type !== TYPE) {
       throw new SerializationError(
         `expected AMQF type ${String(TYPE)}, got ${String(type)}`,
+      );
+    }
+    if ((flags & 0x0f) !== HASH_MURMUR32) {
+      throw new UnknownHashVariantError(
+        `unsupported hash variant ${String(flags & 0x0f)}`,
       );
     }
     assertMinBodyLength(body.length, 14, "bloom");
@@ -161,7 +168,10 @@ export class BloomFilter {
     dv.setUint32(6, this.#seed, true);
     dv.setUint32(10, this.#n, true);
     body.set(payload, 14);
-    return writeHeader({ version: FORMAT_VERSION, type: TYPE, flags: 0 }, body);
+    return writeHeader(
+      { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR32 },
+      body,
+    );
   }
 
   /**

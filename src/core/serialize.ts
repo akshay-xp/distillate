@@ -2,6 +2,10 @@ import { crc32 } from "./crc32.js";
 
 export const FORMAT_VERSION = 2;
 
+/** Hash variant recorded in the low nibble of the header flags byte. */
+export const HASH_MURMUR64 = 0;
+export const HASH_MURMUR32 = 1;
+
 const HEADER_SIZE = 8;
 const TRAILER_SIZE = 4;
 
@@ -47,6 +51,9 @@ export class BadMagicError extends SerializationError {
 }
 export class UnknownVersionError extends SerializationError {
   override readonly name = "UnknownVersionError";
+}
+export class UnknownHashVariantError extends SerializationError {
+  override readonly name = "UnknownHashVariantError";
 }
 export class ChecksumError extends SerializationError {
   override readonly name = "ChecksumError";
