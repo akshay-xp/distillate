@@ -250,3 +250,31 @@ test("length reports the number of bits currently set", () => {
   expect(f.length).toBe(bits);
   expect(f.length).toBeLessThanOrEqual(f.m);
 });
+
+test("rate() estimates the current false-positive rate from actual fill", () => {
+  const empty = new BloomFilter({ m: 4096, k: 7 });
+  expect(empty.rate()).toBe(0);
+
+  const f = new BloomFilter({ m: 4096, k: 7 });
+  for (const key of sampleStrings(1, 300)) f.add(key);
+  expect(f.rate()).toBe((f.length / f.m) ** f.k);
+});
+
+test("rate() is non-decreasing as keys are added (property)", () => {
+  fc.assert(
+    fc.property(
+      fc.array(fc.string(), { minLength: 1, maxLength: 400 }),
+      (keys) => {
+        const f = new BloomFilter({ m: 2048, k: 6 });
+        let prev = f.rate();
+        for (const key of keys) {
+          f.add(key);
+          const r = f.rate();
+          expect(r).toBeGreaterThanOrEqual(prev);
+          expect(r).toBe((f.length / f.m) ** f.k);
+          prev = r;
+        }
+      },
+    ),
+  );
+});
