@@ -99,6 +99,50 @@ export function fmix64(lo: number, hi: number): void {
   RHI = h;
 }
 
+// murmur3_x86_32: pure 32-bit, no emulated 64-bit multiply. The probe path
+// (Bloom/Blocked) only ever consumed 64 bits of the x64 hash, so this is both
+// faster and equivalent in false-positive rate.
+export function murmur32(
+  bytes: Uint8Array,
+  seed: number,
+  len: number = bytes.length,
+): number {
+  let h = seed >>> 0;
+  const n = len & ~3;
+  for (let i = 0; i < n; i += 4) {
+    let k =
+      ((bytes[i] ?? 0) |
+        ((bytes[i + 1] ?? 0) << 8) |
+        ((bytes[i + 2] ?? 0) << 16) |
+        ((bytes[i + 3] ?? 0) << 24)) >>>
+      0;
+    k = Math.imul(k, 0xcc9e2d51);
+    k = ((k << 15) | (k >>> 17)) >>> 0;
+    k = Math.imul(k, 0x1b873593);
+    h = (h ^ k) >>> 0;
+    h = ((h << 13) | (h >>> 19)) >>> 0;
+    h = (Math.imul(h, 5) + 0xe6546b64) >>> 0;
+  }
+  let k1 = 0;
+  const rem = len & 3;
+  if (rem >= 3) k1 ^= (bytes[n + 2] ?? 0) << 16;
+  if (rem >= 2) k1 ^= (bytes[n + 1] ?? 0) << 8;
+  if (rem >= 1) {
+    k1 ^= bytes[n] ?? 0;
+    k1 = Math.imul(k1 >>> 0, 0xcc9e2d51);
+    k1 = ((k1 << 15) | (k1 >>> 17)) >>> 0;
+    k1 = Math.imul(k1, 0x1b873593);
+    h = (h ^ k1) >>> 0;
+  }
+  h = (h ^ len) >>> 0;
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
 function computeLanes(bytes: Uint8Array, seed: number, len: number): void {
   const nblocks = len >>> 4;
 
