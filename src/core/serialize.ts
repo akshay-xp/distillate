@@ -1,6 +1,6 @@
 import { crc32 } from "./crc32.js";
 
-export const FORMAT_VERSION = 1;
+export const FORMAT_VERSION = 2;
 
 const HEADER_SIZE = 8;
 const TRAILER_SIZE = 4;

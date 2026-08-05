@@ -1,7 +1,11 @@
 import fc from "fast-check";
 import { expect, test } from "vitest";
 
-import { readHeader, SerializationError } from "../../src/core/serialize.js";
+import {
+  FORMAT_VERSION,
+  readHeader,
+  SerializationError,
+} from "../../src/core/serialize.js";
 import { optimal } from "../../src/core/sizing.js";
 import { BloomFilter } from "../../src/bloom/bloom.js";
 import { measureFpr, sampleStrings } from "../helpers/fpr.js";
@@ -121,7 +125,7 @@ test("toBytes emits an AMQF type-1 frame with LE params + payload", () => {
 
   const { version, type, body } = readHeader(frame);
   expect(type).toBe(1);
-  expect(version).toBe(1);
+  expect(version).toBe(FORMAT_VERSION);
 
   const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
   expect(dv.getUint32(0, true)).toBe(64);
