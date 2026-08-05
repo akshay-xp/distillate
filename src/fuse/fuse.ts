@@ -1,5 +1,12 @@
 import { type BytesLike } from "../core/bytes.js";
-import { type Hash128, hash128KeyInto } from "../core/hasher.js";
+import {
+  fmix64,
+  type Hash128,
+  hash128KeyInto,
+  mul64,
+  RHI,
+  RLO,
+} from "../core/hasher.js";
 import {
   assertBodyLength,
   assertMinBodyLength,
@@ -26,69 +33,9 @@ export interface FuseParams {
   arrayLength: number;
 }
 
-// Scratch output registers for the 64-bit-lane helpers, reused across calls
-// (zero per-call allocation); safe because every helper is synchronous and
-// non-recursive, and each caller captures RLO/RHI before the next helper runs.
-let RLO = 0;
-let RHI = 0;
-
-// Reused across key hashing (build + lookup); same non-reentrant rationale.
+// Reused across key hashing (build + lookup); same non-reentrant rationale as
+// the shared RLO/RHI scratch in core/hasher.
 const scratchHash: Hash128 = { h1lo: 0, h1hi: 0, h2lo: 0, h2hi: 0 };
-
-function mul64(alo: number, ahi: number, blo: number, bhi: number): void {
-  const a0 = alo & 0xffff;
-  const a1 = alo >>> 16;
-  const a2 = ahi & 0xffff;
-  const a3 = ahi >>> 16;
-  const b0 = blo & 0xffff;
-  const b1 = blo >>> 16;
-  const b2 = bhi & 0xffff;
-  const b3 = bhi >>> 16;
-
-  let c0 = a0 * b0;
-  let c1 = c0 >>> 16;
-  c0 &= 0xffff;
-
-  c1 += a1 * b0;
-  let c2 = c1 >>> 16;
-  c1 &= 0xffff;
-  c1 += a0 * b1;
-  c2 += c1 >>> 16;
-  c1 &= 0xffff;
-
-  c2 += a2 * b0;
-  let c3 = c2 >>> 16;
-  c2 &= 0xffff;
-  c2 += a1 * b1;
-  c3 += c2 >>> 16;
-  c2 &= 0xffff;
-  c2 += a0 * b2;
-  c3 += c2 >>> 16;
-  c2 &= 0xffff;
-
-  c3 += a3 * b0 + a2 * b1 + a1 * b2 + a0 * b3;
-  c3 &= 0xffff;
-
-  RLO = ((c1 << 16) | c0) >>> 0;
-  RHI = ((c3 << 16) | c2) >>> 0;
-}
-
-// murmur3 fmix64 finalizer. Since every right shift is by 33 (>= 32), the
-// shifted low word is (hi >>> 1) and the high word is 0.
-function fmix64(lo: number, hi: number): void {
-  let l = (lo ^ (hi >>> 1)) >>> 0;
-  let h = hi;
-  mul64(l, h, 0xed558ccd, 0xff51afd7);
-  l = RLO;
-  h = RHI;
-  l = (l ^ (h >>> 1)) >>> 0;
-  mul64(l, h, 0x1a85ec53, 0xc4ceb9fe);
-  l = RLO;
-  h = RHI;
-  l = (l ^ (h >>> 1)) >>> 0;
-  RLO = l;
-  RHI = h;
-}
 
 // Cheaply perturb a stored 64-bit key hash with the attempt seed, avoiding a
 // full re-hash of the key on every construction retry.
