@@ -121,6 +121,17 @@ export class BloomFilter {
   }
 
   /**
+   * Estimates the current false-positive rate from the actual fill,
+   * `(length / m) ** k`. This reflects how full the filter is right now, not
+   * the design target; it rises as keys are added.
+   *
+   * @returns The estimated false-positive rate, `0` for an empty filter.
+   */
+  rate(): number {
+    return (this.length / this.#m) ** this.#k;
+  }
+
+  /**
    * Serializes the filter to a portable little-endian byte layout.
    *
    * @returns The serialized filter, readable by {@link BloomFilter.fromBytes}.
