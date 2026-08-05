@@ -110,6 +110,11 @@ export class BloomFilter {
     return this.#seed;
   }
 
+  /** Number of bits currently set. */
+  get length(): number {
+    return this.#bits.count();
+  }
+
   /** Analytic design bits-per-key `m / n`. */
   get bitsPerKey(): number {
     return this.#m / this.#n;
