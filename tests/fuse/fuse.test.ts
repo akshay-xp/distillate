@@ -16,6 +16,7 @@ import {
   writeHeader,
 } from "../../src/core/serialize.js";
 import { sampleStrings } from "../helpers/fpr.js";
+import { fromBase64 } from "../helpers/base64.js";
 
 test("from([]) is a well-defined empty filter, stable across serialization", () => {
   const f8 = BinaryFuse8.from([]);
@@ -209,4 +210,21 @@ test("fromBytes rejects a frame whose body length disagrees with declared params
     body.subarray(0, 5),
   );
   expect(() => BinaryFuse8.fromBytes(short)).toThrow(TruncatedError);
+});
+
+const GOLDEN8_V2 =
+  "QU1RRgIDAAAAAAAACAAAAAgAAAAEAAAAAAAAAAAAAABFAAAAAAAAAAAAAD4AAHcNqOrAzw==";
+const GOLDEN16_V2 =
+  "QU1RRgIEAAAAAAAACAAAAAgAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAEVtAAAAAAAAAAAAAAAAAAAAAAAAAAA+oAAAAAB3GA3i5wR2NA==";
+
+test("reads committed v2 golden frames (locks the format)", () => {
+  const keys = ["alice", "bob", "carol", "dave"];
+
+  const f8 = BinaryFuse8.fromBytes(fromBase64(GOLDEN8_V2));
+  for (const key of keys) expect(f8.has(key)).toBe(true);
+  expect(BinaryFuse8.from(keys).toBytes()).toEqual(fromBase64(GOLDEN8_V2));
+
+  const f16 = BinaryFuse16.fromBytes(fromBase64(GOLDEN16_V2));
+  for (const key of keys) expect(f16.has(key)).toBe(true);
+  expect(BinaryFuse16.from(keys).toBytes()).toEqual(fromBase64(GOLDEN16_V2));
 });

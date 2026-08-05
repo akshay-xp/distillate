@@ -12,6 +12,7 @@ import { optimal } from "../../src/core/sizing.js";
 import { BloomFilter } from "../../src/bloom/bloom.js";
 import { BlockedBloomFilter } from "../../src/blocked/blocked.js";
 import { measureFpr, sampleStrings } from "../helpers/fpr.js";
+import { fromBase64 } from "../helpers/base64.js";
 import { ParamError } from "../../src/core/params.js";
 
 test("constructor rejects non-positive-integer m and k", () => {
@@ -323,4 +324,19 @@ test("fromBytes rejects a frame whose body length disagrees with declared params
     body.subarray(0, 5),
   );
   expect(() => BloomFilter.fromBytes(short)).toThrow(TruncatedError);
+});
+
+const GOLDEN_V2 =
+  "QU1RRgIBAAAABAAABwAqAAAAZQAAAAAAAAAAACAAAAAAgAAAAAAAAAAAAAAAAAAAAAEAAAAACAQAAAAAAAAAAAAACAAABAAAAAAAEAAAAAEAAAAAAAAAAAAAABAAAABAAAgEAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAEAAAAAAAAAAAAAACgAAAgIBAAAAAAAAAAEgxsyFA==";
+
+test("reads a committed v2 golden frame (locks the format)", () => {
+  const f = BloomFilter.fromBytes(fromBase64(GOLDEN_V2));
+  for (const key of ["alice", "bob", "carol"]) expect(f.has(key)).toBe(true);
+  expect(f.m).toBe(1024);
+  expect(f.k).toBe(7);
+  expect(f.seed).toBe(42);
+
+  const fresh = new BloomFilter({ m: 1024, k: 7, seed: 42 });
+  for (const key of ["alice", "bob", "carol"]) fresh.add(key);
+  expect(fresh.toBytes()).toEqual(fromBase64(GOLDEN_V2));
 });

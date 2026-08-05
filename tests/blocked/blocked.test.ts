@@ -14,6 +14,7 @@ import {
   fillBlock,
 } from "../../src/blocked/blocked.js";
 import { measureFpr, sampleStrings } from "../helpers/fpr.js";
+import { fromBase64 } from "../helpers/base64.js";
 import { ParamError } from "../../src/core/params.js";
 import { BloomFilter } from "../../src/bloom/bloom.js";
 
@@ -343,4 +344,20 @@ test("fromBytes rejects a frame whose body length disagrees with declared params
     body.subarray(0, 5),
   );
   expect(() => BlockedBloomFilter.fromBytes(short)).toThrow(TruncatedError);
+});
+
+const GOLDEN_V2 =
+  "QU1RRgICAAAFAAAAKgAAAGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAgAAABAAAAAAABAAAAABAAEAAAEAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAEAAAABAQAAAAAAAQAAAgAAAAABAAAIAAAIAAAAAAAAAQAAAAAgAAAAQAAAAIAAAABAAAAEAAAAEAIxbWKA==";
+
+test("reads a committed v2 golden frame (locks the format)", () => {
+  const f = BlockedBloomFilter.fromBytes(fromBase64(GOLDEN_V2));
+  for (const key of ["alice", "bob", "carol"]) expect(f.has(key)).toBe(true);
+
+  const fresh = new BlockedBloomFilter({
+    bitsPerKey: 12,
+    capacity: 100,
+    seed: 42,
+  });
+  for (const key of ["alice", "bob", "carol"]) fresh.add(key);
+  expect(fresh.toBytes()).toEqual(fromBase64(GOLDEN_V2));
 });
