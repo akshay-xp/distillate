@@ -34,6 +34,17 @@ Offset  Size  Field
 
 Blocked (type 2): `numBlocks (u32) | seed (u32) | n (u32)`, then the lane words (`numBlocks * 32` bytes). Fuse (types 3 and 4): `seed (u32) | seg (u32) | segCountLen (u32) | size (u32)`, then the fingerprint array.
 
+### Hash variant (flags nibble)
+
+Bits 0-3 of the flags byte record which hash produced the stored bits, since the same layout can hold either:
+
+- `0` = MurmurHash3_x64_128 (Fuse)
+- `1` = murmur3_x86_32 (Bloom, Blocked)
+
+Bloom and Blocked write variant `1` and reject any other variant on read with `UnknownHashVariantError`; Fuse writes and expects `0`. This is why a hash change needs no format-version bump: the layout is unchanged, only the variant nibble moves, and it is per-structure, so changing the Bloom/Blocked hash leaves Fuse frames readable.
+
+Forward-compat caveat: the variant check protects a newer reader from an older frame (it refuses rather than misreads). It does not protect an older reader, which predates the check and would silently misread a newer-variant frame. A consumer must therefore be at least as new as the producer.
+
 ## API
 
 ```ts
