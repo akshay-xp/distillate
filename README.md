@@ -43,7 +43,7 @@ Each structure ships as its own subpath, so you only bundle what you import.
 | Import               | Structure     | Mutable? | Use for                                              |
 | -------------------- | ------------- | -------- | ---------------------------------------------------- |
 | `distillate/bloom`   | Classic Bloom | yes      | Familiar default, migration from `bloom-filters`     |
-| `distillate/blocked` | Blocked Bloom | yes      | Very large sets that outgrow CPU cache (10M+ keys)   |
+| `distillate/blocked` | Blocked Bloom | yes      | Faster lookups and a lower FPR for ~15% more space   |
 | `distillate/fuse`    | Binary Fuse   | no       | Static set built once and queried a lot; least space |
 
 ### Classic Bloom (`distillate/bloom`)
@@ -72,11 +72,11 @@ filter.add("alice");
 filter.has("alice"); // true
 ```
 
-Same surface as Classic Bloom (`add` / `has` / `union` / `toBytes` / `fromBytes` / `bitsPerKey`). Confines every lookup to a single cache line, which only pays off once the filter outgrows CPU cache. At typical sizes it matches Classic; for very large sets (tens of millions of keys, past L2/L3) it runs about 1.4x Classic's lookup throughput, at the cost of ~20-30% more space. Prefer Classic unless you are memory-bound at scale.
+Same surface as Classic Bloom (`add` / `has` / `union` / `toBytes` / `fromBytes` / `bitsPerKey`). Confines every lookup to a single cache line, so it is consistently faster than Classic across sizes (measured on Apple M5: ~7% faster at 100k keys, widening to ~1.4x once the filter outgrows CPU cache at tens of millions), and its sizing gives a lower false-positive rate. The cost is ~15% more space. Reach for it when lookup throughput matters; prefer Classic when space is tight.
 
 ### Binary Fuse (`distillate/fuse`)
 
-A **static** filter: built once from the full key set, then immutable. The most space-efficient option (~9 bits/key at ~0.39% FPR for 8-bit; ~19 bits/key at ~1/65536 for 16-bit).
+A **static** filter: built once from the full key set, then immutable. The most space-efficient option (~9 bits/key at ~0.39% FPR for 8-bit; ~19 bits/key at ~1/65536 for 16-bit), and it queries at ~11 M ops/s (Apple M5, 100k keys).
 
 ```ts
 import { BinaryFuse8, BinaryFuse16 } from "distillate/fuse";
@@ -98,10 +98,10 @@ Classic Bloom head-to-head at a **matched 1% false-positive rate** over the same
 
 | Classic Bloom  | bits/key | measured FPR | `has` throughput |
 | -------------- | -------- | ------------ | ---------------- |
-| **distillate** | 9.59     | 1.03%        | ~16 M ops/s      |
+| **distillate** | 9.59     | 1.03%        | ~21 M ops/s      |
 | bloom-filters  | 9.59     | 0.99%        | ~0.29 M ops/s    |
 
-Same space, same accuracy, **~56x the lookup throughput** of [`bloom-filters`](https://www.npmjs.com/package/bloom-filters) (the package distillate replaces), while hashing UTF-8 bytes with MurmurHash3 so filters stay portable and cross-language readable.
+Same space, same accuracy, **~72x the lookup throughput** of [`bloom-filters`](https://www.npmjs.com/package/bloom-filters) (the package distillate replaces), while hashing UTF-8 bytes with MurmurHash3 so filters stay portable and cross-language readable.
 
 These are a point-in-time snapshot on one machine. The full report (blocked/fuse, 1M capacity, the `bloomfilter` micro-package) and exactly how it is measured live in the [distillate-bench](https://github.com/akshay-xp/distillate-bench) repo: [RESULTS.md](https://github.com/akshay-xp/distillate-bench/blob/main/RESULTS.md), [METHODOLOGY.md](https://github.com/akshay-xp/distillate-bench/blob/main/METHODOLOGY.md).
 
