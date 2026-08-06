@@ -7,11 +7,6 @@ export interface Hash128 {
   h2hi: number;
 }
 
-const C1LO = 0x114253d5;
-const C1HI = 0x87c37b91;
-const C2LO = 0x2745937f;
-const C2HI = 0x4cf5ad43;
-
 // Scratch output registers for the 64-bit-lane helpers below. Reused across
 // calls (zero per-call allocation); safe because hash128 is synchronous and
 // non-recursive, so no call observes another's registers mid-computation.
@@ -65,23 +60,6 @@ export function mul64(
   RHI = ((c3 << 16) | c2) >>> 0;
 }
 
-function rotl64(lo: number, hi: number, r: number): void {
-  if (r < 32) {
-    RLO = ((lo << r) | (hi >>> (32 - r))) >>> 0;
-    RHI = ((hi << r) | (lo >>> (32 - r))) >>> 0;
-  } else {
-    const s = r - 32;
-    RLO = ((hi << s) | (lo >>> (32 - s))) >>> 0;
-    RHI = ((lo << s) | (hi >>> (32 - s))) >>> 0;
-  }
-}
-
-function add64(alo: number, ahi: number, blo: number, bhi: number): void {
-  const lo = (alo >>> 0) + (blo >>> 0);
-  RHI = (ahi + bhi + (lo > 0xffffffff ? 1 : 0)) >>> 0;
-  RLO = lo >>> 0;
-}
-
 export function fmix64(lo: number, hi: number): void {
   let l = lo;
   let h = hi;
@@ -99,186 +77,156 @@ export function fmix64(lo: number, hi: number): void {
   RHI = h;
 }
 
-// murmur3_x86_32: pure 32-bit, no emulated 64-bit multiply. The probe path
-// (Bloom/Blocked) only ever consumed 64 bits of the x64 hash, so this is both
-// faster and equivalent in false-positive rate.
-export function murmur32(
-  bytes: Uint8Array,
-  seed: number,
-  len: number = bytes.length,
-): number {
-  let h = seed >>> 0;
-  const n = len & ~3;
-  for (let i = 0; i < n; i += 4) {
-    let k =
-      ((bytes[i] ?? 0) |
-        ((bytes[i + 1] ?? 0) << 8) |
-        ((bytes[i + 2] ?? 0) << 16) |
-        ((bytes[i + 3] ?? 0) << 24)) >>>
-      0;
-    k = Math.imul(k, 0xcc9e2d51);
-    k = ((k << 15) | (k >>> 17)) >>> 0;
-    k = Math.imul(k, 0x1b873593);
-    h = (h ^ k) >>> 0;
-    h = ((h << 13) | (h >>> 19)) >>> 0;
-    h = (Math.imul(h, 5) + 0xe6546b64) >>> 0;
-  }
-  let k1 = 0;
-  const rem = len & 3;
-  if (rem >= 3) k1 ^= (bytes[n + 2] ?? 0) << 16;
-  if (rem >= 2) k1 ^= (bytes[n + 1] ?? 0) << 8;
-  if (rem >= 1) {
-    k1 ^= bytes[n] ?? 0;
-    k1 = Math.imul(k1 >>> 0, 0xcc9e2d51);
-    k1 = ((k1 << 15) | (k1 >>> 17)) >>> 0;
-    k1 = Math.imul(k1, 0x1b873593);
-    h = (h ^ k1) >>> 0;
-  }
-  h = (h ^ len) >>> 0;
-  h ^= h >>> 16;
-  h = Math.imul(h, 0x85ebca6b);
-  h ^= h >>> 13;
-  h = Math.imul(h, 0xc2b2ae35);
-  h ^= h >>> 16;
-  return h >>> 0;
+function rotl32(x: number, r: number): number {
+  return ((x << r) | (x >>> (32 - r))) >>> 0;
 }
+
+function fmix32(h: number): number {
+  let x = h;
+  x ^= x >>> 16;
+  x = Math.imul(x, 0x85ebca6b);
+  x ^= x >>> 13;
+  x = Math.imul(x, 0xc2b2ae35);
+  x ^= x >>> 16;
+  return x >>> 0;
+}
+
+// murmur3_x86_128: pure 32-bit (Math.imul), one pass over the key, four output
+// words. One hash for the whole library: Bloom/Blocked read two words as the
+// double-hash a/b; Fuse reads the first 64-bit lane (h1lo/h1hi). No emulated
+// 64-bit multiply, so it is fast on V8 for every structure.
+const K1 = 0x239b961b;
+const K2 = 0xab0e9789;
+const K3 = 0x38b34ae5;
+const K4 = 0xa1e38b93;
 
 function computeLanes(bytes: Uint8Array, seed: number, len: number): void {
   const nblocks = len >>> 4;
 
-  let h1lo = seed >>> 0;
-  let h1hi = 0;
-  let h2lo = seed >>> 0;
-  let h2hi = 0;
+  let h1 = seed >>> 0;
+  let h2 = seed >>> 0;
+  let h3 = seed >>> 0;
+  let h4 = seed >>> 0;
 
   for (let i = 0; i < nblocks; i++) {
     const b = i * 16;
-    let k1lo =
+    let k1 =
       ((bytes[b] ?? 0) |
         ((bytes[b + 1] ?? 0) << 8) |
         ((bytes[b + 2] ?? 0) << 16) |
         ((bytes[b + 3] ?? 0) << 24)) >>>
       0;
-    let k1hi =
+    let k2 =
       ((bytes[b + 4] ?? 0) |
         ((bytes[b + 5] ?? 0) << 8) |
         ((bytes[b + 6] ?? 0) << 16) |
         ((bytes[b + 7] ?? 0) << 24)) >>>
       0;
-    let k2lo =
+    let k3 =
       ((bytes[b + 8] ?? 0) |
         ((bytes[b + 9] ?? 0) << 8) |
         ((bytes[b + 10] ?? 0) << 16) |
         ((bytes[b + 11] ?? 0) << 24)) >>>
       0;
-    let k2hi =
+    let k4 =
       ((bytes[b + 12] ?? 0) |
         ((bytes[b + 13] ?? 0) << 8) |
         ((bytes[b + 14] ?? 0) << 16) |
         ((bytes[b + 15] ?? 0) << 24)) >>>
       0;
 
-    mul64(k1lo, k1hi, C1LO, C1HI);
-    rotl64(RLO, RHI, 31);
-    mul64(RLO, RHI, C2LO, C2HI);
-    k1lo = RLO;
-    k1hi = RHI;
-    h1lo ^= k1lo;
-    h1hi ^= k1hi;
+    k1 = Math.imul(rotl32(Math.imul(k1, K1), 15), K2);
+    h1 ^= k1;
+    h1 = rotl32(h1, 19);
+    h1 = (h1 + h2) >>> 0;
+    h1 = (Math.imul(h1, 5) + 0x561ccd1b) >>> 0;
 
-    rotl64(h1lo, h1hi, 27);
-    add64(RLO, RHI, h2lo, h2hi);
-    mul64(RLO, RHI, 5, 0);
-    add64(RLO, RHI, 0x52dce729, 0);
-    h1lo = RLO;
-    h1hi = RHI;
+    k2 = Math.imul(rotl32(Math.imul(k2, K2), 16), K3);
+    h2 ^= k2;
+    h2 = rotl32(h2, 17);
+    h2 = (h2 + h3) >>> 0;
+    h2 = (Math.imul(h2, 5) + 0x0bcaa747) >>> 0;
 
-    mul64(k2lo, k2hi, C2LO, C2HI);
-    rotl64(RLO, RHI, 33);
-    mul64(RLO, RHI, C1LO, C1HI);
-    k2lo = RLO;
-    k2hi = RHI;
-    h2lo ^= k2lo;
-    h2hi ^= k2hi;
+    k3 = Math.imul(rotl32(Math.imul(k3, K3), 17), K4);
+    h3 ^= k3;
+    h3 = rotl32(h3, 15);
+    h3 = (h3 + h4) >>> 0;
+    h3 = (Math.imul(h3, 5) + 0x96cd1c35) >>> 0;
 
-    rotl64(h2lo, h2hi, 31);
-    add64(RLO, RHI, h1lo, h1hi);
-    mul64(RLO, RHI, 5, 0);
-    add64(RLO, RHI, 0x38495ab5, 0);
-    h2lo = RLO;
-    h2hi = RHI;
+    k4 = Math.imul(rotl32(Math.imul(k4, K4), 18), K1);
+    h4 ^= k4;
+    h4 = rotl32(h4, 13);
+    h4 = (h4 + h1) >>> 0;
+    h4 = (Math.imul(h4, 5) + 0x32ac3b17) >>> 0;
   }
 
-  let k1lo = 0;
-  let k1hi = 0;
-  let k2lo = 0;
-  let k2hi = 0;
+  let k1 = 0;
+  let k2 = 0;
+  let k3 = 0;
+  let k4 = 0;
   const tail = nblocks * 16;
   const rem = len & 15;
 
-  if (rem >= 15) k2hi ^= (bytes[tail + 14] ?? 0) << 16;
-  if (rem >= 14) k2hi ^= (bytes[tail + 13] ?? 0) << 8;
-  if (rem >= 13) k2hi ^= bytes[tail + 12] ?? 0;
-  if (rem >= 12) k2lo ^= (bytes[tail + 11] ?? 0) << 24;
-  if (rem >= 11) k2lo ^= (bytes[tail + 10] ?? 0) << 16;
-  if (rem >= 10) k2lo ^= (bytes[tail + 9] ?? 0) << 8;
+  if (rem >= 15) k4 ^= (bytes[tail + 14] ?? 0) << 16;
+  if (rem >= 14) k4 ^= (bytes[tail + 13] ?? 0) << 8;
+  if (rem >= 13) {
+    k4 ^= bytes[tail + 12] ?? 0;
+    k4 = Math.imul(rotl32(Math.imul(k4, K4), 18), K1);
+    h4 ^= k4;
+  }
+  if (rem >= 12) k3 ^= (bytes[tail + 11] ?? 0) << 24;
+  if (rem >= 11) k3 ^= (bytes[tail + 10] ?? 0) << 16;
+  if (rem >= 10) k3 ^= (bytes[tail + 9] ?? 0) << 8;
   if (rem >= 9) {
-    k2lo ^= bytes[tail + 8] ?? 0;
-    k2lo >>>= 0;
-    k2hi >>>= 0;
-    mul64(k2lo, k2hi, C2LO, C2HI);
-    rotl64(RLO, RHI, 33);
-    mul64(RLO, RHI, C1LO, C1HI);
-    h2lo ^= RLO;
-    h2hi ^= RHI;
+    k3 ^= bytes[tail + 8] ?? 0;
+    k3 = Math.imul(rotl32(Math.imul(k3, K3), 17), K4);
+    h3 ^= k3;
   }
-
-  if (rem >= 8) k1hi ^= (bytes[tail + 7] ?? 0) << 24;
-  if (rem >= 7) k1hi ^= (bytes[tail + 6] ?? 0) << 16;
-  if (rem >= 6) k1hi ^= (bytes[tail + 5] ?? 0) << 8;
-  if (rem >= 5) k1hi ^= bytes[tail + 4] ?? 0;
-  if (rem >= 4) k1lo ^= (bytes[tail + 3] ?? 0) << 24;
-  if (rem >= 3) k1lo ^= (bytes[tail + 2] ?? 0) << 16;
-  if (rem >= 2) k1lo ^= (bytes[tail + 1] ?? 0) << 8;
+  if (rem >= 8) k2 ^= (bytes[tail + 7] ?? 0) << 24;
+  if (rem >= 7) k2 ^= (bytes[tail + 6] ?? 0) << 16;
+  if (rem >= 6) k2 ^= (bytes[tail + 5] ?? 0) << 8;
+  if (rem >= 5) {
+    k2 ^= bytes[tail + 4] ?? 0;
+    k2 = Math.imul(rotl32(Math.imul(k2, K2), 16), K3);
+    h2 ^= k2;
+  }
+  if (rem >= 4) k1 ^= (bytes[tail + 3] ?? 0) << 24;
+  if (rem >= 3) k1 ^= (bytes[tail + 2] ?? 0) << 16;
+  if (rem >= 2) k1 ^= (bytes[tail + 1] ?? 0) << 8;
   if (rem >= 1) {
-    k1lo ^= bytes[tail] ?? 0;
-    k1lo >>>= 0;
-    k1hi >>>= 0;
-    mul64(k1lo, k1hi, C1LO, C1HI);
-    rotl64(RLO, RHI, 31);
-    mul64(RLO, RHI, C2LO, C2HI);
-    h1lo ^= RLO;
-    h1hi ^= RHI;
+    k1 ^= bytes[tail] ?? 0;
+    k1 = Math.imul(rotl32(Math.imul(k1, K1), 15), K2);
+    h1 ^= k1;
   }
 
-  h1lo = (h1lo ^ len) >>> 0;
-  h2lo = (h2lo ^ len) >>> 0;
+  h1 = (h1 ^ len) >>> 0;
+  h2 = (h2 ^ len) >>> 0;
+  h3 = (h3 ^ len) >>> 0;
+  h4 = (h4 ^ len) >>> 0;
 
-  add64(h1lo, h1hi, h2lo, h2hi);
-  h1lo = RLO;
-  h1hi = RHI;
-  add64(h2lo, h2hi, h1lo, h1hi);
-  h2lo = RLO;
-  h2hi = RHI;
+  h1 = (h1 + h2) >>> 0;
+  h1 = (h1 + h3) >>> 0;
+  h1 = (h1 + h4) >>> 0;
+  h2 = (h2 + h1) >>> 0;
+  h3 = (h3 + h1) >>> 0;
+  h4 = (h4 + h1) >>> 0;
 
-  fmix64(h1lo, h1hi);
-  h1lo = RLO;
-  h1hi = RHI;
-  fmix64(h2lo, h2hi);
-  h2lo = RLO;
-  h2hi = RHI;
+  h1 = fmix32(h1);
+  h2 = fmix32(h2);
+  h3 = fmix32(h3);
+  h4 = fmix32(h4);
 
-  add64(h1lo, h1hi, h2lo, h2hi);
-  h1lo = RLO;
-  h1hi = RHI;
-  add64(h2lo, h2hi, h1lo, h1hi);
-  h2lo = RLO;
-  h2hi = RHI;
+  h1 = (h1 + h2) >>> 0;
+  h1 = (h1 + h3) >>> 0;
+  h1 = (h1 + h4) >>> 0;
+  h2 = (h2 + h1) >>> 0;
+  h3 = (h3 + h1) >>> 0;
+  h4 = (h4 + h1) >>> 0;
 
-  LANES.h1lo = h1lo >>> 0;
-  LANES.h1hi = h1hi >>> 0;
-  LANES.h2lo = h2lo >>> 0;
-  LANES.h2hi = h2hi >>> 0;
+  LANES.h1lo = h1;
+  LANES.h1hi = h2;
+  LANES.h2lo = h3;
+  LANES.h2hi = h4;
 }
 
 export function hash128(
@@ -351,27 +299,24 @@ export function reduce(x: number, range: number): number {
   return (hihi + (lohi >>> 16) + (hilo >>> 16) + (carry >>> 16)) >>> 0;
 }
 
-/**
- * Derive `count` bucket indices in `[0, range)` from a key using
- * Kirsch-Mitzenmacher enhanced double hashing `g_i = h1 + i*h2 + i^2`
- * (the RocksDB `+i^2` fix), reduced into range with Lemire multiply-shift.
- */
-// Second seed for the murmur32 double hash; the golden ratio constant keeps the
-// two 32-bit words independent enough for enhanced double hashing.
-const SEED2 = 0x9e3779b1;
-
 // Two independent 32-bit hashes of `key`, written to out[0]/out[1]. One key
-// encode, two murmur32 passes. Zero per-call allocation.
+// encode, one murmur3_x86_128 pass; the first two output words are the two
+// independent double-hash words. Zero per-call allocation.
 export function hash32x2Into(
   key: BytesLike,
   seed: number,
   out: Uint32Array,
 ): void {
-  encodeKey(key);
-  out[0] = murmur32(encBytes, seed, encLen);
-  out[1] = murmur32(encBytes, (seed ^ SEED2) >>> 0, encLen);
+  keyToLanes(key, seed);
+  out[0] = LANES.h1lo;
+  out[1] = LANES.h1hi;
 }
 
+/**
+ * Derive `count` bucket indices in `[0, range)` from a key using
+ * Kirsch-Mitzenmacher enhanced double hashing `g_i = h1 + i*h2 + i^2`
+ * (the RocksDB `+i^2` fix), reduced into range with Lemire multiply-shift.
+ */
 export function probeInto(
   key: BytesLike,
   count: number,
@@ -379,9 +324,9 @@ export function probeInto(
   seed: number,
   out: Uint32Array,
 ): void {
-  encodeKey(key);
-  const a = murmur32(encBytes, seed, encLen);
-  const b = murmur32(encBytes, (seed ^ SEED2) >>> 0, encLen);
+  keyToLanes(key, seed);
+  const a = LANES.h1lo;
+  const b = LANES.h1hi;
   for (let i = 0; i < count; i++) {
     const x = (a + Math.imul(i, b) + i * i) >>> 0;
     out[i] = reduce(x, range);
