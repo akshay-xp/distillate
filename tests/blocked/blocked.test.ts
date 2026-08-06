@@ -6,6 +6,7 @@ import {
   readHeader,
   SerializationError,
   TruncatedError,
+  UnknownVersionError,
   writeHeader,
 } from "../../src/core/serialize.js";
 import {
@@ -236,6 +237,9 @@ test("toBytes emits an AMQF type-2 frame with LE params + payload", () => {
   f.add("x");
   const frame = f.toBytes();
 
+  expect(frame[4]).toBe(3);
+  expect((frame[6] ?? 0) & 0x0f).toBe(0);
+
   const { version, type, body } = readHeader(frame);
   expect(type).toBe(2);
   expect(version).toBe(FORMAT_VERSION);
@@ -346,11 +350,14 @@ test("fromBytes rejects a frame whose body length disagrees with declared params
   expect(() => BlockedBloomFilter.fromBytes(short)).toThrow(TruncatedError);
 });
 
-const GOLDEN_V2 =
+const GOLDEN_V3 =
+  "QU1RRgMCAAAFAAAAKgAAAGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAQAAIAAAAEAAAAABAAAgAAAAQAAAAAAAIAAAEAEAAQAAAAAAQEAIAAgAAQAAgEAAACAAiAAAAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwnL6jw==";
+
+const UNSUPPORTED_V2 =
   "QU1RRgICAQAFAAAAKgAAAGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAQAAIAAAAEAAAAABAAAgAAAAQAAAAAAAIAAAEAEAAQAAAAAAQEAIAAgAAQAAgEAAACAAiAAAAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADVRVuw==";
 
-test("reads a committed v2 golden frame (locks the format)", () => {
-  const f = BlockedBloomFilter.fromBytes(fromBase64(GOLDEN_V2));
+test("reads a committed v3 golden frame (locks the format)", () => {
+  const f = BlockedBloomFilter.fromBytes(fromBase64(GOLDEN_V3));
   for (const key of ["alice", "bob", "carol"]) expect(f.has(key)).toBe(true);
 
   const fresh = new BlockedBloomFilter({
@@ -359,18 +366,24 @@ test("reads a committed v2 golden frame (locks the format)", () => {
     seed: 42,
   });
   for (const key of ["alice", "bob", "carol"]) fresh.add(key);
-  expect(fresh.toBytes()).toEqual(fromBase64(GOLDEN_V2));
+  expect(fresh.toBytes()).toEqual(fromBase64(GOLDEN_V3));
 });
 
-test("fromBytes rejects a frame built with the old hash variant", () => {
+test("fromBytes rejects a superseded v2 frame", () => {
+  expect(() =>
+    BlockedBloomFilter.fromBytes(fromBase64(UNSUPPORTED_V2)),
+  ).toThrow(UnknownVersionError);
+});
+
+test("fromBytes rejects a frame with an unknown hash variant", () => {
   const f = BlockedBloomFilter.create(1000, 0.01);
   const { type, body } = readHeader(f.toBytes());
-  const variant0 = writeHeader(
-    { version: FORMAT_VERSION, type, flags: 0 },
+  const variant1 = writeHeader(
+    { version: FORMAT_VERSION, type, flags: 1 },
     body,
   );
-  expect(() => BlockedBloomFilter.fromBytes(variant0)).toThrow(
+  expect(() => BlockedBloomFilter.fromBytes(variant1)).toThrow(
     SerializationError,
   );
-  expect(() => BlockedBloomFilter.fromBytes(variant0)).toThrow(/hash variant/i);
+  expect(() => BlockedBloomFilter.fromBytes(variant1)).toThrow(/hash variant/i);
 });

@@ -13,6 +13,7 @@ import {
   FORMAT_VERSION,
   SerializationError,
   TruncatedError,
+  UnknownVersionError,
   writeHeader,
 } from "../../src/core/serialize.js";
 import { sampleStrings } from "../helpers/fpr.js";
@@ -124,7 +125,10 @@ test("fuse16 reports size and ~18-19 bits per key", () => {
 
 test("toBytes emits an AMQF type-3 frame for fuse8 and type-4 for fuse16", () => {
   const f8 = BinaryFuse8.from(sampleStrings(1, 500));
-  const h8 = readHeader(f8.toBytes());
+  const frame8 = f8.toBytes();
+  expect(frame8[4]).toBe(3);
+  expect((frame8[6] ?? 0) & 0x0f).toBe(0);
+  const h8 = readHeader(frame8);
   expect(h8.type).toBe(3);
   expect(h8.version).toBe(FORMAT_VERSION);
   expect(h8.body.length).toBeGreaterThan(16);
@@ -212,19 +216,40 @@ test("fromBytes rejects a frame whose body length disagrees with declared params
   expect(() => BinaryFuse8.fromBytes(short)).toThrow(TruncatedError);
 });
 
-const GOLDEN8_V2 =
-  "QU1RRgIDAAAAAAAACAAAAAgAAAAEAAAAAAAAAAAAAABFAAAAAAAAAAAAAD4AAHcNqOrAzw==";
-const GOLDEN16_V2 =
-  "QU1RRgIEAAAAAAAACAAAAAgAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAEVtAAAAAAAAAAAAAAAAAAAAAAAAAAA+oAAAAAB3GA3i5wR2NA==";
+const GOLDEN8_V3 =
+  "QU1RRgMDAAAAAAAACAAAAAgAAAAEAAAAAAAAAAAAAABFAAAAAAAAAAAAAD4AAHcNytLo5Q==";
+const GOLDEN16_V3 =
+  "QU1RRgMEAAAAAAAACAAAAAgAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAEVtAAAAAAAAAAAAAAAAAAAAAAAAAAA+oAAAAAB3GA3ixZxLUQ==";
 
-test("reads committed v2 golden frames (locks the format)", () => {
+const UNSUPPORTED8_V2 =
+  "QU1RRgIDAAAAAAAACAAAAAgAAAAEAAAAAAAAAAAAAABFAAAAAAAAAAAAAD4AAHcNqOrAzw==";
+
+test("reads committed v3 golden frames (locks the format)", () => {
   const keys = ["alice", "bob", "carol", "dave"];
 
-  const f8 = BinaryFuse8.fromBytes(fromBase64(GOLDEN8_V2));
+  const f8 = BinaryFuse8.fromBytes(fromBase64(GOLDEN8_V3));
   for (const key of keys) expect(f8.has(key)).toBe(true);
-  expect(BinaryFuse8.from(keys).toBytes()).toEqual(fromBase64(GOLDEN8_V2));
+  expect(BinaryFuse8.from(keys).toBytes()).toEqual(fromBase64(GOLDEN8_V3));
 
-  const f16 = BinaryFuse16.fromBytes(fromBase64(GOLDEN16_V2));
+  const f16 = BinaryFuse16.fromBytes(fromBase64(GOLDEN16_V3));
   for (const key of keys) expect(f16.has(key)).toBe(true);
-  expect(BinaryFuse16.from(keys).toBytes()).toEqual(fromBase64(GOLDEN16_V2));
+  expect(BinaryFuse16.from(keys).toBytes()).toEqual(fromBase64(GOLDEN16_V3));
+});
+
+test("fromBytes rejects a superseded v2 frame", () => {
+  expect(() => BinaryFuse8.fromBytes(fromBase64(UNSUPPORTED8_V2))).toThrow(
+    UnknownVersionError,
+  );
+});
+
+test("fromBytes rejects a frame with an unknown hash variant", () => {
+  const { type, body } = readHeader(
+    BinaryFuse8.from(sampleStrings(1, 100)).toBytes(),
+  );
+  const variant1 = writeHeader(
+    { version: FORMAT_VERSION, type, flags: 1 },
+    body,
+  );
+  expect(() => BinaryFuse8.fromBytes(variant1)).toThrow(SerializationError);
+  expect(() => BinaryFuse8.fromBytes(variant1)).toThrow(/hash variant/i);
 });

@@ -11,8 +11,10 @@ import {
   assertBodyLength,
   assertMinBodyLength,
   FORMAT_VERSION,
+  HASH_MURMUR128,
   readHeader,
   SerializationError,
+  UnknownHashVariantError,
   writeHeader,
 } from "../core/serialize.js";
 
@@ -225,10 +227,15 @@ function fuseStateFromBytes(
   bytes: Uint8Array,
   expectedType: number,
 ): FuseState {
-  const { type, body } = readHeader(bytes);
+  const { type, flags, body } = readHeader(bytes);
   if (type !== expectedType) {
     throw new SerializationError(
       `expected AMQF type ${String(expectedType)}, got ${String(type)}`,
+    );
+  }
+  if ((flags & 0x0f) !== HASH_MURMUR128) {
+    throw new UnknownHashVariantError(
+      `unsupported hash variant ${String(flags & 0x0f)}`,
     );
   }
   assertMinBodyLength(body.length, 16, "fuse");
@@ -306,7 +313,10 @@ abstract class BinaryFuse {
     dv.setUint32(12, this.#size, true);
     body.set(laneBytes, 16);
     const type = this.#fp.BYTES_PER_ELEMENT === 1 ? TYPE_FUSE8 : TYPE_FUSE16;
-    return writeHeader({ version: FORMAT_VERSION, type, flags: 0 }, body);
+    return writeHeader(
+      { version: FORMAT_VERSION, type, flags: HASH_MURMUR128 },
+      body,
+    );
   }
 
   /**

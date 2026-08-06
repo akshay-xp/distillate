@@ -10,7 +10,7 @@ import {
   assertBodyLength,
   assertMinBodyLength,
   FORMAT_VERSION,
-  HASH_MURMUR32,
+  HASH_MURMUR128,
   readHeader,
   SerializationError,
   UnknownHashVariantError,
@@ -161,7 +161,7 @@ export class BlockedBloomFilter {
         `expected AMQF type ${String(TYPE)}, got ${String(type)}`,
       );
     }
-    if ((flags & 0x0f) !== HASH_MURMUR32) {
+    if ((flags & 0x0f) !== HASH_MURMUR128) {
       throw new UnknownHashVariantError(
         `unsupported hash variant ${String(flags & 0x0f)}`,
       );
@@ -202,7 +202,7 @@ export class BlockedBloomFilter {
     dv.setUint32(8, this.#n, true);
     body.set(lanes, 12);
     return writeHeader(
-      { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR32 },
+      { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
       body,
     );
   }
