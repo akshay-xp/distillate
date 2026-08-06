@@ -1,10 +1,9 @@
 import { crc32 } from "./crc32.js";
 
-export const FORMAT_VERSION = 2;
+export const FORMAT_VERSION = 3;
 
 /** Hash variant recorded in the low nibble of the header flags byte. */
-export const HASH_MURMUR64 = 0;
-export const HASH_MURMUR32 = 1;
+export const HASH_MURMUR128 = 0;
 
 const HEADER_SIZE = 8;
 const TRAILER_SIZE = 4;
