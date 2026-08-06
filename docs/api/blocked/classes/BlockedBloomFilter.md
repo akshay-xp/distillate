@@ -9,7 +9,7 @@
 Defined in: [src/blocked/blocked.ts:66](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L66)
 
 A blocked (split-block) Bloom filter: confines every lookup to a single cache
-line, trading ~20-30% more space for cache-friendly throughput.
+line, trading ~15% more space for higher lookup throughput and a lower FPR.
 
 ## Example
 
