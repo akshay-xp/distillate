@@ -17,9 +17,9 @@ Offset  Size  Field
 end     4     CRC32 of all preceding bytes
 ```
 
-Current `FORMAT_VERSION` is `2`. Readers reject any other version (`UnknownVersionError`), and validate the body length against the declared params before allocating.
+Current `FORMAT_VERSION` is `3`. Readers reject any other version (`UnknownVersionError`), and validate the body length against the declared params before allocating.
 
-### Params block per type (version 2)
+### Params block per type (version 3)
 
 Bloom (type 1), little-endian:
 
@@ -36,14 +36,15 @@ Blocked (type 2): `numBlocks (u32) | seed (u32) | n (u32)`, then the lane words 
 
 ### Hash variant (flags nibble)
 
-Bits 0-3 of the flags byte record which hash produced the stored bits, since the same layout can hold either:
+Bits 0-3 of the flags byte record which hash produced the stored bits. Version 3 uses one hash for every structure:
 
-- `0` = MurmurHash3_x64_128 (Fuse)
-- `1` = murmur3_x86_32 (Bloom, Blocked)
+- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse)
 
-Bloom and Blocked write variant `1` and reject any other variant on read with `UnknownHashVariantError`; Fuse writes and expects `0`. This is why a hash change needs no format-version bump: the layout is unchanged, only the variant nibble moves, and it is per-structure, so changing the Bloom/Blocked hash leaves Fuse frames readable.
+All three structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted.
 
-Forward-compat caveat: the variant check protects a newer reader from an older frame (it refuses rather than misreads). It does not protect an older reader, which predates the check and would silently misread a newer-variant frame. A consumer must therefore be at least as new as the producer.
+The version bump (not a flags-only change) was deliberate: the version-2 Fuse reader had no variant check and would silently misread a version-3 frame, so bumping the version makes it reject on the version byte instead.
+
+Forward-compat caveat: the version and variant checks protect a newer reader from an older frame (it refuses rather than misreads). An older reader that predates a check would misread a newer frame, so a consumer must be at least as new as the producer.
 
 ## API
 
