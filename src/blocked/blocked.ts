@@ -54,7 +54,7 @@ export interface BlockedBloomParams {
 
 /**
  * A blocked (split-block) Bloom filter: confines every lookup to a single cache
- * line, trading ~20-30% more space for cache-friendly throughput.
+ * line, trading ~15% more space for higher lookup throughput and a lower FPR.
  *
  * @example
  * ```ts
