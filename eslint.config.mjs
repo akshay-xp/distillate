@@ -6,16 +6,20 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   {
     ignores: [
-      "dist",
-      "coverage",
-      "node_modules",
+      "**/dist",
+      "**/coverage",
+      "**/node_modules",
       "**/*.config.*",
-      "scripts",
-      "bench/**/*.bench.ts",
+      "**/scripts",
+      "**/*.bench.ts",
     ],
   },
   {
-    files: ["src/**/*.ts", "tests/**/*.ts", "bench/**/*.ts"],
+    files: [
+      "packages/distillate/src/**/*.ts",
+      "packages/distillate/tests/**/*.ts",
+      "packages/distillate/bench/**/*.ts",
+    ],
     extends: [
       js.configs.recommended,
       ...tseslint.configs.strictTypeChecked,
@@ -23,20 +27,20 @@ export default tseslint.config(
     ],
     languageOptions: {
       parserOptions: {
-        project: "./tsconfig.eslint.json",
+        project: "packages/distillate/tsconfig.eslint.json",
         tsconfigRootDir: import.meta.dirname,
       },
     },
   },
   {
-    files: ["src/**/*.ts"],
+    files: ["packages/distillate/src/**/*.ts"],
     plugins: { tsdoc },
     rules: {
       "tsdoc/syntax": "error",
     },
   },
   {
-    files: ["bench/**/*.ts"],
+    files: ["packages/distillate/bench/**/*.ts"],
     rules: {
       "@typescript-eslint/triple-slash-reference": "off",
       "@typescript-eslint/no-non-null-assertion": "off",
