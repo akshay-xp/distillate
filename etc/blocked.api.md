@@ -13,10 +13,12 @@ export class BlockedBloomFilter {
     equals(other: BlockedBloomFilter): boolean;
     static from(keys: Iterable<BytesLike>, epsilon: number): BlockedBloomFilter;
     static fromBytes(bytes: Uint8Array): BlockedBloomFilter;
+    static fromJSON(value: unknown): BlockedBloomFilter;
     has(key: BytesLike): boolean;
     get length(): number;
     rate(): number;
     toBytes(): Uint8Array;
+    toJSON(): FilterJSON;
     union(other: BlockedBloomFilter): BlockedBloomFilter;
 }
 
@@ -30,6 +32,13 @@ export interface BlockedBloomParams {
     bitsPerKey: number;
     capacity: number;
     seed?: number;
+}
+
+// @public
+export interface FilterJSON {
+    $: string;
+    data: string;
+    v: number;
 }
 
 // @public

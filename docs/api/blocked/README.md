@@ -17,6 +17,12 @@
 
 ## References
 
+### FilterJSON
+
+Re-exports [FilterJSON](../bloom/interfaces/FilterJSON.md)
+
+***
+
 ### ParamError
 
 Re-exports [ParamError](../bloom/classes/ParamError.md)

@@ -6,7 +6,7 @@
 
 # Interface: BloomParams
 
-Defined in: [src/bloom/bloom.ts:31](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L31)
+Defined in: [src/bloom/bloom.ts:34](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L34)
 
 Low-level Bloom filter parameters.
 
@@ -16,7 +16,7 @@ Low-level Bloom filter parameters.
 
 > **k**: `number`
 
-Defined in: [src/bloom/bloom.ts:35](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L35)
+Defined in: [src/bloom/bloom.ts:38](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L38)
 
 Number of hash probes per key.
 
@@ -26,7 +26,7 @@ Number of hash probes per key.
 
 > **m**: `number`
 
-Defined in: [src/bloom/bloom.ts:33](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L33)
+Defined in: [src/bloom/bloom.ts:36](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L36)
 
 Number of bits in the filter.
 
@@ -36,6 +36,6 @@ Number of bits in the filter.
 
 > `optional` **seed?**: `number`
 
-Defined in: [src/bloom/bloom.ts:37](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L37)
+Defined in: [src/bloom/bloom.ts:40](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L40)
 
 Hash seed; defaults to `0`.

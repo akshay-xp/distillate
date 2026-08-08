@@ -15,3 +15,4 @@
 ## Interfaces
 
 - [BloomParams](interfaces/BloomParams.md)
+- [FilterJSON](interfaces/FilterJSON.md)

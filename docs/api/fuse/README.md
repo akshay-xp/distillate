@@ -11,3 +11,9 @@
 - [BinaryFuse16](classes/BinaryFuse16.md)
 - [BinaryFuse8](classes/BinaryFuse8.md)
 - [BinaryFuseBuildError](classes/BinaryFuseBuildError.md)
+
+## References
+
+### FilterJSON
+
+Re-exports [FilterJSON](../bloom/interfaces/FilterJSON.md)
