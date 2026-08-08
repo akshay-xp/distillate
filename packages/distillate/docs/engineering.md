@@ -2,6 +2,15 @@
 
 Packaging, testing, benchmarking, CI, release. Targets 2026 tooling.
 
+## Repository layout
+
+pnpm workspace (`pnpm-workspace.yaml`: `packages/*`, `apps/*`).
+
+- `packages/distillate/`: the published library. All build/test/doc tooling (tsdown, vitest, typedoc, api-extractor) and its configs live here; source links and module docs (this file included) are under `packages/distillate/`.
+- `apps/*`: private, non-published tooling (e.g. the cross-library bench) that depends on the library via `workspace:*`, so it always tracks local source and cannot drift against a stale published version.
+- Root is private: repo-wide tooling (eslint, prettier, husky, commitlint, changesets) and delegating scripts. Whole-tree tasks (`build`/`test`/`typecheck`) fan out via `pnpm -r`; library-specific ones (`coverage`/`check`/`api:*`/`docs:api`) target `pnpm --filter distillate`; `changeset`/`version`/`release` run at root.
+- `.npmrc` public-hoists `typedoc-plugin-markdown` so typedoc resolves it from the pnpm store (same treatment pnpm gives `*eslint*`/`*prettier*`).
+
 ## Packaging
 
 - Bundler: tsdown (Rolldown/Oxc) with `isolatedDeclarations: true`. tsup as fallback.
