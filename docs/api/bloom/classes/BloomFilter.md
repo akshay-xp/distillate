@@ -26,7 +26,7 @@ filter.has("bob"); // false (or a ~1% false positive)
 
 > **new BloomFilter**(`__namedParameters`): `BloomFilter`
 
-Defined in: [src/bloom/bloom.ts:110](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L110)
+Defined in: [src/bloom/bloom.ts:126](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L126)
 
 Constructs a filter from low-level [BloomParams](../interfaces/BloomParams.md). Prefer
 [BloomFilter.create](#create) unless restoring a specific configuration.
@@ -49,7 +49,7 @@ Constructs a filter from low-level [BloomParams](../interfaces/BloomParams.md). 
 
 > **get** **bitsPerKey**(): `number`
 
-Defined in: [src/bloom/bloom.ts:143](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L143)
+Defined in: [src/bloom/bloom.ts:159](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L159)
 
 Analytic design bits-per-key `m / n`.
 
@@ -65,7 +65,7 @@ Analytic design bits-per-key `m / n`.
 
 > **get** **k**(): `number`
 
-Defined in: [src/bloom/bloom.ts:128](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L128)
+Defined in: [src/bloom/bloom.ts:144](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L144)
 
 Number of hash probes per key.
 
@@ -81,7 +81,7 @@ Number of hash probes per key.
 
 > **get** **length**(): `number`
 
-Defined in: [src/bloom/bloom.ts:138](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L138)
+Defined in: [src/bloom/bloom.ts:154](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L154)
 
 Number of bits currently set.
 
@@ -97,7 +97,7 @@ Number of bits currently set.
 
 > **get** **m**(): `number`
 
-Defined in: [src/bloom/bloom.ts:123](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L123)
+Defined in: [src/bloom/bloom.ts:139](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L139)
 
 Number of bits in the filter.
 
@@ -113,7 +113,7 @@ Number of bits in the filter.
 
 > **get** **seed**(): `number`
 
-Defined in: [src/bloom/bloom.ts:133](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L133)
+Defined in: [src/bloom/bloom.ts:149](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L149)
 
 Hash seed.
 
@@ -127,7 +127,7 @@ Hash seed.
 
 > **add**(`key`): `void`
 
-Defined in: [src/bloom/bloom.ts:220](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L220)
+Defined in: [src/bloom/bloom.ts:236](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L236)
 
 Adds a key to the set.
 
@@ -149,7 +149,7 @@ The key to insert, as a string or bytes.
 
 > **equals**(`other`): `boolean`
 
-Defined in: [src/bloom/bloom.ts:185](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L185)
+Defined in: [src/bloom/bloom.ts:201](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L201)
 
 Tests structural equality: `true` when `other` serializes to identical
 bytes, meaning identical parameters and set bits.
@@ -174,7 +174,7 @@ The filter to compare against.
 
 > **has**(`key`): `boolean`
 
-Defined in: [src/bloom/bloom.ts:231](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L231)
+Defined in: [src/bloom/bloom.ts:247](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L247)
 
 Tests whether a key is in the set.
 
@@ -198,7 +198,7 @@ The key to test.
 
 > **rate**(): `number`
 
-Defined in: [src/bloom/bloom.ts:154](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L154)
+Defined in: [src/bloom/bloom.ts:170](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L170)
 
 Estimates the current false-positive rate from the actual fill,
 `(length / m) ** k`. This reflects how full the filter is right now, not
@@ -216,7 +216,7 @@ The estimated false-positive rate, `0` for an empty filter.
 
 > **toBytes**(): `Uint8Array`
 
-Defined in: [src/bloom/bloom.ts:163](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L163)
+Defined in: [src/bloom/bloom.ts:179](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L179)
 
 Serializes the filter to a portable little-endian byte layout.
 
@@ -232,7 +232,7 @@ The serialized filter, readable by [BloomFilter.fromBytes](#frombytes).
 
 > **union**(`other`): `BloomFilter`
 
-Defined in: [src/bloom/bloom.ts:196](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L196)
+Defined in: [src/bloom/bloom.ts:212](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L212)
 
 Returns a new filter containing the union of this filter and `other`.
 
@@ -286,11 +286,43 @@ A new, empty filter.
 
 ***
 
+### from()
+
+> `static` **from**(`keys`, `epsilon`): `BloomFilter`
+
+Defined in: [src/bloom/bloom.ts:84](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L84)
+
+Builds a filter from `keys`, sized for their count at the target
+false-positive rate. The ergonomic entry point when the key set is already
+in hand; use [BloomFilter.create](#create) to size for a count known ahead.
+
+#### Parameters
+
+##### keys
+
+`Iterable`\<`BytesLike`\>
+
+The keys to insert.
+
+##### epsilon
+
+`number`
+
+Target false-positive rate, e.g. `0.01` for 1%.
+
+#### Returns
+
+`BloomFilter`
+
+A new filter containing every key.
+
+***
+
 ### fromBytes()
 
 > `static` **fromBytes**(`bytes`): `BloomFilter`
 
-Defined in: [src/bloom/bloom.ts:81](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L81)
+Defined in: [src/bloom/bloom.ts:97](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L97)
 
 Restores a filter from its [BloomFilter.toBytes](#tobytes) serialization.
 
