@@ -5,6 +5,22 @@
   "description": "Monorepo for distillate: the published library and its internal tooling.",
   "type": "module",
   "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "coverage": "pnpm --filter distillate coverage",
+    "check": "pnpm --filter distillate check",
+    "api:report": "pnpm --filter distillate api:report",
+    "api:check": "pnpm --filter distillate api:check",
+    "docs:api": "pnpm --filter distillate docs:api",
+    "bench": "pnpm --filter distillate bench",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "changeset publish",
     "prepare": "husky"
   },
   "lint-staged": {
