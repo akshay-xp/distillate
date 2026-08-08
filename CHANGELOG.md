@@ -1,5 +1,21 @@
 # distillate
 
+## 0.6.0
+
+### Minor Changes
+
+- 6e77718: Add `equals` to Bloom, Blocked, and both Fuse filters. `a.equals(b)` is true when the two filters serialize to identical bytes (same parameters and contents); a fuse8 and a fuse16 are never equal.
+- 16db712: Add `from(keys, epsilon)` to Bloom and Blocked filters: build a filter directly from an iterable of keys, sized for their count at the target false-positive rate. Mirrors the existing `BinaryFuse.from`.
+- c9b0a21: Unify all structures on murmur3_x86_128 and bump the serialization format to version 3.
+
+  One hash (murmur3_x86_128, pure `Math.imul`, single pass) now backs Bloom, Blocked, and Fuse, replacing the two-pass murmur3_x86_32 and the emulated MurmurHash3_x64_128. On Apple M5 this is ~2x faster Fuse queries and ~1.3x faster Bloom/Blocked lookups.
+
+  Breaking: this is a format change. Filters serialized by earlier versions (format v2) are rejected on read with `UnknownVersionError`; re-serialize with this version. Fuse frames now carry a hash-variant guard they previously lacked.
+
+### Patch Changes
+
+- 01ecf28: Compute the serialization CRC-32 with a slice-by-8 table drive instead of the byte-at-a-time loop. Output is byte-identical (same IEEE 802.3 checksum), so no format change; `toBytes`/`fromBytes` are about 4x faster on large filters (measured ~50 ms to ~13 ms for the CRC over an 11 MB payload on Apple M5).
+
 ## 0.5.0
 
 ### Minor Changes
