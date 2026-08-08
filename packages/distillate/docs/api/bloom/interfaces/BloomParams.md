@@ -1,6 +1,6 @@
 [**distillate**](../../README.md)
 
-***
+---
 
 [distillate](../../README.md) / [bloom](../README.md) / BloomParams
 
@@ -20,7 +20,7 @@ Defined in: [src/bloom/bloom.ts:38](https://github.com/akshay-xp/distillate/blob
 
 Number of hash probes per key.
 
-***
+---
 
 ### m
 
@@ -30,7 +30,7 @@ Defined in: [src/bloom/bloom.ts:36](https://github.com/akshay-xp/distillate/blob
 
 Number of bits in the filter.
 
-***
+---
 
 ### seed?
 

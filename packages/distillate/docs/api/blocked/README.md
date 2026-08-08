@@ -1,6 +1,6 @@
 [**distillate**](../README.md)
 
-***
+---
 
 [distillate](../README.md) / blocked
 
@@ -21,7 +21,7 @@
 
 Re-exports [FilterJSON](../bloom/interfaces/FilterJSON.md)
 
-***
+---
 
 ### ParamError
 

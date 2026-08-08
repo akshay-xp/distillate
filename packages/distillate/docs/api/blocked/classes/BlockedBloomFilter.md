@@ -1,6 +1,6 @@
 [**distillate**](../../README.md)
 
-***
+---
 
 [distillate](../../README.md) / [blocked](../README.md) / BlockedBloomFilter
 
@@ -56,7 +56,7 @@ Actual bits allocated per key (`total bits / capacity`).
 
 `number`
 
-***
+---
 
 ### length
 
@@ -94,7 +94,7 @@ The key to insert, as a string or bytes.
 
 `void`
 
-***
+---
 
 ### equals()
 
@@ -119,7 +119,7 @@ The filter to compare against.
 
 `true` if the two filters are byte-for-byte identical.
 
-***
+---
 
 ### has()
 
@@ -143,7 +143,7 @@ The key to test.
 
 `true` if present (possibly a false positive); `false` guarantees absence.
 
-***
+---
 
 ### rate()
 
@@ -162,7 +162,7 @@ how full the filter is right now, not the design target.
 
 The estimated false-positive rate, `0` for an empty filter.
 
-***
+---
 
 ### toBytes()
 
@@ -178,7 +178,7 @@ Serializes the filter to a portable little-endian byte layout.
 
 The serialized filter, readable by [BlockedBloomFilter.fromBytes](#frombytes).
 
-***
+---
 
 ### toJSON()
 
@@ -195,7 +195,7 @@ Serializes the filter to a JSON-friendly envelope wrapping the base64 of
 
 The envelope, readable by [BlockedBloomFilter.fromJSON](#fromjson).
 
-***
+---
 
 ### union()
 
@@ -223,7 +223,7 @@ A new filter reporting membership for keys in either input.
 
 [BlockedBloomParamMismatchError](BlockedBloomParamMismatchError.md) if the parameters differ.
 
-***
+---
 
 ### create()
 
@@ -253,7 +253,7 @@ Target false-positive rate, e.g. `0.01` for 1%.
 
 A new, empty filter.
 
-***
+---
 
 ### from()
 
@@ -286,7 +286,7 @@ Target false-positive rate, e.g. `0.01` for 1%.
 
 A new filter containing every key.
 
-***
+---
 
 ### fromBytes()
 
@@ -310,7 +310,7 @@ The serialized filter.
 
 The reconstructed filter.
 
-***
+---
 
 ### fromJSON()
 

@@ -1,87 +1,10 @@
 {
-  "name": "distillate",
-  "version": "0.5.0",
-  "description": "Probabilistic data structures for JavaScript. Space-efficient, approximate-membership filters (Bloom, Blocked Bloom, Binary Fuse) with tunable error and a portable binary format; zero dependencies, universal.",
-  "keywords": [
-    "bloom-filter",
-    "cuckoo-filter",
-    "binary-fuse",
-    "xor-filter",
-    "amq",
-    "approximate-membership",
-    "probabilistic",
-    "probabilistic-data-structures",
-    "set",
-    "filter"
-  ],
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/akshay-xp/distillate.git"
-  },
-  "homepage": "https://github.com/akshay-xp/distillate#readme",
+  "name": "siftr",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Monorepo for distillate: the published library and its internal tooling.",
   "type": "module",
-  "sideEffects": false,
-  "exports": {
-    ".": {
-      "types": {
-        "import": "./dist/index.d.ts",
-        "require": "./dist/index.d.cts"
-      },
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
-    },
-    "./bloom": {
-      "types": {
-        "import": "./dist/bloom/index.d.ts",
-        "require": "./dist/bloom/index.d.cts"
-      },
-      "import": "./dist/bloom/index.js",
-      "require": "./dist/bloom/index.cjs"
-    },
-    "./blocked": {
-      "types": {
-        "import": "./dist/blocked/index.d.ts",
-        "require": "./dist/blocked/index.d.cts"
-      },
-      "import": "./dist/blocked/index.js",
-      "require": "./dist/blocked/index.cjs"
-    },
-    "./fuse": {
-      "types": {
-        "import": "./dist/fuse/index.d.ts",
-        "require": "./dist/fuse/index.d.cts"
-      },
-      "import": "./dist/fuse/index.js",
-      "require": "./dist/fuse/index.cjs"
-    },
-    "./package.json": "./package.json"
-  },
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
   "scripts": {
-    "build": "tsdown",
-    "publint": "publint --strict",
-    "check": "publint --strict && attw --pack . --profile node16",
-    "attw": "attw --pack . --profile node16",
-    "test": "vitest run",
-    "coverage": "vitest run --coverage",
-    "api:report": "node scripts/api-extractor.mjs --local",
-    "api:check": "node scripts/api-extractor.mjs",
-    "docs:api": "typedoc",
-    "changeset": "changeset",
-    "version": "changeset version",
-    "release": "changeset publish",
-    "bench": "tsx bench/core.bench.ts && tsx bench/bloom.bench.ts && tsx bench/blocked.bench.ts && tsx bench/fuse.bench.ts && tsx bench/accuracy.bench.ts",
-    "typecheck": "tsc --noEmit",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -92,30 +15,18 @@
     "*.{js,mjs,cjs,json,md,yml,yaml}": "prettier --write"
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "^0.18.5",
     "@changesets/cli": "^2.31.1",
     "@commitlint/cli": "^21.2.1",
     "@commitlint/config-conventional": "^21.2.0",
     "@eslint/js": "^10.0.1",
-    "@microsoft/api-extractor": "^7.58.12",
-    "@types/node": "^26.1.2",
-    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-tsdoc": "^0.5.2",
-    "fast-check": "^4.9.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.2.0",
-    "mitata": "^1.0.34",
     "prettier": "^3.9.6",
-    "publint": "^0.3.22",
-    "tsdown": "^0.22.14",
-    "tsx": "^4.23.1",
-    "typedoc": "^0.28.20",
-    "typedoc-plugin-markdown": "^4.12.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.65.0",
-    "vitest": "^4.1.10"
+    "typescript-eslint": "^8.65.0"
   },
   "engines": {
     "node": ">=20"

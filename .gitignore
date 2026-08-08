@@ -6,3 +6,7 @@ temp/
 
 # Sibling comparison repo (its own git repo)
 distillate-bench/
+
+# Local external review notes (not part of the package)
+distillate-review/
+distillate-review-2/

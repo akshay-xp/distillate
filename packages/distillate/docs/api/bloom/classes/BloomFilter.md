@@ -1,6 +1,6 @@
 [**distillate**](../../README.md)
 
-***
+---
 
 [distillate](../../README.md) / [bloom](../README.md) / BloomFilter
 
@@ -57,7 +57,7 @@ Analytic design bits-per-key `m / n`.
 
 `number`
 
-***
+---
 
 ### k
 
@@ -73,7 +73,7 @@ Number of hash probes per key.
 
 `number`
 
-***
+---
 
 ### length
 
@@ -89,7 +89,7 @@ Number of bits currently set.
 
 `number`
 
-***
+---
 
 ### m
 
@@ -105,7 +105,7 @@ Number of bits in the filter.
 
 `number`
 
-***
+---
 
 ### seed
 
@@ -143,7 +143,7 @@ The key to insert, as a string or bytes.
 
 `void`
 
-***
+---
 
 ### equals()
 
@@ -168,7 +168,7 @@ The filter to compare against.
 
 `true` if the two filters are byte-for-byte identical.
 
-***
+---
 
 ### has()
 
@@ -192,7 +192,7 @@ The key to test.
 
 `true` if present (possibly a false positive); `false` guarantees absence.
 
-***
+---
 
 ### rate()
 
@@ -210,7 +210,7 @@ the design target; it rises as keys are added.
 
 The estimated false-positive rate, `0` for an empty filter.
 
-***
+---
 
 ### toBytes()
 
@@ -226,7 +226,7 @@ Serializes the filter to a portable little-endian byte layout.
 
 The serialized filter, readable by [BloomFilter.fromBytes](#frombytes).
 
-***
+---
 
 ### toJSON()
 
@@ -243,7 +243,7 @@ Serializes the filter to a JSON-friendly envelope wrapping the base64 of
 
 The envelope, readable by [BloomFilter.fromJSON](#fromjson).
 
-***
+---
 
 ### union()
 
@@ -271,7 +271,7 @@ A new filter reporting membership for keys in either input.
 
 [BloomParamMismatchError](BloomParamMismatchError.md) if the parameters differ.
 
-***
+---
 
 ### create()
 
@@ -301,7 +301,7 @@ Target false-positive rate, e.g. `0.01` for 1%.
 
 A new, empty filter.
 
-***
+---
 
 ### from()
 
@@ -333,7 +333,7 @@ Target false-positive rate, e.g. `0.01` for 1%.
 
 A new filter containing every key.
 
-***
+---
 
 ### fromBytes()
 
@@ -357,7 +357,7 @@ The serialized filter.
 
 The reconstructed filter.
 
-***
+---
 
 ### fromJSON()
 

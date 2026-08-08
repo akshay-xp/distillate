@@ -1,6 +1,6 @@
 [**distillate**](../../README.md)
 
-***
+---
 
 [distillate](../../README.md) / [bloom](../README.md) / ParamError
 
@@ -116,7 +116,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 `RangeError.cause`
 
-***
+---
 
 ### message
 
@@ -128,7 +128,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 `RangeError.message`
 
-***
+---
 
 ### name
 
@@ -142,7 +142,7 @@ Discriminates this error from other `Error`s.
 
 `RangeError.name`
 
-***
+---
 
 ### stack?
 
