@@ -268,3 +268,23 @@ test("equals is true iff serialized frames match, false across variants", () => 
   expect(f8a.equals(f16)).toBe(false);
   expect(f16.equals(BinaryFuse16.from(keys))).toBe(true);
 });
+
+test("toJSON/fromJSON round-trips both variants through JSON.stringify", () => {
+  const keys = ["alice", "bob", "carol", "dave"];
+  const f8 = BinaryFuse8.from(keys);
+  const f16 = BinaryFuse16.from(keys);
+
+  for (const j of [f8.toJSON(), f16.toJSON()]) {
+    expect(j.$).toBe("distillate");
+    expect(j.v).toBe(FORMAT_VERSION);
+    expect(typeof j.data).toBe("string");
+  }
+
+  expect(BinaryFuse8.fromJSON(f8.toJSON()).equals(f8)).toBe(true);
+  expect(BinaryFuse16.fromJSON(f16.toJSON()).equals(f16)).toBe(true);
+  expect(
+    BinaryFuse8.fromJSON(
+      JSON.parse(JSON.stringify(f8.toJSON())) as unknown,
+    ).equals(f8),
+  ).toBe(true);
+});
