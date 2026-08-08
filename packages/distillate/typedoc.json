@@ -8,6 +8,7 @@
   ],
   "plugin": ["typedoc-plugin-markdown"],
   "out": "docs/api",
+  "formatWithPrettier": true,
   "tsconfig": "./tsconfig.json",
   "readme": "none",
   "hideGenerator": true,
