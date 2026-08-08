@@ -6,7 +6,7 @@
 
 # Class: ParamError
 
-Defined in: [src/core/params.ts:2](https://github.com/akshay-xp/distillate/blob/main/src/core/params.ts#L2)
+Defined in: [packages/distillate/src/core/params.ts:2](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/core/params.ts#L2)
 
 Thrown when a structure is constructed with invalid parameters.
 
@@ -134,7 +134,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 > `readonly` **name**: `"ParamError"` = `"ParamError"`
 
-Defined in: [src/core/params.ts:4](https://github.com/akshay-xp/distillate/blob/main/src/core/params.ts#L4)
+Defined in: [packages/distillate/src/core/params.ts:4](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/core/params.ts#L4)
 
 Discriminates this error from other `Error`s.
 

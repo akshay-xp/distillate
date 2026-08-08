@@ -6,7 +6,7 @@
 
 # Interface: BlockedBloomParams
 
-Defined in: [src/blocked/blocked.ts:50](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L50)
+Defined in: [packages/distillate/src/blocked/blocked.ts:50](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L50)
 
 Low-level blocked Bloom filter parameters.
 
@@ -16,7 +16,7 @@ Low-level blocked Bloom filter parameters.
 
 > **bitsPerKey**: `number`
 
-Defined in: [src/blocked/blocked.ts:52](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L52)
+Defined in: [packages/distillate/src/blocked/blocked.ts:52](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L52)
 
 Bits allocated per key; higher lowers the false-positive rate.
 
@@ -26,7 +26,7 @@ Bits allocated per key; higher lowers the false-positive rate.
 
 > **capacity**: `number`
 
-Defined in: [src/blocked/blocked.ts:54](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L54)
+Defined in: [packages/distillate/src/blocked/blocked.ts:54](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L54)
 
 Expected number of keys.
 
@@ -36,6 +36,6 @@ Expected number of keys.
 
 > `optional` **seed?**: `number`
 
-Defined in: [src/blocked/blocked.ts:56](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L56)
+Defined in: [packages/distillate/src/blocked/blocked.ts:56](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L56)
 
 Hash seed; defaults to `0`.
