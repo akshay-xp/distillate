@@ -11,10 +11,13 @@ import {
   assertBodyLength,
   assertMinBodyLength,
   bytesEqual,
+  type FilterJSON,
   FORMAT_VERSION,
+  fromJSONEnvelope,
   HASH_MURMUR128,
   readHeader,
   SerializationError,
+  toJSONEnvelope,
   UnknownHashVariantError,
   writeHeader,
 } from "../core/serialize.js";
@@ -361,6 +364,16 @@ abstract class BinaryFuse {
   equals(other: BinaryFuse8 | BinaryFuse16): boolean {
     return bytesEqual(this.toBytes(), other.toBytes());
   }
+
+  /**
+   * Serializes the filter to a JSON-friendly envelope wrapping the base64 of
+   * the `toBytes` frame.
+   *
+   * @returns The envelope, readable by the matching `fromJSON`.
+   */
+  toJSON(): FilterJSON {
+    return toJSONEnvelope(this.toBytes());
+  }
 }
 
 /**
@@ -395,6 +408,16 @@ export class BinaryFuse8 extends BinaryFuse {
   static fromBytes(bytes: Uint8Array): BinaryFuse8 {
     return new BinaryFuse8(fuseStateFromBytes(bytes, TYPE_FUSE8));
   }
+
+  /**
+   * Restores a filter from its {@link BinaryFuse8.toJSON} envelope.
+   *
+   * @param value - The JSON envelope.
+   * @returns The reconstructed filter.
+   */
+  static fromJSON(value: unknown): BinaryFuse8 {
+    return BinaryFuse8.fromBytes(fromJSONEnvelope(value));
+  }
 }
 
 /**
@@ -427,5 +450,15 @@ export class BinaryFuse16 extends BinaryFuse {
    */
   static fromBytes(bytes: Uint8Array): BinaryFuse16 {
     return new BinaryFuse16(fuseStateFromBytes(bytes, TYPE_FUSE16));
+  }
+
+  /**
+   * Restores a filter from its {@link BinaryFuse16.toJSON} envelope.
+   *
+   * @param value - The JSON envelope.
+   * @returns The reconstructed filter.
+   */
+  static fromJSON(value: unknown): BinaryFuse16 {
+    return BinaryFuse16.fromBytes(fromJSONEnvelope(value));
   }
 }
