@@ -11,6 +11,7 @@ export class BloomFilter {
     get bitsPerKey(): number;
     static create(n: number, epsilon: number): BloomFilter;
     equals(other: BloomFilter): boolean;
+    static from(keys: Iterable<BytesLike>, epsilon: number): BloomFilter;
     static fromBytes(bytes: Uint8Array): BloomFilter;
     has(key: BytesLike): boolean;
     get k(): number;

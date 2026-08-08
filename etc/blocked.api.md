@@ -11,6 +11,7 @@ export class BlockedBloomFilter {
     get bitsPerKey(): number;
     static create(n: number, epsilon: number): BlockedBloomFilter;
     equals(other: BlockedBloomFilter): boolean;
+    static from(keys: Iterable<BytesLike>, epsilon: number): BlockedBloomFilter;
     static fromBytes(bytes: Uint8Array): BlockedBloomFilter;
     has(key: BytesLike): boolean;
     get length(): number;
