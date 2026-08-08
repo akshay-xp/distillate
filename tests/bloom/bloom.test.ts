@@ -412,3 +412,30 @@ test("from builds a filter with no false negatives from any iterable", () => {
     ParamError,
   );
 });
+
+test("toJSON/fromJSON round-trips and rejects malformed envelopes", () => {
+  const f = BloomFilter.from(["a", "b", "c"], 0.01);
+  const j = f.toJSON();
+
+  expect(j.$).toBe("distillate");
+  expect(j.v).toBe(FORMAT_VERSION);
+  expect(typeof j.data).toBe("string");
+
+  expect(BloomFilter.fromJSON(j).equals(f)).toBe(true);
+  expect(
+    BloomFilter.fromJSON(JSON.parse(JSON.stringify(j)) as unknown).equals(f),
+  ).toBe(true);
+
+  expect(() => BloomFilter.fromJSON({ ...j, $: "nope" })).toThrow(
+    SerializationError,
+  );
+  expect(() => BloomFilter.fromJSON({ ...j, v: 99 })).toThrow(
+    SerializationError,
+  );
+  expect(() =>
+    BloomFilter.fromJSON({ ...j, data: "Z" + j.data.slice(1) }),
+  ).toThrow(SerializationError);
+  expect(() =>
+    BloomFilter.fromJSON({ $: "distillate", v: FORMAT_VERSION }),
+  ).toThrow(SerializationError);
+});

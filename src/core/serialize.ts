@@ -1,3 +1,4 @@
+import { fromBase64, toBase64 } from "./base64.js";
 import { crc32 } from "./crc32.js";
 
 export const FORMAT_VERSION = 3;
@@ -56,6 +57,47 @@ export class UnknownHashVariantError extends SerializationError {
 }
 export class ChecksumError extends SerializationError {
   override readonly name = "ChecksumError";
+}
+
+const JSON_TAG = "distillate";
+
+/** JSON-friendly envelope for a filter: the binary frame, base64-encoded. */
+export interface FilterJSON {
+  /** Format tag; always `"distillate"`. */
+  $: string;
+  /** Binary format version. */
+  v: number;
+  /** Base64 of the `toBytes` frame. */
+  data: string;
+}
+
+/** Wraps a serialized frame in the JSON envelope. */
+export function toJSONEnvelope(bytes: Uint8Array): FilterJSON {
+  return { $: JSON_TAG, v: FORMAT_VERSION, data: toBase64(bytes) };
+}
+
+/**
+ * Validates a JSON envelope and returns the raw frame bytes for a structure's
+ * own `fromBytes` to decode. Throws {@link SerializationError} on any envelope
+ * defect; the frame itself is checked downstream.
+ */
+export function fromJSONEnvelope(value: unknown): Uint8Array {
+  if (value === null || typeof value !== "object") {
+    throw new SerializationError("not a distillate filter JSON object");
+  }
+  const o = value as Record<string, unknown>;
+  if (o.$ !== JSON_TAG) {
+    throw new SerializationError(`expected "$":"${JSON_TAG}"`);
+  }
+  if (o.v !== FORMAT_VERSION) {
+    throw new UnknownVersionError(
+      `unsupported JSON version ${String(o.v)}, expected ${String(FORMAT_VERSION)}`,
+    );
+  }
+  if (typeof o.data !== "string") {
+    throw new SerializationError('missing string "data"');
+  }
+  return fromBase64(o.data);
 }
 
 /** Byte-wise equality of two frames; the basis for structure `equals`. */
