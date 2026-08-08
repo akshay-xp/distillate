@@ -6,7 +6,7 @@
 
 # Class: BinaryFuse16
 
-Defined in: [src/fuse/fuse.ts:397](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L397)
+Defined in: [src/fuse/fuse.ts:410](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L410)
 
 A static 16-bit binary fuse filter: like [BinaryFuse8](BinaryFuse8.md) but twice the
 space (~18 bits/key) for a far lower false-positive rate (~1/65536).
@@ -28,7 +28,7 @@ filter.has("alice"); // true
 
 > `protected` **new BinaryFuse16**(`state`): `BinaryFuse16`
 
-Defined in: [src/fuse/fuse.ts:278](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L278)
+Defined in: [src/fuse/fuse.ts:279](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L279)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: [src/fuse/fuse.ts:278](https://github.com/akshay-xp/distillate/blob/
 
 > **get** **bitsPerKey**(): `number`
 
-Defined in: [src/fuse/fuse.ts:293](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L293)
+Defined in: [src/fuse/fuse.ts:294](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L294)
 
 Actual bits stored per key (`0` for an empty filter).
 
@@ -72,7 +72,7 @@ Actual bits stored per key (`0` for an empty filter).
 
 > **get** **size**(): `number`
 
-Defined in: [src/fuse/fuse.ts:288](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L288)
+Defined in: [src/fuse/fuse.ts:289](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L289)
 
 Number of distinct keys the filter was built from.
 
@@ -86,11 +86,41 @@ Number of distinct keys the filter was built from.
 
 ## Methods
 
+### equals()
+
+> **equals**(`other`): `boolean`
+
+Defined in: [src/fuse/fuse.ts:361](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L361)
+
+Tests structural equality: `true` when `other` serializes to identical
+bytes. A [BinaryFuse8](BinaryFuse8.md) and a BinaryFuse16 are never equal,
+since their frames carry different type bytes.
+
+#### Parameters
+
+##### other
+
+[`BinaryFuse8`](BinaryFuse8.md) \| `BinaryFuse16`
+
+The filter to compare against.
+
+#### Returns
+
+`boolean`
+
+`true` if the two filters are byte-for-byte identical.
+
+#### Inherited from
+
+`BinaryFuse.equals`
+
+***
+
 ### has()
 
 > **has**(`key`): `boolean`
 
-Defined in: [src/fuse/fuse.ts:328](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L328)
+Defined in: [src/fuse/fuse.ts:329](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L329)
 
 Tests whether a key is in the set.
 
@@ -118,7 +148,7 @@ The key to test.
 
 > **toBytes**(): `Uint8Array`
 
-Defined in: [src/fuse/fuse.ts:302](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L302)
+Defined in: [src/fuse/fuse.ts:303](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L303)
 
 Serializes the filter to a portable little-endian byte layout.
 
@@ -138,7 +168,7 @@ The serialized filter, readable by the matching `fromBytes`.
 
 > `static` **from**(`keys`): `BinaryFuse16`
 
-Defined in: [src/fuse/fuse.ts:405](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L405)
+Defined in: [src/fuse/fuse.ts:418](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L418)
 
 Builds a filter from the given keys; duplicates are ignored.
 
@@ -166,7 +196,7 @@ A new immutable filter.
 
 > `static` **fromBytes**(`bytes`): `BinaryFuse16`
 
-Defined in: [src/fuse/fuse.ts:415](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L415)
+Defined in: [src/fuse/fuse.ts:428](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L428)
 
 Restores a filter from its [BinaryFuse16.toBytes](BinaryFuse8.md#tobytes) serialization.
 

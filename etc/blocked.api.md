@@ -10,6 +10,7 @@ export class BlockedBloomFilter {
     add(key: BytesLike): void;
     get bitsPerKey(): number;
     static create(n: number, epsilon: number): BlockedBloomFilter;
+    equals(other: BlockedBloomFilter): boolean;
     static fromBytes(bytes: Uint8Array): BlockedBloomFilter;
     has(key: BytesLike): boolean;
     get length(): number;
