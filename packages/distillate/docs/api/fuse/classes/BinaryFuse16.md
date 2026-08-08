@@ -1,22 +1,21 @@
 [**distillate**](../../README.md)
 
-***
+---
 
-[distillate](../../README.md) / [fuse](../README.md) / BinaryFuse8
+[distillate](../../README.md) / [fuse](../README.md) / BinaryFuse16
 
-# Class: BinaryFuse8
+# Class: BinaryFuse16
 
-Defined in: [src/fuse/fuse.ts:390](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L390)
+Defined in: [src/fuse/fuse.ts:433](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L433)
 
-A static 8-bit binary fuse filter: built once from a key set, then immutable.
-The most space-efficient option (~9 bits/key at ~0.39% false-positive rate).
+A static 16-bit binary fuse filter: like [BinaryFuse8](BinaryFuse8.md) but twice the
+space (~18 bits/key) for a far lower false-positive rate (~1/65536).
 
 ## Example
 
 ```ts
-const filter = BinaryFuse8.from(["alice", "bob", "carol"]);
+const filter = BinaryFuse16.from(["alice", "bob", "carol"]);
 filter.has("alice"); // true
-filter.size; // 3
 ```
 
 ## Extends
@@ -27,7 +26,7 @@ filter.size; // 3
 
 ### Constructor
 
-> `protected` **new BinaryFuse8**(`state`): `BinaryFuse8`
+> `protected` **new BinaryFuse16**(`state`): `BinaryFuse16`
 
 Defined in: [src/fuse/fuse.ts:282](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L282)
 
@@ -39,7 +38,7 @@ Defined in: [src/fuse/fuse.ts:282](https://github.com/akshay-xp/distillate/blob/
 
 #### Returns
 
-`BinaryFuse8`
+`BinaryFuse16`
 
 #### Inherited from
 
@@ -65,7 +64,7 @@ Actual bits stored per key (`0` for an empty filter).
 
 `BinaryFuse.bitsPerKey`
 
-***
+---
 
 ### size
 
@@ -94,14 +93,14 @@ Number of distinct keys the filter was built from.
 Defined in: [src/fuse/fuse.ts:364](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L364)
 
 Tests structural equality: `true` when `other` serializes to identical
-bytes. A BinaryFuse8 and a [BinaryFuse16](BinaryFuse16.md) are never equal,
+bytes. A [BinaryFuse8](BinaryFuse8.md) and a BinaryFuse16 are never equal,
 since their frames carry different type bytes.
 
 #### Parameters
 
 ##### other
 
-`BinaryFuse8` \| [`BinaryFuse16`](BinaryFuse16.md)
+[`BinaryFuse8`](BinaryFuse8.md) \| `BinaryFuse16`
 
 The filter to compare against.
 
@@ -115,7 +114,7 @@ The filter to compare against.
 
 `BinaryFuse.equals`
 
-***
+---
 
 ### has()
 
@@ -143,7 +142,7 @@ The key to test.
 
 `BinaryFuse.has`
 
-***
+---
 
 ### toBytes()
 
@@ -163,7 +162,7 @@ The serialized filter, readable by the matching `fromBytes`.
 
 `BinaryFuse.toBytes`
 
-***
+---
 
 ### toJSON()
 
@@ -184,13 +183,13 @@ The envelope, readable by the matching `fromJSON`.
 
 `BinaryFuse.toJSON`
 
-***
+---
 
 ### from()
 
-> `static` **from**(`keys`): `BinaryFuse8`
+> `static` **from**(`keys`): `BinaryFuse16`
 
-Defined in: [src/fuse/fuse.ts:398](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L398)
+Defined in: [src/fuse/fuse.ts:441](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L441)
 
 Builds a filter from the given keys; duplicates are ignored.
 
@@ -204,7 +203,7 @@ The complete set of keys to store.
 
 #### Returns
 
-`BinaryFuse8`
+`BinaryFuse16`
 
 A new immutable filter.
 
@@ -212,15 +211,15 @@ A new immutable filter.
 
 [BinaryFuseBuildError](BinaryFuseBuildError.md) if construction fails to converge.
 
-***
+---
 
 ### fromBytes()
 
-> `static` **fromBytes**(`bytes`): `BinaryFuse8`
+> `static` **fromBytes**(`bytes`): `BinaryFuse16`
 
-Defined in: [src/fuse/fuse.ts:408](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L408)
+Defined in: [src/fuse/fuse.ts:451](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L451)
 
-Restores a filter from its [BinaryFuse8.toBytes](#tobytes) serialization.
+Restores a filter from its [BinaryFuse16.toBytes](BinaryFuse8.md#tobytes) serialization.
 
 #### Parameters
 
@@ -232,19 +231,19 @@ The serialized filter.
 
 #### Returns
 
-`BinaryFuse8`
+`BinaryFuse16`
 
 The reconstructed filter.
 
-***
+---
 
 ### fromJSON()
 
-> `static` **fromJSON**(`value`): `BinaryFuse8`
+> `static` **fromJSON**(`value`): `BinaryFuse16`
 
-Defined in: [src/fuse/fuse.ts:418](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L418)
+Defined in: [src/fuse/fuse.ts:461](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L461)
 
-Restores a filter from its [BinaryFuse8.toJSON](#tojson) envelope.
+Restores a filter from its [BinaryFuse16.toJSON](BinaryFuse8.md#tojson) envelope.
 
 #### Parameters
 
@@ -256,6 +255,6 @@ The JSON envelope.
 
 #### Returns
 
-`BinaryFuse8`
+`BinaryFuse16`
 
 The reconstructed filter.

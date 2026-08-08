@@ -1,6 +1,6 @@
 [**distillate**](../../README.md)
 
-***
+---
 
 [distillate](../../README.md) / [blocked](../README.md) / BlockedBloomParams
 
@@ -20,7 +20,7 @@ Defined in: [src/blocked/blocked.ts:52](https://github.com/akshay-xp/distillate/
 
 Bits allocated per key; higher lowers the false-positive rate.
 
-***
+---
 
 ### capacity
 
@@ -30,7 +30,7 @@ Defined in: [src/blocked/blocked.ts:54](https://github.com/akshay-xp/distillate/
 
 Expected number of keys.
 
-***
+---
 
 ### seed?
 

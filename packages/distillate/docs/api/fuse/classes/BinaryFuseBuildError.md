@@ -1,14 +1,14 @@
 [**distillate**](../../README.md)
 
-***
+---
 
-[distillate](../../README.md) / [blocked](../README.md) / BlockedBloomParamMismatchError
+[distillate](../../README.md) / [fuse](../README.md) / BinaryFuseBuildError
 
-# Class: BlockedBloomParamMismatchError
+# Class: BinaryFuseBuildError
 
-Defined in: [src/blocked/blocked.ts:44](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L44)
+Defined in: [src/fuse/fuse.ts:30](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L30)
 
-Thrown when an operation requires two filters built with identical parameters.
+Thrown when binary fuse construction fails to converge on the key set.
 
 ## Extends
 
@@ -18,7 +18,7 @@ Thrown when an operation requires two filters built with identical parameters.
 
 ### Constructor
 
-> **new BlockedBloomParamMismatchError**(`message?`): `BlockedBloomParamMismatchError`
+> **new BinaryFuseBuildError**(`message?`): `BinaryFuseBuildError`
 
 Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/lib.es5.d.ts:1082
 
@@ -30,7 +30,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 #### Returns
 
-`BlockedBloomParamMismatchError`
+`BinaryFuseBuildError`
 
 #### Inherited from
 
@@ -38,7 +38,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 ### Constructor
 
-> **new BlockedBloomParamMismatchError**(`message?`, `options?`): `BlockedBloomParamMismatchError`
+> **new BinaryFuseBuildError**(`message?`, `options?`): `BinaryFuseBuildError`
 
 Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/lib.es5.d.ts:1082
 
@@ -54,7 +54,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 #### Returns
 
-`BlockedBloomParamMismatchError`
+`BinaryFuseBuildError`
 
 #### Inherited from
 
@@ -72,7 +72,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 `Error.cause`
 
-***
+---
 
 ### message
 
@@ -84,13 +84,13 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 `Error.message`
 
-***
+---
 
 ### name
 
-> `readonly` **name**: `"BlockedBloomParamMismatchError"` = `"BlockedBloomParamMismatchError"`
+> `readonly` **name**: `"BinaryFuseBuildError"` = `"BinaryFuseBuildError"`
 
-Defined in: [src/blocked/blocked.ts:46](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L46)
+Defined in: [src/fuse/fuse.ts:32](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L32)
 
 Discriminates this error from other `Error`s.
 
@@ -98,7 +98,7 @@ Discriminates this error from other `Error`s.
 
 `Error.name`
 
-***
+---
 
 ### stack?
 

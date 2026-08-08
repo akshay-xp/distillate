@@ -1,0 +1,97 @@
+{
+  "name": "distillate",
+  "version": "0.5.0",
+  "description": "Probabilistic data structures for JavaScript. Space-efficient, approximate-membership filters (Bloom, Blocked Bloom, Binary Fuse) with tunable error and a portable binary format; zero dependencies, universal.",
+  "keywords": [
+    "bloom-filter",
+    "cuckoo-filter",
+    "binary-fuse",
+    "xor-filter",
+    "amq",
+    "approximate-membership",
+    "probabilistic",
+    "probabilistic-data-structures",
+    "set",
+    "filter"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akshay-xp/distillate.git"
+  },
+  "homepage": "https://github.com/akshay-xp/distillate#readme",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts"
+      },
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./bloom": {
+      "types": {
+        "import": "./dist/bloom/index.d.ts",
+        "require": "./dist/bloom/index.d.cts"
+      },
+      "import": "./dist/bloom/index.js",
+      "require": "./dist/bloom/index.cjs"
+    },
+    "./blocked": {
+      "types": {
+        "import": "./dist/blocked/index.d.ts",
+        "require": "./dist/blocked/index.d.cts"
+      },
+      "import": "./dist/blocked/index.js",
+      "require": "./dist/blocked/index.cjs"
+    },
+    "./fuse": {
+      "types": {
+        "import": "./dist/fuse/index.d.ts",
+        "require": "./dist/fuse/index.d.cts"
+      },
+      "import": "./dist/fuse/index.js",
+      "require": "./dist/fuse/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "publint": "publint --strict",
+    "check": "publint --strict && attw --pack . --profile node16",
+    "attw": "attw --pack . --profile node16",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "api:report": "node scripts/api-extractor.mjs --local",
+    "api:check": "node scripts/api-extractor.mjs",
+    "docs:api": "typedoc",
+    "bench": "tsx bench/core.bench.ts && tsx bench/bloom.bench.ts && tsx bench/blocked.bench.ts && tsx bench/fuse.bench.ts && tsx bench/accuracy.bench.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@microsoft/api-extractor": "^7.58.12",
+    "@types/node": "^26.1.2",
+    "@vitest/coverage-v8": "^4.1.10",
+    "fast-check": "^4.9.0",
+    "mitata": "^1.0.34",
+    "publint": "^0.3.22",
+    "tsdown": "^0.22.14",
+    "tsx": "^4.23.1",
+    "typedoc": "^0.28.20",
+    "typedoc-plugin-markdown": "^4.12.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,6 +1,6 @@
 [**distillate**](../../README.md)
 
-***
+---
 
 [distillate](../../README.md) / [bloom](../README.md) / FilterJSON
 
@@ -20,7 +20,7 @@ Defined in: [src/core/serialize.ts:67](https://github.com/akshay-xp/distillate/b
 
 Format tag; always `"distillate"`.
 
-***
+---
 
 ### data
 
@@ -30,7 +30,7 @@ Defined in: [src/core/serialize.ts:71](https://github.com/akshay-xp/distillate/b
 
 Base64 of the `toBytes` frame.
 
-***
+---
 
 ### v
 

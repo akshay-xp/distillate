@@ -1,12 +1,12 @@
 [**distillate**](../../README.md)
 
-***
+---
 
-[distillate](../../README.md) / [bloom](../README.md) / BloomParamMismatchError
+[distillate](../../README.md) / [blocked](../README.md) / BlockedBloomParamMismatchError
 
-# Class: BloomParamMismatchError
+# Class: BlockedBloomParamMismatchError
 
-Defined in: [src/bloom/bloom.ts:28](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L28)
+Defined in: [src/blocked/blocked.ts:44](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L44)
 
 Thrown when an operation requires two filters built with identical parameters.
 
@@ -18,7 +18,7 @@ Thrown when an operation requires two filters built with identical parameters.
 
 ### Constructor
 
-> **new BloomParamMismatchError**(`message?`): `BloomParamMismatchError`
+> **new BlockedBloomParamMismatchError**(`message?`): `BlockedBloomParamMismatchError`
 
 Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/lib.es5.d.ts:1082
 
@@ -30,7 +30,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 #### Returns
 
-`BloomParamMismatchError`
+`BlockedBloomParamMismatchError`
 
 #### Inherited from
 
@@ -38,7 +38,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 ### Constructor
 
-> **new BloomParamMismatchError**(`message?`, `options?`): `BloomParamMismatchError`
+> **new BlockedBloomParamMismatchError**(`message?`, `options?`): `BlockedBloomParamMismatchError`
 
 Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/lib.es5.d.ts:1082
 
@@ -54,7 +54,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 #### Returns
 
-`BloomParamMismatchError`
+`BlockedBloomParamMismatchError`
 
 #### Inherited from
 
@@ -72,7 +72,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 `Error.cause`
 
-***
+---
 
 ### message
 
@@ -84,13 +84,13 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 `Error.message`
 
-***
+---
 
 ### name
 
-> `readonly` **name**: `"BloomParamMismatchError"` = `"BloomParamMismatchError"`
+> `readonly` **name**: `"BlockedBloomParamMismatchError"` = `"BlockedBloomParamMismatchError"`
 
-Defined in: [src/bloom/bloom.ts:30](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L30)
+Defined in: [src/blocked/blocked.ts:46](https://github.com/akshay-xp/distillate/blob/main/src/blocked/blocked.ts#L46)
 
 Discriminates this error from other `Error`s.
 
@@ -98,7 +98,7 @@ Discriminates this error from other `Error`s.
 
 `Error.name`
 
-***
+---
 
 ### stack?
 

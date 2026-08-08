@@ -1,14 +1,14 @@
 [**distillate**](../../README.md)
 
-***
+---
 
-[distillate](../../README.md) / [fuse](../README.md) / BinaryFuseBuildError
+[distillate](../../README.md) / [bloom](../README.md) / BloomParamMismatchError
 
-# Class: BinaryFuseBuildError
+# Class: BloomParamMismatchError
 
-Defined in: [src/fuse/fuse.ts:30](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L30)
+Defined in: [src/bloom/bloom.ts:28](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L28)
 
-Thrown when binary fuse construction fails to converge on the key set.
+Thrown when an operation requires two filters built with identical parameters.
 
 ## Extends
 
@@ -18,7 +18,7 @@ Thrown when binary fuse construction fails to converge on the key set.
 
 ### Constructor
 
-> **new BinaryFuseBuildError**(`message?`): `BinaryFuseBuildError`
+> **new BloomParamMismatchError**(`message?`): `BloomParamMismatchError`
 
 Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/lib.es5.d.ts:1082
 
@@ -30,7 +30,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 #### Returns
 
-`BinaryFuseBuildError`
+`BloomParamMismatchError`
 
 #### Inherited from
 
@@ -38,7 +38,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 ### Constructor
 
-> **new BinaryFuseBuildError**(`message?`, `options?`): `BinaryFuseBuildError`
+> **new BloomParamMismatchError**(`message?`, `options?`): `BloomParamMismatchError`
 
 Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/lib.es5.d.ts:1082
 
@@ -54,7 +54,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 #### Returns
 
-`BinaryFuseBuildError`
+`BloomParamMismatchError`
 
 #### Inherited from
 
@@ -72,7 +72,7 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 `Error.cause`
 
-***
+---
 
 ### message
 
@@ -84,13 +84,13 @@ Defined in: node\_modules/.pnpm/typescript@5.9.3/node\_modules/typescript/lib/li
 
 `Error.message`
 
-***
+---
 
 ### name
 
-> `readonly` **name**: `"BinaryFuseBuildError"` = `"BinaryFuseBuildError"`
+> `readonly` **name**: `"BloomParamMismatchError"` = `"BloomParamMismatchError"`
 
-Defined in: [src/fuse/fuse.ts:32](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L32)
+Defined in: [src/bloom/bloom.ts:30](https://github.com/akshay-xp/distillate/blob/main/src/bloom/bloom.ts#L30)
 
 Discriminates this error from other `Error`s.
 
@@ -98,7 +98,7 @@ Discriminates this error from other `Error`s.
 
 `Error.name`
 
-***
+---
 
 ### stack?
 

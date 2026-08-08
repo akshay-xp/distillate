@@ -1,6 +1,6 @@
 [**distillate**](../README.md)
 
-***
+---
 
 [distillate](../README.md) / index
 
