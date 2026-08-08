@@ -6,7 +6,7 @@
 
 # Class: BinaryFuse8
 
-Defined in: [src/fuse/fuse.ts:377](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L377)
+Defined in: [src/fuse/fuse.ts:390](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L390)
 
 A static 8-bit binary fuse filter: built once from a key set, then immutable.
 The most space-efficient option (~9 bits/key at ~0.39% false-positive rate).
@@ -29,7 +29,7 @@ filter.size; // 3
 
 > `protected` **new BinaryFuse8**(`state`): `BinaryFuse8`
 
-Defined in: [src/fuse/fuse.ts:279](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L279)
+Defined in: [src/fuse/fuse.ts:282](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L282)
 
 #### Parameters
 
@@ -53,7 +53,7 @@ Defined in: [src/fuse/fuse.ts:279](https://github.com/akshay-xp/distillate/blob/
 
 > **get** **bitsPerKey**(): `number`
 
-Defined in: [src/fuse/fuse.ts:294](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L294)
+Defined in: [src/fuse/fuse.ts:297](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L297)
 
 Actual bits stored per key (`0` for an empty filter).
 
@@ -73,7 +73,7 @@ Actual bits stored per key (`0` for an empty filter).
 
 > **get** **size**(): `number`
 
-Defined in: [src/fuse/fuse.ts:289](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L289)
+Defined in: [src/fuse/fuse.ts:292](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L292)
 
 Number of distinct keys the filter was built from.
 
@@ -91,7 +91,7 @@ Number of distinct keys the filter was built from.
 
 > **equals**(`other`): `boolean`
 
-Defined in: [src/fuse/fuse.ts:361](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L361)
+Defined in: [src/fuse/fuse.ts:364](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L364)
 
 Tests structural equality: `true` when `other` serializes to identical
 bytes. A BinaryFuse8 and a [BinaryFuse16](BinaryFuse16.md) are never equal,
@@ -121,7 +121,7 @@ The filter to compare against.
 
 > **has**(`key`): `boolean`
 
-Defined in: [src/fuse/fuse.ts:329](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L329)
+Defined in: [src/fuse/fuse.ts:332](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L332)
 
 Tests whether a key is in the set.
 
@@ -149,7 +149,7 @@ The key to test.
 
 > **toBytes**(): `Uint8Array`
 
-Defined in: [src/fuse/fuse.ts:303](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L303)
+Defined in: [src/fuse/fuse.ts:306](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L306)
 
 Serializes the filter to a portable little-endian byte layout.
 
@@ -165,11 +165,32 @@ The serialized filter, readable by the matching `fromBytes`.
 
 ***
 
+### toJSON()
+
+> **toJSON**(): [`FilterJSON`](../../bloom/interfaces/FilterJSON.md)
+
+Defined in: [src/fuse/fuse.ts:374](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L374)
+
+Serializes the filter to a JSON-friendly envelope wrapping the base64 of
+the `toBytes` frame.
+
+#### Returns
+
+[`FilterJSON`](../../bloom/interfaces/FilterJSON.md)
+
+The envelope, readable by the matching `fromJSON`.
+
+#### Inherited from
+
+`BinaryFuse.toJSON`
+
+***
+
 ### from()
 
 > `static` **from**(`keys`): `BinaryFuse8`
 
-Defined in: [src/fuse/fuse.ts:385](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L385)
+Defined in: [src/fuse/fuse.ts:398](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L398)
 
 Builds a filter from the given keys; duplicates are ignored.
 
@@ -197,7 +218,7 @@ A new immutable filter.
 
 > `static` **fromBytes**(`bytes`): `BinaryFuse8`
 
-Defined in: [src/fuse/fuse.ts:395](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L395)
+Defined in: [src/fuse/fuse.ts:408](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L408)
 
 Restores a filter from its [BinaryFuse8.toBytes](#tobytes) serialization.
 
@@ -208,6 +229,30 @@ Restores a filter from its [BinaryFuse8.toBytes](#tobytes) serialization.
 `Uint8Array`
 
 The serialized filter.
+
+#### Returns
+
+`BinaryFuse8`
+
+The reconstructed filter.
+
+***
+
+### fromJSON()
+
+> `static` **fromJSON**(`value`): `BinaryFuse8`
+
+Defined in: [src/fuse/fuse.ts:418](https://github.com/akshay-xp/distillate/blob/main/src/fuse/fuse.ts#L418)
+
+Restores a filter from its [BinaryFuse8.toJSON](#tojson) envelope.
+
+#### Parameters
+
+##### value
+
+`unknown`
+
+The JSON envelope.
 
 #### Returns
 

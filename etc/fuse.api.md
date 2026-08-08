@@ -8,17 +8,26 @@
 export class BinaryFuse16 extends BinaryFuse {
     static from(keys: Iterable<BytesLike>): BinaryFuse16;
     static fromBytes(bytes: Uint8Array): BinaryFuse16;
+    static fromJSON(value: unknown): BinaryFuse16;
 }
 
 // @public
 export class BinaryFuse8 extends BinaryFuse {
     static from(keys: Iterable<BytesLike>): BinaryFuse8;
     static fromBytes(bytes: Uint8Array): BinaryFuse8;
+    static fromJSON(value: unknown): BinaryFuse8;
 }
 
 // @public
 export class BinaryFuseBuildError extends Error {
     override readonly name = "BinaryFuseBuildError";
+}
+
+// @public
+export interface FilterJSON {
+    $: string;
+    data: string;
+    v: number;
 }
 
 // (No @packageDocumentation comment for this package)

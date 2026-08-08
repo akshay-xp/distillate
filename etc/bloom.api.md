@@ -13,6 +13,7 @@ export class BloomFilter {
     equals(other: BloomFilter): boolean;
     static from(keys: Iterable<BytesLike>, epsilon: number): BloomFilter;
     static fromBytes(bytes: Uint8Array): BloomFilter;
+    static fromJSON(value: unknown): BloomFilter;
     has(key: BytesLike): boolean;
     get k(): number;
     get length(): number;
@@ -20,6 +21,7 @@ export class BloomFilter {
     rate(): number;
     get seed(): number;
     toBytes(): Uint8Array;
+    toJSON(): FilterJSON;
     union(other: BloomFilter): BloomFilter;
 }
 
@@ -33,6 +35,13 @@ export interface BloomParams {
     k: number;
     m: number;
     seed?: number;
+}
+
+// @public
+export interface FilterJSON {
+    $: string;
+    data: string;
+    v: number;
 }
 
 // @public
