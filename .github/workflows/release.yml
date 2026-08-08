@@ -30,8 +30,11 @@ jobs:
       # npm >= 11.5.1 is required for Trusted Publishing (OIDC) + automatic provenance.
       - run: npm install -g npm@latest
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test
+      # Release gates on the published library. Build first so its dist exists,
+      # then test it; the private apps/bench (which pulls external packages and
+      # imports distillate's built subpaths) is not part of the release gate.
       - run: pnpm build
+      - run: pnpm --filter distillate test
       - uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1
         with:
           version: pnpm run version
