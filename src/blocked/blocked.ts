@@ -9,6 +9,7 @@ import {
 import {
   assertBodyLength,
   assertMinBodyLength,
+  bytesEqual,
   FORMAT_VERSION,
   HASH_MURMUR128,
   readHeader,
@@ -205,6 +206,17 @@ export class BlockedBloomFilter {
       { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
       body,
     );
+  }
+
+  /**
+   * Tests structural equality: `true` when `other` serializes to identical
+   * bytes, meaning identical parameters and set bits.
+   *
+   * @param other - The filter to compare against.
+   * @returns `true` if the two filters are byte-for-byte identical.
+   */
+  equals(other: BlockedBloomFilter): boolean {
+    return bytesEqual(this.toBytes(), other.toBytes());
   }
 
   /**

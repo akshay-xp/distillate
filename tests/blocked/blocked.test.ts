@@ -387,3 +387,24 @@ test("fromBytes rejects a frame with an unknown hash variant", () => {
   );
   expect(() => BlockedBloomFilter.fromBytes(variant1)).toThrow(/hash variant/i);
 });
+
+test("equals is true iff serialized frames match", () => {
+  const keys = ["a", "b", "c"];
+  const a = BlockedBloomFilter.create(1000, 0.01);
+  const b = BlockedBloomFilter.create(1000, 0.01);
+  for (const k of keys) {
+    a.add(k);
+    b.add(k);
+  }
+
+  const c = BlockedBloomFilter.create(1000, 0.01);
+  for (const k of keys) c.add(k);
+  c.add("x");
+
+  const d = BlockedBloomFilter.create(1000, 0.05);
+  for (const k of keys) d.add(k);
+
+  expect(a.equals(b)).toBe(true);
+  expect(a.equals(c)).toBe(false);
+  expect(a.equals(d)).toBe(false);
+});
