@@ -10,10 +10,13 @@ import {
   assertBodyLength,
   assertMinBodyLength,
   bytesEqual,
+  type FilterJSON,
   FORMAT_VERSION,
+  fromJSONEnvelope,
   HASH_MURMUR128,
   readHeader,
   SerializationError,
+  toJSONEnvelope,
   UnknownHashVariantError,
   writeHeader,
 } from "../core/serialize.js";
@@ -234,6 +237,26 @@ export class BlockedBloomFilter {
    */
   equals(other: BlockedBloomFilter): boolean {
     return bytesEqual(this.toBytes(), other.toBytes());
+  }
+
+  /**
+   * Serializes the filter to a JSON-friendly envelope wrapping the base64 of
+   * {@link BlockedBloomFilter.toBytes}.
+   *
+   * @returns The envelope, readable by {@link BlockedBloomFilter.fromJSON}.
+   */
+  toJSON(): FilterJSON {
+    return toJSONEnvelope(this.toBytes());
+  }
+
+  /**
+   * Restores a filter from its {@link BlockedBloomFilter.toJSON} envelope.
+   *
+   * @param value - The JSON envelope.
+   * @returns The reconstructed filter.
+   */
+  static fromJSON(value: unknown): BlockedBloomFilter {
+    return BlockedBloomFilter.fromBytes(fromJSONEnvelope(value));
   }
 
   /**

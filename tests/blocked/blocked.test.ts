@@ -428,3 +428,19 @@ test("from builds a filter with no false negatives from any iterable", () => {
     BlockedBloomFilter.from(keys, undefined as unknown as number),
   ).toThrow(ParamError);
 });
+
+test("toJSON/fromJSON round-trips through JSON.stringify", () => {
+  const f = BlockedBloomFilter.from(["a", "b", "c"], 0.01);
+  const j = f.toJSON();
+
+  expect(j.$).toBe("distillate");
+  expect(j.v).toBe(FORMAT_VERSION);
+  expect(typeof j.data).toBe("string");
+
+  expect(BlockedBloomFilter.fromJSON(j).equals(f)).toBe(true);
+  expect(
+    BlockedBloomFilter.fromJSON(
+      JSON.parse(JSON.stringify(j)) as unknown,
+    ).equals(f),
+  ).toBe(true);
+});
