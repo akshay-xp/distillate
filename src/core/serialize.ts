@@ -58,6 +58,15 @@ export class ChecksumError extends SerializationError {
   override readonly name = "ChecksumError";
 }
 
+/** Byte-wise equality of two frames; the basis for structure `equals`. */
+export function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 /**
  * Asserts a frame body is long enough to hold its fixed params block, so the
  * params can be read without running off the end.
