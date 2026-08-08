@@ -253,3 +253,18 @@ test("fromBytes rejects a frame with an unknown hash variant", () => {
   expect(() => BinaryFuse8.fromBytes(variant1)).toThrow(SerializationError);
   expect(() => BinaryFuse8.fromBytes(variant1)).toThrow(/hash variant/i);
 });
+
+test("equals is true iff serialized frames match, false across variants", () => {
+  const keys = ["alice", "bob", "carol", "dave"];
+  const other = ["x", "y", "z", "w"];
+
+  const f8a = BinaryFuse8.from(keys);
+  const f8b = BinaryFuse8.from(keys);
+  const f8c = BinaryFuse8.from(other);
+  const f16 = BinaryFuse16.from(keys);
+
+  expect(f8a.equals(f8b)).toBe(true);
+  expect(f8a.equals(f8c)).toBe(false);
+  expect(f8a.equals(f16)).toBe(false);
+  expect(f16.equals(BinaryFuse16.from(keys))).toBe(true);
+});

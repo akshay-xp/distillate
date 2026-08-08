@@ -10,6 +10,7 @@ import {
 import {
   assertBodyLength,
   assertMinBodyLength,
+  bytesEqual,
   FORMAT_VERSION,
   HASH_MURMUR128,
   readHeader,
@@ -347,6 +348,18 @@ abstract class BinaryFuse {
       ((mlo ^ mhi) & mask) ===
       (((this.#fp[p0] ?? 0) ^ (this.#fp[p1] ?? 0) ^ (this.#fp[p2] ?? 0)) & mask)
     );
+  }
+
+  /**
+   * Tests structural equality: `true` when `other` serializes to identical
+   * bytes. A {@link BinaryFuse8} and a {@link BinaryFuse16} are never equal,
+   * since their frames carry different type bytes.
+   *
+   * @param other - The filter to compare against.
+   * @returns `true` if the two filters are byte-for-byte identical.
+   */
+  equals(other: BinaryFuse8 | BinaryFuse16): boolean {
+    return bytesEqual(this.toBytes(), other.toBytes());
   }
 }
 
