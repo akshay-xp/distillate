@@ -103,7 +103,7 @@ Classic Bloom head-to-head at a **matched 1% false-positive rate** over the same
 
 Same space, same accuracy, **~72x the lookup throughput** of [`bloom-filters`](https://www.npmjs.com/package/bloom-filters) (the package distillate replaces), while hashing UTF-8 bytes with MurmurHash3 so filters stay portable and cross-language readable.
 
-These are a point-in-time snapshot on one machine. The full report (blocked/fuse, 1M capacity, the `bloomfilter` micro-package) and exactly how it is measured live in the [distillate-bench](https://github.com/akshay-xp/distillate-bench) repo: [RESULTS.md](https://github.com/akshay-xp/distillate-bench/blob/main/RESULTS.md), [METHODOLOGY.md](https://github.com/akshay-xp/distillate-bench/blob/main/METHODOLOGY.md).
+These are a point-in-time snapshot on one machine. The full report (blocked/fuse, 1M capacity, the `bloomfilter` micro-package) and exactly how it is measured live in the [`apps/bench`](https://github.com/akshay-xp/distillate/tree/main/apps/bench) workspace: [RESULTS.md](https://github.com/akshay-xp/distillate/blob/main/apps/bench/RESULTS.md), [METHODOLOGY.md](https://github.com/akshay-xp/distillate/blob/main/apps/bench/METHODOLOGY.md).
 
 ## Docs
 
