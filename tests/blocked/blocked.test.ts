@@ -408,3 +408,23 @@ test("equals is true iff serialized frames match", () => {
   expect(a.equals(c)).toBe(false);
   expect(a.equals(d)).toBe(false);
 });
+
+test("from builds a filter with no false negatives from any iterable", () => {
+  const keys = ["alice", "bob", "carol"];
+
+  const fromArray = BlockedBloomFilter.from(keys, 0.01);
+  const fromSet = BlockedBloomFilter.from(new Set(keys), 0.01);
+  function* gen(): Generator<string> {
+    yield* keys;
+  }
+  const fromGen = BlockedBloomFilter.from(gen(), 0.01);
+
+  for (const f of [fromArray, fromSet, fromGen]) {
+    for (const k of keys) expect(f.has(k)).toBe(true);
+  }
+
+  expect(() => BlockedBloomFilter.from(keys, 5)).toThrow(ParamError);
+  expect(() =>
+    BlockedBloomFilter.from(keys, undefined as unknown as number),
+  ).toThrow(ParamError);
+});

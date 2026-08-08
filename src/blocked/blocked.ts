@@ -107,6 +107,23 @@ export class BlockedBloomFilter {
   }
 
   /**
+   * Builds a filter from `keys`, sized for their count at the target
+   * false-positive rate. The ergonomic entry point when the key set is already
+   * in hand; use {@link BlockedBloomFilter.create} to size for a count known
+   * ahead.
+   *
+   * @param keys - The keys to insert.
+   * @param epsilon - Target false-positive rate, e.g. `0.01` for 1%.
+   * @returns A new filter containing every key.
+   */
+  static from(keys: Iterable<BytesLike>, epsilon: number): BlockedBloomFilter {
+    const arr = [...keys];
+    const f = BlockedBloomFilter.create(arr.length, epsilon);
+    for (const k of arr) f.add(k);
+    return f;
+  }
+
+  /**
    * Constructs a filter from low-level {@link BlockedBloomParams}. Prefer
    * {@link BlockedBloomFilter.create} unless restoring a specific configuration.
    */
