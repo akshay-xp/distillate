@@ -70,6 +70,8 @@ Accept `Uint8Array` or `ArrayBuffer`. Respect `byteOffset`/`byteLength`: build t
 
 ## Stability
 
-Golden-file tests: commit known-good serialized filters, assert current code still reads them across versions. Malformed-input fuzzing: bad magic, unknown version, wrong type, truncation, bit-flip, CRC mismatch each throw a typed error, never crash or read out of bounds.
+Golden fixtures pin the exact byte layout, which round-trip tests miss (`toBytes`/`fromBytes` drift together and stay mutually consistent). `tests/fixtures/golden.json` holds a base64 `frame` per structure (one v3 per type, plus a v2 frame), rebuilt from committed keys. `tests/core/golden.test.ts` asserts each v3 frame parses, contains its keys, re-serializes to the same bytes, and matches a fresh build from the recipe (so a layout change fails the fresh-build check); the v2 frame must throw `UnknownVersionError`. Fixtures are committed and never regenerated in CI; on an intentional format bump, `pnpm golden:gen` (`scripts/gen-golden.ts`) refreshes them, and its output is byte-identical to the committed prettier format.
+
+Malformed-input fuzzing: bad magic, unknown version, wrong type, truncation, bit-flip, CRC mismatch each throw a typed error, never crash or read out of bounds.
 
 The format spec is published as a standalone doc for other-language implementers.
