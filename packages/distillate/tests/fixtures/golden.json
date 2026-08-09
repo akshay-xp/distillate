@@ -1,0 +1,78 @@
+[
+  {
+    "name": "bloom",
+    "kind": "bloom",
+    "epsilon": 0.01,
+    "keys": [
+      "alice",
+      "bob",
+      "carol",
+      "dave",
+      "erin",
+      "frank",
+      "grace",
+      "heidi",
+      "ivan",
+      "judy"
+    ],
+    "frame": "QU1RRgMBAABgAAAABwAAAAAACgAAAOretaMm0wnRmeSt8J97N1o="
+  },
+  {
+    "name": "blocked",
+    "kind": "blocked",
+    "epsilon": 0.01,
+    "keys": [
+      "alice",
+      "bob",
+      "carol",
+      "dave",
+      "erin",
+      "frank",
+      "grace",
+      "heidi",
+      "ivan",
+      "judy"
+    ],
+    "frame": "QU1RRgMCAAABAAAAAAAAAAoAAAAheAAkosAAJXBAEFYC6soAIYgJmI0MUBABeSAJLiYAARVUrjY="
+  },
+  {
+    "name": "fuse8",
+    "kind": "fuse8",
+    "keys": [
+      "alice",
+      "bob",
+      "carol",
+      "dave",
+      "erin",
+      "frank",
+      "grace",
+      "heidi",
+      "ivan",
+      "judy"
+    ],
+    "frame": "QU1RRgMDAAAAAAAAEAAAABAAAAAKAAAAAAAAAAAAAADLAAAAawAAAAAAAAAAAAAAAACVAAAABgAAAAAAAAAAAAkAGRo6AH11s1/nYw=="
+  },
+  {
+    "name": "fuse16",
+    "kind": "fuse16",
+    "keys": [
+      "alice",
+      "bob",
+      "carol",
+      "dave",
+      "erin",
+      "frank",
+      "grace",
+      "heidi",
+      "ivan",
+      "judy"
+    ],
+    "frame": "QU1RRgMEAAAAAAAAEAAAABAAAAAKAAAAAAAAAAAAAAAAAAAAAAAAAMu5AAAAAAAAa+cAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJXeAAAAAAAABmgAAAAAAAAAAAAAAAAAAAAAAAAJkAAAGcoaezopAAB9jnWFFH39bg=="
+  },
+  {
+    "name": "v2-reject",
+    "kind": "v2",
+    "keys": [],
+    "frame": "QU1RRgIBAAAdAAAABwAAAAAAAwAAAKIj5ROWWZ+f"
+  }
+]
