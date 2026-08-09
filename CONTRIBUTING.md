@@ -6,7 +6,7 @@ By participating you agree to abide by the [Code of Conduct](./CODE_OF_CONDUCT.m
 
 ## Prerequisites
 
-- **Node.js 20+** (20, 22, or 24).
+- **Node.js 22+** (22 or 24).
 - **pnpm** (the repo pins its version via the `packageManager` field). Enable [Corepack](https://nodejs.org/api/corepack.html) so the right pnpm is used automatically:
 
   ```sh

@@ -17,11 +17,11 @@ The **public API is exactly what the committed API reports in [`etc/`](../etc) d
 
 `distillate` targets **ES2022**, ships zero runtime dependencies, and uses no `eval` or required WASM, so it runs on every modern JavaScript runtime:
 
-- **Node.js** 20, 22, 24 (active LTS and current)
+- **Node.js** 22, 24 (active LTS and current)
 - **Bun** and **Deno**
 - Browsers and Cloudflare / Vercel edge
 
-Every push runs a CI smoke matrix that imports the built package on Node 20/22/24, Bun, and Deno, so this support is verified, not assumed.
+Every push runs a CI smoke matrix that imports the built package on Node 22/24, Bun, and Deno, so this support is verified, not assumed.
 
 ### Node.js support policy
 
