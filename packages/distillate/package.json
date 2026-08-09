@@ -73,6 +73,7 @@
     "api:report": "node scripts/api-extractor.mjs --local",
     "api:check": "node scripts/api-extractor.mjs",
     "docs:api": "typedoc",
+    "golden:gen": "tsx scripts/gen-golden.ts",
     "bench": "tsx bench/core.bench.ts && tsx bench/bloom.bench.ts && tsx bench/blocked.bench.ts && tsx bench/fuse.bench.ts && tsx bench/accuracy.bench.ts",
     "typecheck": "tsc --noEmit"
   },
