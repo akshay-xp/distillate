@@ -12,6 +12,7 @@ import {
 import {
   BlockedBloomFilter,
   BlockedBloomParamMismatchError,
+  blockedFprAt,
   fillBlock,
 } from "../../src/blocked/blocked.js";
 import { measureFpr, sampleStrings } from "../helpers/fpr.js";
@@ -174,6 +175,17 @@ test("create(n, epsilon) sizes so observed FPR stays at or below epsilon", () =>
     const obs = measureFpr(f, present, absent);
     expect(obs).toBeLessThanOrEqual(epsilon * 1.3);
   }
+});
+
+test("blockedFprAt is strictly decreasing and brackets measured anchors", () => {
+  for (let bpk = 1; bpk < 64; bpk++) {
+    expect(blockedFprAt(bpk)).toBeGreaterThan(blockedFprAt(bpk + 1));
+  }
+  // Review measured 0.81% at 11 bits/key and 0.0103% at 27 bits/key.
+  expect(blockedFprAt(11)).toBeGreaterThan(0.004);
+  expect(blockedFprAt(11)).toBeLessThan(0.012);
+  expect(blockedFprAt(27)).toBeGreaterThan(3e-5);
+  expect(blockedFprAt(27)).toBeLessThan(2e-4);
 });
 
 test("create picks bits-per-key monotonically with tighter epsilon", () => {
