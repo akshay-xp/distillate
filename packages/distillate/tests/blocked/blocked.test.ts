@@ -45,6 +45,15 @@ test("constructor rejects invalid bitsPerKey, capacity, and seed", () => {
   expect(f.has("x")).toBe(false);
 });
 
+test("constructor rejects capacity beyond its serialized width", () => {
+  expect(
+    () => new BlockedBloomFilter({ bitsPerKey: 256, capacity: 2 ** 32 }),
+  ).toThrow(ParamError);
+  expect(
+    () => new BlockedBloomFilter({ bitsPerKey: 8, capacity: 65536 }),
+  ).not.toThrow();
+});
+
 test("create rejects invalid n and epsilon", () => {
   for (const n of [0, 1.5, -5]) {
     expect(() => BlockedBloomFilter.create(n, 0.01)).toThrow(ParamError);
