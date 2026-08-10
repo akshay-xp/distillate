@@ -40,6 +40,29 @@ const SALT = Uint32Array.of(
 // synchronous and non-reentrant (same rationale as the hasher's scratch).
 const scratch2 = new Uint32Array(2);
 
+const BLOCK_BITS = 256;
+const LANE_BITS = 32;
+const LANES = 8;
+
+/**
+ * Modeled false-positive rate of a split-block filter at `bitsPerKey`. A block
+ * holding `j` keys has FPR `(1 - (1 - 1/32)^j)^8` (8 lanes of 32 bits, one probe
+ * each); the filter's rate averages that over the Poisson block load
+ * `lambda = 256 / bitsPerKey`. This clustering average is why the blocked curve
+ * is not linear in `log10(1/epsilon)`.
+ */
+export function blockedFprAt(bitsPerKey: number): number {
+  const lambda = BLOCK_BITS / bitsPerKey;
+  let fpr = 0;
+  let p = Math.exp(-lambda); // Poisson pmf, advanced by p_j = p_{j-1} * lambda / j
+  for (let j = 0; ; j++) {
+    if (j > 0) p *= lambda / j;
+    fpr += p * (1 - (1 - 1 / LANE_BITS) ** j) ** LANES;
+    if (j > lambda && p < 1e-15) break;
+  }
+  return fpr;
+}
+
 /** Thrown when an operation requires two filters built with identical parameters. */
 export class BlockedBloomParamMismatchError extends Error {
   /** Discriminates this error from other `Error`s. */
