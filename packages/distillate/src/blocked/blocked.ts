@@ -158,6 +158,7 @@ export class BlockedBloomFilter {
   constructor({ bitsPerKey, capacity, seed = 0 }: BlockedBloomParams) {
     assertPositiveFinite(bitsPerKey, "bitsPerKey");
     assertPositiveInt(capacity, "capacity");
+    assertUint32(capacity, "capacity");
     assertUint32(seed, "seed");
     this.#numBlocks = Math.max(1, Math.ceil((bitsPerKey * capacity) / 256));
     this.#lanes = new Uint32Array(this.#numBlocks * 8);
