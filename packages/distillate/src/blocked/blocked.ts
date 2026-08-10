@@ -5,6 +5,7 @@ import {
   assertPositiveInt,
   assertProbability,
   assertUint32,
+  ParamError,
 } from "../core/params.js";
 import {
   assertBodyLength,
@@ -61,6 +62,25 @@ export function blockedFprAt(bitsPerKey: number): number {
     if (j > lambda && p < 1e-15) break;
   }
   return fpr;
+}
+
+// Densest filter the solver will size to. Its modeled FPR (~1e-8) is the
+// solvable floor: below it, blocked cannot hit the target within a sane budget.
+const MAX_BITS_PER_KEY = 128;
+
+/**
+ * Minimal integer bits-per-key whose modeled split-block FPR is at or below
+ * `epsilon`. Throws {@link ParamError} when even the densest supported filter
+ * cannot reach the target, so callers get a typed rejection instead of a
+ * silently under-provisioned filter.
+ */
+export function blockedBitsPerKey(epsilon: number): number {
+  for (let bpk = 1; bpk <= MAX_BITS_PER_KEY; bpk++) {
+    if (blockedFprAt(bpk) <= epsilon) return bpk;
+  }
+  throw new ParamError(
+    `epsilon ${String(epsilon)} is below the blocked-filter floor; use a classic or fuse filter`,
+  );
 }
 
 /** Thrown when an operation requires two filters built with identical parameters. */
