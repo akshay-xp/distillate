@@ -42,6 +42,13 @@ test("constructor rejects out-of-range seed", () => {
   ).not.toThrow();
 });
 
+test("constructor rejects m and k beyond their serialized widths", () => {
+  expect(() => new BloomFilter({ m: 1000, k: 70000 })).toThrow(ParamError);
+  expect(() => new BloomFilter({ m: 2 ** 33, k: 7 })).toThrow(ParamError);
+  expect(() => new BloomFilter({ m: 1000, k: 65535 })).not.toThrow();
+  expect(() => new BloomFilter({ m: 2 ** 20, k: 7 })).not.toThrow();
+});
+
 test("create rejects invalid n and epsilon", () => {
   for (const n of [0, 1.5, -5]) {
     expect(() => BloomFilter.create(n, 0.01)).toThrow(ParamError);
