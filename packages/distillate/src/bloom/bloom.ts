@@ -18,6 +18,7 @@ import {
 import {
   assertPositiveInt,
   assertProbability,
+  assertUint16,
   assertUint32,
 } from "../core/params.js";
 import { optimal } from "../core/sizing.js";
@@ -128,7 +129,9 @@ export class BloomFilter {
    */
   constructor({ m, k, seed = 0 }: BloomParams) {
     assertPositiveInt(m, "m");
+    assertUint32(m, "m");
     assertPositiveInt(k, "k");
+    assertUint16(k, "k");
     assertUint32(seed, "seed");
     this.#bits = new BitSet(m);
     this.#m = m;
