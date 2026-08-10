@@ -167,6 +167,7 @@ test("bitsPerKey reports numBlocks * 256 / capacity", () => {
 test("create(n, epsilon) sizes so observed FPR stays at or below epsilon", () => {
   const present = sampleStrings(1, 5000);
   for (const [epsilon, count] of [
+    [1e-1, 20000],
     [1e-2, 20000],
     [1e-3, 60000],
     [1e-4, 200000],
@@ -176,6 +177,13 @@ test("create(n, epsilon) sizes so observed FPR stays at or below epsilon", () =>
     const obs = measureFpr(f, present, absent);
     expect(obs).toBeLessThanOrEqual(epsilon * 1.3);
   }
+});
+
+test("create rejects a target below the solvable floor, builds down to 1e-6", () => {
+  expect(() => BlockedBloomFilter.create(1000, 1e-30)).toThrow(ParamError);
+  const f = BlockedBloomFilter.create(1000, 1e-6);
+  f.add("alice");
+  expect(f.has("alice")).toBe(true);
 });
 
 test("blockedFprAt is strictly decreasing and brackets measured anchors", () => {
