@@ -12,6 +12,7 @@ import {
 import {
   BlockedBloomFilter,
   BlockedBloomParamMismatchError,
+  blockedBitsPerKey,
   blockedFprAt,
   fillBlock,
 } from "../../src/blocked/blocked.js";
@@ -186,6 +187,20 @@ test("blockedFprAt is strictly decreasing and brackets measured anchors", () => 
   expect(blockedFprAt(11)).toBeLessThan(0.012);
   expect(blockedFprAt(27)).toBeGreaterThan(3e-5);
   expect(blockedFprAt(27)).toBeLessThan(2e-4);
+});
+
+test("blockedBitsPerKey returns the minimal integer bits/key hitting the target", () => {
+  let prev = 0;
+  for (const eps of [0.1, 0.01, 1e-3, 1e-4, 1e-6]) {
+    const bpk = blockedBitsPerKey(eps);
+    expect(Number.isInteger(bpk)).toBe(true);
+    expect(bpk).toBeGreaterThanOrEqual(1);
+    expect(blockedFprAt(bpk)).toBeLessThanOrEqual(eps);
+    expect(blockedFprAt(bpk - 1)).toBeGreaterThan(eps);
+    expect(bpk).toBeGreaterThanOrEqual(prev); // monotonic as epsilon tightens
+    prev = bpk;
+  }
+  expect(() => blockedBitsPerKey(1e-30)).toThrow(ParamError);
 });
 
 test("create picks bits-per-key monotonically with tighter epsilon", () => {
