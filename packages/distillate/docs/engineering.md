@@ -31,6 +31,10 @@ Keep each subpath a separate bundler entry (independent chunks; no barrel pullin
 
 Shipped `dist/*.js` is **not minified** (tsdown default). Consumers bundle and minify downstream, so TSDoc comments never reach their runtime bundle; the `.d.ts` files keep the comments for IntelliSense, and readable installed source aids debugging. Minifying here would only trade that away for no consumer benefit.
 
+## Bundle size
+
+The "small" claim is enforced, not asserted. `pnpm size:check` (`scripts/size-check.mjs`, zero deps) measures each `exports` subpath's transitive static-import closure (entry plus the shared chunks it pulls in) as raw and gzipped bytes, and fails if any exceeds its budget in `size-budget.json`. The CI build job runs it right after `pnpm build`, so an accidental size regression fails the build. Budgets are keyed by subpath (stable); the hashed chunk filenames are resolved at runtime, so they never need updating. An `exports` entry with no budget fails the check, forcing a conscious budget for every new subpath. Intentional growth means bumping the budget in the same change, deliberately.
+
 ## Testing
 
 - Framework runs unmodified on Node/Bun/Deno: tests written against `Uint8Array` and Web APIs, no Node `Buffer`/`fs` in core.
