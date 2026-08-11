@@ -289,6 +289,14 @@ test("union has every key from either input (property)", () => {
   );
 });
 
+test("from([]) builds an empty filter", () => {
+  const f = BlockedBloomFilter.from([], 0.01);
+  for (const key of ["a", "alice", "", "xyz"]) {
+    expect(f.has(key)).toBe(false);
+  }
+  expect(() => BlockedBloomFilter.create(0, 0.01)).toThrow(ParamError);
+});
+
 test("fromBytes rejects numBlocks=0 and n=0 frames", () => {
   const { type } = readHeader(BlockedBloomFilter.create(10, 0.01).toBytes());
   const craftBlocked = (numBlocks: number, n: number) => {
