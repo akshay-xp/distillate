@@ -13,7 +13,7 @@ import {
   SerializationError,
   toJSONEnvelope,
   UnknownHashVariantError,
-  writeHeader,
+  writeFrame,
 } from "../core/serialize.js";
 import {
   assertPositiveInt,
@@ -184,16 +184,16 @@ export class BloomFilter {
    */
   toBytes(): Uint8Array {
     const payload = this.#bits.bytes;
-    const body = new Uint8Array(14 + payload.length);
-    const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
-    dv.setUint32(0, this.#m, true);
-    dv.setUint16(4, this.#k, true);
-    dv.setUint32(6, this.#seed, true);
-    dv.setUint32(10, this.#n, true);
-    body.set(payload, 14);
-    return writeHeader(
+    return writeFrame(
       { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
-      body,
+      14 + payload.length,
+      (body, dv) => {
+        dv.setUint32(0, this.#m, true);
+        dv.setUint16(4, this.#k, true);
+        dv.setUint32(6, this.#seed, true);
+        dv.setUint32(10, this.#n, true);
+        body.set(payload, 14);
+      },
     );
   }
 
