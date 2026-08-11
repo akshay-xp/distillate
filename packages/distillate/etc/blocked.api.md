@@ -16,7 +16,9 @@ export class BlockedBloomFilter {
     static fromJSON(value: unknown): BlockedBloomFilter;
     has(key: BytesLike): boolean;
     get length(): number;
+    get numBlocks(): number;
     rate(): number;
+    get seed(): number;
     toBytes(): Uint8Array;
     toJSON(): FilterJSON;
     union(other: BlockedBloomFilter): BlockedBloomFilter;
