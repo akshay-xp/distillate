@@ -3,14 +3,32 @@ import { expect, test } from "vitest";
 
 import {
   BadMagicError,
+  bytesEqual,
   ChecksumError,
   FORMAT_VERSION,
   readHeader,
   SerializationError,
   TruncatedError,
   UnknownVersionError,
+  writeFrame,
   writeHeader,
 } from "../../src/core/serialize.js";
+
+test("writeFrame allocates once and equals the writeHeader path", () => {
+  const body = Uint8Array.of(9, 8, 7, 6, 5);
+  const header = { version: FORMAT_VERSION, type: 5, flags: 3 };
+
+  let captured: Uint8Array | undefined;
+  const frame = writeFrame(header, body.length, (b) => {
+    captured = b;
+    b.set(body);
+  });
+
+  expect(captured?.buffer).toBe(frame.buffer);
+  expect(captured?.byteOffset).toBe(8);
+  expect(captured?.length).toBe(body.length);
+  expect(bytesEqual(frame, writeHeader(header, body))).toBe(true);
+});
 
 test("writeHeader frames magic, reserved byte, and round-trips fields", () => {
   const frame = writeHeader(
