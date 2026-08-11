@@ -293,6 +293,11 @@ abstract class BinaryFuse {
     return this.#size;
   }
 
+  /** Hash seed selected during construction (may differ from 0 after a peel retry). */
+  get seed(): number {
+    return this.#seed;
+  }
+
   /** Actual bits stored per key (`0` for an empty filter). */
   get bitsPerKey(): number {
     return this.#size === 0 ? 0 : (this.#fp.byteLength * 8) / this.#size;
