@@ -248,6 +248,16 @@ function fuseStateFromBytes(
   const seg = dv.getUint32(4, true);
   const segCountLen = dv.getUint32(8, true);
   const size = dv.getUint32(12, true);
+  // segMask = seg - 1 is only a valid bitmask when seg is a power of two, and
+  // the peel geometry requires segCountLen to be a whole number of segments.
+  if (seg === 0 || (seg & (seg - 1)) !== 0 || seg > 1 << 18) {
+    throw new SerializationError(`invalid fuse segment length ${String(seg)}`);
+  }
+  if (segCountLen % seg !== 0) {
+    throw new SerializationError(
+      `fuse segment count length ${String(segCountLen)} is not a multiple of segment length ${String(seg)}`,
+    );
+  }
   const bpe = expectedType === TYPE_FUSE8 ? 1 : 2;
   // An empty filter carries params but zero fingerprints; otherwise the array
   // length is fixed by the segment geometry (arrayLength = segCountLen + 2*seg).

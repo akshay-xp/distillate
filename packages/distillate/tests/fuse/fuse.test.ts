@@ -184,6 +184,30 @@ test("fromBytes rejects a frame of the wrong fuse type", () => {
   expect(() => BinaryFuse16.fromBytes(frame8)).toThrow(SerializationError);
 });
 
+test("fromBytes rejects malformed segment geometry", () => {
+  const { type } = readHeader(
+    BinaryFuse8.from(sampleStrings(1, 100)).toBytes(),
+  );
+  const craftFuse8 = (seg: number, segCountLen: number, size: number) => {
+    const body = new Uint8Array(16 + (size === 0 ? 0 : segCountLen + 2 * seg));
+    const dv = new DataView(body.buffer);
+    dv.setUint32(4, seg, true);
+    dv.setUint32(8, segCountLen, true);
+    dv.setUint32(12, size, true);
+    return writeHeader({ version: FORMAT_VERSION, type, flags: 0 }, body);
+  };
+
+  expect(() => BinaryFuse8.fromBytes(craftFuse8(3, 12, 1))).toThrow(
+    SerializationError,
+  );
+  expect(() => BinaryFuse8.fromBytes(craftFuse8(4, 10, 1))).toThrow(
+    SerializationError,
+  );
+  expect(() => BinaryFuse8.fromBytes(craftFuse8(1 << 19, 0, 0))).toThrow(
+    SerializationError,
+  );
+});
+
 test("exhausted construction attempts throw BinaryFuseBuildError", () => {
   const params = computeParams(2);
   const hashes = Uint32Array.of(1, 2, 3, 4);
