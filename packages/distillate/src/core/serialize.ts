@@ -15,6 +15,39 @@ export interface Header {
   flags: number;
 }
 
+/**
+ * Allocates a full frame once, hands `fill` a writable view over the body region
+ * (and a `DataView` scoped to it), then seals the CRC trailer. The body view
+ * aliases the frame's buffer, so callers write fields and payload straight into
+ * the frame with no intermediate body allocation or copy.
+ */
+export function writeFrame(
+  header: Header,
+  bodyLength: number,
+  fill: (body: Uint8Array, view: DataView) => void,
+): Uint8Array {
+  const frame = new Uint8Array(HEADER_SIZE + bodyLength + TRAILER_SIZE);
+  frame[0] = 0x41;
+  frame[1] = 0x4d;
+  frame[2] = 0x51;
+  frame[3] = 0x46;
+  frame[4] = header.version;
+  frame[5] = header.type;
+  frame[6] = header.flags;
+  frame[7] = 0;
+
+  const body = frame.subarray(HEADER_SIZE, HEADER_SIZE + bodyLength);
+  fill(body, new DataView(frame.buffer, HEADER_SIZE, bodyLength));
+
+  const crc = crc32(frame.subarray(0, HEADER_SIZE + bodyLength));
+  new DataView(frame.buffer, frame.byteOffset, frame.byteLength).setUint32(
+    HEADER_SIZE + bodyLength,
+    crc,
+    true,
+  );
+  return frame;
+}
+
 export function writeHeader(header: Header, body: Uint8Array): Uint8Array {
   const frame = new Uint8Array(HEADER_SIZE + body.length + TRAILER_SIZE);
   frame[0] = 0x41;
