@@ -166,6 +166,23 @@ export class BlockedBloomFilter {
     this.#n = capacity;
   }
 
+  // Rebuild an empty filter with exactly `numBlocks` blocks. Sizing by
+  // `bitsPerKey: 256, capacity: numBlocks` keeps ceil(256*numBlocks/256)
+  // integer-exact, unlike round-tripping the fractional `bitsPerKey` getter.
+  static #fromNumBlocks(
+    numBlocks: number,
+    seed: number,
+    n: number,
+  ): BlockedBloomFilter {
+    const f = new BlockedBloomFilter({
+      bitsPerKey: 256,
+      capacity: numBlocks,
+      seed,
+    });
+    f.#n = n;
+    return f;
+  }
+
   /** Actual bits allocated per key (`total bits / capacity`). */
   get bitsPerKey(): number {
     return (this.#numBlocks * 256) / this.#n;
@@ -308,11 +325,11 @@ export class BlockedBloomFilter {
         "cannot union blocked Bloom filters whose parameters do not match",
       );
     }
-    const r = new BlockedBloomFilter({
-      bitsPerKey: this.bitsPerKey,
-      capacity: this.#n,
-      seed: this.#seed,
-    });
+    const r = BlockedBloomFilter.#fromNumBlocks(
+      this.#numBlocks,
+      this.#seed,
+      this.#n,
+    );
     for (let i = 0; i < this.#lanes.length; i++)
       r.#lanes[i] = (this.#lanes[i] ?? 0) | (other.#lanes[i] ?? 0);
     return r;
