@@ -32,6 +32,16 @@ test("from([]) is a well-defined empty filter, stable across serialization", () 
   }
 });
 
+test("exposes seed accessor that survives a round-trip", () => {
+  const keys = sampleStrings(1, 500);
+  for (const Kind of [BinaryFuse8, BinaryFuse16]) {
+    const f = Kind.from(keys);
+    expect(Number.isInteger(f.seed)).toBe(true);
+    expect(f.seed).toBeGreaterThanOrEqual(0);
+    expect(Kind.fromBytes(f.toBytes()).seed).toBe(f.seed);
+  }
+});
+
 test("from with keys is unaffected by the empty-set guard", () => {
   const f = BinaryFuse8.from(["alice", "bob"]);
   expect(f.size).toBe(2);
