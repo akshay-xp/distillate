@@ -245,6 +245,11 @@ export class BlockedBloomFilter {
     const numBlocks = dv.getUint32(0, true);
     const seed = dv.getUint32(4, true);
     const n = dv.getUint32(8, true);
+    if (numBlocks === 0 || n === 0) {
+      throw new SerializationError(
+        `blocked frame declares numBlocks=${String(numBlocks)}, n=${String(n)}; both must be positive`,
+      );
+    }
     assertBodyLength(body.length, 12 + numBlocks * 32, "blocked");
     const f = BlockedBloomFilter.#fromNumBlocks(numBlocks, seed, n);
     new Uint8Array(f.#lanes.buffer).set(body.subarray(12));

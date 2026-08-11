@@ -289,6 +289,24 @@ test("union has every key from either input (property)", () => {
   );
 });
 
+test("fromBytes rejects numBlocks=0 and n=0 frames", () => {
+  const { type } = readHeader(BlockedBloomFilter.create(10, 0.01).toBytes());
+  const craftBlocked = (numBlocks: number, n: number) => {
+    const body = new Uint8Array(12 + numBlocks * 32);
+    const dv = new DataView(body.buffer);
+    dv.setUint32(0, numBlocks, true);
+    dv.setUint32(8, n, true);
+    return writeHeader({ version: FORMAT_VERSION, type, flags: 0 }, body);
+  };
+
+  expect(() => BlockedBloomFilter.fromBytes(craftBlocked(0, 5))).toThrow(
+    SerializationError,
+  );
+  expect(() => BlockedBloomFilter.fromBytes(craftBlocked(1, 0))).toThrow(
+    SerializationError,
+  );
+});
+
 test("union rejects mismatched params with a typed error", () => {
   const base = new BlockedBloomFilter({ bitsPerKey: 12, capacity: 1000 });
 
