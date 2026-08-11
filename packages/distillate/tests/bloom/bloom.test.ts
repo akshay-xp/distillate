@@ -198,6 +198,16 @@ test("union merges two filters without mutating inputs", () => {
   expect(b.toBytes()).toEqual(snapB);
 });
 
+test("union preserves the operand bitsPerKey and equals the receiver", () => {
+  const a = BloomFilter.create(1000, 0.01);
+  a.add("x");
+  const b = BloomFilter.create(1000, 0.01);
+
+  const u = a.union(b);
+  expect(u.bitsPerKey).toBe(a.bitsPerKey);
+  expect(a.equals(u)).toBe(true);
+});
+
 test("union has every key from either input (property)", () => {
   fc.assert(
     fc.property(

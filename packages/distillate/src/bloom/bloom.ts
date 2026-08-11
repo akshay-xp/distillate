@@ -141,6 +141,15 @@ export class BloomFilter {
     this.#n = Math.round((m * Math.LN2) / k);
   }
 
+  // Reconstruct with an explicit expected-key count, overriding the #n the
+  // constructor derives from m/k. The single place #n is carried across
+  // reconstruction, so a caller cannot silently drop it.
+  static #withN(params: BloomParams, n: number): BloomFilter {
+    const f = new BloomFilter(params);
+    f.#n = n;
+    return f;
+  }
+
   /** Number of bits in the filter. */
   get m(): number {
     return this.#m;
@@ -249,7 +258,10 @@ export class BloomFilter {
     const b = other.#bits.bytes;
     const merged = new Uint8Array(a.length);
     for (let i = 0; i < a.length; i++) merged[i] = (a[i] ?? 0) | (b[i] ?? 0);
-    const r = new BloomFilter({ m: this.#m, k: this.#k, seed: this.#seed });
+    const r = BloomFilter.#withN(
+      { m: this.#m, k: this.#k, seed: this.#seed },
+      this.#n,
+    );
     r.#bits.bytes.set(merged);
     return r;
   }
