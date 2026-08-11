@@ -220,6 +220,18 @@ test("blockedBitsPerKey returns the minimal integer bits/key hitting the target"
   expect(() => blockedBitsPerKey(1e-30)).toThrow(ParamError);
 });
 
+test("exposes numBlocks and seed accessors for compatibility prechecks", () => {
+  const f = new BlockedBloomFilter({ bitsPerKey: 12, capacity: 1000, seed: 7 });
+  expect(f.seed).toBe(7);
+  expect(f.numBlocks).toBe(Math.ceil((12 * 1000) / 256));
+
+  const a = BlockedBloomFilter.create(1000, 0.01);
+  const b = BlockedBloomFilter.create(1000, 0.01);
+  expect(a.numBlocks).toBe(b.numBlocks);
+  expect(a.seed).toBe(b.seed);
+  expect(BlockedBloomFilter.create(2000, 0.01).numBlocks).not.toBe(a.numBlocks);
+});
+
 test("create picks bits-per-key monotonically with tighter epsilon", () => {
   const loose = BlockedBloomFilter.create(100000, 0.01).bitsPerKey;
   const tight = BlockedBloomFilter.create(100000, 0.0001).bitsPerKey;
