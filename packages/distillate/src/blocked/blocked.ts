@@ -246,14 +246,7 @@ export class BlockedBloomFilter {
     const seed = dv.getUint32(4, true);
     const n = dv.getUint32(8, true);
     assertBodyLength(body.length, 12 + numBlocks * 32, "blocked");
-    // bitsPerKey 256 with capacity=numBlocks reconstructs exactly numBlocks
-    // blocks (256*numBlocks/256); #n is then restored to the stored capacity.
-    const f = new BlockedBloomFilter({
-      bitsPerKey: 256,
-      capacity: numBlocks,
-      seed,
-    });
-    f.#n = n;
+    const f = BlockedBloomFilter.#fromNumBlocks(numBlocks, seed, n);
     new Uint8Array(f.#lanes.buffer).set(body.subarray(12));
     return f;
   }
