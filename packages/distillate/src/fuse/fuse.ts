@@ -41,7 +41,7 @@ export interface FuseParams {
 
 // Reused across key hashing (build + lookup); same non-reentrant rationale as
 // the shared RLO/RHI scratch in core/hasher.
-const scratchHash: Hash128 = { h1lo: 0, h1hi: 0, h2lo: 0, h2hi: 0 };
+const scratchHash: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
 
 // Cheaply perturb a stored 64-bit key hash with the attempt seed, avoiding a
 // full re-hash of the key on every construction retry.
@@ -211,8 +211,8 @@ function buildState(
   const seen = new Set<string>();
   for (const key of keys) {
     hash128KeyInto(key, 0, scratchHash);
-    const lo = scratchHash.h1lo >>> 0;
-    const hi = scratchHash.h1hi >>> 0;
+    const lo = scratchHash.w0 >>> 0;
+    const hi = scratchHash.w1 >>> 0;
     const id = `${String(lo)},${String(hi)}`;
     if (seen.has(id)) continue;
     seen.add(id);
@@ -337,7 +337,7 @@ abstract class BinaryFuse {
   has(key: BytesLike): boolean {
     if (this.#fp.length === 0) return false;
     hash128KeyInto(key, 0, scratchHash);
-    mixSeed(scratchHash.h1lo >>> 0, scratchHash.h1hi >>> 0, this.#seed);
+    mixSeed(scratchHash.w0 >>> 0, scratchHash.w1 >>> 0, this.#seed);
     const mlo = RLO;
     const mhi = RHI;
     positionsInto(

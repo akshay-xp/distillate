@@ -1,10 +1,10 @@
 import { normalize, type BytesLike } from "./bytes.js";
 
 export interface Hash128 {
-  h1lo: number;
-  h1hi: number;
-  h2lo: number;
-  h2hi: number;
+  w0: number;
+  w1: number;
+  w2: number;
+  w3: number;
 }
 
 // Scratch output registers for the 64-bit-lane helpers below. Reused across
@@ -15,7 +15,7 @@ export let RHI = 0;
 
 // Reused output struct for the final hash lanes, same non-reentrant rationale
 // as RLO/RHI. computeLanes writes it; the allocating wrappers copy it out.
-const LANES: Hash128 = { h1lo: 0, h1hi: 0, h2lo: 0, h2hi: 0 };
+const LANES: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
 
 export function mul64(
   alo: number,
@@ -93,7 +93,7 @@ function fmix32(h: number): number {
 
 // murmur3_x86_128: pure 32-bit (Math.imul), one pass over the key, four output
 // words. One hash for the whole library: Bloom/Blocked read two words as the
-// double-hash a/b; Fuse reads the first 64-bit lane (h1lo/h1hi). No emulated
+// double-hash a/b; Fuse reads the first 64-bit lane (w0/w1). No emulated
 // 64-bit multiply, so it is fast on V8 for every structure.
 const K1 = 0x239b961b;
 const K2 = 0xab0e9789;
@@ -223,10 +223,10 @@ function computeLanes(bytes: Uint8Array, seed: number, len: number): void {
   h3 = (h3 + h1) >>> 0;
   h4 = (h4 + h1) >>> 0;
 
-  LANES.h1lo = h1;
-  LANES.h1hi = h2;
-  LANES.h2lo = h3;
-  LANES.h2hi = h4;
+  LANES.w0 = h1;
+  LANES.w1 = h2;
+  LANES.w2 = h3;
+  LANES.w3 = h4;
 }
 
 export function hash128(
@@ -278,10 +278,10 @@ export function hash128KeyInto(
   out: Hash128,
 ): void {
   keyToLanes(key, seed);
-  out.h1lo = LANES.h1lo;
-  out.h1hi = LANES.h1hi;
-  out.h2lo = LANES.h2lo;
-  out.h2hi = LANES.h2hi;
+  out.w0 = LANES.w0;
+  out.w1 = LANES.w1;
+  out.w2 = LANES.w2;
+  out.w3 = LANES.w3;
 }
 
 // Lemire multiply-shift: map x in [0, 2^32) to [0, range) via the high 32 bits
@@ -308,8 +308,8 @@ export function hash32x2Into(
   out: Uint32Array,
 ): void {
   keyToLanes(key, seed);
-  out[0] = LANES.h1lo;
-  out[1] = LANES.h1hi;
+  out[0] = LANES.w0;
+  out[1] = LANES.w1;
 }
 
 /**
@@ -325,8 +325,8 @@ export function probeInto(
   out: Uint32Array,
 ): void {
   keyToLanes(key, seed);
-  const a = LANES.h1lo;
-  const b = LANES.h1hi;
+  const a = LANES.w0;
+  const b = LANES.w1;
   for (let i = 0; i < count; i++) {
     const x = (a + Math.imul(i, b) + i * i) >>> 0;
     out[i] = reduce(x, range);
