@@ -86,7 +86,7 @@ export class BloomFilter {
    */
   static from(keys: Iterable<BytesLike>, epsilon: number): BloomFilter {
     const arr = [...keys];
-    const f = BloomFilter.create(arr.length, epsilon);
+    const f = BloomFilter.create(Math.max(1, arr.length), epsilon);
     for (const k of arr) f.add(k);
     return f;
   }

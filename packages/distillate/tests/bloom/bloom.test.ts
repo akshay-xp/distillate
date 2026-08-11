@@ -185,6 +185,14 @@ test("fromBytes throws SerializationError on corrupt or foreign input", () => {
   expect(() => BloomFilter.fromBytes(badCrc)).toThrow(SerializationError);
 });
 
+test("from([]) builds an empty filter", () => {
+  const f = BloomFilter.from([], 0.01);
+  for (const key of ["a", "alice", "", "xyz"]) {
+    expect(f.has(key)).toBe(false);
+  }
+  expect(() => BloomFilter.create(0, 0.01)).toThrow(ParamError);
+});
+
 test("union merges two filters without mutating inputs", () => {
   const a = new BloomFilter({ m: 1 << 12, k: 7 });
   const b = new BloomFilter({ m: 1 << 12, k: 7 });
