@@ -56,6 +56,9 @@ test("create rejects invalid n and epsilon", () => {
   for (const epsilon of [1, 0, -0.1, NaN]) {
     expect(() => BloomFilter.create(100, epsilon)).toThrow(ParamError);
   }
+  expect(() => BloomFilter.create(2 ** 32, 0.999)).toThrow(ParamError);
+  expect(() => BloomFilter.create(2 ** 32 - 1, 0.999)).not.toThrow();
+
   const f = BloomFilter.create(100000, 0.01);
   f.add("alice");
   expect(f.has("alice")).toBe(true);

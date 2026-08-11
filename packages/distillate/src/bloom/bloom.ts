@@ -70,10 +70,9 @@ export class BloomFilter {
    */
   static create(n: number, epsilon: number): BloomFilter {
     assertPositiveInt(n, "n");
+    assertUint32(n, "n");
     assertProbability(epsilon, "epsilon");
-    const f = new BloomFilter(optimal(n, epsilon));
-    f.#n = n;
-    return f;
+    return BloomFilter.#withN(optimal(n, epsilon), n);
   }
 
   /**
