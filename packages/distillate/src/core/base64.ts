@@ -35,13 +35,18 @@ export function toBase64(bytes: Uint8Array): string {
 export function fromBase64(s: string): Uint8Array {
   let len = s.length;
   while (len > 0 && s.charCodeAt(len - 1) === 61) len--; // strip '=' padding
+  if (len % 4 === 1) {
+    throw new RangeError(`invalid base64 length ${String(len)}`);
+  }
   const out = new Uint8Array((len * 3) >> 2);
   let acc = 0;
   let bits = 0;
   let o = 0;
   for (let i = 0; i < len; i++) {
     const v = DECODE[s.charCodeAt(i)] ?? -1;
-    if (v < 0) continue;
+    if (v < 0) {
+      throw new RangeError(`invalid base64 character at index ${String(i)}`);
+    }
     acc = (acc << 6) | v;
     bits += 6;
     if (bits >= 8) {

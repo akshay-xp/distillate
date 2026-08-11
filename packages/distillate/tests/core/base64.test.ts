@@ -27,6 +27,12 @@ test("fromBase64 inverts the RFC 4648 vectors", () => {
   }
 });
 
+test("fromBase64 rejects invalid characters and lengths", () => {
+  expect(() => fromBase64("!!!!!!!!")).toThrow(RangeError);
+  expect(() => fromBase64("Z\ng")).toThrow(RangeError);
+  expect(() => fromBase64("A")).toThrow(RangeError);
+});
+
 test("fromBase64(toBase64(b)) round-trips arbitrary bytes", () => {
   fc.assert(
     fc.property(fc.uint8Array(), (b) => {
