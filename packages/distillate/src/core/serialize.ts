@@ -116,7 +116,11 @@ export function fromJSONEnvelope(value: unknown): Uint8Array {
   if (typeof o.data !== "string") {
     throw new SerializationError('missing string "data"');
   }
-  return fromBase64(o.data);
+  try {
+    return fromBase64(o.data);
+  } catch {
+    throw new SerializationError("envelope data is not valid base64");
+  }
 }
 
 /** Byte-wise equality of two frames; the basis for structure `equals`. */

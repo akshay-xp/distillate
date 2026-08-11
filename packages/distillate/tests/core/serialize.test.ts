@@ -6,6 +6,7 @@ import {
   bytesEqual,
   ChecksumError,
   FORMAT_VERSION,
+  fromJSONEnvelope,
   readHeader,
   SerializationError,
   TruncatedError,
@@ -110,6 +111,15 @@ test("readHeader handles every truncated prefix of a valid frame (fuzz)", () => 
       expect(err).toBeInstanceOf(SerializationError);
     }
   }
+});
+
+test("fromJSONEnvelope surfaces invalid base64 data as SerializationError", () => {
+  const env = {
+    $: "distillate",
+    v: FORMAT_VERSION,
+    data: "!!!!not-base64!!!!",
+  };
+  expect(() => fromJSONEnvelope(env)).toThrow(SerializationError);
 });
 
 test("readHeader rejects a version-1 frame", () => {
