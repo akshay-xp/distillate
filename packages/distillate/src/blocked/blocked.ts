@@ -171,6 +171,16 @@ export class BlockedBloomFilter {
     return (this.#numBlocks * 256) / this.#n;
   }
 
+  /** Number of 256-bit blocks; one of the two fields `union` requires to match. */
+  get numBlocks(): number {
+    return this.#numBlocks;
+  }
+
+  /** Hash seed; the other field `union` requires to match. */
+  get seed(): number {
+    return this.#seed;
+  }
+
   /** Number of bits currently set across all lanes. */
   get length(): number {
     let bits = 0;
