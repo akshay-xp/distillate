@@ -19,7 +19,7 @@ import {
   SerializationError,
   toJSONEnvelope,
   UnknownHashVariantError,
-  writeHeader,
+  writeFrame,
 } from "../core/serialize.js";
 
 const TYPE = 2;
@@ -242,15 +242,15 @@ export class BlockedBloomFilter {
       this.#lanes.byteOffset,
       this.#lanes.byteLength,
     );
-    const body = new Uint8Array(12 + lanes.length);
-    const dv = new DataView(body.buffer);
-    dv.setUint32(0, this.#numBlocks, true);
-    dv.setUint32(4, this.#seed, true);
-    dv.setUint32(8, this.#n, true);
-    body.set(lanes, 12);
-    return writeHeader(
+    return writeFrame(
       { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
-      body,
+      12 + lanes.length,
+      (body, dv) => {
+        dv.setUint32(0, this.#numBlocks, true);
+        dv.setUint32(4, this.#seed, true);
+        dv.setUint32(8, this.#n, true);
+        body.set(lanes, 12);
+      },
     );
   }
 

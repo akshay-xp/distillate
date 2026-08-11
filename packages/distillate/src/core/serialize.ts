@@ -48,25 +48,11 @@ export function writeFrame(
   return frame;
 }
 
+/** Convenience adapter for callers that already hold the full body bytes. */
 export function writeHeader(header: Header, body: Uint8Array): Uint8Array {
-  const frame = new Uint8Array(HEADER_SIZE + body.length + TRAILER_SIZE);
-  frame[0] = 0x41;
-  frame[1] = 0x4d;
-  frame[2] = 0x51;
-  frame[3] = 0x46;
-  frame[4] = header.version;
-  frame[5] = header.type;
-  frame[6] = header.flags;
-  frame[7] = 0;
-  frame.set(body, HEADER_SIZE);
-
-  const crc = crc32(frame.subarray(0, HEADER_SIZE + body.length));
-  new DataView(frame.buffer, frame.byteOffset, frame.byteLength).setUint32(
-    HEADER_SIZE + body.length,
-    crc,
-    true,
-  );
-  return frame;
+  return writeFrame(header, body.length, (b) => {
+    b.set(body);
+  });
 }
 
 export interface ReadResult extends Header {

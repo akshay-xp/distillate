@@ -19,7 +19,7 @@ import {
   SerializationError,
   toJSONEnvelope,
   UnknownHashVariantError,
-  writeHeader,
+  writeFrame,
 } from "../core/serialize.js";
 
 const ARITY = 3;
@@ -309,17 +309,17 @@ abstract class BinaryFuse {
       this.#fp.byteOffset,
       this.#fp.byteLength,
     );
-    const body = new Uint8Array(16 + laneBytes.length);
-    const dv = new DataView(body.buffer);
-    dv.setUint32(0, this.#seed, true);
-    dv.setUint32(4, this.#seg, true);
-    dv.setUint32(8, this.#segCountLen, true);
-    dv.setUint32(12, this.#size, true);
-    body.set(laneBytes, 16);
     const type = this.#fp.BYTES_PER_ELEMENT === 1 ? TYPE_FUSE8 : TYPE_FUSE16;
-    return writeHeader(
+    return writeFrame(
       { version: FORMAT_VERSION, type, flags: HASH_MURMUR128 },
-      body,
+      16 + laneBytes.length,
+      (body, dv) => {
+        dv.setUint32(0, this.#seed, true);
+        dv.setUint32(4, this.#seg, true);
+        dv.setUint32(8, this.#segCountLen, true);
+        dv.setUint32(12, this.#size, true);
+        body.set(laneBytes, 16);
+      },
     );
   }
 
