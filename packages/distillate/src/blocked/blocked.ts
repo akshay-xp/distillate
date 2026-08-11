@@ -146,7 +146,7 @@ export class BlockedBloomFilter {
    */
   static from(keys: Iterable<BytesLike>, epsilon: number): BlockedBloomFilter {
     const arr = [...keys];
-    const f = BlockedBloomFilter.create(arr.length, epsilon);
+    const f = BlockedBloomFilter.create(Math.max(1, arr.length), epsilon);
     for (const k of arr) f.add(k);
     return f;
   }
