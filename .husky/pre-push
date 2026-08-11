@@ -1,0 +1,7 @@
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  if [ "$remote_ref" = "refs/heads/main" ]; then
+    echo "pre-push blocked: do not push directly to main. Open a PR from a feature branch." >&2
+    echo "(intentional override: git push --no-verify)" >&2
+    exit 1
+  fi
+done
