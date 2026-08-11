@@ -252,14 +252,34 @@ test("union merges two filters without mutating inputs", () => {
   expect(b.has("x")).toBe(false);
 });
 
+test.each([
+  { bpk: 10, cap: 164, blocks: 7 },
+  { bpk: 17, cap: 100, blocks: 7 },
+  { bpk: 100, cap: 157, blocks: 62 },
+])(
+  "union preserves keys and block count at bitsPerKey $bpk capacity $cap",
+  ({ bpk, cap, blocks }) => {
+    const a = new BlockedBloomFilter({ bitsPerKey: bpk, capacity: cap });
+    const b = new BlockedBloomFilter({ bitsPerKey: bpk, capacity: cap });
+    const ka = Array.from({ length: 50 }, (_, i) => `a-${String(i)}`);
+    const kb = Array.from({ length: 50 }, (_, i) => `b-${String(i)}`);
+    for (const k of ka) a.add(k);
+    for (const k of kb) b.add(k);
+
+    const u = a.union(b);
+    expect(u.numBlocks).toBe(blocks);
+    for (const k of [...ka, ...kb]) expect(u.has(k)).toBe(true);
+  },
+);
+
 test("union has every key from either input (property)", () => {
   fc.assert(
     fc.property(
       fc.uniqueArray(fc.string()),
       fc.uniqueArray(fc.string()),
       (ka, kb) => {
-        const a = new BlockedBloomFilter({ bitsPerKey: 12, capacity: 2000 });
-        const b = new BlockedBloomFilter({ bitsPerKey: 12, capacity: 2000 });
+        const a = new BlockedBloomFilter({ bitsPerKey: 10, capacity: 164 });
+        const b = new BlockedBloomFilter({ bitsPerKey: 10, capacity: 164 });
         for (const key of ka) a.add(key);
         for (const key of kb) b.add(key);
         const u = a.union(b);
