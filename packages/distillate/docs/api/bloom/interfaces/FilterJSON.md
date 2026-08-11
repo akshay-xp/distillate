@@ -6,7 +6,7 @@
 
 # Interface: FilterJSON
 
-Defined in: [packages/distillate/src/core/serialize.ts:65](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/core/serialize.ts#L65)
+Defined in: [packages/distillate/src/core/serialize.ts:84](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/core/serialize.ts#L84)
 
 JSON-friendly envelope for a filter: the binary frame, base64-encoded.
 
@@ -16,7 +16,7 @@ JSON-friendly envelope for a filter: the binary frame, base64-encoded.
 
 > **$**: `string`
 
-Defined in: [packages/distillate/src/core/serialize.ts:67](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/core/serialize.ts#L67)
+Defined in: [packages/distillate/src/core/serialize.ts:86](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/core/serialize.ts#L86)
 
 Format tag; always `"distillate"`.
 
@@ -26,7 +26,7 @@ Format tag; always `"distillate"`.
 
 > **data**: `string`
 
-Defined in: [packages/distillate/src/core/serialize.ts:71](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/core/serialize.ts#L71)
+Defined in: [packages/distillate/src/core/serialize.ts:90](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/core/serialize.ts#L90)
 
 Base64 of the `toBytes` frame.
 
@@ -36,6 +36,6 @@ Base64 of the `toBytes` frame.
 
 > **v**: `number`
 
-Defined in: [packages/distillate/src/core/serialize.ts:69](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/core/serialize.ts#L69)
+Defined in: [packages/distillate/src/core/serialize.ts:88](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/core/serialize.ts#L88)
 
 Binary format version.

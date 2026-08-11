@@ -6,7 +6,7 @@
 
 # Class: BlockedBloomFilter
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:70](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L70)
+Defined in: [packages/distillate/src/blocked/blocked.ts:113](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L113)
 
 A blocked (split-block) Bloom filter: confines every lookup to a single cache
 line, trading ~15% more space for higher lookup throughput and a lower FPR.
@@ -25,7 +25,7 @@ filter.has("alice"); // true
 
 > **new BlockedBloomFilter**(`__namedParameters`): `BlockedBloomFilter`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:133](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L133)
+Defined in: [packages/distillate/src/blocked/blocked.ts:158](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L158)
 
 Constructs a filter from low-level [BlockedBloomParams](../interfaces/BlockedBloomParams.md). Prefer
 [BlockedBloomFilter.create](#create) unless restoring a specific configuration.
@@ -48,7 +48,7 @@ Constructs a filter from low-level [BlockedBloomParams](../interfaces/BlockedBlo
 
 > **get** **bitsPerKey**(): `number`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:144](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L144)
+Defined in: [packages/distillate/src/blocked/blocked.ts:170](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L170)
 
 Actual bits allocated per key (`total bits / capacity`).
 
@@ -64,9 +64,41 @@ Actual bits allocated per key (`total bits / capacity`).
 
 > **get** **length**(): `number`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:149](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L149)
+Defined in: [packages/distillate/src/blocked/blocked.ts:185](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L185)
 
 Number of bits currently set across all lanes.
+
+##### Returns
+
+`number`
+
+---
+
+### numBlocks
+
+#### Get Signature
+
+> **get** **numBlocks**(): `number`
+
+Defined in: [packages/distillate/src/blocked/blocked.ts:175](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L175)
+
+Number of 256-bit blocks; one of the two fields `union` requires to match.
+
+##### Returns
+
+`number`
+
+---
+
+### seed
+
+#### Get Signature
+
+> **get** **seed**(): `number`
+
+Defined in: [packages/distillate/src/blocked/blocked.ts:180](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L180)
+
+Hash seed; the other field `union` requires to match.
 
 ##### Returns
 
@@ -78,7 +110,7 @@ Number of bits currently set across all lanes.
 
 > **add**(`key`): `void`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:290](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L290)
+Defined in: [packages/distillate/src/blocked/blocked.ts:326](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L326)
 
 Adds a key to the set.
 
@@ -100,7 +132,7 @@ The key to insert, as a string or bytes.
 
 > **equals**(`other`): `boolean`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:238](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L238)
+Defined in: [packages/distillate/src/blocked/blocked.ts:274](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L274)
 
 Tests structural equality: `true` when `other` serializes to identical
 bytes, meaning identical parameters and set bits.
@@ -125,7 +157,7 @@ The filter to compare against.
 
 > **has**(`key`): `boolean`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:304](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L304)
+Defined in: [packages/distillate/src/blocked/blocked.ts:340](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L340)
 
 Tests whether a key is in the set.
 
@@ -149,7 +181,7 @@ The key to test.
 
 > **rate**(): `number`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:168](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L168)
+Defined in: [packages/distillate/src/blocked/blocked.ts:204](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L204)
 
 Estimates the current false-positive rate from the actual fill,
 `(length / totalBits) ** 8`. A split-block query checks exactly 8 lane-bits,
@@ -168,7 +200,7 @@ The estimated false-positive rate, `0` for an empty filter.
 
 > **toBytes**(): `Uint8Array`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:213](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L213)
+Defined in: [packages/distillate/src/blocked/blocked.ts:249](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L249)
 
 Serializes the filter to a portable little-endian byte layout.
 
@@ -184,7 +216,7 @@ The serialized filter, readable by [BlockedBloomFilter.fromBytes](#frombytes).
 
 > **toJSON**(): [`FilterJSON`](../../bloom/interfaces/FilterJSON.md)
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:248](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L248)
+Defined in: [packages/distillate/src/blocked/blocked.ts:284](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L284)
 
 Serializes the filter to a JSON-friendly envelope wrapping the base64 of
 [BlockedBloomFilter.toBytes](#tobytes).
@@ -201,7 +233,7 @@ The envelope, readable by [BlockedBloomFilter.fromJSON](#fromjson).
 
 > **union**(`other`): `BlockedBloomFilter`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:269](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L269)
+Defined in: [packages/distillate/src/blocked/blocked.ts:305](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L305)
 
 Returns a new filter containing the union of this filter and `other`.
 
@@ -229,7 +261,7 @@ A new filter reporting membership for keys in either input.
 
 > `static` **create**(`n`, `epsilon`): `BlockedBloomFilter`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:94](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L94)
+Defined in: [packages/distillate/src/blocked/blocked.ts:128](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L128)
 
 Creates a filter sized for `n` expected keys at a target false-positive rate.
 
@@ -259,7 +291,7 @@ A new, empty filter.
 
 > `static` **from**(`keys`, `epsilon`): `BlockedBloomFilter`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:122](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L122)
+Defined in: [packages/distillate/src/blocked/blocked.ts:147](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L147)
 
 Builds a filter from `keys`, sized for their count at the target
 false-positive rate. The ergonomic entry point when the key set is already
@@ -292,7 +324,7 @@ A new filter containing every key.
 
 > `static` **fromBytes**(`bytes`): `BlockedBloomFilter`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:178](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L178)
+Defined in: [packages/distillate/src/blocked/blocked.ts:214](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L214)
 
 Restores a filter from its [BlockedBloomFilter.toBytes](#tobytes) serialization.
 
@@ -316,7 +348,7 @@ The reconstructed filter.
 
 > `static` **fromJSON**(`value`): `BlockedBloomFilter`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:258](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L258)
+Defined in: [packages/distillate/src/blocked/blocked.ts:294](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L294)
 
 Restores a filter from its [BlockedBloomFilter.toJSON](#tojson) envelope.
 
