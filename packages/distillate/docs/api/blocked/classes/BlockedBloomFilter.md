@@ -110,7 +110,7 @@ Hash seed; the other field `union` requires to match.
 
 > **add**(`key`): `void`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:336](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L336)
+Defined in: [packages/distillate/src/blocked/blocked.ts:341](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L341)
 
 Adds a key to the set.
 
@@ -132,7 +132,7 @@ The key to insert, as a string or bytes.
 
 > **equals**(`other`): `boolean`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:284](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L284)
+Defined in: [packages/distillate/src/blocked/blocked.ts:289](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L289)
 
 Tests structural equality: `true` when `other` serializes to identical
 bytes, meaning identical parameters and set bits.
@@ -157,7 +157,7 @@ The filter to compare against.
 
 > **has**(`key`): `boolean`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:350](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L350)
+Defined in: [packages/distillate/src/blocked/blocked.ts:355](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L355)
 
 Tests whether a key is in the set.
 
@@ -200,7 +200,7 @@ The estimated false-positive rate, `0` for an empty filter.
 
 > **toBytes**(): `Uint8Array`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:259](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L259)
+Defined in: [packages/distillate/src/blocked/blocked.ts:264](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L264)
 
 Serializes the filter to a portable little-endian byte layout.
 
@@ -216,7 +216,7 @@ The serialized filter, readable by [BlockedBloomFilter.fromBytes](#frombytes).
 
 > **toJSON**(): [`FilterJSON`](../../bloom/interfaces/FilterJSON.md)
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:294](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L294)
+Defined in: [packages/distillate/src/blocked/blocked.ts:299](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L299)
 
 Serializes the filter to a JSON-friendly envelope wrapping the base64 of
 [BlockedBloomFilter.toBytes](#tobytes).
@@ -233,7 +233,7 @@ The envelope, readable by [BlockedBloomFilter.fromJSON](#fromjson).
 
 > **union**(`other`): `BlockedBloomFilter`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:315](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L315)
+Defined in: [packages/distillate/src/blocked/blocked.ts:320](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L320)
 
 Returns a new filter containing the union of this filter and `other`.
 
@@ -348,7 +348,7 @@ The reconstructed filter.
 
 > `static` **fromJSON**(`value`): `BlockedBloomFilter`
 
-Defined in: [packages/distillate/src/blocked/blocked.ts:304](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L304)
+Defined in: [packages/distillate/src/blocked/blocked.ts:309](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/src/blocked/blocked.ts#L309)
 
 Restores a filter from its [BlockedBloomFilter.toJSON](#tojson) envelope.
 
