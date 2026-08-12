@@ -1,6 +1,6 @@
 {
   "name": "distillate-bench",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "description": "Cross-library benchmark: distillate vs bloom-filters and bloomfilter.js at matched FPR",

@@ -1,5 +1,37 @@
 # distillate
 
+## 0.6.0
+
+### Minor Changes
+
+- 6e77718: Add `equals` to Bloom, Blocked, and both Fuse filters. `a.equals(b)` is true when the two filters serialize to identical bytes (same parameters and contents); a fuse8 and a fuse16 are never equal.
+- 16db712: Add `from(keys, epsilon)` to Bloom and Blocked filters: build a filter directly from an iterable of keys, sized for their count at the target false-positive rate. Mirrors the existing `BinaryFuse.from`.
+- 51db353: Add `toJSON`/`fromJSON` to all filters (Bloom, Blocked, Fuse 8/16). `toJSON()` returns a JSON-friendly envelope (`{ $, v, data }`) wrapping the base64 of `toBytes()`, so filters can live in a JSON column or survive `JSON.stringify`; `fromJSON` validates the envelope and delegates to `fromBytes`.
+- e3264f5: Raise the minimum supported Node.js to 22; Node 20 reached end-of-life on 2026-04-30. Dropping an end-of-life Node line is a minor, not a breaking change, per the runtime-support policy.
+- 83aeccb: Correctness and API hardening:
+
+  - `BlockedBloomFilter.create` now sizes bits-per-key by solving the split-block false-positive rate in closed form, so it hits the target rate across the full epsilon range (previously values like `0.1` were silently under-provisioned to ~18%). Targets below the solvable floor throw a `ParamError` rather than returning a degraded filter. The bits-per-key chosen for a given epsilon may differ from before.
+  - Filter constructors now reject parameters that exceed their serialized field widths (`k > 65535`, `m`/`capacity > 2^32-1`) with a `ParamError`, instead of silently truncating on serialize.
+  - New accessors for compatibility prechecks: `numBlocks` and `seed` on `BlockedBloomFilter`, and `seed` on `BinaryFuse8`/`BinaryFuse16`.
+  - `toBytes` writes into a single allocated frame, dropping the duplicate body buffer.
+
+- c9b0a21: Unify all structures on murmur3_x86_128 and bump the serialization format to version 3.
+
+  One hash (murmur3_x86_128, pure `Math.imul`, single pass) now backs Bloom, Blocked, and Fuse, replacing the two-pass murmur3_x86_32 and the emulated MurmurHash3_x64_128. On Apple M5 this is ~2x faster Fuse queries and ~1.3x faster Bloom/Blocked lookups.
+
+  Breaking: this is a format change. Filters serialized by earlier versions (format v2) are rejected on read with `UnknownVersionError`; re-serialize with this version. Fuse frames now carry a hash-variant guard they previously lacked.
+
+### Patch Changes
+
+- c4c0c4b: Fix `BlockedBloomFilter.union` returning false negatives. The result filter was rebuilt from the fractional `bitsPerKey` getter, which for some capacities rounded up to one extra block; keys then hashed to a different block and read as absent. `union` (and `fromBytes`) now reconstruct from the exact integer block count.
+- 4649c1a: Fix `BloomFilter.union` reporting the wrong `bitsPerKey`/`rate` and breaking `equals`: the result now carries the operand's expected-key count instead of re-deriving it from `m/k` (membership was never affected). `BloomFilter.create` now rejects `n` above `2^32-1` with a `ParamError` instead of silently truncating it into the serialized frame.
+- 01ecf28: Compute the serialization CRC-32 with a slice-by-8 table drive instead of the byte-at-a-time loop. Output is byte-identical (same IEEE 802.3 checksum), so no format change; `toBytes`/`fromBytes` are about 4x faster on large filters (measured ~50 ms to ~13 ms for the CRC over an 11 MB payload on Apple M5).
+- fa2fb8c: Pre-1.0 hardening:
+
+  - Deserialization now rejects malformed frames with `SerializationError`: `BinaryFuse8`/`BinaryFuse16.fromBytes` reject a segment length that is not a power of two, exceeds `1<<18`, or whose segment-count length is not a multiple of it; `BlockedBloomFilter.fromBytes` rejects `numBlocks=0` and `n=0` (previously a `ParamError` leaked, or an `Infinity` bits-per-key filter was accepted).
+  - `fromBase64` now throws on characters outside the base64 alphabet and on invalid lengths instead of silently producing wrong-length bytes; a corrupted JSON envelope surfaces as `SerializationError` rather than a downstream `ChecksumError`.
+  - `BloomFilter.from([])` and `BlockedBloomFilter.from([])` build a valid empty filter (membership always false) instead of throwing, matching the binary fuse filters.
+
 ## 0.5.0
 
 ### Minor Changes
