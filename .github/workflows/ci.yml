@@ -99,9 +99,7 @@ jobs:
 
   changeset:
     name: changeset
-    # Dependabot only bumps dev dependencies (zero runtime deps), so its PRs
-    # never need a changeset.
-    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -113,7 +111,14 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec changeset status --since=origin/${{ github.base_ref }}
+      # The job always runs so the required `changeset` check reports a status,
+      # but the enforcement step is skipped for cases that legitimately carry no
+      # changeset: Dependabot (dev-only bumps) and the changesets Version
+      # Packages PR (which has already consumed its changesets into the release).
+      # Skipping the whole job would leave the required check pending and block
+      # those PRs forever.
+      - if: github.actor != 'dependabot[bot]' && github.head_ref != 'changeset-release/main'
+        run: pnpm exec changeset status --since=origin/${{ github.base_ref }}
 
   smoke-node:
     name: smoke (node ${{ matrix.node }})
