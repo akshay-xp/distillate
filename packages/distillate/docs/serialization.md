@@ -13,7 +13,7 @@ Offset  Size  Field
 6       1     Flags (u8)                  # bit0-3 hash variant, others reserved
 7       1     Reserved (u8, 0)            # keeps params 8-byte aligned
 8       ...   Params block (fixed per type, see below)
-...     ...   Payload: raw backing typed array, little-endian
+...     ...   Payload: raw backing typed array, host byte order (see Principles)
 end     4     CRC32 of all preceding bytes
 ```
 
@@ -57,9 +57,9 @@ Plus a JSON view (`toJSON`) for debugging only, not the persistence format.
 
 ## Principles
 
-- All multi-byte integers little-endian via `DataView`, `littleEndian: true` explicit. Native order on x86/ARM; never rely on platform default.
+- Header and params multi-byte integers are written little-endian via `DataView`, `littleEndian: true` explicit, so they parse identically on any host regardless of platform endianness.
 - 64-bit fields via `getBigUint64`/`setBigUint64`.
-- Payload is the raw backing array copied verbatim. A same-params Rust/Go reader reconstructs by pointing at these bytes (how FastFilter serializes).
+- Payload is the raw backing typed array copied verbatim, so its multi-byte lanes (blocked's `Uint32Array` lane words, fuse16's `Uint16Array` fingerprints) land in host byte order, not a forced little-endian. Every supported JS runtime is little-endian, so on-disk frames are interoperable in practice; a hypothetical big-endian host would need a read-time byte-swap, which is not currently implemented. Bloom bit arrays and fuse8 fingerprints are `Uint8Array`, so they are endian-neutral. A same-params Rust/Go reader reconstructs by pointing at these bytes (how FastFilter serializes).
 - Serialize mathematical params, not JS object internals. That is what makes cross-language real.
 - Pin the hash variant in flags (see [hashing.md](hashing.md)).
 - Magic byte rejects foreign/corrupt input early; version byte lets readers refuse unknown formats instead of misparsing; CRC32 detects corruption.
