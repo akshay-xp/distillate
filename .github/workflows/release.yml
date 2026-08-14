@@ -35,7 +35,7 @@ jobs:
       # imports distillate's built subpaths) is not part of the release gate.
       - run: pnpm build
       - run: pnpm --filter distillate test
-      - uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1
+      - uses: changesets/action@22ccf9aa43179fe9e27dc62e575971d28cce197c # v1
         with:
           version: pnpm run version
           publish: pnpm run release
