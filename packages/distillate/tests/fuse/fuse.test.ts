@@ -7,6 +7,7 @@ import {
   BinaryFuseBuildError,
   buildFingerprints,
   computeParams,
+  fuseBitsPerKey,
 } from "../../src/fuse/fuse.js";
 import {
   readHeader,
@@ -95,6 +96,16 @@ test("size and bitsPerKey report deduped count and per-key cost", () => {
   const empty = BinaryFuse8.from([]);
   expect(empty.size).toBe(0);
   expect(empty.bitsPerKey).toBe(0);
+});
+
+test("fuseBitsPerKey matches the built filter without allocating one", () => {
+  for (const n of [1000, 10000]) {
+    const keys = sampleStrings(1, n);
+    expect(fuseBitsPerKey(n, 8)).toBe(BinaryFuse8.from(keys).bitsPerKey);
+    expect(fuseBitsPerKey(n, 16)).toBe(BinaryFuse16.from(keys).bitsPerKey);
+  }
+
+  expect(fuseBitsPerKey(0, 8)).toBe(0);
 });
 
 test("fuse16 has no false negatives (property)", () => {

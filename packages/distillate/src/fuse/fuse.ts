@@ -106,6 +106,20 @@ export function computeParams(size: number): FuseParams {
 }
 
 /**
+ * Bits stored per key by a binary fuse filter over `n` keys at a fingerprint
+ * width, without building one. Counts `n` as distinct keys, since a built
+ * filter sizes on its deduped hash count.
+ *
+ * @param n - Number of distinct keys.
+ * @param width - Fingerprint width in bits: `8` for {@link BinaryFuse8}, `16` for {@link BinaryFuse16}.
+ * @returns Bits per key (`0` for an empty filter).
+ */
+export function fuseBitsPerKey(n: number, width: 8 | 16): number {
+  if (n === 0) return 0;
+  return (computeParams(n).arrayLength * width) / n;
+}
+
+/**
  * Peel the 3-hypergraph and assign fingerprints so every key's XOR of its 3
  * lanes equals its fingerprint. Retries with a bumped seed on a stall; returns
  * the seed that succeeded.
