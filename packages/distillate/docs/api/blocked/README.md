@@ -15,6 +15,11 @@
 
 - [BlockedBloomParams](interfaces/BlockedBloomParams.md)
 
+## Functions
+
+- [blockedBitsPerKey](functions/blockedBitsPerKey.md)
+- [blockedFprAt](functions/blockedFprAt.md)
+
 ## References
 
 ### FilterJSON

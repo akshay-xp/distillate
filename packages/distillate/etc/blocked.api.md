@@ -5,6 +5,9 @@
 ```ts
 
 // @public
+export function blockedBitsPerKey(epsilon: number): number;
+
+// @public
 export class BlockedBloomFilter {
     constructor(input: BlockedBloomParams);
     add(key: BytesLike): void;
@@ -35,6 +38,9 @@ export interface BlockedBloomParams {
     capacity: number;
     seed?: number;
 }
+
+// @public
+export function blockedFprAt(bitsPerKey: number): number;
 
 // @public
 export interface FilterJSON {

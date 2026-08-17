@@ -3,9 +3,16 @@
 import { readFileSync } from "node:fs";
 
 import { VERSION } from "../dist/index.js";
-import { BlockedBloomFilter } from "../dist/blocked/index.js";
-import { BloomFilter } from "../dist/bloom/index.js";
-import { BinaryFuse8, BinaryFuse16 } from "../dist/fuse/index.js";
+import {
+  BlockedBloomFilter,
+  blockedBitsPerKey,
+} from "../dist/blocked/index.js";
+import { BloomFilter, bloomSizing } from "../dist/bloom/index.js";
+import {
+  BinaryFuse8,
+  BinaryFuse16,
+  fuseBitsPerKey,
+} from "../dist/fuse/index.js";
 
 if (typeof VERSION !== "string") {
   console.error(
@@ -31,6 +38,27 @@ if (!bf.has("smoke")) {
 const ff = BinaryFuse8.from(["smoke", "a", "b"]);
 if (!ff.has("smoke")) {
   console.error("smoke: BinaryFuse8.has failed for a built key");
+  process.exit(1);
+}
+
+const sizing = bloomSizing(1000, 0.01);
+if (sizing.m !== 9586 || sizing.k !== 7) {
+  console.error(
+    `smoke: bloomSizing(1000, 0.01) gave m=${sizing.m} k=${sizing.k}`,
+  );
+  process.exit(1);
+}
+
+if (blockedBitsPerKey(0.01) !== 11) {
+  console.error(
+    `smoke: blockedBitsPerKey(0.01) gave ${blockedBitsPerKey(0.01)}`,
+  );
+  process.exit(1);
+}
+
+const fuseKeys = Array.from({ length: 1000 }, (_, i) => `fuse:${i}`);
+if (fuseBitsPerKey(1000, 8) !== BinaryFuse8.from(fuseKeys).bitsPerKey) {
+  console.error("smoke: fuseBitsPerKey disagrees with the built filter");
   process.exit(1);
 }
 
@@ -80,5 +108,5 @@ for (const { name, kind, keys, epsilon, frame } of golden) {
 }
 
 console.log(
-  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse work, toBytes byte-identical to golden`,
+  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse work (filters + sizing helpers), toBytes byte-identical to golden`,
 );

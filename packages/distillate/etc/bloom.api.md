@@ -38,6 +38,15 @@ export interface BloomParams {
 }
 
 // @public
+export interface BloomSizing {
+    k: number;
+    m: number;
+}
+
+// @public
+export function bloomSizing(n: number, epsilon: number): BloomSizing;
+
+// @public
 export interface FilterJSON {
     $: string;
     data: string;

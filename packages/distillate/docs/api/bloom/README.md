@@ -15,4 +15,9 @@
 ## Interfaces
 
 - [BloomParams](interfaces/BloomParams.md)
+- [BloomSizing](interfaces/BloomSizing.md)
 - [FilterJSON](interfaces/FilterJSON.md)
+
+## Functions
+
+- [bloomSizing](functions/bloomSizing.md)

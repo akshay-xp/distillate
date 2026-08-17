@@ -12,6 +12,10 @@
 - [BinaryFuse8](classes/BinaryFuse8.md)
 - [BinaryFuseBuildError](classes/BinaryFuseBuildError.md)
 
+## Functions
+
+- [fuseBitsPerKey](functions/fuseBitsPerKey.md)
+
 ## References
 
 ### FilterJSON
