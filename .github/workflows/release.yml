@@ -35,13 +35,16 @@ jobs:
       # imports distillate's built subpaths) is not part of the release gate.
       - run: pnpm build
       - run: pnpm --filter distillate test
-      - uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1
+      - uses: changesets/action@22ccf9aa43179fe9e27dc62e575971d28cce197c # v2.0.0
         with:
           version: pnpm run version
           publish: pnpm run release
           # Conventional-commit message so the local commitlint hook accepts
           # the bot's version commit.
           commit: "chore: version packages"
+          # v2 no longer falls back to the checkout credentials or GITHUB_TOKEN
+          # env for pushing the version commit/tag; the token must be an input.
+          github-token: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
