@@ -7,6 +7,7 @@ import {
   ParamError,
 } from "../src/blocked/index.js";
 import { BloomFilter, bloomSizing } from "../src/bloom/index.js";
+import { fuseBitsPerKey } from "../src/fuse/index.js";
 import { VERSION } from "../src/index.js";
 
 test("package entry exposes VERSION as a string", () => {
@@ -31,4 +32,11 @@ test("distillate/blocked exposes the bits-per-key solver", () => {
   expect(blockedFprAt(bpk)).toBeLessThanOrEqual(0.01);
 
   expect(() => blockedBitsPerKey(1e-12)).toThrow(ParamError);
+});
+
+test("distillate/fuse exposes fuseBitsPerKey", () => {
+  const bpk8 = fuseBitsPerKey(1000, 8);
+  expect(Number.isFinite(bpk8)).toBe(true);
+  expect(bpk8).toBeGreaterThan(8);
+  expect(fuseBitsPerKey(1000, 16)).toBe(bpk8 * 2);
 });
