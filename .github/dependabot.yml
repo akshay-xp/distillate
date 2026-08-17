@@ -14,6 +14,10 @@ updates:
       # typescript-eslint does not yet support the TS 7 native compiler.
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # @types/node tracks the Node major; stay on the 22.x line to match the
+      # `engines` floor so tsc keeps guarding the minimum supported runtime.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
