@@ -116,8 +116,10 @@ jobs:
       # changeset: Dependabot (dev-only bumps) and the changesets Version
       # Packages PR (which has already consumed its changesets into the release).
       # Skipping the whole job would leave the required check pending and block
-      # those PRs forever.
-      - if: github.actor != 'dependabot[bot]' && github.head_ref != 'changeset-release/main'
+      # those PRs forever. Key off the PR author, not github.actor: the latter
+      # becomes the human who re-triggers or updates the branch, which would
+      # wrongly enforce a changeset on a Dependabot PR.
+      - if: github.event.pull_request.user.login != 'dependabot[bot]' && github.head_ref != 'changeset-release/main'
         run: pnpm exec changeset status --since=origin/${{ github.base_ref }}
 
   smoke-node:
