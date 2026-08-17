@@ -38,7 +38,7 @@ Introspection accessors sit alongside the narrow interface, not in it: Bloom exp
 
 ## Sizing helpers (first-class)
 
-`optimal(n, epsilon)` returns the params for a target count and false-positive rate. Incumbents force manual computation; this is a core ergonomics win.
+`bloomSizing(n, epsilon)` returns the params for a target count and false-positive rate. Incumbents force manual computation; this is a core ergonomics win.
 
 ## Storage
 
@@ -60,7 +60,7 @@ src/
     hasher.ts       # Hasher interface, default murmur3-x64-128, KM double hashing
     bitset.ts       # typed-array bit storage + large-filter variant
     serialize.ts    # header read/write, CRC32, version dispatch
-    sizing.ts       # optimal(n, epsilon)
+    sizing.ts       # bloomSizing(n, epsilon)
   bloom/            # classic + blocked
   counting/         # counting + scalable
   cuckoo/

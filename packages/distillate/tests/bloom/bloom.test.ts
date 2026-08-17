@@ -9,7 +9,7 @@ import {
   UnknownVersionError,
   writeHeader,
 } from "../../src/core/serialize.js";
-import { optimal } from "../../src/core/sizing.js";
+import { bloomSizing } from "../../src/core/sizing.js";
 import { BloomFilter } from "../../src/bloom/bloom.js";
 import { BlockedBloomFilter } from "../../src/blocked/blocked.js";
 import { measureFpr, sampleStrings } from "../helpers/fpr.js";
@@ -129,7 +129,7 @@ test("bitsPerKey reports analytic m / n", () => {
   const raw = new BloomFilter({ m: 1000, k: 7 });
   expect(raw.bitsPerKey).toBe(1000 / Math.round((1000 * Math.LN2) / 7));
 
-  const { m } = optimal(100000, 0.01);
+  const { m } = bloomSizing(100000, 0.01);
   expect(BloomFilter.create(100000, 0.01).bitsPerKey).toBe(m / 100000);
 });
 
@@ -264,7 +264,7 @@ test("m, k, seed accessors report the params the filter was built with", () => {
   expect(new BloomFilter({ m: 1000, k: 7 }).seed).toBe(0);
 
   const g = BloomFilter.create(100_000, 0.01);
-  const p = optimal(100_000, 0.01);
+  const p = bloomSizing(100_000, 0.01);
   expect(g.m).toBe(p.m);
   expect(g.k).toBe(p.k);
   expect(g.seed).toBe(0);
