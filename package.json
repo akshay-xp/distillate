@@ -24,7 +24,7 @@
     "prepare": "husky"
   },
   "lint-staged": {
-    "*.ts": [
+    "*.{ts,astro}": [
       "eslint --fix --no-warn-ignored",
       "prettier --write"
     ],
