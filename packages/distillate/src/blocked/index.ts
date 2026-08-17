@@ -1,6 +1,8 @@
 export {
   BlockedBloomFilter,
   BlockedBloomParamMismatchError,
+  blockedBitsPerKey,
+  blockedFprAt,
 } from "./blocked.js";
 export type { BlockedBloomParams } from "./blocked.js";
 export type { FilterJSON } from "../core/serialize.js";
