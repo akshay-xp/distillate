@@ -7,7 +7,7 @@ Packaging, testing, benchmarking, CI, release. Targets 2026 tooling.
 pnpm workspace (`pnpm-workspace.yaml`: `packages/*`, `apps/*`).
 
 - `packages/distillate/`: the published library. All build/test/doc tooling (tsdown, vitest, typedoc, api-extractor) and its configs live here; source links and module docs (this file included) are under `packages/distillate/`.
-- `apps/*`: private, non-published tooling (e.g. the cross-library bench) that depends on the library via `workspace:*`, so it always tracks local source and cannot drift against a stale published version.
+- `apps/*`: private, non-published tooling (the cross-library bench, the docs site) that depends on the library via `workspace:*`, so it always tracks local source and cannot drift against a stale published version.
 - Root is private: repo-wide tooling (eslint, prettier, husky, commitlint, changesets) and delegating scripts. Whole-tree tasks (`build`/`test`/`typecheck`) fan out via `pnpm -r`; library-specific ones (`coverage`/`check`/`api:*`/`docs:api`) target `pnpm --filter distillate`; `changeset`/`version`/`release` run at root.
 - `.npmrc` public-hoists `typedoc-plugin-markdown` so typedoc resolves it from the pnpm store (same treatment pnpm gives `*eslint*`/`*prettier*`).
 
@@ -53,6 +53,15 @@ The "small" claim is enforced, not asserted. `pnpm size:check` (`scripts/size-ch
 - Metrics, space/accuracy first: `bench/accuracy.bench.ts` reports target vs measured FPR (over a >= 1e6 disjoint miss set) and analytic bits/key (`backing.byteLength * 8 / n`, not `process.memoryUsage`) across a 1e4/1e5/1e6 sweep; then throughput as separate `add` / `has (hit)` / `has (miss)` benches plus build for static filters.
 - Anti-optimization: distinct-key pools (never a constant key), keys cycled so V8 can't constant-fold, results consumed with `do_not_optimize`, distinct-key inserts.
 - Machine disclosure: absolute throughput is machine-relative, so published numbers must state the machine and lead with the machine-independent metrics (bits/key, measured FPR).
+
+## Documentation site
+
+`apps/docs` (`distillate-docs`, private): Astro + Starlight, built statically to `apps/docs/dist`. `pnpm typecheck` there is `astro check`, which covers `.astro` files `tsc` cannot.
+
+- Search is Pagefind, which Starlight enables by default and indexes from the built HTML. No configuration.
+- `site` is exported once, from `apps/docs/astro.config.mjs`. The custom domain is undecided, so it holds an interim root URL. Deploys target a host root, never a subdirectory, so `base` stays unset and the absolute `/_astro/...` paths Astro emits resolve (Astro has no relative-asset mode; `build.assetsPrefix` is for CDNs, not relative paths).
+- `disable404Route: true` alongside `src/content/docs/404.md`: Starlight's built-in `/404` route and the `/404` its catch-all route derives from that file are duplicates, and Astro 7 warns on the conflict. The authored page also needs `sidebar.hidden`, since Astro emits it as `404.html` and a sidebar link to `/404/` would dead-end.
+- `apps/docs/tsconfig.json` (extends `astro/tsconfigs/strict`) is load-bearing: the root ESLint config points `parserOptions.project` at it for every `.ts` under `apps/docs`, so type-aware linting breaks without it. Astro's generated `apps/docs/.astro/` types are ignored at the root instead.
 
 ## CI (GitHub Actions)
 
