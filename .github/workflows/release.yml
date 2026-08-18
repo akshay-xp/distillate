@@ -27,8 +27,11 @@ jobs:
           node-version: 24
           cache: pnpm
           registry-url: "https://registry.npmjs.org"
-      # npm >= 11.5.1 is required for Trusted Publishing (OIDC) + automatic provenance.
-      - run: npm install -g npm@latest
+      # npm >= 11.5.1 is required for Trusted Publishing (OIDC) + automatic
+      # provenance. Held on the 11 line because npm 12 wraps `npm info --json`
+      # in an array; @changesets/cli 3.0.0 unwraps that on its npm code path but
+      # not the pnpm one this repo takes, so publish dies reading `.versions`.
+      - run: npm install -g npm@11
       - run: pnpm install --frozen-lockfile
       # Release gates on the published library. Build first so its dist exists,
       # then test it; the private apps/bench (which pulls external packages and
