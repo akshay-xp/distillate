@@ -1,6 +1,6 @@
 {
   "name": "distillate",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Probabilistic data structures for JavaScript. Space-efficient, approximate-membership filters (Bloom, Blocked Bloom, Binary Fuse) with tunable error and a portable binary format; zero dependencies, universal.",
   "keywords": [
     "bloom-filter",
