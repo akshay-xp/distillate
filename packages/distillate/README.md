@@ -72,11 +72,11 @@ filter.add("alice");
 filter.has("alice"); // true
 ```
 
-Same surface as Classic Bloom (`add` / `has` / `union` / `toBytes` / `fromBytes` / `bitsPerKey`). Confines every lookup to a single cache line, so it is consistently faster than Classic across sizes (measured on Apple M5: ~7% faster at 100k keys, widening to ~1.4x once the filter outgrows CPU cache at tens of millions), and its sizing gives a lower false-positive rate. The cost is ~15% more space. Reach for it when lookup throughput matters; prefer Classic when space is tight.
+Same surface as Classic Bloom (`add` / `has` / `union` / `toBytes` / `fromBytes` / `bitsPerKey`). Confines every lookup to a single cache line, so it is consistently faster than Classic across sizes (package microbench on Apple M5: ~15% faster on `has` at 100k keys, widening to ~1.5x on hits and ~1.1x on misses at 30M keys, once the filter outgrows CPU cache), and its sizing gives a lower false-positive rate. The cost is ~15% more space. Reach for it when lookup throughput matters; prefer Classic when space is tight.
 
 ### Binary Fuse (`distillate/fuse`)
 
-A **static** filter: built once from the full key set, then immutable. The most space-efficient option (~9 bits/key at ~0.39% FPR for 8-bit; ~19 bits/key at ~1/65536 for 16-bit), and it queries at ~11 M ops/s (Apple M5, 100k keys).
+A **static** filter: built once from the full key set, then immutable. The most space-efficient option (~9.5 bits/key at ~0.39% FPR for 8-bit; ~19 bits/key at ~1/65536 for 16-bit, both falling to ~9.0 / ~18.1 at 1M keys), and it queries at ~11 M ops/s (cross-library harness, Apple M5, 100k keys; see [RESULTS.md](https://github.com/akshay-xp/distillate/blob/main/apps/bench/RESULTS.md)).
 
 ```ts
 import { BinaryFuse8, BinaryFuse16 } from "distillate/fuse";
@@ -94,14 +94,14 @@ Also: `toBytes` / `fromBytes`. No `add` / `delete`; rebuild `from` the new set t
 
 ## Performance
 
-Classic Bloom head-to-head at a **matched 1% false-positive rate** over the same 100k keys, measured by identical code (Node, Apple M5):
+Classic Bloom head-to-head at a **matched 1% false-positive rate** over the same 100k keys, measured by identical code (cross-library harness, node v24.14.1, Apple M5):
 
 | Classic Bloom  | bits/key | measured FPR | `has` throughput |
 | -------------- | -------- | ------------ | ---------------- |
-| **distillate** | 9.59     | 1.03%        | ~21 M ops/s      |
+| **distillate** | 9.59     | 1.01%        | ~21.8 M ops/s    |
 | bloom-filters  | 9.59     | 0.99%        | ~0.29 M ops/s    |
 
-Same space, same accuracy, **~72x the lookup throughput** of [`bloom-filters`](https://www.npmjs.com/package/bloom-filters) (the package distillate replaces), while hashing UTF-8 bytes with MurmurHash3 so filters stay portable and cross-language readable.
+Same space, same accuracy, **~75x the lookup throughput** of [`bloom-filters`](https://www.npmjs.com/package/bloom-filters) (the package distillate replaces), while hashing UTF-8 bytes with MurmurHash3 so filters stay portable and cross-language readable.
 
 These are a point-in-time snapshot on one machine. The full report (blocked/fuse, 1M capacity, the `bloomfilter` micro-package) and exactly how it is measured live in the [`apps/bench`](https://github.com/akshay-xp/distillate/tree/main/apps/bench) workspace: [RESULTS.md](https://github.com/akshay-xp/distillate/blob/main/apps/bench/RESULTS.md), [METHODOLOGY.md](https://github.com/akshay-xp/distillate/blob/main/apps/bench/METHODOLOGY.md).
 
