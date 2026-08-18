@@ -10,6 +10,8 @@ export default tseslint.config(
       "**/dist",
       "**/coverage",
       "**/node_modules",
+      // Astro's generated content-collection types.
+      "**/.astro",
       "**/*.config.*",
       "**/scripts",
       "**/*.bench.ts",
