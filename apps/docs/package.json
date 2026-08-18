@@ -1,0 +1,21 @@
+{
+  "name": "distillate-docs",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Documentation site for distillate, built with Astro and Starlight",
+  "scripts": {
+    "build": "astro build",
+    "dev": "astro dev",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.41.7",
+    "astro": "^7.2.3",
+    "distillate": "workspace:*"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "typescript": "^5.9.3"
+  }
+}
