@@ -24,7 +24,7 @@
     "prepare": "husky"
   },
   "lint-staged": {
-    "*.ts": [
+    "*.{ts,astro}": [
       "eslint --fix --no-warn-ignored",
       "prettier --write"
     ],
@@ -37,10 +37,12 @@
     "@eslint/js": "^10.0.1",
     "eslint": "^10.8.1",
     "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-astro": "^3.1.0",
     "eslint-plugin-tsdoc": "^0.5.2",
     "husky": "^9.1.7",
     "lint-staged": "^17.3.0",
     "prettier": "^3.9.6",
+    "prettier-plugin-astro": "^0.14.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.67.0"
   },

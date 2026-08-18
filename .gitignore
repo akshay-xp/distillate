@@ -3,6 +3,7 @@ node_modules/
 dist/
 coverage/
 temp/
+.astro/
 
 # Local external review notes (not part of the package)
 distillate-review/
