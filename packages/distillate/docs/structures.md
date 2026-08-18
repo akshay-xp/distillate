@@ -21,7 +21,7 @@ Space is stated as overhead over the information-theoretic floor of `log2(1/epsi
 One cache line per lookup vs k cache misses for classic. Space penalty ~20-30% over classic, bought back in speed. SIMD-friendly for a later WASM path.
 Putze, Sanders, Singler, JEA 2009.
 
-Shipped at `distillate/blocked`: `BlockedBloomFilter.create(n, epsilon)` (or `new BlockedBloomFilter({ bitsPerKey, capacity, seed })`), `add` / `has`, `union` (OR-merge of equal-param filters), `toBytes` / `fromBytes` (AMQF type=2), `bitsPerKey`. Split-block layout (Parquet/Impala): 256-bit blocks = 8x u32 lanes, k=8 fixed (one bit per lane); reuses `hash128` + Lemire `reduce`, no XXH64/Parquet-byte-compat (native only). `create` maps epsilon to bits-per-key by solving the closed-form split-block FPR (per-block `(1 - (1-1/32)^j)^8` averaged over the Poisson block load), so the target holds across the range (~6 @ 0.1, ~11 @ 1e-2, ~27 @ 1e-4, ~65 @ 1e-6) rather than only near the old anchor points; targets below the solvable floor throw `ParamError`. Below ~1e-5 blocked costs more bits-per-key than classic for a worse FPR (the split-block clustering penalty compounds), so pick classic or a fuse filter there, not blocked.
+Shipped at `distillate/blocked`: `BlockedBloomFilter.create(n, epsilon)` (or `new BlockedBloomFilter({ bitsPerKey, capacity, seed })`), `add` / `has`, `union` (OR-merge of equal-param filters), `toBytes` / `fromBytes` (AMQF type=2), `bitsPerKey`, plus the analytic `blockedBitsPerKey(epsilon)` solver and its `blockedFprAt(bitsPerKey)` model. Split-block layout (Parquet/Impala): 256-bit blocks = 8x u32 lanes, k=8 fixed (one bit per lane); reuses `hash128` + Lemire `reduce`, no XXH64/Parquet-byte-compat (native only). `create` maps epsilon to bits-per-key by solving the closed-form split-block FPR (per-block `(1 - (1-1/32)^j)^8` averaged over the Poisson block load), so the target holds across the range (~6 @ 0.1, ~11 @ 1e-2, ~27 @ 1e-4, ~65 @ 1e-6) rather than only near the old anchor points; targets below the solvable floor throw `ParamError`. Below ~1e-5 blocked costs more bits-per-key than classic for a worse FPR (the split-block clustering penalty compounds), so pick classic or a fuse filter there, not blocked.
 
 Bench (single hot key, n=100k eps=1%): add ~265 ns, has ~263 ns, vs Classic Bloom add ~269 / has ~267. Even here because a single resident key keeps classic's k probes in L1; blocked's one-cache-line advantage only shows under a large random working set (cache-miss-bound), not this microbench. A working-set bench is future work.
 
@@ -30,7 +30,7 @@ Bench (single hot key, n=100k eps=1%): add ~265 ns, has ~263 ns, vs Classic Bloo
 1.44x floor (+44% overhead), fixed forever. Ubiquitous, zero build risk, mergeable at equal params. Kept for familiarity and the migration path.
 Bloom, CACM 1970.
 
-Shipped at `distillate/bloom`: `BloomFilter.create(n, epsilon)` (or `new BloomFilter({ m, k, seed })`), `add` / `has`, `union` (OR-merge of equal-param filters), `toBytes` / `fromBytes` (AMQF), `bitsPerKey`.
+Shipped at `distillate/bloom`: `BloomFilter.create(n, epsilon)` (or `new BloomFilter({ m, k, seed })`), `add` / `has`, `union` (OR-merge of equal-param filters), `toBytes` / `fromBytes` (AMQF), `bitsPerKey`, plus the analytic `bloomSizing(n, epsilon)` returning `{ m, k }` for `new BloomFilter(...)`.
 
 ### Counting + Scalable Bloom (mutable, migration)
 
@@ -46,7 +46,7 @@ Fan, Andersen, Kaminsky, Mitzenmacher, CoNEXT 2014.
 Peeling-built, 3 cache-local probes. ~1.08-1.13x floor (~9% overhead), smaller and faster than XOR, low build failure and peak memory. 8-bit -> epsilon ~0.39%; 16-bit -> ~1/65536. The best static AMQ and the thing nobody ships in JS.
 Graf and Lemire, JEA 2022 (arXiv 2201.01174). Reference: FastFilter/xorfilter.
 
-Shipped at `distillate/fuse`: `BinaryFuse8` / `BinaryFuse16` (static, immutable) via `.from(keys)`; `has`, `toBytes` / `fromBytes` (AMQF type=3 Fuse8, type=4 Fuse16; rejects a mismatched type), `size`, `bitsPerKey`. No `add` / `delete` / `union`. Builds hash each key once via `hash128` (64-bit), dedupe by hash, then a split-construction peel over a shared width-generic core; a bumped-seed retry budget throws `BinaryFuseBuildError` on the (astronomically rare) stall rather than corrupting. Fingerprints are `Uint8Array` (8-bit) / `Uint16Array` (16-bit); native AMQF only, no Parquet/xorfilter byte interop. Observed ~9 bpk @ ~0.39% (8-bit), ~19 bpk @ ~1/65536 (16-bit).
+Shipped at `distillate/fuse`: `BinaryFuse8` / `BinaryFuse16` (static, immutable) via `.from(keys)`; `has`, `toBytes` / `fromBytes` (AMQF type=3 Fuse8, type=4 Fuse16; rejects a mismatched type), `size`, `bitsPerKey`, plus the analytic `fuseBitsPerKey(n, width)` for `n` distinct keys. No `add` / `delete` / `union`. Builds hash each key once via `hash128` (64-bit), dedupe by hash, then a split-construction peel over a shared width-generic core; a bumped-seed retry budget throws `BinaryFuseBuildError` on the (astronomically rare) stall rather than corrupting. Fingerprints are `Uint8Array` (8-bit) / `Uint16Array` (16-bit); native AMQF only, no Parquet/xorfilter byte interop. Observed ~9 bpk @ ~0.39% (8-bit), ~19 bpk @ ~1/65536 (16-bit).
 
 Bench (n=100k, 8-bit): build ~70 ms, has ~212 ns (hit) / ~218 ns (miss).
 

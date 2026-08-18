@@ -30,6 +30,9 @@ export interface FilterJSON {
     v: number;
 }
 
+// @public
+export function fuseBitsPerKey(n: number, width: 8 | 16): number;
+
 // (No @packageDocumentation comment for this package)
 
 ```

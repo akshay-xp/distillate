@@ -21,7 +21,7 @@ import {
   assertUint16,
   assertUint32,
 } from "../core/params.js";
-import { optimal } from "../core/sizing.js";
+import { bloomSizing } from "../core/sizing.js";
 
 const TYPE = 1;
 
@@ -72,7 +72,7 @@ export class BloomFilter {
     assertPositiveInt(n, "n");
     assertUint32(n, "n");
     assertProbability(epsilon, "epsilon");
-    return BloomFilter.#withN(optimal(n, epsilon), n);
+    return BloomFilter.#withN(bloomSizing(n, epsilon), n);
   }
 
   /**

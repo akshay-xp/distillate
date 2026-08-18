@@ -1,14 +1,14 @@
 import { expect, test } from "vitest";
 
-import { optimal } from "../../src/core/sizing.js";
+import { bloomSizing } from "../../src/core/sizing.js";
 
 const analyticFpr = (n: number, m: number, k: number): number =>
   (1 - Math.exp((-k * n) / m)) ** k;
 
-test("optimal returns near-optimal sizing within 5% of target FPR", () => {
+test("bloomSizing returns near-optimal sizing within 5% of target FPR", () => {
   for (const n of [1e3, 1e6]) {
     for (const epsilon of [1e-2, 1e-4]) {
-      const { m, k } = optimal(n, epsilon);
+      const { m, k } = bloomSizing(n, epsilon);
       expect(Number.isInteger(m)).toBe(true);
       expect(Number.isInteger(k)).toBe(true);
       expect(m).toBeGreaterThan(0);
@@ -20,6 +20,6 @@ test("optimal returns near-optimal sizing within 5% of target FPR", () => {
   }
 });
 
-test("optimal(1000, 0.01) pins exact m and k", () => {
-  expect(optimal(1000, 0.01)).toEqual({ m: 9586, k: 7 });
+test("bloomSizing(1000, 0.01) pins exact m and k", () => {
+  expect(bloomSizing(1000, 0.01)).toEqual({ m: 9586, k: 7 });
 });
