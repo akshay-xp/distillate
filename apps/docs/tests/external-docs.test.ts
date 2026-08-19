@@ -15,3 +15,9 @@ test("parseTitle leaves a later h1 in place", () => {
   );
   expect(body).toBe("Intro.\n\n# Appendix\n\nMore.\n");
 });
+
+test("parseTitle names the file when it has no h1", () => {
+  expect(() => parseTitle("no heading here\n", "RESULTS.md")).toThrow(
+    /RESULTS\.md/,
+  );
+});

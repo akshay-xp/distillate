@@ -6,6 +6,6 @@ export function parseTitle(
   filename: string,
 ): { title: string; body: string } {
   const match = H1.exec(source);
-  if (!match?.[1]) return { title: filename, body: source };
+  if (!match?.[1]) throw new Error(`${filename}: no h1 to use as the title`);
   return { title: match[1], body: source.slice(match[0].length) };
 }
