@@ -54,6 +54,9 @@ export function renderResults(opts: ResultsOptions): string {
     "",
     `## Throughput (n = ${capacityLabel(opts.throughputCapacity)})`,
     "",
+    "Absolute throughput is machine-relative: it depends on the CPU, the runtime, and the load on the box at measurement time.",
+    "Compare the ratios between rows, not these figures against a run on another machine.",
+    "",
     opts.throughputTable,
     "",
   ].join("\n");
