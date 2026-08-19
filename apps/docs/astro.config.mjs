@@ -1,10 +1,9 @@
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
 
-// The only definition of the deployed origin. Interim host until a custom
-// domain is picked; keep it a root URL so `base` never has to be set and the
-// absolute asset paths Astro emits stay correct.
-export const site = "https://distillate.pages.dev";
+// The only definition of the deployed origin. Keep it a root URL so `base`
+// never has to be set and the absolute asset paths Astro emits stay correct.
+export const site = "https://distillate.akxp.net";
 
 export default defineConfig({
   site,

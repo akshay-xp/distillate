@@ -59,7 +59,7 @@ The "small" claim is enforced, not asserted. `pnpm size:check` (`scripts/size-ch
 `apps/docs` (`distillate-docs`, private): Astro + Starlight, built statically to `apps/docs/dist`. `pnpm typecheck` there is `astro check`, which covers `.astro` files `tsc` cannot.
 
 - Search is Pagefind, which Starlight enables by default and indexes from the built HTML. No configuration.
-- `site` is exported once, from `apps/docs/astro.config.mjs`. The custom domain is undecided, so it holds an interim root URL. Deploys target a host root, never a subdirectory, so `base` stays unset and the absolute `/_astro/...` paths Astro emits resolve (Astro has no relative-asset mode; `build.assetsPrefix` is for CDNs, not relative paths).
+- `site` is exported once, from `apps/docs/astro.config.mjs`, holding `https://distillate.akxp.net`. Deploys target a host root, never a subdirectory, so `base` stays unset and the absolute `/_astro/...` paths Astro emits resolve (Astro has no relative-asset mode; `build.assetsPrefix` is for CDNs, not relative paths).
 - `disable404Route: true` alongside `src/content/docs/404.md`: Starlight's built-in `/404` route and the `/404` its catch-all route derives from that file are duplicates, and Astro 7 warns on the conflict. The authored page also needs `sidebar.hidden`, since Astro emits it as `404.html` and a sidebar link to `/404/` would dead-end.
 - `apps/docs/tsconfig.json` (extends `astro/tsconfigs/strict`) is load-bearing: the root ESLint config points `parserOptions.project` at it for every `.ts` under `apps/docs`, so type-aware linting breaks without it. Astro's generated `apps/docs/.astro/` types are ignored at the root instead.
 
@@ -83,6 +83,12 @@ Versioning and the changelog are driven by [Changesets](https://github.com/chang
 - Every user-facing change adds a changeset: run `pnpm changeset`, pick the bump (patch/minor/major), and write a one-line summary. Commit the generated `.changeset/*.md` file with the change.
 - Non-user-facing changes (docs, CI, internal refactors) add an empty changeset: `pnpm changeset add --empty`. CI requires one or the other on every PR.
 - Do not hand-edit `package.json` version or `CHANGELOG.md`. `pnpm version` (`changeset version`) consumes pending changesets, bumps semver, and writes the changelog; the release workflow runs this and publishes.
+
+### The publish path needs a clean changeset set
+
+`changesets/action` publishes only when `main` has no pending changesets. Any changeset present, even an empty one, routes it onto the version path, where an all-empty set logs `All changesets are empty; not creating PR` and exits without running `publish-script`.
+
+Normally this is invisible, because the Version Packages merge is itself the zero-changeset push that publishes. It bites when a publish fails: the fix PR carries the usual empty changeset and so blocks the very publish it was meant to restore. Recovery means landing a commit on `main` with no changesets at all, so the recovery PR omits the empty one. `changeset status --since=origin/main` still exits 0 in that case, so the required check passes.
 
 ### Pre-publish checklist
 
