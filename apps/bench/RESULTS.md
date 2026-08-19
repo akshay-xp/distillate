@@ -2,7 +2,7 @@
 
 - Machine: distillate-bench | node v24.14.1 | arm64 | Apple M5 | 10 cores
 - Package: distillate@0.7.0
-- Date: 2026-08-19
+- Date: 2026-08-20
 
 All filters are configured at the same target FPR (1%) and measured by identical code.
 See [METHODOLOGY.md](./METHODOLOGY.md) for how these benches are run.
@@ -26,20 +26,23 @@ See [METHODOLOGY.md](./METHODOLOGY.md) for how these benches are run.
 
 ## Throughput (n = 100k)
 
+Absolute throughput is machine-relative: it depends on the CPU, the runtime, and the load on the box at measurement time.
+Compare the ratios between rows, not these figures against a run on another machine.
+
 | Operation                   | Throughput    |
 | --------------------------- | ------------- |
-| distillate/bloom add        | 21.91 M ops/s |
-| distillate/bloom has (hit)  | 21.79 M ops/s |
-| distillate/bloom has (miss) | 19.28 M ops/s |
-| bloom-filters add           | 288 k ops/s   |
-| bloom-filters has (hit)     | 289 k ops/s   |
-| bloom-filters has (miss)    | 286 k ops/s   |
-| bloomfilter add             | 13.01 M ops/s |
-| bloomfilter has (hit)       | 13.77 M ops/s |
-| bloomfilter has (miss)      | 12.14 M ops/s |
-| blocked has (hit)           | 24.96 M ops/s |
-| blocked has (miss)          | 20.51 M ops/s |
-| fuse8 has (hit)             | 11.07 M ops/s |
-| fuse8 has (miss)            | 11.21 M ops/s |
-| fuse16 has (hit)            | 11.18 M ops/s |
-| fuse16 has (miss)           | 11.06 M ops/s |
+| distillate/bloom add        | 22.06 M ops/s |
+| distillate/bloom has (hit)  | 22.00 M ops/s |
+| distillate/bloom has (miss) | 18.88 M ops/s |
+| bloom-filters add           | 289 k ops/s   |
+| bloom-filters has (hit)     | 291 k ops/s   |
+| bloom-filters has (miss)    | 288 k ops/s   |
+| bloomfilter add             | 13.40 M ops/s |
+| bloomfilter has (hit)       | 14.12 M ops/s |
+| bloomfilter has (miss)      | 12.50 M ops/s |
+| blocked has (hit)           | 24.31 M ops/s |
+| blocked has (miss)          | 20.39 M ops/s |
+| fuse8 has (hit)             | 11.04 M ops/s |
+| fuse8 has (miss)            | 11.04 M ops/s |
+| fuse16 has (hit)            | 10.95 M ops/s |
+| fuse16 has (miss)           | 10.95 M ops/s |
