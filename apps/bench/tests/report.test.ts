@@ -73,3 +73,19 @@ test("renderResults includes metadata, tables, and the fairness statement", () =
   expect(md).toContain("identical code");
   expect(md).toContain("[METHODOLOGY.md](./METHODOLOGY.md)");
 });
+
+test("renderResults calls throughput machine-relative between the two tables", () => {
+  const md = renderResults({
+    banner: "distillate-bench | node v24 | arm64 | Apple M1 | 8 cores",
+    version: "0.1.1",
+    date: "2026-07-31",
+    targetFpr: 0.01,
+    throughputCapacity: 100000,
+    spaceTable: "SPACE_TBL",
+    throughputTable: "TPUT_TBL",
+  });
+  const caveat = md.indexOf("machine-relative");
+  expect(caveat).toBeGreaterThan(-1);
+  expect(caveat).toBeGreaterThan(md.indexOf("SPACE_TBL"));
+  expect(caveat).toBeLessThan(md.indexOf("TPUT_TBL"));
+});
