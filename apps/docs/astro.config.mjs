@@ -1,6 +1,6 @@
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
-import starlightTypeDoc from "starlight-typedoc";
+import starlightTypeDoc, { typeDocSidebarGroup } from "starlight-typedoc";
 
 // The only definition of the deployed origin. Keep it a root URL so `base`
 // never has to be set and the absolute asset paths Astro emits stay correct.
@@ -27,6 +27,8 @@ export default defineConfig({
           label: "Internals",
           items: [{ label: "Hashing", link: "/internals/hashing/" }],
         },
+        // Generated last, per the start-here then guides then reference order.
+        typeDocSidebarGroup,
       ],
       plugins: [
         starlightTypeDoc({
@@ -37,6 +39,7 @@ export default defineConfig({
             "../../packages/distillate/src/fuse/index.ts",
           ],
           tsconfig: "../../packages/distillate/tsconfig.json",
+          sidebar: { label: "API reference" },
           typeDoc: {
             excludeInternal: true,
             treatWarningsAsErrors: true,
