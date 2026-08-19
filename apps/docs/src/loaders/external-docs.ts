@@ -26,6 +26,8 @@ const RELATIVE_MD_LINK = /\]\((?:\.\/)?([\w.-]+\.md)\)/g;
 export function rewriteLinks(body: string, opts: RewriteOptions): string {
   return body.replace(RELATIVE_MD_LINK, (whole, target: string) => {
     const route = opts.siteRoutes[target];
-    return route ? `](${route})` : whole;
+    if (route) return `](${route})`;
+    if (opts.githubDocs.has(target)) return `](${opts.githubBase}${target})`;
+    return whole;
   });
 }
