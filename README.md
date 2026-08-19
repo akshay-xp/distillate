@@ -8,29 +8,6 @@ Probabilistic data structures for JavaScript: space-efficient, approximate-membe
 
 > **Pre-release (0.x).** The published structures are correct, tested, and benchmarked, but the public API may still change before `1.0`. Pin a version if you depend on it.
 
-```sh
-npm install distillate
-```
-
-```ts
-import { BloomFilter } from "distillate/bloom";
-
-const filter = BloomFilter.create(100_000, 0.01); // capacity, target FPR
-filter.add("alice");
-filter.has("alice"); // true
-filter.has("bob"); // false (or a ~1% false positive)
-
-const restored = BloomFilter.fromBytes(filter.toBytes()); // portable binary format
-```
-
-Each structure is its own subpath, so you only bundle what you import:
-
-| Import               | Structure     | Mutable? | Use for                                              |
-| -------------------- | ------------- | -------- | ---------------------------------------------------- |
-| `distillate/bloom`   | Classic Bloom | yes      | Familiar default, migration from `bloom-filters`     |
-| `distillate/blocked` | Blocked Bloom | yes      | Faster lookups and a lower FPR for ~15% more space   |
-| `distillate/fuse`    | Binary Fuse   | no       | Static set built once and queried a lot; least space |
-
 Full install, usage, runtime support, and benchmarks are in the [package README](./packages/distillate/README.md).
 
 ## Repository
