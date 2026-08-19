@@ -28,6 +28,8 @@ export function rewriteLinks(body: string, opts: RewriteOptions): string {
     const route = opts.siteRoutes[target];
     if (route) return `](${route})`;
     if (opts.githubDocs.has(target)) return `](${opts.githubBase}${target})`;
-    return whole;
+    throw new Error(
+      `${opts.file}: link to ${target} is in neither siteRoutes nor githubDocs`,
+    );
   });
 }
