@@ -40,14 +40,12 @@ export default defineConfig({
           ],
           tsconfig: "../../packages/distillate/tsconfig.json",
           sidebar: { label: "API reference" },
+          // Generation only. starlight-typedoc never calls app.validate(), and
+          // typedoc enforces treatWarningsAsErrors only in its CLI, so passing
+          // either here does nothing. The undocumented-export gate is
+          // `pnpm docs:check`, configured in packages/distillate/typedoc.json.
           typeDoc: {
             excludeInternal: true,
-            treatWarningsAsErrors: true,
-            validation: {
-              notDocumented: true,
-              notExported: false,
-              invalidLink: true,
-            },
             gitRevision: "main",
           },
         }),
