@@ -56,3 +56,9 @@ test("rewriteLinks sends docs that are not rendered to github", () => {
     `[s](${GITHUB_BASE}serialization.md)`,
   );
 });
+
+test("rewriteLinks rejects a relative md link with no mapping", () => {
+  expect(() => rewriteLinks("[x](unknown.md)", opts)).toThrow(
+    /hashing\.md.*unknown\.md/,
+  );
+});
