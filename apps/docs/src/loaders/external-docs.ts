@@ -23,8 +23,10 @@ export interface RewriteOptions {
 // Markdown link to a sibling .md file, in both the ./NAME.md and NAME.md forms.
 const RELATIVE_MD_LINK = /\]\((?:\.\/)?([\w.-]+\.md)\)/g;
 
-export function rewriteLinks(body: string, opts: RewriteOptions): string {
-  return body.replace(RELATIVE_MD_LINK, (whole, target: string) => {
+const FENCE = /^\s*(?:```|~~~)/;
+
+function rewriteLine(line: string, opts: RewriteOptions): string {
+  return line.replace(RELATIVE_MD_LINK, (whole, target: string) => {
     const route = opts.siteRoutes[target];
     if (route) return `](${route})`;
     if (opts.githubDocs.has(target)) return `](${opts.githubBase}${target})`;
@@ -32,4 +34,18 @@ export function rewriteLinks(body: string, opts: RewriteOptions): string {
       `${opts.file}: link to ${target} is in neither siteRoutes nor githubDocs`,
     );
   });
+}
+
+export function rewriteLinks(body: string, opts: RewriteOptions): string {
+  let fenced = false;
+  return body
+    .split("\n")
+    .map((line) => {
+      if (FENCE.test(line)) {
+        fenced = !fenced;
+        return line;
+      }
+      return fenced ? line : rewriteLine(line, opts);
+    })
+    .join("\n");
 }

@@ -57,6 +57,13 @@ test("rewriteLinks sends docs that are not rendered to github", () => {
   );
 });
 
+test("rewriteLinks leaves fenced code alone", () => {
+  const fence = "```md\n[a](./METHODOLOGY.md)\n[b](./unknown.md)\n```\n";
+  expect(rewriteLinks(`${fence}\n[m](./METHODOLOGY.md)\n`, opts)).toBe(
+    `${fence}\n[m](/bench/methodology/)\n`,
+  );
+});
+
 test("rewriteLinks rejects a relative md link with no mapping", () => {
   expect(() => rewriteLinks("[x](unknown.md)", opts)).toThrow(
     /hashing\.md.*unknown\.md/,
