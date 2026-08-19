@@ -16,7 +16,7 @@
     "check": "pnpm --filter distillate check",
     "api:report": "pnpm --filter distillate api:report",
     "api:check": "pnpm --filter distillate api:check",
-    "docs:api": "pnpm --filter distillate docs:api",
+    "docs:check": "pnpm --filter distillate docs:check",
     "bench": "pnpm --filter distillate bench",
     "changeset": "changeset",
     "version": "changeset version",
