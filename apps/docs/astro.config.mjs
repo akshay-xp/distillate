@@ -14,6 +14,19 @@ export default defineConfig({
       // route emits for src/content/docs/404.md, and Astro 7 warns on the
       // conflict. Dropping Starlight's route leaves the authored page.
       disable404Route: true,
+      sidebar: [
+        {
+          label: "Benchmarks",
+          items: [
+            { label: "Results", link: "/bench/results/" },
+            { label: "Methodology", link: "/bench/methodology/" },
+          ],
+        },
+        {
+          label: "Internals",
+          items: [{ label: "Hashing", link: "/internals/hashing/" }],
+        },
+      ],
     }),
   ],
 });
