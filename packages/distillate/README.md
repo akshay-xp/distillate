@@ -40,11 +40,11 @@ Every push runs a CI smoke matrix that imports the built package on Node 22/24, 
 
 Each structure ships as its own subpath, so you only bundle what you import.
 
-| Import               | Structure     | Mutable? | Use for                                              |
-| -------------------- | ------------- | -------- | ---------------------------------------------------- |
-| `distillate/bloom`   | Classic Bloom | yes      | Familiar default, migration from `bloom-filters`     |
-| `distillate/blocked` | Blocked Bloom | yes      | Faster lookups and a lower FPR for ~15% more space   |
-| `distillate/fuse`    | Binary Fuse   | no       | Static set built once and queried a lot; least space |
+| Import               | Structure     | Mutable? | Use for                                                  |
+| -------------------- | ------------- | -------- | -------------------------------------------------------- |
+| `distillate/bloom`   | Classic Bloom | yes      | Familiar default, migration from `bloom-filters`         |
+| `distillate/blocked` | Blocked Bloom | yes      | Faster lookups and a lower FPR for a small space premium |
+| `distillate/fuse`    | Binary Fuse   | no       | Static set built once and queried a lot; least space     |
 
 ### Classic Bloom (`distillate/bloom`)
 
@@ -72,11 +72,11 @@ filter.add("alice");
 filter.has("alice"); // true
 ```
 
-Same surface as Classic Bloom (`add` / `has` / `union` / `toBytes` / `fromBytes` / `bitsPerKey`). Confines every lookup to a single cache line, so it is consistently faster than Classic across sizes (package microbench on Apple M5: ~15% faster on `has` at 100k keys, widening to ~1.5x on hits and ~1.1x on misses at 30M keys, once the filter outgrows CPU cache), and its sizing gives a lower false-positive rate. The cost is ~15% more space. Reach for it when lookup throughput matters; prefer Classic when space is tight.
+Same surface as Classic Bloom (`add` / `has` / `union` / `toBytes` / `fromBytes` / `bitsPerKey`). Reach for it when lookup throughput matters; prefer Classic when space is tight. Cache-line rationale, speed ratios, and the space penalty: [structures.md](./docs/structures.md).
 
 ### Binary Fuse (`distillate/fuse`)
 
-A **static** filter: built once from the full key set, then immutable. The most space-efficient option (~9.5 bits/key at ~0.39% FPR for 8-bit; ~19 bits/key at ~1/65536 for 16-bit, both falling to ~9.0 / ~18.1 at 1M keys), and it queries at ~11 M ops/s (cross-library harness, Apple M5, 100k keys; see [RESULTS.md](https://github.com/akshay-xp/distillate/blob/main/apps/bench/RESULTS.md)).
+A **static** filter: built once from the full key set, then immutable. The most space-efficient option in the lineup. Bits-per-key, FPR, and query throughput: [structures.md](./docs/structures.md).
 
 ```ts
 import { BinaryFuse8, BinaryFuse16 } from "distillate/fuse";
