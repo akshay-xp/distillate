@@ -9,3 +9,23 @@ export function parseTitle(
   if (!match?.[1]) throw new Error(`${filename}: no h1 to use as the title`);
   return { title: match[1], body: source.slice(match[0].length) };
 }
+
+export interface RewriteOptions {
+  /** Source file the body came from, for error messages. */
+  file: string;
+  /** Link target to the site route that renders it. */
+  siteRoutes: Record<string, string>;
+  /** Link targets that stay on GitHub. */
+  githubDocs: Set<string>;
+  githubBase: string;
+}
+
+// Markdown link to a sibling .md file, in both the ./NAME.md and NAME.md forms.
+const RELATIVE_MD_LINK = /\]\((?:\.\/)?([\w.-]+\.md)\)/g;
+
+export function rewriteLinks(body: string, opts: RewriteOptions): string {
+  return body.replace(RELATIVE_MD_LINK, (whole, target: string) => {
+    const route = opts.siteRoutes[target];
+    return route ? `](${route})` : whole;
+  });
+}
