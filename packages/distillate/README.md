@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/distillate)](https://www.npmjs.com/package/distillate)
 [![license](https://img.shields.io/npm/l/distillate)](./LICENSE)
 
-Probabilistic data structures for JavaScript: space-efficient, approximate answers with tunable error and zero false negatives. TypeScript-first, zero dependencies, and the right structure per workload. It opens with a family of membership filters (the next-generation successor to Bloom filter packages) and is built to grow into other sketches.
+Probabilistic data structures for JavaScript: space-efficient, approximate answers with tunable error and zero false negatives. TypeScript-first, zero dependencies, and the right structure per workload. It opens with a family of membership filters and is built to grow into other sketches.
 
 > **Pre-release (0.x).** The published structures are correct, tested, and benchmarked, but the public API may still change before `1.0`, and more structures (Cuckoo, Scalable Bloom) are on the way. Pin a version if you depend on it.
 
@@ -12,10 +12,12 @@ Probabilistic data structures for JavaScript: space-efficient, approximate answe
 
 An approximate-membership query (AMQ) filter answers "is this in the set?" with a tunable false-positive rate and **zero false negatives**, in a fraction of the space of storing the set itself.
 
-- **Runs anywhere**: Node, Bun, Deno, browsers, and Cloudflare/Vercel edge. No `eval`, no required WASM compile.
-- **Correct**: no false negatives (property-tested); false-positive rates validated against theory.
-- **Small**: per-structure subpath imports, `sideEffects: false`, zero runtime dependencies.
-- **Portable**: a versioned little-endian binary format (`toBytes` / `fromBytes`) for persistence and cross-language reads.
+- **Runs anywhere**: Node, Bun, Deno, browsers, Cloudflare/Vercel edge.
+- **Correct**: no false negatives, property-tested.
+- **Small**: per-structure subpath imports, zero runtime dependencies.
+- **Portable**: a versioned binary format (`toBytes` / `fromBytes`).
+
+Why these promises, and what the incumbents get wrong: [overview.md](./docs/overview.md).
 
 ## Install
 
