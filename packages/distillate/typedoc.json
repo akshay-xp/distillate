@@ -1,18 +1,16 @@
 {
   "$schema": "https://typedoc.org/schema.json",
+  // Validation only. starlight-typedoc generates the published reference but
+  // never calls app.validate(), and typedoc enforces treatWarningsAsErrors
+  // only in its CLI, so the undocumented-export gate has to be its own run.
   "entryPoints": [
     "src/index.ts",
     "src/bloom/index.ts",
     "src/blocked/index.ts",
     "src/fuse/index.ts"
   ],
-  "plugin": ["typedoc-plugin-markdown"],
-  "out": "docs/api",
-  "formatWithPrettier": true,
   "tsconfig": "./tsconfig.json",
   "readme": "none",
-  "hideGenerator": true,
-  "gitRevision": "main",
   "excludeInternal": true,
   "treatWarningsAsErrors": true,
   "validation": {

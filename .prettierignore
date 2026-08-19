@@ -4,5 +4,4 @@ coverage
 pnpm-lock.yaml
 etc
 temp
-docs/api
 apps/docs/src/content/docs/api

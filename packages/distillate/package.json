@@ -72,7 +72,7 @@
     "coverage": "vitest run --coverage",
     "api:report": "node scripts/api-extractor.mjs --local",
     "api:check": "node scripts/api-extractor.mjs",
-    "docs:api": "typedoc",
+    "docs:check": "typedoc --emit none",
     "golden:gen": "tsx scripts/gen-golden.ts",
     "size:check": "node scripts/size-check.mjs",
     "bench": "tsx bench/core.bench.ts && tsx bench/bloom.bench.ts && tsx bench/blocked.bench.ts && tsx bench/fuse.bench.ts && tsx bench/accuracy.bench.ts",
@@ -89,7 +89,6 @@
     "tsdown": "^0.22.14",
     "tsx": "^4.23.12",
     "typedoc": "^0.28.20",
-    "typedoc-plugin-markdown": "^4.12.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"
   },
