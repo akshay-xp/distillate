@@ -1,5 +1,6 @@
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
+import starlightTypeDoc from "starlight-typedoc";
 
 // The only definition of the deployed origin. Keep it a root URL so `base`
 // never has to be set and the absolute asset paths Astro emits stay correct.
@@ -26,6 +27,27 @@ export default defineConfig({
           label: "Internals",
           items: [{ label: "Hashing", link: "/internals/hashing/" }],
         },
+      ],
+      plugins: [
+        starlightTypeDoc({
+          entryPoints: [
+            "../../packages/distillate/src/index.ts",
+            "../../packages/distillate/src/bloom/index.ts",
+            "../../packages/distillate/src/blocked/index.ts",
+            "../../packages/distillate/src/fuse/index.ts",
+          ],
+          tsconfig: "../../packages/distillate/tsconfig.json",
+          typeDoc: {
+            excludeInternal: true,
+            treatWarningsAsErrors: true,
+            validation: {
+              notDocumented: true,
+              notExported: false,
+              invalidLink: true,
+            },
+            gitRevision: "main",
+          },
+        }),
       ],
     }),
   ],
