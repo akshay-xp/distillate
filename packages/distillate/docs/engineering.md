@@ -47,7 +47,9 @@ The "small" claim is enforced, not asserted. `pnpm size:check` (`scripts/size-ch
 
 ## Benchmarking
 
-`pnpm bench` runs the suite; mitata is the timing engine, and every script prints `envBanner()` (runtime + version + CPU) first.
+`pnpm bench` runs the package microbenches; mitata is the timing engine, and every script prints `envBanner()` (runtime + version + CPU) first.
+
+- Regenerating `apps/bench/RESULTS.md` is a different command: `pnpm --filter distillate-bench bench`, the cross-library harness. It needs a built `distillate` in the same tree, and it must run on an otherwise idle machine, since concurrent load skews the throughput table (the space and accuracy table is seeded and stable). Its raw output is not Prettier-clean, so follow it with `pnpm format` or `format:check` fails.
 
 - Harness (`bench/harness.ts`): shared primitives so every bench measures by identical code: `hitMissPools` (disjoint hit/miss pools), `cycle`, `benchLookup` (cycle keys through `has()`, consume via `do_not_optimize`), `measureFpr` (empirical FPR of a built filter over a disjoint miss set).
 - Metrics, space/accuracy first: `bench/accuracy.bench.ts` reports target vs measured FPR (over a >= 1e6 disjoint miss set) and analytic bits/key (`backing.byteLength * 8 / n`, not `process.memoryUsage`) across a 1e4/1e5/1e6 sweep; then throughput as separate `add` / `has (hit)` / `has (miss)` benches plus build for static filters.
