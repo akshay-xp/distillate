@@ -29,7 +29,7 @@ pnpm lint         # type-aware ESLint
 pnpm format:check
 ```
 
-Library-specific tasks target the package: `pnpm --filter distillate <coverage|check|api:check|docs:api|bench>`. Releases run through [Changesets](https://github.com/changesets/changesets) at the root (`pnpm changeset`). See [CONTRIBUTING.md](./CONTRIBUTING.md).
+Library-specific tasks target the package: `pnpm --filter distillate <coverage|check|api:check|docs:check|bench>`. Releases run through [Changesets](https://github.com/changesets/changesets) at the root (`pnpm changeset`). See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Docs
 
@@ -38,7 +38,7 @@ Design notes, the structure decision matrix, hashing, and the binary format live
 - [overview](./packages/distillate/docs/overview.md): what and why
 - [structures](./packages/distillate/docs/structures.md): decision matrix and the full lineup
 - [architecture](./packages/distillate/docs/architecture.md), [hashing](./packages/distillate/docs/hashing.md), [serialization](./packages/distillate/docs/serialization.md)
-- [API reference](./packages/distillate/docs/api): generated from TSDoc
+- [API reference](https://distillate.akxp.net/api/): generated from TSDoc at site build time
 
 ## License
 

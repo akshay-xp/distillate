@@ -90,11 +90,12 @@ Public (exported) API members carry [TSDoc](https://tsdoc.org/) comments, valida
 - Keep them concise: a one-line summary, `@param`/`@returns`, and a short `@example` on the primary types. Long-form narrative, guides, and tutorials belong on the docs site, not in code comments.
 - Internal (non-exported) helpers keep the usual minimal-comment style.
 
-The committed API reference under [`packages/distillate/docs/api`](./packages/distillate/docs/api) is generated from these comments. After any public-API or doc-comment change, regenerate it and commit the result; CI fails if it is missing docs or out of date:
+These comments are the source of the [API reference](https://distillate.akxp.net/api/), which the docs site generates at build time. Nothing generated is committed, so there is no output to regenerate.
 
-```sh
-pnpm docs:api
-```
+Two gates back this up, both run in CI:
+
+- `pnpm docs:check` fails when a public export has no TSDoc.
+- `pnpm api:check` fails when an exported signature changes without a matching report regen.
 
 ## Pull requests
 

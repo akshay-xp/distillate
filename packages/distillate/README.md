@@ -115,7 +115,7 @@ Design notes, the structure decision matrix, hashing, and the binary format live
 - [structures](./docs/structures.md): decision matrix and the full lineup
 - [architecture](./docs/architecture.md), [hashing](./docs/hashing.md), [serialization](./docs/serialization.md)
 - [versioning](./docs/versioning.md): SemVer policy and supported-runtime baseline
-- [API reference](./docs/api): generated from TSDoc (per entry point)
+- [API reference](https://distillate.akxp.net/api/): generated from TSDoc at site build time (per entry point)
 
 ## License
 
