@@ -43,3 +43,16 @@ test("rewriteLinks resolves the bare md form too", () => {
     "[m](/bench/methodology/)",
   );
 });
+
+test("rewriteLinks sends docs that are not rendered to github", () => {
+  const githubOnly = {
+    ...opts,
+    githubDocs: new Set(["architecture.md", "serialization.md"]),
+  };
+  expect(rewriteLinks("[architecture.md](architecture.md)", githubOnly)).toBe(
+    `[architecture.md](${GITHUB_BASE}architecture.md)`,
+  );
+  expect(rewriteLinks("[s](serialization.md)", githubOnly)).toBe(
+    `[s](${GITHUB_BASE}serialization.md)`,
+  );
+});
