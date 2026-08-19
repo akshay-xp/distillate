@@ -32,6 +32,8 @@ Bloom, CACM 1970.
 
 Shipped at `distillate/bloom`: `BloomFilter.create(n, epsilon)` (or `new BloomFilter({ m, k, seed })`), `add` / `has`, `union` (OR-merge of equal-param filters), `toBytes` / `fromBytes` (AMQF), `bitsPerKey`, plus the analytic `bloomSizing(n, epsilon)` returning `{ m, k }` for `new BloomFilter(...)`.
 
+Head-to-head against `bloom-filters` at a matched FPR (cross-library harness): [README, section Performance](../README.md#performance).
+
 ### Counting + Scalable Bloom (mutable, migration)
 
 Counting: 4-bit counters enable delete at ~4x space. Scalable: chain of Blooms for unbounded growth. Both mainly for parity with incumbents.
