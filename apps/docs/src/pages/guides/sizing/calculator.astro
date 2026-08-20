@@ -1,0 +1,20 @@
+---
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
+
+import SizingCalculator from "../../../components/sizing/SizingCalculator.astro";
+---
+
+<StarlightPage
+  frontmatter={{
+    title: "Sizing calculator",
+    description:
+      "Price a filter before you allocate one: capacity and target false positive rate in, bits per key and total size out for every shipped structure.",
+  }}
+>
+  <p>
+    Every figure here comes from the same analytic helper the library calls
+    inside <code>create</code>, so nothing is allocated and a 100 million key
+    input answers instantly.
+  </p>
+  <SizingCalculator />
+</StarlightPage>

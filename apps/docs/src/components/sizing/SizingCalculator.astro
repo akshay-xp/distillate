@@ -1,0 +1,187 @@
+---
+const STRUCTURES = [
+  { key: "bloom", label: "Classic Bloom", subpath: "distillate/bloom" },
+  { key: "blocked", label: "Blocked Bloom", subpath: "distillate/blocked" },
+  { key: "fuse8", label: "Binary Fuse 8", subpath: "distillate/fuse" },
+  { key: "fuse16", label: "Binary Fuse 16", subpath: "distillate/fuse" },
+] as const;
+---
+
+<form class="sizing" data-sizing novalidate>
+  <div class="field">
+    <label for="sizing-capacity">Capacity (distinct keys)</label>
+    <input
+      id="sizing-capacity"
+      name="capacity"
+      type="text"
+      inputmode="numeric"
+      value="1000000"
+    />
+  </div>
+  <div class="field">
+    <label for="sizing-epsilon">Target false positive rate</label>
+    <input
+      id="sizing-epsilon"
+      name="epsilon"
+      type="text"
+      inputmode="decimal"
+      value="0.01"
+    />
+    <p class="hint">
+      1e-2 is 1%. Binary Fuse ignores this; its rate is fixed by fingerprint
+      width.
+    </p>
+  </div>
+</form>
+
+<div
+  class="sizing-warnings"
+  data-sizing-warnings
+  role="status"
+  aria-live="polite"
+>
+</div>
+
+<table class="sizing-results">
+  <thead>
+    <tr><th>Structure</th><th>Bits/key</th><th>Total size</th></tr>
+  </thead>
+  <tbody>
+    {
+      STRUCTURES.map((s) => (
+        <tr data-row={s.key}>
+          <th scope="row">
+            {s.label}
+            <span class="subpath">{s.subpath}</span>
+          </th>
+          <td data-cell="bits" colspan="2">
+            Calculating…
+          </td>
+        </tr>
+      ))
+    }
+  </tbody>
+</table>
+
+<style>
+  .sizing {
+    display: grid;
+    gap: 1rem;
+    margin-block: 1.5rem;
+  }
+  @media (min-width: 30rem) {
+    .sizing {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  .field {
+    display: grid;
+    gap: 0.35rem;
+  }
+  .field label {
+    font-weight: 600;
+  }
+  .field input {
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.35rem;
+    background: var(--sl-color-black);
+    color: var(--sl-color-white);
+    font-family: var(--sl-font-mono, monospace);
+  }
+  .field input:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+  }
+  .hint {
+    margin: 0;
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+  }
+  .sizing-results {
+    width: 100%;
+    display: block;
+    overflow-x: auto;
+  }
+  .subpath {
+    display: block;
+    font-weight: 400;
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+    font-family: var(--sl-font-mono, monospace);
+  }
+  .sizing-warnings:not(:empty) {
+    margin-block: 1rem;
+    padding: 0.75rem 1rem;
+    border-inline-start: 4px solid var(--sl-color-orange);
+    background: var(--sl-color-orange-low);
+    border-radius: 0.25rem;
+  }
+  .failed {
+    color: var(--sl-color-gray-3);
+  }
+</style>
+
+<script>
+  import { computeSizing } from "./compute.js";
+  import type { StructureResult } from "./compute.js";
+
+  const KEYS = ["bloom", "blocked", "fuse8", "fuse16"] as const;
+
+  function formatBytes(bytes: number): string {
+    const units = ["bytes", "KiB", "MiB", "GiB", "TiB"];
+    let value = bytes;
+    let unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+      value /= 1024;
+      unit += 1;
+    }
+    const scaled =
+      unit === 0 ? String(bytes) : `${value.toFixed(2)} ${units[unit]}`;
+    return unit === 0
+      ? `${scaled} bytes`
+      : `${scaled} (${bytes.toLocaleString()} bytes)`;
+  }
+
+  function render(row: HTMLTableRowElement, result: StructureResult): void {
+    const cell = row.querySelector<HTMLTableCellElement>("[data-cell='bits']");
+    if (!cell) return;
+    if (!result.ok) {
+      cell.colSpan = 2;
+      cell.className = "failed";
+      cell.textContent = result.message;
+      return;
+    }
+    cell.colSpan = 1;
+    cell.className = "";
+    cell.textContent = `${result.bitsPerKey.toFixed(2)}`;
+    let size = row.querySelector<HTMLTableCellElement>("[data-cell='size']");
+    if (!size) {
+      size = document.createElement("td");
+      size.dataset.cell = "size";
+      row.append(size);
+    }
+    size.textContent = formatBytes(result.totalBytes);
+    size.title = result.note ?? "";
+  }
+
+  const form = document.querySelector<HTMLFormElement>("[data-sizing]");
+  const warnings = document.querySelector<HTMLElement>(
+    "[data-sizing-warnings]",
+  );
+
+  function update(): void {
+    if (!form) return;
+    const data = new FormData(form);
+    const report = computeSizing(data.get("capacity"), data.get("epsilon"));
+    for (const key of KEYS) {
+      const row = document.querySelector<HTMLTableRowElement>(
+        `[data-row='${key}']`,
+      );
+      if (row) render(row, report[key]);
+    }
+    if (warnings) warnings.textContent = report.warnings.join(" ");
+  }
+
+  form?.addEventListener("input", update);
+  update();
+</script>
