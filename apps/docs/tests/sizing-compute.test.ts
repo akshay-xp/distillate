@@ -111,3 +111,62 @@ test("fuse ignores the epsilon input entirely", () => {
   expect(loose.fuse8).toEqual(tight.fuse8);
   expect(loose.fuse16).toEqual(tight.fuse16);
 });
+
+const ALL = ["bloom", "blocked", "fuse8", "fuse16"] as const;
+
+test.each(["", "abc", 0, -1, 1e15, NaN, Infinity])(
+  "capacity %s is rejected with a message naming capacity",
+  (capacity) => {
+    const report = computeSizing(capacity, 0.01);
+
+    for (const key of ALL) {
+      const result = report[key];
+      expect(result.ok).toBe(false);
+      if (result.ok) continue;
+      expect(result.message).toMatch(/capacity/i);
+    }
+  },
+);
+
+test.each([0, 1, -0.5, "x", NaN])(
+  "target rate %s is rejected with a message naming the rate",
+  (epsilon) => {
+    const report = computeSizing(1e6, epsilon);
+
+    for (const key of ALL) {
+      const result = report[key];
+      expect(result.ok).toBe(false);
+      if (result.ok) continue;
+      expect(result.message).toMatch(/rate|epsilon/i);
+    }
+  },
+);
+
+test("no bad input ever produces NaN or throws", () => {
+  const bad: unknown[] = [
+    "",
+    "abc",
+    0,
+    -1,
+    1e15,
+    NaN,
+    Infinity,
+    null,
+    undefined,
+    {},
+  ];
+
+  for (const capacity of bad) {
+    for (const epsilon of bad) {
+      expect(() => computeSizing(capacity, epsilon)).not.toThrow();
+      const report = computeSizing(capacity, epsilon);
+      for (const key of ALL) {
+        const result = report[key];
+        if (result.ok) {
+          expect(Number.isNaN(result.bitsPerKey)).toBe(false);
+          expect(Number.isNaN(result.totalBytes)).toBe(false);
+        }
+      }
+    }
+  }
+});
