@@ -168,3 +168,30 @@ test("a fuse build failure reads as an instruction, not as a status line", () =>
   expect(message).toContain("Binary Fuse");
   expect(message).toContain("key count");
 });
+
+test("a key that was inserted reads as a member everywhere", () => {
+  const result = built().lookup("key-5");
+
+  expect(result).toEqual({
+    key: "key-5",
+    inserted: true,
+    verdicts: { bloom: "member", blocked: "member", fuse8: "member" },
+  });
+});
+
+test("a hit on a never-inserted key is a false positive, not a member", () => {
+  const result = built().lookup("miss-22");
+
+  expect(result.inserted).toBe(false);
+  expect(result.verdicts.bloom).toBe("false positive");
+});
+
+test("a miss on a never-inserted key is simply absent", () => {
+  const result = built().lookup("miss-0");
+
+  expect(result).toEqual({
+    key: "miss-0",
+    inserted: false,
+    verdicts: { bloom: "absent", blocked: "absent", fuse8: "absent" },
+  });
+});
