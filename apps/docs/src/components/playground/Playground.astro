@@ -14,6 +14,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
 <noscript>
   <style>
     .pg,
+    .pg-add,
     .pg-query,
     .pg-status,
     .pg-results,
@@ -69,6 +70,18 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     </p>
   </div>
   <button type="submit">Query</button>
+</form>
+
+<form class="pg-add" data-pg-add novalidate>
+  <div class="field">
+    <label for="pg-add">Add a key after the build</label>
+    <input id="pg-add" name="key" type="text" value="late-key" />
+    <p class="hint">
+      Both Bloom filters take it. Binary Fuse is static and cannot, which is the
+      trade it makes for its size.
+    </p>
+  </div>
+  <button type="submit">Add</button>
 </form>
 
 <div class="pg-status" data-pg-status role="status" aria-live="polite"></div>
@@ -160,12 +173,14 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   .field input:focus-visible {
     outline: 2px solid var(--sl-color-accent);
   }
+  .pg-add,
   .pg-query {
     display: grid;
     gap: 0.5rem;
     margin-block: 1.5rem;
   }
   .pg button,
+  .pg-add button,
   .pg-query button {
     justify-self: start;
     padding: 0.5rem 1.1rem;
@@ -234,6 +249,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
 
   const form = document.querySelector<HTMLFormElement>("[data-pg]");
   const queryForm = document.querySelector<HTMLFormElement>("[data-pg-query]");
+  const addForm = document.querySelector<HTMLFormElement>("[data-pg-add]");
   const status = document.querySelector<HTMLElement>("[data-pg-status]");
 
   // Held between events. `report()` walks every key it holds, so a query must
@@ -247,6 +263,8 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     if (cell) cell.textContent = text;
   }
 
+  // Anything that changes the key set invalidates the last query, so the
+  // verdict column is cleared here rather than by each caller.
   function render(report: PlaygroundReport): void {
     for (const key of KEYS) {
       const s = report.structures[key];
@@ -255,6 +273,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       set(key, "bits", s.bitsPerKey.toFixed(2));
       set(key, "size", formatBytes(s.totalBytes));
       set(key, "fpr", s.measuredFpr.toFixed(5));
+      set(key, "verdict", "");
     }
   }
 
@@ -269,7 +288,15 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     if (status) status.textContent = "";
     current = result.playground;
     render(current.report());
-    for (const key of KEYS) set(key, "verdict", "");
+  }
+
+  function insert(): void {
+    if (!addForm || !current) return;
+    const key = String(new FormData(addForm).get("key") ?? "");
+    if (key === "") return;
+    const { fuseRefusal } = current.insert(key);
+    if (status) status.textContent = fuseRefusal;
+    render(current.report());
   }
 
   function query(): void {
@@ -280,13 +307,15 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       set(structure, "verdict", verdicts[structure]);
   }
 
-  form?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    build();
-  });
-  queryForm?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    query();
-  });
+  function onSubmit(target: HTMLFormElement | null, run: () => void): void {
+    target?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      run();
+    });
+  }
+
+  onSubmit(form, build);
+  onSubmit(queryForm, query);
+  onSubmit(addForm, insert);
   build();
 </script>
