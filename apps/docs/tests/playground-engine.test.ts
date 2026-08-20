@@ -195,3 +195,57 @@ test("a miss on a never-inserted key is simply absent", () => {
     verdicts: { bloom: "absent", blocked: "absent", fuse8: "absent" },
   });
 });
+
+test("a late key is taken by both bloom filters and refused by fuse", () => {
+  const playground = built();
+
+  const insert = playground.insert("late-key");
+
+  expect(insert.key).toBe("late-key");
+  expect(insert.keyCount).toBe(KEYS + 1);
+  expect(insert.fuseRefusal).toContain("Binary Fuse");
+  expect(insert.fuseRefusal).toContain("static");
+});
+
+test("a late key leaves neither structure with a false negative", () => {
+  const playground = built();
+  playground.insert("late-key");
+
+  const { structures } = playground.report();
+
+  expect(structures.bloom.heldKeys).toBe(KEYS + 1);
+  expect(structures.blocked.heldKeys).toBe(KEYS + 1);
+  expect(structures.fuse8.heldKeys).toBe(KEYS);
+  for (const key of ["bloom", "blocked", "fuse8"] as const) {
+    expect(structures[key].missing).toBe(0);
+  }
+});
+
+test("a late key is outside the fuse build, not missing from it", () => {
+  const playground = built();
+  playground.insert("late-key");
+
+  expect(playground.lookup("late-key")).toEqual({
+    key: "late-key",
+    inserted: true,
+    verdicts: {
+      bloom: "member",
+      blocked: "member",
+      fuse8: "added after build",
+    },
+  });
+});
+
+test("inserting a probe key drops it from the measurement", () => {
+  const playground = built();
+  const before = playground.report();
+
+  playground.insert("miss-22");
+  const after = playground.report();
+
+  expect(before.structures.bloom.falsePositives).toBeGreaterThan(0);
+  expect(after.probeCount).toBe(before.probeCount - 1);
+  expect(after.structures.bloom.falsePositives).toBe(
+    before.structures.bloom.falsePositives - 1,
+  );
+});

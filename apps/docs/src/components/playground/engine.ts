@@ -21,13 +21,22 @@ export interface StructureReport {
 }
 
 /** What one structure says about one queried key. */
-export type Verdict = "member" | "false positive" | "absent";
+export type Verdict =
+  "member" | "false positive" | "absent" | "added after build";
 
 /** One query, answered by all three structures at once. */
 export interface Lookup {
   key: string;
   inserted: boolean;
   verdicts: Record<StructureKey, Verdict>;
+}
+
+/** What happened to one key added after the build. */
+export interface InsertReport {
+  key: string;
+  keyCount: number;
+  /** Why Binary Fuse could not take it. Always set: it is static. */
+  fuseRefusal: string;
 }
 
 /** A snapshot of the whole playground, enough to render it. */
@@ -72,18 +81,20 @@ interface Filters {
 
 function describe(
   filter: { has: (key: string) => boolean; bitsPerKey: number },
-  keys: readonly string[],
+  held: readonly string[],
   probes: readonly string[],
+  buildCount: number,
 ): StructureReport {
   let missing = 0;
-  for (const key of keys) if (!filter.has(key)) missing += 1;
+  for (const key of held) if (!filter.has(key)) missing += 1;
   let falsePositives = 0;
   for (const probe of probes) if (filter.has(probe)) falsePositives += 1;
   return {
-    heldKeys: keys.length,
+    heldKeys: held.length,
     missing,
     bitsPerKey: filter.bitsPerKey,
-    totalBytes: Math.ceil((filter.bitsPerKey * keys.length) / 8),
+    // Neither filter reallocates on add, so space stays priced at the build.
+    totalBytes: Math.ceil((filter.bitsPerKey * buildCount) / 8),
     falsePositives,
     measuredFpr: falsePositives / probes.length,
   };
@@ -107,16 +118,21 @@ export function toMessage(error: unknown): string {
 
 /** A built set of filters over generated keys, ready to be queried. */
 export class Playground {
-  // The same keys twice: a list to walk when verifying, a set to answer one
-  // query against without walking anything.
+  /** Keys the fuse filter was built from. Fixed: it cannot take any more. */
+  readonly #built: string[];
+  /** Everything the two bloom filters hold, the build set plus late arrivals. */
   readonly #keys: string[];
+  /** The same keys as a set, to answer one query without walking anything. */
   readonly #inserted: Set<string>;
+  /** Just the late arrivals, so a query can tell them from the build set. */
+  readonly #late = new Set<string>();
   readonly #probes: string[];
   readonly #target: number;
   readonly #filters: Filters;
 
   private constructor(keys: string[], target: number, filters: Filters) {
-    this.#keys = keys;
+    this.#built = keys;
+    this.#keys = [...keys];
     this.#inserted = new Set(keys);
     this.#probes = probeKeys();
     this.#target = target;
@@ -148,9 +164,29 @@ export class Playground {
     return { ok: true, playground: new Playground(keys, epsilon, filters) };
   }
 
+  /**
+   * Adds one key. The bloom filters take it; Binary Fuse is static and cannot,
+   * so the reason comes back rather than being thrown.
+   */
+  insert(key: string): InsertReport {
+    if (!this.#inserted.has(key)) {
+      this.#filters.bloom.add(key);
+      this.#filters.blocked.add(key);
+      this.#keys.push(key);
+      this.#inserted.add(key);
+      this.#late.add(key);
+    }
+    return {
+      key,
+      keyCount: this.#keys.length,
+      fuseRefusal: `Binary Fuse is static: it was built from ${this.#built.length.toLocaleString("en-US")} keys in one pass and has no add. To include this key you rebuild the whole filter. Classic and Blocked Bloom took it.`,
+    };
+  }
+
   /** Answers one query across all three structures. */
   lookup(key: string): Lookup {
     const inserted = this.#inserted.has(key);
+    const late = this.#late.has(key);
     const verdict = (filter: { has: (k: string) => boolean }): Verdict => {
       if (!filter.has(key)) return "absent";
       return inserted ? "member" : "false positive";
@@ -162,21 +198,30 @@ export class Playground {
       verdicts: {
         bloom: verdict(bloom),
         blocked: verdict(blocked),
-        fuse8: verdict(fuse8),
+        // A key the fuse filter never saw is outside its build, not a false
+        // negative. Saying so is the whole point of showing it.
+        fuse8: late ? "added after build" : verdict(fuse8),
       },
     };
   }
 
   report(): PlaygroundReport {
     const { bloom, blocked, fuse8 } = this.#filters;
+    // A probe the reader has since inserted is a member, so it leaves the miss
+    // set rather than being counted as a false positive.
+    const probes =
+      this.#late.size === 0
+        ? this.#probes
+        : this.#probes.filter((p) => !this.#late.has(p));
+    const n = this.#built.length;
     return {
       keyCount: this.#keys.length,
       target: this.#target,
-      probeCount: this.#probes.length,
+      probeCount: probes.length,
       structures: {
-        bloom: describe(bloom, this.#keys, this.#probes),
-        blocked: describe(blocked, this.#keys, this.#probes),
-        fuse8: describe(fuse8, this.#keys, this.#probes),
+        bloom: describe(bloom, this.#keys, probes, n),
+        blocked: describe(blocked, this.#keys, probes, n),
+        fuse8: describe(fuse8, this.#built, probes, n),
       },
     };
   }
