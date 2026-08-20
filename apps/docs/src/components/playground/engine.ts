@@ -13,21 +13,37 @@ export interface StructureReport {
   missing: number;
   bitsPerKey: number;
   totalBytes: number;
+  /** Miss-set keys `has()` claims are members. */
+  falsePositives: number;
+  measuredFpr: number;
 }
 
 /** A snapshot of the whole playground, enough to render it. */
 export interface PlaygroundReport {
   keyCount: number;
   target: number;
+  /** Size of the miss set the rate was measured over. */
+  probeCount: number;
   structures: Record<StructureKey, StructureReport>;
 }
 
 export type BuildResult =
   { ok: true; playground: Playground } | { ok: false; message: string };
 
+/** How many never-inserted keys the measured rate is averaged over. */
+export const PROBE_COUNT = 20_000;
+
+// Members and probes are told apart by prefix, so the miss set is disjoint
+// from the key set by construction rather than by a filtering pass.
 function memberKeys(count: number): string[] {
   const keys = new Array<string>(count);
   for (let i = 0; i < count; i += 1) keys[i] = `key-${String(i)}`;
+  return keys;
+}
+
+function probeKeys(): string[] {
+  const keys = new Array<string>(PROBE_COUNT);
+  for (let i = 0; i < PROBE_COUNT; i += 1) keys[i] = `miss-${String(i)}`;
   return keys;
 }
 
@@ -40,25 +56,32 @@ interface Filters {
 function describe(
   filter: { has: (key: string) => boolean; bitsPerKey: number },
   keys: readonly string[],
+  probes: readonly string[],
 ): StructureReport {
   let missing = 0;
   for (const key of keys) if (!filter.has(key)) missing += 1;
+  let falsePositives = 0;
+  for (const probe of probes) if (filter.has(probe)) falsePositives += 1;
   return {
     heldKeys: keys.length,
     missing,
     bitsPerKey: filter.bitsPerKey,
     totalBytes: Math.ceil((filter.bitsPerKey * keys.length) / 8),
+    falsePositives,
+    measuredFpr: falsePositives / probes.length,
   };
 }
 
 /** A built set of filters over generated keys, ready to be queried. */
 export class Playground {
   readonly #keys: string[];
+  readonly #probes: string[];
   readonly #target: number;
   readonly #filters: Filters;
 
   private constructor(keys: string[], target: number, filters: Filters) {
     this.#keys = keys;
+    this.#probes = probeKeys();
     this.#target = target;
     this.#filters = filters;
   }
@@ -77,13 +100,15 @@ export class Playground {
   }
 
   report(): PlaygroundReport {
+    const { bloom, blocked, fuse8 } = this.#filters;
     return {
       keyCount: this.#keys.length,
       target: this.#target,
+      probeCount: this.#probes.length,
       structures: {
-        bloom: describe(this.#filters.bloom, this.#keys),
-        blocked: describe(this.#filters.blocked, this.#keys),
-        fuse8: describe(this.#filters.fuse8, this.#keys),
+        bloom: describe(bloom, this.#keys, this.#probes),
+        blocked: describe(blocked, this.#keys, this.#probes),
+        fuse8: describe(fuse8, this.#keys, this.#probes),
       },
     };
   }

@@ -55,3 +55,31 @@ test("reported space matches what the library allocated", () => {
     expect(totalBytes).toBe(Math.ceil((bitsPerKey * KEYS) / 8));
   }
 });
+
+test("the miss set is 20,000 keys and the rate is measured against it", () => {
+  const { probeCount, structures } = built().report();
+
+  expect(probeCount).toBe(20_000);
+  for (const key of ["bloom", "blocked", "fuse8"] as const) {
+    const { falsePositives, measuredFpr } = structures[key];
+    expect(measuredFpr).toBe(falsePositives / probeCount);
+  }
+});
+
+test("both bloom variants land within a factor of two of the target", () => {
+  const { structures } = built().report();
+
+  for (const key of ["bloom", "blocked"] as const) {
+    expect(structures[key].measuredFpr).toBeGreaterThanOrEqual(TARGET / 2);
+    expect(structures[key].measuredFpr).toBeLessThanOrEqual(TARGET * 2);
+  }
+});
+
+test("fuse holds its fingerprint-fixed rate whatever the target is", () => {
+  for (const target of [TARGET, 0.2, 1e-4]) {
+    const { measuredFpr } = built(KEYS, target).report().structures.fuse8;
+
+    expect(measuredFpr).toBeGreaterThanOrEqual(0.002);
+    expect(measuredFpr).toBeLessThanOrEqual(0.006);
+  }
+});
