@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { blockedBitsPerKey } from "distillate/blocked";
 import { bloomSizing } from "distillate/bloom";
 import { fuseBitsPerKey } from "distillate/fuse";
@@ -195,4 +198,31 @@ test("the advisory boundary sits where the ratio reaches 1.5", () => {
 test("bad input produces no advisory", () => {
   expect(computeSizing("abc", 0.01).warnings).toEqual([]);
   expect(computeSizing(1e6, 1e-9).warnings).toEqual([]);
+});
+
+test("a 1e8 capacity is answered analytically, well inside the budget", () => {
+  const start = performance.now();
+  computeSizing(1e8, 0.01);
+  const single = performance.now() - start;
+
+  const bulkStart = performance.now();
+  for (let i = 0; i < 1000; i++) computeSizing(1e8, 0.01);
+  const bulk = performance.now() - bulkStart;
+
+  expect(single).toBeLessThan(100);
+  expect(bulk).toBeLessThan(500);
+});
+
+test("the module never allocates a real filter", () => {
+  const source = readFileSync(
+    fileURLToPath(
+      new URL("../src/components/sizing/compute.ts", import.meta.url),
+    ),
+    "utf8",
+  );
+
+  // Building a filter would allocate storage proportional to capacity, which
+  // is exactly what makes a 1e8 input hang a tab. Only the analytic helpers.
+  expect(source).not.toMatch(/\.create\(/);
+  expect(source).not.toMatch(/\.from\(/);
 });
