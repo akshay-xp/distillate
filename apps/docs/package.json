@@ -8,7 +8,8 @@
     "build": "astro build",
     "dev": "astro dev",
     "test": "vitest run",
-    "typecheck": "astro check"
+    "typecheck": "astro check",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.41.7",
@@ -17,6 +18,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@playwright/test": "^1.62.1",
     "starlight-typedoc": "^0.23.1",
     "typedoc": "^0.28.20",
     "typedoc-plugin-markdown": "^4.12.0",
