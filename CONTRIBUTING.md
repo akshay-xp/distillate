@@ -81,7 +81,7 @@ pnpm build
 pnpm api:report
 ```
 
-Commit the updated `packages/distillate/etc/*.api.md` alongside your change. An unexpected report change means you exported or broke something you didn't intend to. See [versioning](./packages/distillate/docs/versioning.md) for the SemVer policy.
+Commit the updated `packages/distillate/etc/*.api.md` alongside your change. An unexpected report change means you exported or broke something you didn't intend to. See [versioning](https://distillate.akxp.net/reference/versioning/) for the SemVer policy.
 
 ## Documentation comments
 

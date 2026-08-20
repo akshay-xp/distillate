@@ -36,7 +36,7 @@ Blocked Bloom, Classic Bloom, Binary Fuse 8/16, correct Cuckoo (with delete), pl
 ## Module docs
 
 - [architecture.md](architecture.md): interfaces, families, storage, file layout.
-- [structures.md](structures.md): decision matrix, v1 lineup, citations, deferred tiers.
+- [choosing a structure](https://distillate.akxp.net/guides/choosing-a-structure/): decision matrix, v1 lineup, citations, deferred tiers.
 - [hashing.md](hashing.md): hash strategy and correctness.
-- [serialization.md](serialization.md): binary format spec.
+- [serialization](https://distillate.akxp.net/reference/serialization/): binary format spec.
 - [engineering.md](engineering.md): packaging, testing, benchmarking, CI, release.

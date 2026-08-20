@@ -36,8 +36,9 @@ Library-specific tasks target the package: `pnpm --filter distillate <coverage|c
 Design notes, the structure decision matrix, hashing, and the binary format live under [`packages/distillate/docs`](./packages/distillate/docs):
 
 - [overview](./packages/distillate/docs/overview.md): what and why
-- [structures](./packages/distillate/docs/structures.md): decision matrix and the full lineup
-- [architecture](./packages/distillate/docs/architecture.md), [hashing](./packages/distillate/docs/hashing.md), [serialization](./packages/distillate/docs/serialization.md)
+- [choosing a structure](https://distillate.akxp.net/guides/choosing-a-structure/): decision matrix and the full lineup
+- [serialization](https://distillate.akxp.net/reference/serialization/): the binary format spec
+- [architecture](./packages/distillate/docs/architecture.md), [hashing](./packages/distillate/docs/hashing.md): contributor notes, on GitHub
 - [API reference](https://distillate.akxp.net/api/): generated from TSDoc at site build time
 
 ## License
