@@ -59,3 +59,30 @@ test("surfaces the blocked floor and bad input in the page, not the console", as
 
   expect(noise).toEqual([]);
 });
+
+test("the two inputs are the same size and line up", async ({ page }) => {
+  await page.goto(PAGE);
+
+  const capacity = await page.locator("#sizing-capacity").boundingBox();
+  const epsilon = await page.locator("#sizing-epsilon").boundingBox();
+  if (!capacity || !epsilon) throw new Error("inputs not rendered");
+
+  expect(Math.abs(capacity.width - epsilon.width)).toBeLessThan(1);
+  expect(Math.abs(capacity.y - epsilon.y)).toBeLessThan(1);
+});
+
+test("does not scroll horizontally on a narrow viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.goto(PAGE);
+
+  const overflow = await page.evaluate(
+    () =>
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+
+  // The results table is allowed to scroll, but inside its own box.
+  const table = page.locator(".sizing-results");
+  await expect(table).toHaveCSS("overflow-x", "auto");
+});
