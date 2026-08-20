@@ -20,6 +20,16 @@ export interface StructureReport {
   measuredFpr: number;
 }
 
+/** What one structure says about one queried key. */
+export type Verdict = "member" | "false positive" | "absent";
+
+/** One query, answered by all three structures at once. */
+export interface Lookup {
+  key: string;
+  inserted: boolean;
+  verdicts: Record<StructureKey, Verdict>;
+}
+
 /** A snapshot of the whole playground, enough to render it. */
 export interface PlaygroundReport {
   keyCount: number;
@@ -97,13 +107,17 @@ export function toMessage(error: unknown): string {
 
 /** A built set of filters over generated keys, ready to be queried. */
 export class Playground {
+  // The same keys twice: a list to walk when verifying, a set to answer one
+  // query against without walking anything.
   readonly #keys: string[];
+  readonly #inserted: Set<string>;
   readonly #probes: string[];
   readonly #target: number;
   readonly #filters: Filters;
 
   private constructor(keys: string[], target: number, filters: Filters) {
     this.#keys = keys;
+    this.#inserted = new Set(keys);
     this.#probes = probeKeys();
     this.#target = target;
     this.#filters = filters;
@@ -132,6 +146,25 @@ export class Playground {
       return { ok: false, message: toMessage(error) };
     }
     return { ok: true, playground: new Playground(keys, epsilon, filters) };
+  }
+
+  /** Answers one query across all three structures. */
+  lookup(key: string): Lookup {
+    const inserted = this.#inserted.has(key);
+    const verdict = (filter: { has: (k: string) => boolean }): Verdict => {
+      if (!filter.has(key)) return "absent";
+      return inserted ? "member" : "false positive";
+    };
+    const { bloom, blocked, fuse8 } = this.#filters;
+    return {
+      key,
+      inserted,
+      verdicts: {
+        bloom: verdict(bloom),
+        blocked: verdict(blocked),
+        fuse8: verdict(fuse8),
+      },
+    };
   }
 
   report(): PlaygroundReport {
