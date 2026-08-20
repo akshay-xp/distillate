@@ -39,6 +39,10 @@ export default defineConfig({
             { label: "Blocked Bloom", link: "/guides/blocked/" },
             { label: "Binary Fuse", link: "/guides/fuse/" },
             { label: "Sizing and tuning FPR", link: "/guides/sizing/" },
+            {
+              label: "Sizing calculator",
+              link: "/guides/sizing/calculator/",
+            },
             { label: "Cross-runtime usage", link: "/guides/cross-runtime/" },
             {
               label: "Migrating from bloom-filters",
