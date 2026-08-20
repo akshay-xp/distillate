@@ -1,0 +1,26 @@
+---
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
+
+import Playground from "../../components/playground/Playground.astro";
+---
+
+<StarlightPage
+  frontmatter={{
+    title: "Playground",
+    description:
+      "Watch it happen before you install anything: real filters built in your browser, every inserted key found, and a measured false positive rate next to the target.",
+  }}
+>
+  <p>
+    Everything below runs the same <code>distillate</code> build you would install,
+    in this tab, over keys generated on the spot. Nothing is simulated and no numbers
+    are hard-coded.
+  </p>
+  <Playground />
+  <p>
+    For how to pick between these three, see
+    <a href="/guides/choosing-a-structure/">Choosing a structure</a>. For what a
+    target rate costs in memory at your capacity, see the
+    <a href="/guides/sizing/calculator/">sizing calculator</a>.
+  </p>
+</StarlightPage>
