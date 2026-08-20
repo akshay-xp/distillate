@@ -2,6 +2,8 @@ import { BlockedBloomFilter } from "distillate/blocked";
 import { BloomFilter } from "distillate/bloom";
 import { BinaryFuse8 } from "distillate/fuse";
 
+import { toNumber } from "../../lib/form.js";
+
 /** The three shipped structures, side by side over one key set. */
 export type StructureKey = "bloom" | "blocked" | "fuse8";
 
@@ -32,6 +34,11 @@ export type BuildResult =
 
 /** How many never-inserted keys the measured rate is averaged over. */
 export const PROBE_COUNT = 20_000;
+
+/** Most keys the playground will build from. Past this it refuses rather than wedge the tab. */
+export const MAX_KEYS = 100_000;
+
+const KEY_COUNT_MESSAGE = `Key count must be a whole number between 1 and ${MAX_KEYS.toLocaleString("en-US")}. The playground builds real filters in your browser, so it stops there.`;
 
 // Members and probes are told apart by prefix, so the miss set is disjoint
 // from the key set by construction rather than by a filtering pass.
@@ -87,8 +94,12 @@ export class Playground {
   }
 
   /** Builds all three structures from `keyCount` generated keys. */
-  static build(keyCount: number, target: number): BuildResult {
-    const keys = memberKeys(keyCount);
+  static build(keyCount: unknown, target: number): BuildResult {
+    const n = toNumber(keyCount);
+    if (!Number.isInteger(n) || n < 1 || n > MAX_KEYS) {
+      return { ok: false, message: KEY_COUNT_MESSAGE };
+    }
+    const keys = memberKeys(n);
     return {
       ok: true,
       playground: new Playground(keys, target, {
