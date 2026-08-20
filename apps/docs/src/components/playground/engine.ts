@@ -1,6 +1,6 @@
 import { BlockedBloomFilter, ParamError } from "distillate/blocked";
 import { BloomFilter } from "distillate/bloom";
-import { BinaryFuse8 } from "distillate/fuse";
+import { BinaryFuse8, BinaryFuseBuildError } from "distillate/fuse";
 
 import { RATE_MESSAGE, toNumber } from "../../lib/form.js";
 
@@ -86,6 +86,12 @@ function describe(
  */
 export function toMessage(error: unknown): string {
   if (error instanceof ParamError) return error.message;
+  // The library says only "binary fuse construction failed", which is true and
+  // useless. Peeling retries 100 deterministic seeds, so the same key set fails
+  // the same way every time and a different key count is the only way out.
+  if (error instanceof BinaryFuseBuildError) {
+    return "Binary Fuse could not build from this key set: the peeling step did not converge. Change the key count and try again.";
+  }
   throw error;
 }
 
