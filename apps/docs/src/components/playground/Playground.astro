@@ -14,6 +14,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
 <noscript>
   <style>
     .pg,
+    .pg-query,
     .pg-status,
     .pg-results,
     .pg-note {
@@ -58,6 +59,18 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   <button type="submit">Build</button>
 </form>
 
+<form class="pg-query" data-pg-query novalidate>
+  <div class="field">
+    <label for="pg-query">Query a key</label>
+    <input id="pg-query" name="key" type="text" value="key-5" />
+    <p class="hint">
+      Inserted keys are <code>key-0</code> through <code>key-9999</code>. Try
+      <code>miss-22</code>, which none of them ever saw.
+    </p>
+  </div>
+  <button type="submit">Query</button>
+</form>
+
 <div class="pg-status" data-pg-status role="status" aria-live="polite"></div>
 
 <table class="pg-results">
@@ -69,6 +82,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       <th>Bits/key</th>
       <th>Size</th>
       <th>Measured rate</th>
+      <th>Last query</th>
     </tr>
   </thead>
   <tbody>
@@ -84,11 +98,18 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
           <td data-cell="bits" />
           <td data-cell="size" />
           <td data-cell="fpr" />
+          <td data-cell="verdict" />
         </tr>
       ))
     }
   </tbody>
 </table>
+
+<p class="pg-note">
+  <strong>A false positive is the filter working, not a bug.</strong> These structures
+  trade exactness for space: a key that was never inserted can still answer yes, at
+  roughly the target rate. What they never do is the reverse.
+</p>
 
 <p class="pg-note">
   <strong>Not found is zero, and stays zero.</strong> That column counts inserted
@@ -139,7 +160,13 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   .field input:focus-visible {
     outline: 2px solid var(--sl-color-accent);
   }
-  .pg button {
+  .pg-query {
+    display: grid;
+    gap: 0.5rem;
+    margin-block: 1.5rem;
+  }
+  .pg button,
+  .pg-query button {
     justify-self: start;
     padding: 0.5rem 1.1rem;
     border: 1px solid var(--sl-color-accent);
@@ -149,6 +176,8 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     font-weight: 600;
     cursor: pointer;
   }
+  /* The build form is two columns at this width, so its button spans both.
+     The query form stays one column and needs no span. */
   @media (min-width: 30rem) {
     .pg button {
       grid-column: 1 / -1;
@@ -204,7 +233,12 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   }
 
   const form = document.querySelector<HTMLFormElement>("[data-pg]");
+  const queryForm = document.querySelector<HTMLFormElement>("[data-pg-query]");
   const status = document.querySelector<HTMLElement>("[data-pg-status]");
+
+  // Held between events. `report()` walks every key it holds, so a query must
+  // read this rather than rebuild.
+  let current: Playground | null = null;
 
   function set(key: StructureKey, name: string, text: string): void {
     const cell = document.querySelector(
@@ -233,12 +267,26 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       return;
     }
     if (status) status.textContent = "";
-    render(result.playground.report());
+    current = result.playground;
+    render(current.report());
+    for (const key of KEYS) set(key, "verdict", "");
+  }
+
+  function query(): void {
+    if (!queryForm || !current) return;
+    const key = String(new FormData(queryForm).get("key") ?? "");
+    const { verdicts } = current.lookup(key);
+    for (const structure of KEYS)
+      set(structure, "verdict", verdicts[structure]);
   }
 
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
     build();
+  });
+  queryForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    query();
   });
   build();
 </script>
