@@ -1,0 +1,244 @@
+---
+import { MAX_KEYS, PROBE_COUNT } from "./engine.js";
+
+const STRUCTURES = [
+  { key: "bloom", label: "Classic Bloom", subpath: "distillate/bloom" },
+  { key: "blocked", label: "Blocked Bloom", subpath: "distillate/blocked" },
+  { key: "fuse8", label: "Binary Fuse 8", subpath: "distillate/fuse" },
+] as const;
+
+const bound = MAX_KEYS.toLocaleString("en-US");
+const probes = PROBE_COUNT.toLocaleString("en-US");
+---
+
+<noscript>
+  <style>
+    .pg,
+    .pg-status,
+    .pg-results,
+    .pg-note {
+      display: none;
+    }
+  </style>
+  <p>
+    The playground builds real filters in your browser and needs JavaScript.
+    With it off, <a href="/guides/choosing-a-structure/">Choosing a structure</a
+    > covers the same ground in prose.
+  </p>
+</noscript>
+
+<form class="pg" data-pg novalidate>
+  <div class="field">
+    <label for="pg-keys">Keys to insert</label>
+    <input
+      id="pg-keys"
+      name="keys"
+      type="text"
+      inputmode="numeric"
+      value="10000"
+    />
+    <p class="hint">
+      Up to {bound}. Past that the playground refuses rather than freeze the
+      tab.
+    </p>
+  </div>
+  <div class="field">
+    <label for="pg-target">Target false positive rate</label>
+    <input
+      id="pg-target"
+      name="target"
+      type="text"
+      inputmode="decimal"
+      value="0.01"
+    />
+    <p class="hint">
+      Binary Fuse ignores this; its rate is fixed by fingerprint width.
+    </p>
+  </div>
+  <button type="submit">Build</button>
+</form>
+
+<div class="pg-status" data-pg-status role="status" aria-live="polite"></div>
+
+<table class="pg-results">
+  <thead>
+    <tr>
+      <th>Structure</th>
+      <th>Keys held</th>
+      <th>Not found</th>
+      <th>Bits/key</th>
+      <th>Size</th>
+      <th>Measured rate</th>
+    </tr>
+  </thead>
+  <tbody>
+    {
+      STRUCTURES.map((s) => (
+        <tr data-row={s.key}>
+          <th scope="row">
+            {s.label}
+            <span class="subpath">{s.subpath}</span>
+          </th>
+          <td data-cell="held" />
+          <td data-cell="missing" />
+          <td data-cell="bits" />
+          <td data-cell="size" />
+          <td data-cell="fpr" />
+        </tr>
+      ))
+    }
+  </tbody>
+</table>
+
+<p class="pg-note">
+  <strong>Not found is zero, and stays zero.</strong> That column counts inserted
+  keys the filter cannot find. It is guaranteed to be zero by how these structures
+  are built, not a lucky property of this sample: a key that was added always answers
+  yes. The measured rate is the opposite direction, counted over {probes} keys that
+  were never inserted, and it is an estimate, so expect it within roughly a factor
+  of two of the target at these sample sizes.
+</p>
+
+<style>
+  .pg {
+    display: grid;
+    gap: 1rem;
+    margin-block: 1.5rem;
+  }
+  .field {
+    display: grid;
+    row-gap: 0.35rem;
+    align-content: start;
+  }
+  @media (min-width: 30rem) {
+    .pg {
+      grid-template-columns: 1fr 1fr;
+      /* label, input, hint. Each field inherits these rows through subgrid, so
+         both inputs sit on the same line even when one label wraps and the
+         other does not. */
+      grid-template-rows: auto auto auto;
+    }
+    .field {
+      grid-template-rows: subgrid;
+      grid-row: span 3;
+    }
+  }
+  .field label {
+    font-weight: 600;
+  }
+  .field input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.35rem;
+    background: var(--sl-color-black);
+    color: var(--sl-color-white);
+    font-family: var(--sl-font-mono, monospace);
+  }
+  .field input:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+  }
+  .pg button {
+    justify-self: start;
+    padding: 0.5rem 1.1rem;
+    border: 1px solid var(--sl-color-accent);
+    border-radius: 0.35rem;
+    background: var(--sl-color-accent);
+    color: var(--sl-color-black);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  @media (min-width: 30rem) {
+    .pg button {
+      grid-column: 1 / -1;
+    }
+  }
+  .hint {
+    margin: 0;
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+  }
+  .pg-results {
+    width: 100%;
+    display: block;
+    overflow-x: auto;
+  }
+  .subpath {
+    display: block;
+    font-weight: 400;
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+    font-family: var(--sl-font-mono, monospace);
+  }
+  .pg-status:not(:empty) {
+    margin-block: 1rem;
+    padding: 0.75rem 1rem;
+    border-inline-start: 4px solid var(--sl-color-orange);
+    background: var(--sl-color-orange-low);
+    border-radius: 0.25rem;
+  }
+  .pg-note {
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-2);
+  }
+</style>
+
+<script>
+  import { Playground } from "./engine.js";
+  import type { PlaygroundReport, StructureKey } from "./engine.js";
+
+  const KEYS = ["bloom", "blocked", "fuse8"] as const;
+
+  function formatBytes(bytes: number): string {
+    const units = ["bytes", "KiB", "MiB", "GiB"];
+    let value = bytes;
+    let unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+      value /= 1024;
+      unit += 1;
+    }
+    return unit === 0
+      ? `${String(bytes)} bytes`
+      : `${value.toFixed(1)} ${units[unit]}`;
+  }
+
+  const form = document.querySelector<HTMLFormElement>("[data-pg]");
+  const status = document.querySelector<HTMLElement>("[data-pg-status]");
+
+  function set(key: StructureKey, name: string, text: string): void {
+    const cell = document.querySelector(
+      `[data-row='${key}'] [data-cell='${name}']`,
+    );
+    if (cell) cell.textContent = text;
+  }
+
+  function render(report: PlaygroundReport): void {
+    for (const key of KEYS) {
+      const s = report.structures[key];
+      set(key, "held", s.heldKeys.toLocaleString("en-US"));
+      set(key, "missing", String(s.missing));
+      set(key, "bits", s.bitsPerKey.toFixed(2));
+      set(key, "size", formatBytes(s.totalBytes));
+      set(key, "fpr", s.measuredFpr.toFixed(5));
+    }
+  }
+
+  function build(): void {
+    if (!form) return;
+    const data = new FormData(form);
+    const result = Playground.build(data.get("keys"), data.get("target"));
+    if (!result.ok) {
+      if (status) status.textContent = result.message;
+      return;
+    }
+    if (status) status.textContent = "";
+    render(result.playground.report());
+  }
+
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    build();
+  });
+  build();
+</script>
