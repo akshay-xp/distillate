@@ -7,6 +7,22 @@ const STRUCTURES = [
 ] as const;
 ---
 
+<noscript>
+  <style>
+    .sizing,
+    .sizing-results,
+    .sizing-warnings {
+      display: none;
+    }
+  </style>
+  <p class="sizing-nojs">
+    The calculator runs in your browser and needs JavaScript. With it off, the
+    tables in <a href="/guides/sizing/">Sizing and tuning FPR</a> give bits per key
+    for classic Bloom at every common target, the blocked equivalents, and both fuse
+    widths.
+  </p>
+</noscript>
+
 <form class="sizing" data-sizing novalidate>
   <div class="field">
     <label for="sizing-capacity">Capacity (distinct keys)</label>
