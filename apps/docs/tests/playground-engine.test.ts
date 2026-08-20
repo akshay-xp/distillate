@@ -3,7 +3,11 @@ import { bloomSizing } from "distillate/bloom";
 import { BinaryFuse8 } from "distillate/fuse";
 import { expect, test } from "vitest";
 
-import { MAX_KEYS, Playground } from "../src/components/playground/engine.js";
+import {
+  MAX_KEYS,
+  Playground,
+  toMessage,
+} from "../src/components/playground/engine.js";
 
 const KEYS = 10_000;
 const TARGET = 0.01;
@@ -112,3 +116,43 @@ test("building at the bound stays far inside a responsive budget", () => {
   expect(result.ok).toBe(true);
   expect(elapsed).toBeLessThan(3000);
 });
+
+test("an out-of-range target rate is a message, not an exception", () => {
+  const result = Playground.build(1000, 1.5);
+
+  expect(result).toEqual({
+    ok: false,
+    message: "epsilon must be in the open interval (0, 1), got 1.5",
+  });
+});
+
+test("a target under the blocked floor is a message, not an exception", () => {
+  const result = Playground.build(1000, 1e-9);
+
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.message).toContain("below the blocked-filter floor");
+});
+
+test("anything that is not a ParamError still propagates", () => {
+  const boom = new TypeError("not a param problem");
+
+  expect(() => {
+    toMessage(boom);
+  }).toThrow(boom);
+});
+
+test("a target typed into the form arrives as a string and still builds", () => {
+  expect(Playground.build(1000, "0.01").ok).toBe(true);
+});
+
+test.each(["", "abc", null, undefined])(
+  "a target of %o is refused as a rate, not misreported as one",
+  (target) => {
+    const result = Playground.build(1000, target);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.message).toContain("greater than 0 and less than 1");
+  },
+);
