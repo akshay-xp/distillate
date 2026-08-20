@@ -86,3 +86,40 @@ test("does not scroll horizontally on a narrow viewport", async ({ page }) => {
   const table = page.locator(".sizing-results");
   await expect(table).toHaveCSS("overflow-x", "auto");
 });
+
+test("groups the capacity digits with commas as you type", async ({ page }) => {
+  await page.goto(PAGE);
+
+  const capacity = page.locator("#sizing-capacity");
+  await expect(capacity).toHaveValue("1,000,000");
+
+  await capacity.fill("100000000");
+  await expect(capacity).toHaveValue("100,000,000");
+  // The grouped value still parses, so results track it.
+  await expect(row(page, "bloom")).toContainText("114.26 MiB");
+
+  // Non-numeric text is left alone so the validation message can explain it.
+  await capacity.fill("abc");
+  await expect(capacity).toHaveValue("abc");
+  await expect(row(page, "bloom")).toContainText(/capacity/i);
+});
+
+test("keeps the caret put while regrouping", async ({ page }) => {
+  await page.goto(PAGE);
+  const capacity = page.locator("#sizing-capacity");
+
+  // Type past the first comma, so the inserted digit really does move every
+  // separator. Inserting right after the leading digit would not: "1,000,000"
+  // becomes "12,000,000", which is already grouped, and regrouping no-ops.
+  await capacity.click();
+  await page.keyboard.press("Home");
+  for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowRight");
+  await page.keyboard.type("2");
+
+  await expect(capacity).toHaveValue("10,200,000");
+  const caret = await capacity.evaluate(
+    (el) => (el as HTMLInputElement).selectionStart,
+  );
+  // Right after the typed "2", not flung to the end by the reformat.
+  expect(caret).toBe(4);
+});

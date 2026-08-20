@@ -31,7 +31,7 @@ const STRUCTURES = [
       name="capacity"
       type="text"
       inputmode="numeric"
-      value="1000000"
+      value="1,000,000"
     />
   </div>
   <div class="field">
@@ -191,6 +191,40 @@ const STRUCTURES = [
     size.title = result.note ?? "";
   }
 
+  // Only regroup input that is already just digits and separators, so typing
+  // something wrong is left intact for the validation message to explain.
+  const GROUPED = /^[\d,]*$/;
+  const MAX_DIGITS = 15;
+
+  function digitsOf(value: string): string {
+    return value.replace(/\D/g, "");
+  }
+
+  // Regroups in place, keeping the caret where the typist left it. The offset
+  // is counted in digits rather than characters, so an inserted comma does not
+  // drag the caret along with it.
+  function regroup(input: HTMLInputElement): void {
+    if (!GROUPED.test(input.value)) return;
+    const digits = digitsOf(input.value);
+    if (digits === "" || digits.length > MAX_DIGITS) return;
+
+    const caret = input.selectionStart ?? input.value.length;
+    const digitsBeforeCaret = digitsOf(input.value.slice(0, caret)).length;
+    const formatted = Number(digits).toLocaleString("en-US");
+    if (formatted === input.value) return;
+
+    input.value = formatted;
+    let seen = 0;
+    let position = 0;
+    while (position < formatted.length && seen < digitsBeforeCaret) {
+      if (/\d/.test(formatted.charAt(position))) seen += 1;
+      position += 1;
+    }
+    input.setSelectionRange(position, position);
+  }
+
+  const capacityInput =
+    document.querySelector<HTMLInputElement>("#sizing-capacity");
   const form = document.querySelector<HTMLFormElement>("[data-sizing]");
   const warnings = document.querySelector<HTMLElement>(
     "[data-sizing-warnings]",
@@ -199,7 +233,9 @@ const STRUCTURES = [
   function update(): void {
     if (!form) return;
     const data = new FormData(form);
-    const report = computeSizing(data.get("capacity"), data.get("epsilon"));
+    const raw = String(data.get("capacity") ?? "");
+    const capacity = GROUPED.test(raw) ? digitsOf(raw) : raw;
+    const report = computeSizing(capacity, data.get("epsilon"));
     for (const key of KEYS) {
       const row = document.querySelector<HTMLTableRowElement>(
         `[data-row='${key}']`,
@@ -209,6 +245,9 @@ const STRUCTURES = [
     if (warnings) warnings.textContent = report.warnings.join(" ");
   }
 
-  form?.addEventListener("input", update);
+  form?.addEventListener("input", (event) => {
+    if (capacityInput && event.target === capacityInput) regroup(capacityInput);
+    update();
+  });
   update();
 </script>
