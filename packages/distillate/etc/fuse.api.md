@@ -5,6 +5,11 @@
 ```ts
 
 // @public
+export class BadMagicError extends SerializationError {
+    override readonly name = "BadMagicError";
+}
+
+// @public
 export class BinaryFuse16 extends BinaryFuse {
     static from(keys: Iterable<BytesLike>): BinaryFuse16;
     static fromBytes(bytes: Uint8Array): BinaryFuse16;
@@ -24,6 +29,11 @@ export class BinaryFuseBuildError extends Error {
 }
 
 // @public
+export class ChecksumError extends SerializationError {
+    override readonly name = "ChecksumError";
+}
+
+// @public
 export interface FilterJSON {
     $: string;
     data: string;
@@ -32,6 +42,26 @@ export interface FilterJSON {
 
 // @public
 export function fuseBitsPerKey(n: number, width: 8 | 16): number;
+
+// @public
+export class SerializationError extends Error {
+    override readonly name: string;
+}
+
+// @public
+export class TruncatedError extends SerializationError {
+    override readonly name = "TruncatedError";
+}
+
+// @public
+export class UnknownHashVariantError extends SerializationError {
+    override readonly name = "UnknownHashVariantError";
+}
+
+// @public
+export class UnknownVersionError extends SerializationError {
+    override readonly name = "UnknownVersionError";
+}
 
 // (No @packageDocumentation comment for this package)
 
