@@ -13,6 +13,8 @@ export interface SizingReport {
   blocked: StructureResult;
   fuse8: StructureResult;
   fuse16: StructureResult;
+  /** Advice that depends on the inputs, not on one structure alone. */
+  warnings: string[];
 }
 
 function classicSizing(capacity: number, epsilon: number): StructureResult {
@@ -83,6 +85,21 @@ function fuseSizing(capacity: number, width: 8 | 16): StructureResult {
   };
 }
 
+// Blocked is dearer than classic at every target, which is the price of the
+// one-cache-line lookup. It only stops being worth paying once the split-block
+// clustering penalty compounds, so warn on the ratio rather than on the bare
+// inequality, which would fire always and mean nothing.
+const PENALTY_RATIO = 1.5;
+
+function spacePenalty(
+  bloom: StructureResult,
+  blocked: StructureResult,
+): string | null {
+  if (!bloom.ok || !blocked.ok) return null;
+  if (blocked.bitsPerKey < PENALTY_RATIO * bloom.bitsPerKey) return null;
+  return `Blocked Bloom needs ${String(Math.round(blocked.bitsPerKey))} bits/key here where Classic Bloom needs ${String(Math.round(bloom.bitsPerKey))} for the same rate. Blocked still meets the target, but its clustering penalty compounds at rates this low. Prefer Classic Bloom, or Binary Fuse if the set is static.`;
+}
+
 export function computeSizing(
   capacity: unknown,
   epsilon: unknown,
@@ -90,12 +107,22 @@ export function computeSizing(
   const input = validate(capacity, epsilon);
   if (!input.ok) {
     const failed = { ok: false, message: input.message } as const;
-    return { bloom: failed, blocked: failed, fuse8: failed, fuse16: failed };
+    return {
+      bloom: failed,
+      blocked: failed,
+      fuse8: failed,
+      fuse16: failed,
+      warnings: [],
+    };
   }
+  const bloom = classicSizing(input.capacity, input.epsilon);
+  const blocked = blockedSizing(input.capacity, input.epsilon);
+  const penalty = spacePenalty(bloom, blocked);
   return {
-    bloom: classicSizing(input.capacity, input.epsilon),
-    blocked: blockedSizing(input.capacity, input.epsilon),
+    bloom,
+    blocked,
     fuse8: fuseSizing(input.capacity, 8),
     fuse16: fuseSizing(input.capacity, 16),
+    warnings: penalty ? [penalty] : [],
   };
 }

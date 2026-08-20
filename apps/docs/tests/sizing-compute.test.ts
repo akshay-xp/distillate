@@ -170,3 +170,29 @@ test("no bad input ever produces NaN or throws", () => {
     }
   }
 });
+
+test("no advisory where blocked's premium is the modest one it is sold on", () => {
+  // eps 1e-2: classic 9.59 bits/key, blocked 11, ratio 1.15.
+  expect(computeSizing(1e6, 0.01).warnings).toEqual([]);
+});
+
+test("advisory fires where blocked's space penalty turns decisive", () => {
+  // eps 1e-5: classic 23.96 bits/key, blocked 41, ratio 1.71.
+  const { warnings } = computeSizing(1e6, 1e-5);
+
+  expect(warnings).toHaveLength(1);
+  expect(warnings[0]).toMatch(/41/);
+  expect(warnings[0]).toMatch(/24/);
+});
+
+test("the advisory boundary sits where the ratio reaches 1.5", () => {
+  // eps 3e-5: classic 21.68, blocked 34, ratio 1.57, the first target to trip it.
+  expect(computeSizing(1e6, 3e-5).warnings).toHaveLength(1);
+  // eps 1e-4: classic 19.17, blocked 27, ratio 1.41, still below the threshold.
+  expect(computeSizing(1e6, 1e-4).warnings).toEqual([]);
+});
+
+test("bad input produces no advisory", () => {
+  expect(computeSizing("abc", 0.01).warnings).toEqual([]);
+  expect(computeSizing(1e6, 1e-9).warnings).toEqual([]);
+});
