@@ -116,7 +116,7 @@ Design notes, the structure decision matrix, hashing, and the binary format live
 - [serialization](https://distillate.akxp.net/reference/serialization/): the binary format spec
 - [versioning](https://distillate.akxp.net/reference/versioning/): SemVer policy and supported-runtime baseline
 - [architecture](./docs/architecture.md), [hashing](./docs/hashing.md): contributor notes, on GitHub
-- [API reference](https://distillate.akxp.net/api/): generated from TSDoc at site build time (per entry point)
+- [API reference](https://distillate.akxp.net/api/readme/): generated from TSDoc at site build time (per entry point)
 
 ## License
 

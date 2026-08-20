@@ -28,7 +28,9 @@ pnpm workspace (`pnpm-workspace.yaml`: `packages/*`, `apps/*`).
 
 Keep each subpath a separate bundler entry (independent chunks; no barrel pulling everything in). No top-level side effects.
 
-Shipped `dist/*.js` is **not minified** (tsdown default). Consumers bundle and minify downstream, so TSDoc comments never reach their runtime bundle; the `.d.ts` files keep the comments for IntelliSense, and readable installed source aids debugging. Minifying here would only trade that away for no consumer benefit.
+Shipped `dist/*.js` is **not minified** (tsdown default). Consumers bundle and minify downstream, and readable installed source aids debugging, so minifying here would trade that away for no consumer benefit.
+
+TSDoc, however, is stripped from the JS: `outputOptions: { comments: false }` in `tsdown.config.mjs`. **Do not turn this back on.** Rolldown preserves doc comments by default, and they were reaching every consumer's runtime bundle, not just the installed source. Documenting the six serialization errors in the shared `serialize` chunk added ~1.9 KB raw to all three subpaths at once and broke every budget; the export statements themselves cost only ~286 bytes. Turning comments off cut `./bloom` from 23018 to 18387 raw bytes and `./blocked` from 24630 to 19184, because the pre-existing TSDoc was shipping too. The `.d.ts` files keep every comment, so IntelliSense, `docs:check`, and the generated API reference are unaffected.
 
 ## Bundle size
 
