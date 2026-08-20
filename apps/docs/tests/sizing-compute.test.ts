@@ -1,5 +1,6 @@
 import { blockedBitsPerKey } from "distillate/blocked";
 import { bloomSizing } from "distillate/bloom";
+import { fuseBitsPerKey } from "distillate/fuse";
 import { expect, test } from "vitest";
 
 import { computeSizing } from "../src/components/sizing/compute.js";
@@ -61,4 +62,52 @@ test("a target below the blocked floor becomes a message, not an exception", () 
   expect(result.ok).toBe(false);
   if (result.ok) return;
   expect(result.message).toMatch(/floor/i);
+});
+
+test("fuse sizing matches fuseBitsPerKey for both widths", () => {
+  const report = computeSizing(1e8, 0.01);
+
+  expect(report.fuse8).toMatchObject({ ok: true, bitsPerKey: 9.00726784 });
+  expect(report.fuse16).toMatchObject({ ok: true, bitsPerKey: 18.01453568 });
+});
+
+test.each([
+  [1e8, 8],
+  [1e6, 8],
+  [1e6, 16],
+] as const)(
+  "fuse sizing tracks the library helper at n=%d width=%d",
+  (n, width) => {
+    const result =
+      width === 8
+        ? computeSizing(n, 0.01).fuse8
+        : computeSizing(n, 0.01).fuse16;
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.bitsPerKey).toBe(fuseBitsPerKey(n, width));
+    expect(result.totalBytes).toBe(
+      Math.ceil((fuseBitsPerKey(n, width) * n) / 8),
+    );
+  },
+);
+
+test("fuse output states it is static and takes no target rate", () => {
+  const report = computeSizing(1e8, 0.01);
+
+  for (const result of [report.fuse8, report.fuse16]) {
+    expect(result.ok).toBe(true);
+    if (!result.ok) continue;
+    expect(result.note).toMatch(/static/i);
+    expect(result.note).toMatch(/insert/i);
+    expect(result.note).toMatch(/epsilon|target/i);
+  }
+});
+
+test("fuse ignores the epsilon input entirely", () => {
+  const loose = computeSizing(1e8, 0.01);
+  const tight = computeSizing(1e8, 1e-6);
+
+  expect(loose.fuse8).toEqual(tight.fuse8);
+  expect(loose.fuse16).toEqual(tight.fuse16);
 });
