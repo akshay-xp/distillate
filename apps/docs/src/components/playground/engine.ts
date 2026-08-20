@@ -1,8 +1,8 @@
-import { BlockedBloomFilter } from "distillate/blocked";
+import { BlockedBloomFilter, ParamError } from "distillate/blocked";
 import { BloomFilter } from "distillate/bloom";
 import { BinaryFuse8 } from "distillate/fuse";
 
-import { toNumber } from "../../lib/form.js";
+import { RATE_MESSAGE, toNumber } from "../../lib/form.js";
 
 /** The three shipped structures, side by side over one key set. */
 export type StructureKey = "bloom" | "blocked" | "fuse8";
@@ -79,6 +79,16 @@ function describe(
   };
 }
 
+/**
+ * Turns an error the library threw into something a reader can act on.
+ *
+ * @throws the original error if it is not one the page knows how to explain.
+ */
+export function toMessage(error: unknown): string {
+  if (error instanceof ParamError) return error.message;
+  throw error;
+}
+
 /** A built set of filters over generated keys, ready to be queried. */
 export class Playground {
   readonly #keys: string[];
@@ -94,20 +104,28 @@ export class Playground {
   }
 
   /** Builds all three structures from `keyCount` generated keys. */
-  static build(keyCount: unknown, target: number): BuildResult {
+  static build(keyCount: unknown, target: unknown): BuildResult {
     const n = toNumber(keyCount);
     if (!Number.isInteger(n) || n < 1 || n > MAX_KEYS) {
       return { ok: false, message: KEY_COUNT_MESSAGE };
     }
+    // Only non-numeric input is caught here. What counts as a usable rate is
+    // the library's to say, and it says it well enough to show verbatim.
+    const epsilon = toNumber(target);
+    if (Number.isNaN(epsilon)) return { ok: false, message: RATE_MESSAGE };
+
     const keys = memberKeys(n);
-    return {
-      ok: true,
-      playground: new Playground(keys, target, {
-        bloom: BloomFilter.from(keys, target),
-        blocked: BlockedBloomFilter.from(keys, target),
+    let filters: Filters;
+    try {
+      filters = {
+        bloom: BloomFilter.from(keys, epsilon),
+        blocked: BlockedBloomFilter.from(keys, epsilon),
         fuse8: BinaryFuse8.from(keys),
-      }),
-    };
+      };
+    } catch (error) {
+      return { ok: false, message: toMessage(error) };
+    }
+    return { ok: true, playground: new Playground(keys, epsilon, filters) };
   }
 
   report(): PlaygroundReport {

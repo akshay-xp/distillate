@@ -2,7 +2,7 @@ import { blockedBitsPerKey, ParamError } from "distillate/blocked";
 import { bloomSizing } from "distillate/bloom";
 import { fuseBitsPerKey } from "distillate/fuse";
 
-import { toNumber } from "../../lib/form.js";
+import { RATE_MESSAGE, toNumber } from "../../lib/form.js";
 
 /** Space a structure needs for the requested capacity, or why it cannot say. */
 export type StructureResult =
@@ -47,8 +47,6 @@ const MAX_CAPACITY = 1e12;
 
 const CAPACITY_MESSAGE =
   "Capacity must be a whole number of keys between 1 and 1e12.";
-const RATE_MESSAGE =
-  "Target rate must be a number greater than 0 and less than 1, for example 0.01 for 1%.";
 
 type Inputs =
   | { ok: true; capacity: number; epsilon: number }
