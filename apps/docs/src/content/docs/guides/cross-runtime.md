@@ -33,9 +33,9 @@ Each structure is its own subpath, so a bundle only carries what it imports.
 With `sideEffects: false` set, a build that imports `distillate/fuse` never
 pulls in the Bloom code at all.
 
-Deno resolves the same specifier through npm:
+Deno resolves the same specifier through npm, by prefixing it:
 
-```ts
+```
 import { BloomFilter } from "npm:distillate/bloom";
 ```
 
