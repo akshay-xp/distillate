@@ -1,6 +1,6 @@
 import { BlockedBloomFilter } from "distillate/blocked";
 import { bloomSizing } from "distillate/bloom";
-import { BinaryFuse8 } from "distillate/fuse";
+import { BinaryFuse8, BinaryFuseBuildError } from "distillate/fuse";
 import { expect, test } from "vitest";
 
 import {
@@ -156,3 +156,15 @@ test.each(["", "abc", null, undefined])(
     expect(result.message).toContain("greater than 0 and less than 1");
   },
 );
+
+// The peeling loop converges for every realistic key set, so there is no
+// honest input that triggers this. Tested on the error itself instead.
+test("a fuse build failure reads as an instruction, not as a status line", () => {
+  const raw = "binary fuse construction failed";
+
+  const message = toMessage(new BinaryFuseBuildError(raw));
+
+  expect(message).not.toBe(raw);
+  expect(message).toContain("Binary Fuse");
+  expect(message).toContain("key count");
+});
