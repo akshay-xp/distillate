@@ -56,3 +56,47 @@ test("the build is repeatable from the button, at a new key count", async ({
   ).toHaveText("50,000");
   expect(errors).toEqual([]);
 });
+
+async function query(page: Page, key: string): Promise<void> {
+  await page.fill("#pg-query", key);
+  await page.getByRole("button", { name: "Query" }).click();
+}
+
+function verdict(page: Page, structure: string) {
+  return page.locator(`[data-row='${structure}'] [data-cell='verdict']`);
+}
+
+test("an inserted key reads as a member in every structure", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  await query(page, "key-5");
+
+  for (const structure of ["bloom", "blocked", "fuse8"]) {
+    await expect(verdict(page, structure)).toHaveText("member");
+  }
+  expect(errors).toEqual([]);
+});
+
+test("a hit on a never-inserted key is named a false positive", async ({
+  page,
+}) => {
+  await page.goto("/start/playground/");
+
+  await query(page, "miss-22");
+
+  await expect(verdict(page, "bloom")).toHaveText("false positive");
+  await expect(page.locator("main")).toContainText("not a bug");
+});
+
+test("a miss on a never-inserted key is simply absent", async ({ page }) => {
+  await page.goto("/start/playground/");
+
+  await query(page, "miss-0");
+
+  for (const structure of ["bloom", "blocked", "fuse8"]) {
+    await expect(verdict(page, structure)).toHaveText("absent");
+  }
+});
