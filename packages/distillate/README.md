@@ -74,11 +74,11 @@ filter.add("alice");
 filter.has("alice"); // true
 ```
 
-Same surface as Classic Bloom (`add` / `has` / `union` / `toBytes` / `fromBytes` / `bitsPerKey`). Reach for it when lookup throughput matters; prefer Classic when space is tight. Cache-line rationale, speed ratios, and the space penalty: [structures.md](./docs/structures.md).
+Same surface as Classic Bloom (`add` / `has` / `union` / `toBytes` / `fromBytes` / `bitsPerKey`). Reach for it when lookup throughput matters; prefer Classic when space is tight. Cache-line rationale, speed ratios, and the space penalty: [Blocked Bloom guide](https://distillate.akxp.net/guides/blocked/).
 
 ### Binary Fuse (`distillate/fuse`)
 
-A **static** filter: built once from the full key set, then immutable. The most space-efficient option in the lineup. Bits-per-key, FPR, and query throughput: [structures.md](./docs/structures.md).
+A **static** filter: built once from the full key set, then immutable. The most space-efficient option in the lineup. Bits-per-key, FPR, and query throughput: [Binary Fuse guide](https://distillate.akxp.net/guides/fuse/).
 
 ```ts
 import { BinaryFuse8, BinaryFuse16 } from "distillate/fuse";
@@ -112,9 +112,10 @@ These are a point-in-time snapshot on one machine. The full report (blocked/fuse
 Design notes, the structure decision matrix, hashing, and the binary format live in [`docs/`](./docs):
 
 - [overview](./docs/overview.md): what and why
-- [structures](./docs/structures.md): decision matrix and the full lineup
-- [architecture](./docs/architecture.md), [hashing](./docs/hashing.md), [serialization](./docs/serialization.md)
-- [versioning](./docs/versioning.md): SemVer policy and supported-runtime baseline
+- [choosing a structure](https://distillate.akxp.net/guides/choosing-a-structure/): decision matrix and the full lineup
+- [serialization](https://distillate.akxp.net/reference/serialization/): the binary format spec
+- [versioning](https://distillate.akxp.net/reference/versioning/): SemVer policy and supported-runtime baseline
+- [architecture](./docs/architecture.md), [hashing](./docs/hashing.md): contributor notes, on GitHub
 - [API reference](https://distillate.akxp.net/api/): generated from TSDoc at site build time (per entry point)
 
 ## License

@@ -72,4 +72,4 @@ Subpath exports mirror these directories (see [engineering.md](engineering.md)).
 
 ## Related
 
-- [structures.md](structures.md), [hashing.md](hashing.md), [serialization.md](serialization.md)
+- [choosing a structure](https://distillate.akxp.net/guides/choosing-a-structure/), [hashing.md](hashing.md), [serialization](https://distillate.akxp.net/reference/serialization/)
