@@ -100,15 +100,36 @@ async function loadSource(
 }
 
 /**
+ * Link targets for every page the site owns: one derived from each in-place
+ * source, plus `authored` for pages that live in `src/content/docs` and so
+ * have no source file to derive from. An explicit entry wins, which is what
+ * lets a doc move into the site without its in-place linkers going stale.
+ */
+export function siteRoutesFor(
+  sources: ExternalSource[],
+  authored: Record<string, string> = {},
+): Record<string, string> {
+  return {
+    ...Object.fromEntries(sources.map((s) => [basename(s.file), `/${s.id}/`])),
+    ...authored,
+  };
+}
+
+/**
  * Renders files that live outside the docs site as pages, leaving the files
  * where they are. Layers over Starlight's own loader so authored pages in
  * `src/content/docs` keep working.
+ *
+ * @param sources - Files to render in place.
+ * @param authored - Extra `filename.md` to route mappings for site-owned pages
+ * that are not in-place sources.
  */
-export function externalDocsLoader(sources: ExternalSource[]): Loader {
+export function externalDocsLoader(
+  sources: ExternalSource[],
+  authored: Record<string, string> = {},
+): Loader {
   const { load: loadDocs } = docsLoader();
-  const siteRoutes = Object.fromEntries(
-    sources.map((s) => [basename(s.file), `/${s.id}/`]),
-  );
+  const siteRoutes = siteRoutesFor(sources, authored);
   return {
     name: "external-docs-loader",
     load: async (ctx) => {

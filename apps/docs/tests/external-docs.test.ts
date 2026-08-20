@@ -1,6 +1,10 @@
 import { expect, test } from "vitest";
 
-import { parseTitle, rewriteLinks } from "../src/loaders/external-docs.js";
+import {
+  parseTitle,
+  rewriteLinks,
+  siteRoutesFor,
+} from "../src/loaders/external-docs.js";
 
 const GITHUB_BASE =
   "https://github.com/akshay-xp/distillate/blob/main/packages/distillate/docs/";
@@ -68,4 +72,48 @@ test("rewriteLinks rejects a relative md link with no mapping", () => {
   expect(() => rewriteLinks("[x](unknown.md)", opts)).toThrow(
     /hashing\.md.*unknown\.md/,
   );
+});
+
+test("siteRoutesFor derives a route per in-place source", () => {
+  expect(
+    siteRoutesFor([
+      { file: "apps/bench/RESULTS.md", id: "bench/results" },
+      { file: "packages/distillate/docs/hashing.md", id: "internals/hashing" },
+    ]),
+  ).toEqual({
+    "RESULTS.md": "/bench/results/",
+    "hashing.md": "/internals/hashing/",
+  });
+});
+
+test("siteRoutesFor adds authored pages that are not in-place sources", () => {
+  expect(
+    siteRoutesFor(
+      [
+        {
+          file: "packages/distillate/docs/hashing.md",
+          id: "internals/hashing",
+        },
+      ],
+      { "serialization.md": "/reference/serialization/" },
+    ),
+  ).toEqual({
+    "hashing.md": "/internals/hashing/",
+    "serialization.md": "/reference/serialization/",
+  });
+});
+
+test("an authored route resolves a link an in-place page makes", () => {
+  const siteRoutes = siteRoutesFor(
+    [{ file: "packages/distillate/docs/hashing.md", id: "internals/hashing" }],
+    { "serialization.md": "/reference/serialization/" },
+  );
+  expect(
+    rewriteLinks("see [serialization.md](serialization.md)", {
+      file: "hashing.md",
+      siteRoutes,
+      githubDocs: new Set<string>(),
+      githubBase: GITHUB_BASE,
+    }),
+  ).toBe("see [serialization.md](/reference/serialization/)");
 });
