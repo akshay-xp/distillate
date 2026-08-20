@@ -59,22 +59,67 @@ export interface ReadResult extends Header {
   body: Uint8Array;
 }
 
+/**
+ * Base class for every defect `fromBytes` and `fromJSON` reject. Thrown
+ * directly when a JSON envelope is malformed: not an object, missing the
+ * `"distillate"` tag, missing `data`, or `data` that is not valid base64.
+ * Catch this to handle any decode failure at once, or a subclass to tell the
+ * causes apart. The input is corrupt or foreign, so discard it; retrying the
+ * same bytes cannot succeed.
+ */
 export class SerializationError extends Error {
+  /** Discriminates this error from other `Error`s. */
   override readonly name: string = "SerializationError";
 }
+
+/**
+ * Thrown when a frame is shorter than its header plus trailer, or when its
+ * body length does not match the length its declared params imply. The bytes
+ * were cut short in transit or storage; re-fetch the whole frame.
+ */
 export class TruncatedError extends SerializationError {
+  /** Discriminates this error from other `Error`s. */
   override readonly name = "TruncatedError";
 }
+
+/**
+ * Thrown when a frame does not start with the four-byte `AMQF` magic, so it
+ * was never produced by `toBytes`. Check that the bytes really are a
+ * distillate frame and not another payload, a text encoding of one, or a
+ * slice taken at the wrong offset.
+ */
 export class BadMagicError extends SerializationError {
+  /** Discriminates this error from other `Error`s. */
   override readonly name = "BadMagicError";
 }
+
+/**
+ * Thrown when a frame or JSON envelope declares a format version this release
+ * does not read. A reader must be at least as new as the producer, so upgrade
+ * `distillate` or re-serialize the data with the version you run.
+ */
 export class UnknownVersionError extends SerializationError {
+  /** Discriminates this error from other `Error`s. */
   override readonly name = "UnknownVersionError";
 }
+
+/**
+ * Thrown when a frame's flags nibble names a hash this release cannot
+ * reproduce, so its stored bits are unreadable. Rebuild the filter from the
+ * source keys with the version you run.
+ */
 export class UnknownHashVariantError extends SerializationError {
+  /** Discriminates this error from other `Error`s. */
   override readonly name = "UnknownHashVariantError";
 }
+
+/**
+ * Thrown when a frame's CRC32 trailer does not match its contents, so the
+ * bytes were corrupted after they were written. Discard them and re-fetch;
+ * the payload cannot be trusted even where it still parses.
+ */
 export class ChecksumError extends SerializationError {
+  /** Discriminates this error from other `Error`s. */
   override readonly name = "ChecksumError";
 }
 

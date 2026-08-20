@@ -5,3 +5,11 @@ export {
   fuseBitsPerKey,
 } from "./fuse.js";
 export type { FilterJSON } from "../core/serialize.js";
+export {
+  BadMagicError,
+  ChecksumError,
+  SerializationError,
+  TruncatedError,
+  UnknownHashVariantError,
+  UnknownVersionError,
+} from "../core/serialize.js";
