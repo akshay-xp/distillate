@@ -5,6 +5,11 @@
 ```ts
 
 // @public
+export class BadMagicError extends SerializationError {
+    override readonly name = "BadMagicError";
+}
+
+// @public
 export function blockedBitsPerKey(epsilon: number): number;
 
 // @public
@@ -43,6 +48,11 @@ export interface BlockedBloomParams {
 export function blockedFprAt(bitsPerKey: number): number;
 
 // @public
+export class ChecksumError extends SerializationError {
+    override readonly name = "ChecksumError";
+}
+
+// @public
 export interface FilterJSON {
     $: string;
     data: string;
@@ -52,6 +62,26 @@ export interface FilterJSON {
 // @public
 export class ParamError extends RangeError {
     override readonly name = "ParamError";
+}
+
+// @public
+export class SerializationError extends Error {
+    override readonly name: string;
+}
+
+// @public
+export class TruncatedError extends SerializationError {
+    override readonly name = "TruncatedError";
+}
+
+// @public
+export class UnknownHashVariantError extends SerializationError {
+    override readonly name = "UnknownHashVariantError";
+}
+
+// @public
+export class UnknownVersionError extends SerializationError {
+    override readonly name = "UnknownVersionError";
 }
 
 // (No @packageDocumentation comment for this package)
