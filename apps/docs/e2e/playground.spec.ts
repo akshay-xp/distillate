@@ -100,3 +100,68 @@ test("a miss on a never-inserted key is simply absent", async ({ page }) => {
     await expect(verdict(page, structure)).toHaveText("absent");
   }
 });
+
+async function add(page: Page, key: string): Promise<void> {
+  await page.fill("#pg-add", key);
+  await page.getByRole("button", { name: "Add" }).click();
+}
+
+test("a late key is taken by the bloom filters and refused by fuse", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  await add(page, "late-key");
+
+  const status = page.locator("[data-pg-status]");
+  await expect(status).toContainText("Binary Fuse");
+  await expect(status).toContainText("static");
+  await expect(
+    page.locator("[data-row='bloom'] [data-cell='held']"),
+  ).toHaveText("10,001");
+  await expect(
+    page.locator("[data-row='fuse8'] [data-cell='held']"),
+  ).toHaveText("10,000");
+  expect(errors).toEqual([]);
+});
+
+test("a late key reads as outside the fuse build, not as a miss", async ({
+  page,
+}) => {
+  await page.goto("/start/playground/");
+
+  await add(page, "late-key");
+  await query(page, "late-key");
+
+  await expect(verdict(page, "bloom")).toHaveText("member");
+  await expect(verdict(page, "blocked")).toHaveText("member");
+  await expect(verdict(page, "fuse8")).toHaveText("added after build");
+});
+
+test("no structure gains a false negative from a late key", async ({
+  page,
+}) => {
+  await page.goto("/start/playground/");
+
+  await add(page, "late-key");
+
+  for (const structure of ["bloom", "blocked", "fuse8"]) {
+    await expect(
+      page.locator(`[data-row='${structure}'] [data-cell='missing']`),
+    ).toHaveText("0");
+  }
+});
+
+test("adding a key clears a verdict it has just invalidated", async ({
+  page,
+}) => {
+  await page.goto("/start/playground/");
+
+  await query(page, "late-key");
+  await expect(verdict(page, "bloom")).toHaveText("absent");
+
+  await add(page, "late-key");
+
+  await expect(verdict(page, "bloom")).toBeEmpty();
+});
