@@ -15,7 +15,48 @@ export default defineConfig({
       // route emits for src/content/docs/404.md, and Astro 7 warns on the
       // conflict. Dropping Starlight's route leaves the authored page.
       disable404Route: true,
+      // The teaching path: start here, then guides, then reference. Supporting
+      // material follows, and the generated API tree is last.
       sidebar: [
+        {
+          label: "Start here",
+          items: [
+            {
+              label: "What is an AMQ filter?",
+              link: "/start/what-is-an-amq-filter/",
+            },
+            { label: "Install", link: "/start/install/" },
+          ],
+        },
+        {
+          label: "Guides",
+          items: [
+            {
+              label: "Choosing a structure",
+              link: "/guides/choosing-a-structure/",
+            },
+            { label: "Classic Bloom", link: "/guides/bloom/" },
+            { label: "Blocked Bloom", link: "/guides/blocked/" },
+            { label: "Binary Fuse", link: "/guides/fuse/" },
+            { label: "Sizing and tuning FPR", link: "/guides/sizing/" },
+            { label: "Cross-runtime usage", link: "/guides/cross-runtime/" },
+            {
+              label: "Migrating from bloom-filters",
+              link: "/guides/migrating-from-bloom-filters/",
+            },
+          ],
+        },
+        {
+          label: "Reference",
+          items: [
+            {
+              label: "Serialization format",
+              link: "/reference/serialization/",
+            },
+            { label: "Versioning and support", link: "/reference/versioning/" },
+            { label: "Errors", link: "/reference/errors/" },
+          ],
+        },
         {
           label: "Benchmarks",
           items: [
@@ -27,7 +68,6 @@ export default defineConfig({
           label: "Internals",
           items: [{ label: "Hashing", link: "/internals/hashing/" }],
         },
-        // Generated last, per the start-here then guides then reference order.
         typeDocSidebarGroup,
       ],
       plugins: [
