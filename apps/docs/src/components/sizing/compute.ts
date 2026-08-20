@@ -1,5 +1,6 @@
 import { blockedBitsPerKey, ParamError } from "distillate/blocked";
 import { bloomSizing } from "distillate/bloom";
+import { fuseBitsPerKey } from "distillate/fuse";
 
 /** Space a structure needs for the requested capacity, or why it cannot say. */
 export type StructureResult =
@@ -10,6 +11,8 @@ export type StructureResult =
 export interface SizingReport {
   bloom: StructureResult;
   blocked: StructureResult;
+  fuse8: StructureResult;
+  fuse16: StructureResult;
 }
 
 function classicSizing(capacity: number, epsilon: number): StructureResult {
@@ -35,9 +38,24 @@ function blockedSizing(capacity: number, epsilon: number): StructureResult {
   };
 }
 
+const FUSE_NOTE =
+  "Static: built once from the whole key set, then immutable. It rejects inserts after the build, and takes no target epsilon; the rate is fixed by fingerprint width.";
+
+function fuseSizing(capacity: number, width: 8 | 16): StructureResult {
+  const bitsPerKey = fuseBitsPerKey(capacity, width);
+  return {
+    ok: true,
+    bitsPerKey,
+    totalBytes: Math.ceil((bitsPerKey * capacity) / 8),
+    note: FUSE_NOTE,
+  };
+}
+
 export function computeSizing(capacity: number, epsilon: number): SizingReport {
   return {
     bloom: classicSizing(capacity, epsilon),
     blocked: blockedSizing(capacity, epsilon),
+    fuse8: fuseSizing(capacity, 8),
+    fuse16: fuseSizing(capacity, 16),
   };
 }
