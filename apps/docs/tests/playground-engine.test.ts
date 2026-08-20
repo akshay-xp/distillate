@@ -100,3 +100,15 @@ test.each([100_001, 1e9, 0, -1, 1.5, "abc", "", null, undefined])(
 test("the bound itself is buildable", () => {
   expect(Playground.build(MAX_KEYS, TARGET).ok).toBe(true);
 });
+
+// A wedge guard, not a benchmark. Building at the bound measured 61 ms here,
+// so 3000 ms is roughly 50x headroom: it fires only if the bound grows to
+// something that would freeze the tab, never on a slow machine.
+test("building at the bound stays far inside a responsive budget", () => {
+  const started = performance.now();
+  const result = Playground.build(MAX_KEYS, TARGET);
+  const elapsed = performance.now() - started;
+
+  expect(result.ok).toBe(true);
+  expect(elapsed).toBeLessThan(3000);
+});
