@@ -12,6 +12,12 @@ The floor for any filter is `log2(1/epsilon)` bits per key: 6.64 at a 1% FPR,
 9.97 at 0.1%, 19.93 at 1e-6. Nothing beats that. How far above it a structure
 lands is the whole comparison.
 
+:::tip[Price it without reading further]
+The [sizing calculator](/guides/sizing/calculator/) runs every helper on this
+page against your own capacity and target, and prices all four structures at
+once. It is analytic, so a 100 million key input answers instantly.
+:::
+
 ## Pick a target first
 
 `epsilon` is not a quality dial to turn up. It is the fraction of negative
