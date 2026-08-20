@@ -2,6 +2,8 @@ import { blockedBitsPerKey, ParamError } from "distillate/blocked";
 import { bloomSizing } from "distillate/bloom";
 import { fuseBitsPerKey } from "distillate/fuse";
 
+import { toNumber } from "../../lib/form.js";
+
 /** Space a structure needs for the requested capacity, or why it cannot say. */
 export type StructureResult =
   | { ok: true; bitsPerKey: number; totalBytes: number; note?: string }
@@ -47,14 +49,6 @@ const CAPACITY_MESSAGE =
   "Capacity must be a whole number of keys between 1 and 1e12.";
 const RATE_MESSAGE =
   "Target rate must be a number greater than 0 and less than 1, for example 0.01 for 1%.";
-
-// The form hands over strings, so accept those as well as numbers. Anything
-// else, including null, undefined, objects, and blanks, is not a number.
-function toNumber(value: unknown): number {
-  if (typeof value === "number") return value;
-  if (typeof value === "string" && value.trim() !== "") return Number(value);
-  return NaN;
-}
 
 type Inputs =
   | { ok: true; capacity: number; epsilon: number }

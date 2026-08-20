@@ -3,7 +3,7 @@ import { bloomSizing } from "distillate/bloom";
 import { BinaryFuse8 } from "distillate/fuse";
 import { expect, test } from "vitest";
 
-import { Playground } from "../src/components/playground/engine.js";
+import { MAX_KEYS, Playground } from "../src/components/playground/engine.js";
 
 const KEYS = 10_000;
 const TARGET = 0.01;
@@ -82,4 +82,21 @@ test("fuse holds its fingerprint-fixed rate whatever the target is", () => {
     expect(measuredFpr).toBeGreaterThanOrEqual(0.002);
     expect(measuredFpr).toBeLessThanOrEqual(0.006);
   }
+});
+
+// 1e9 is here to prove the refusal happens before any allocation: attempting
+// it would exhaust memory rather than return a message.
+test.each([100_001, 1e9, 0, -1, 1.5, "abc", "", null, undefined])(
+  "a key count of %o is refused, naming the bound",
+  (keyCount) => {
+    const result = Playground.build(keyCount, TARGET);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.message).toContain("100,000");
+  },
+);
+
+test("the bound itself is buildable", () => {
+  expect(Playground.build(MAX_KEYS, TARGET).ok).toBe(true);
 });
