@@ -1,11 +1,18 @@
 // Fails the build when the site links to a page it never emitted. Run after
 // build: `pnpm links:check [dir]`, defaulting to `dist`.
 import { readdirSync, readFileSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { basename, join, relative, sep } from "node:path";
 
-import { findBrokenLinks } from "./links.mjs";
+import { findBrokenLinks, findBrokenSiteLinks } from "./links.mjs";
 
-const root = process.argv[2] ?? "dist";
+// Usage: check-links.mjs [dist-dir] [markdown-file ...]
+// Each markdown file is checked for absolute links into the deployed site, so
+// a route rename cannot leave a dead link that npm renders. Naming the files
+// rather than assuming them keeps the checker usable on any directory.
+const [root = "dist", ...external] = process.argv.slice(2);
+
+// Kept in step with `site` in astro.config.mjs.
+const SITE = "https://distillate.akxp.net";
 
 /** @param {string} dir @returns {string[]} */
 function htmlFiles(dir) {
@@ -26,6 +33,21 @@ const pages = new Map(
 
 const broken = findBrokenLinks(pages);
 for (const { from, href } of broken) console.log(`${from} -> ${href}`);
-console.log(`${String(pages.size)} routes, ${String(broken.length)} broken`);
 
-if (broken.length > 0) process.exitCode = 1;
+const routes = new Set(pages.keys());
+let outside = 0;
+for (const file of external) {
+  for (const url of findBrokenSiteLinks(
+    readFileSync(file, "utf8"),
+    SITE,
+    routes,
+  )) {
+    console.log(`${basename(file)} -> ${url}`);
+    outside += 1;
+  }
+}
+
+const total = broken.length + outside;
+console.log(`${String(pages.size)} routes, ${String(total)} broken`);
+
+if (total > 0) process.exitCode = 1;

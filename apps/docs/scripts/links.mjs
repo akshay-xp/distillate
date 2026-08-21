@@ -53,3 +53,26 @@ export function findBrokenLinks(pages) {
   }
   return broken;
 }
+
+/**
+ * Markdown outside the site, such as the package README, linking into it by
+ * absolute URL. `findBrokenLinks` cannot see these: they are neither
+ * root-relative nor written as `href`, so nothing checked them before.
+ *
+ * @param {string} markdown
+ * @param {string} origin Site origin, without a trailing slash.
+ * @param {ReadonlySet<string>} routes Routes the build emitted.
+ * @returns {string[]} Every linked URL under `origin` with no such route.
+ */
+export function findBrokenSiteLinks(markdown, origin, routes) {
+  /** @type {string[]} */
+  const broken = [];
+  for (const match of markdown.matchAll(/\]\((https?:\/\/[^)\s]+)\)/g)) {
+    const url = match[1];
+    if (!url.startsWith(origin)) continue;
+    const path = pathOf(url.slice(origin.length)) || "/";
+    if (isAsset(path)) continue;
+    if (!routes.has(routeOf(path))) broken.push(url);
+  }
+  return broken;
+}
