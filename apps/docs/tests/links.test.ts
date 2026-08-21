@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test } from "vitest";
 
-import { findBrokenLinks } from "../scripts/links.mjs";
+import { findBrokenLinks, findBrokenSiteLinks } from "../scripts/links.mjs";
 
 function page(...hrefs: string[]): string {
   const links = hrefs.map((h) => `<a href="${h}">x</a>`).join("");
@@ -119,4 +119,20 @@ test("the checker exits zero once every link resolves", () => {
   expect(status).toBe(0);
   expect(output).toContain("2 routes, 0 broken");
   expect(output).not.toContain("->");
+});
+
+const SITE = "https://distillate.akxp.net";
+
+test("an absolute link into the site is checked against the same routes", () => {
+  const routes = new Set(["/", "/guides/sizing/"]);
+  const markdown = [
+    `[live](${SITE}/guides/sizing/)`,
+    `[dead](${SITE}/api/readme/)`,
+    "[elsewhere](https://example.com/whatever/)",
+    "[relative](./other.md)",
+  ].join("\n");
+
+  expect(findBrokenSiteLinks(markdown, SITE, routes)).toEqual([
+    `${SITE}/api/readme/`,
+  ]);
 });
