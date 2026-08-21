@@ -1,3 +1,9 @@
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { expect, test } from "vitest";
 
 import { findBrokenLinks } from "../scripts/links.mjs";
@@ -71,4 +77,46 @@ test("a dot in a page's own path does not make it an asset", () => {
   expect(findBrokenLinks(pages)).toEqual([
     { from: "/a/", href: "/reference/v0.7/" },
   ]);
+});
+
+const CHECKER = fileURLToPath(
+  new URL("../scripts/check-links.mjs", import.meta.url),
+);
+
+/** Writes `{ route: html }` into a temp directory laid out like `dist`. */
+function buildDir(tree: Record<string, string>): string {
+  const dir = mkdtempSync(join(tmpdir(), "links-"));
+  for (const [route, html] of Object.entries(tree)) {
+    const parent = join(dir, route);
+    mkdirSync(parent, { recursive: true });
+    writeFileSync(join(parent, "index.html"), html);
+  }
+  return dir;
+}
+
+function check(dir: string) {
+  const run = spawnSync(process.execPath, [CHECKER, dir], {
+    encoding: "utf8",
+  });
+  return { status: run.status, output: run.stdout + run.stderr };
+}
+
+test("the checker exits non-zero and names a broken link", () => {
+  const dir = buildDir({ ".": page("/gone/") });
+
+  const { status, output } = check(dir);
+
+  expect(status).toBe(1);
+  expect(output).toContain("/ -> /gone/");
+  expect(output).toContain("1 routes, 1 broken");
+});
+
+test("the checker exits zero once every link resolves", () => {
+  const dir = buildDir({ ".": page("/gone/"), gone: page() });
+
+  const { status, output } = check(dir);
+
+  expect(status).toBe(0);
+  expect(output).toContain("2 routes, 0 broken");
+  expect(output).not.toContain("->");
 });
