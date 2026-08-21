@@ -207,3 +207,30 @@ test("a target under the blocked floor names the floor, in the page", async ({
   );
   expect(errors).toEqual([]);
 });
+
+test("the playground has a sidebar entry", async ({ page }) => {
+  await page.goto("/start/what-is-an-amq-filter/");
+
+  const entry = page
+    .locator("nav")
+    .getByRole("link", { name: "Playground", exact: true });
+
+  await expect(entry).toHaveAttribute("href", "/start/playground/");
+});
+
+test("the page that introduces the guarantee links to the demo", async ({
+  page,
+}) => {
+  await page.goto("/start/what-is-an-amq-filter/");
+
+  await page
+    .locator("main")
+    .getByRole("link", { name: /playground/i })
+    .first()
+    .click();
+
+  await expect(page).toHaveURL(/\/start\/playground\/$/);
+  await expect(
+    page.locator("[data-row='bloom'] [data-cell='held']"),
+  ).toHaveText("10,000");
+});
