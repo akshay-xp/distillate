@@ -93,4 +93,4 @@ other languages can read the same bytes.
 
 - [What is an AMQ filter?](/start/what-is-an-amq-filter/) for the concept.
 - [Choosing a structure](/guides/choosing-a-structure/) to pick the right one.
-- [API reference](/api/readme/) generated from the source.
+- [API reference](/api/overview/) generated from the source.

@@ -92,6 +92,13 @@ export default defineConfig({
           // either here does nothing. The undocumented-export gate is
           // `pnpm docs:check`, configured in packages/distillate/typedoc.json.
           typeDoc: {
+            // The plugin deletes every generated `<module>/README.md` while
+            // its own index still links to them, so the default name leaves
+            // four dead routes. Anything else keeps those pages. It must never
+            // match an entry point name: `index` would collide with
+            // `src/index.ts` and silently overwrite the module list, which a
+            // link check cannot catch because the result is still valid HTML.
+            entryFileName: "overview",
             excludeInternal: true,
             gitRevision: "main",
           },
