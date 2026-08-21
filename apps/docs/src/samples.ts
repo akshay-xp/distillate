@@ -3,9 +3,10 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { basename, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import ts from "typescript";
@@ -39,16 +40,28 @@ function markdownFilesIn(dir: string): string[] {
   return found.sort();
 }
 
-/** Every fenced `ts` block under `dir`, in a stable order. */
-export function extractSamples(dir: string): Sample[] {
+/**
+ * Every fenced `ts` block in `target`, in a stable order. `target` is either a
+ * directory to walk or a single markdown file, which is how a lone README is
+ * checked without scanning the package around it.
+ */
+export function extractSamples(target: string): Sample[] {
+  const isFile = statSync(target).isFile();
+  const files = isFile ? [target] : markdownFilesIn(target);
+  // A directory names its pages by their path within it; a lone file has no
+  // such path, and `relative` would call it the empty string.
+  const nameOf = isFile
+    ? basename
+    : (file: string) => relative(target, file).split(sep).join("/");
+
   const samples: Sample[] = [];
-  for (const file of markdownFilesIn(dir)) {
+  for (const file of files) {
     const source = readFileSync(file, "utf8");
     let index = 0;
     for (const match of source.matchAll(TS_FENCE)) {
       index++;
       samples.push({
-        file: relative(dir, file).split(sep).join("/"),
+        file: nameOf(file),
         index,
         code: match[1],
       });
