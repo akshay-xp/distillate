@@ -1,0 +1,26 @@
+import { expect, test } from "vitest";
+
+import { findBrokenLinks } from "../scripts/links.mjs";
+
+function page(...hrefs: string[]): string {
+  const links = hrefs.map((h) => `<a href="${h}">x</a>`).join("");
+  return `<html><body>${links}</body></html>`;
+}
+
+test("a link to a route the build never emitted is reported", () => {
+  const pages = new Map([
+    ["/a/", page("/b/", "/nope/")],
+    ["/b/", page()],
+  ]);
+
+  expect(findBrokenLinks(pages)).toEqual([{ from: "/a/", href: "/nope/" }]);
+});
+
+test("a page linking only to routes that exist reports nothing", () => {
+  const pages = new Map([
+    ["/a/", page("/b/", "/a/")],
+    ["/b/", page("/a/")],
+  ]);
+
+  expect(findBrokenLinks(pages)).toEqual([]);
+});
