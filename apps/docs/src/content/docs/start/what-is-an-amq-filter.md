@@ -78,6 +78,9 @@ to the same portable binary format.
 
 ## Next
 
+- The [playground](/start/playground/) builds all three in your browser, so
+  you can watch every inserted key come back and catch a false positive in
+  the act before installing anything.
 - [Install](/start/install/) and run the quick start.
 - [Choosing a structure](/guides/choosing-a-structure/) maps workloads onto
   the lineup.

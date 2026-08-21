@@ -25,6 +25,9 @@ export default defineConfig({
               label: "What is an AMQ filter?",
               link: "/start/what-is-an-amq-filter/",
             },
+            // Before Install, deliberately: the guarantee is easier to believe
+            // once you have watched it than after reading about it.
+            { label: "Playground", link: "/start/playground/" },
             { label: "Install", link: "/start/install/" },
           ],
         },
