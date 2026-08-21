@@ -39,3 +39,36 @@ test("a broken link is reported as written, not as normalised", () => {
 
   expect(findBrokenLinks(pages)).toEqual([{ from: "/a/", href: "/nope#x" }]);
 });
+
+test("assets, external URLs and relative links are not routes", () => {
+  const pages = new Map([
+    [
+      "/a/",
+      page(
+        "/_astro/x.js",
+        "/favicon.svg",
+        "/llms.txt",
+        "https://example.com/nope/",
+        "mailto:x@y.z",
+        "../b/",
+        "#top",
+        // The control: a real dead page link, so the filters above cannot
+        // pass by swallowing everything.
+        "/nope/",
+      ),
+    ],
+  ]);
+
+  expect(findBrokenLinks(pages)).toEqual([{ from: "/a/", href: "/nope/" }]);
+});
+
+// `/llms.txt` is a file and `/reference/v0.7/` is a page, and after a trailing
+// slash is appended the two look alike. The trailing slash as written is what
+// tells them apart, so the asset test has to run before normalisation.
+test("a dot in a page's own path does not make it an asset", () => {
+  const pages = new Map([["/a/", page("/reference/v0.7/")]]);
+
+  expect(findBrokenLinks(pages)).toEqual([
+    { from: "/a/", href: "/reference/v0.7/" },
+  ]);
+});

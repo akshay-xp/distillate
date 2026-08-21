@@ -4,13 +4,32 @@
 
 /** @typedef {{ from: string, href: string }} BrokenLink */
 
-// `/b`, `/b/`, `/b#x` and `/b?q=1` all address the page emitted at `/b/`.
 /**
  * @param {string} href
+ * @returns {string} The href with any fragment and query cut off.
+ */
+function pathOf(href) {
+  return href.split(/[#?]/, 1)[0];
+}
+
+// A path ending in an extension is a file the build copied, not a page it
+// routed: hashed `_astro` bundles, favicons, `llms.txt`. The trailing slash is
+// what separates `/llms.txt` from a page like `/reference/v0.7/`, so this has
+// to run before that slash is normalised away.
+/**
+ * @param {string} path
+ * @returns {boolean}
+ */
+function isAsset(path) {
+  return !path.endsWith("/") && /\.\w+$/.test(path);
+}
+
+// `/b`, `/b/`, `/b#x` and `/b?q=1` all address the page emitted at `/b/`.
+/**
+ * @param {string} path
  * @returns {string}
  */
-function routeOf(href) {
-  const path = href.split(/[#?]/, 1)[0];
+function routeOf(path) {
   return path.endsWith("/") ? path : `${path}/`;
 }
 
@@ -24,8 +43,12 @@ export function findBrokenLinks(pages) {
   for (const [from, html] of pages) {
     for (const match of html.matchAll(/href="([^"]*)"/g)) {
       const href = match[1];
+      // Anything not rooted at the site is someone else's to resolve:
+      // external URLs, `mailto:`, bare fragments, relative paths.
       if (!href.startsWith("/")) continue;
-      if (!pages.has(routeOf(href))) broken.push({ from, href });
+      const path = pathOf(href);
+      if (isAsset(path)) continue;
+      if (!pages.has(routeOf(path))) broken.push({ from, href });
     }
   }
   return broken;
