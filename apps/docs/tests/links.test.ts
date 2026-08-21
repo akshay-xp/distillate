@@ -24,3 +24,18 @@ test("a page linking only to routes that exist reports nothing", () => {
 
   expect(findBrokenLinks(pages)).toEqual([]);
 });
+
+test("the forms that address one page are all the same route", () => {
+  const pages = new Map([
+    ["/a/", page("/b", "/b/", "/b#x", "/b/#x", "/b?q=1", "/b/?q=1")],
+    ["/b/", page()],
+  ]);
+
+  expect(findBrokenLinks(pages)).toEqual([]);
+});
+
+test("a broken link is reported as written, not as normalised", () => {
+  const pages = new Map([["/a/", page("/nope#x")]]);
+
+  expect(findBrokenLinks(pages)).toEqual([{ from: "/a/", href: "/nope#x" }]);
+});
