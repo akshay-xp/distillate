@@ -165,3 +165,45 @@ test("adding a key clears a verdict it has just invalidated", async ({
 
   await expect(verdict(page, "bloom")).toBeEmpty();
 });
+
+test("a key count past the bound is refused in the page", async ({ page }) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+  const held = page.locator("[data-row='bloom'] [data-cell='held']");
+  await expect(held).toHaveText("10,000");
+
+  await page.fill("#pg-keys", "200000");
+  await page.getByRole("button", { name: "Build" }).click();
+
+  await expect(page.locator("[data-pg-status]")).toContainText("100,000");
+  await expect(held).toHaveText("10,000");
+  expect(errors).toEqual([]);
+});
+
+test("an unusable target rate is refused in the page", async ({ page }) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  await page.fill("#pg-target", "1.5");
+  await page.getByRole("button", { name: "Build" }).click();
+
+  await expect(page.locator("[data-pg-status]")).toContainText(
+    "open interval (0, 1)",
+  );
+  expect(errors).toEqual([]);
+});
+
+test("a target under the blocked floor names the floor, in the page", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  await page.fill("#pg-target", "1e-9");
+  await page.getByRole("button", { name: "Build" }).click();
+
+  await expect(page.locator("[data-pg-status]")).toContainText(
+    "below the blocked-filter floor",
+  );
+  expect(errors).toEqual([]);
+});
