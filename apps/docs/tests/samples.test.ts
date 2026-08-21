@@ -9,6 +9,13 @@ import { extractSamples, typecheckSamples } from "../src/samples.js";
 
 const DOCS = fileURLToPath(new URL("../src/content/docs", import.meta.url));
 
+// The npm front door. Checked as a single file rather than by scanning the
+// package, which would also pull in contributor docs and the fence-heavy
+// `etc/` and `temp/` API reports.
+const README = fileURLToPath(
+  new URL("../../../packages/distillate/README.md", import.meta.url),
+);
+
 let fixture: string;
 
 beforeAll(() => {
@@ -52,4 +59,20 @@ test("every documentation sample typechecks against the workspace build", () => 
   const samples = extractSamples(DOCS);
   expect(samples.length).toBeGreaterThan(0);
   expect(typecheckSamples(samples)).toEqual([]);
+});
+
+test("extractSamples accepts a single markdown file", () => {
+  const samples = extractSamples(README);
+
+  expect(samples).toHaveLength(3);
+  expect(samples.map((s) => s.file)).toEqual([
+    "README.md",
+    "README.md",
+    "README.md",
+  ]);
+  expect(samples.map((s) => s.index)).toEqual([1, 2, 3]);
+});
+
+test("every package README sample typechecks against the workspace build", () => {
+  expect(typecheckSamples(extractSamples(README))).toEqual([]);
 });
