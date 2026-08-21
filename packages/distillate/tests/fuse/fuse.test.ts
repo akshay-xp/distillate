@@ -108,6 +108,18 @@ test("fuseBitsPerKey matches the built filter without allocating one", () => {
   expect(fuseBitsPerKey(0, 8)).toBe(0);
 });
 
+// The regime the README and the fuse guide demonstrate, and the one the
+// asymptotic ~9 figure does not describe: at three keys the fingerprint array
+// is at its fixed minimum, so the ratio is an order of magnitude worse.
+test("a filter at the segment floor costs far more than the asymptote", () => {
+  const keys = ["alice", "bob", "carol"];
+
+  expect(fuseBitsPerKey(3, 8)).toBe(64);
+  expect(fuseBitsPerKey(3, 16)).toBe(128);
+  expect(BinaryFuse8.from(keys).bitsPerKey).toBe(64);
+  expect(BinaryFuse16.from(keys).bitsPerKey).toBe(128);
+});
+
 test("fuse16 has no false negatives (property)", () => {
   fc.assert(
     fc.property(fc.uniqueArray(fc.string(), { minLength: 2 }), (keys) => {
