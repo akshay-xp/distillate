@@ -82,7 +82,7 @@
     "@arethetypeswrong/cli": "^0.18.5",
     "@microsoft/api-extractor": "^7.58.12",
     "@types/node": "^22.0.0",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.11",
     "fast-check": "^4.9.0",
     "mitata": "^1.0.34",
     "publint": "^0.3.23",
@@ -90,7 +90,7 @@
     "tsx": "^4.23.12",
     "typedoc": "^0.28.20",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=22"
