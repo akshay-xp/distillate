@@ -86,11 +86,13 @@ import { BinaryFuse8, BinaryFuse16 } from "distillate/fuse";
 const filter = BinaryFuse8.from(["alice", "bob", "carol"]);
 filter.has("alice"); // true
 filter.size; // 3
-filter.bitsPerKey; // ~9
+filter.bitsPerKey; // 64 at this size; see below
 
 // Lower false-positive rate, twice the space:
 const precise = BinaryFuse16.from(["alice", "bob", "carol"]);
 ```
+
+`bitsPerKey` is the space actually allocated, not the asymptotic figure. Three keys pay 64 bits each because the fingerprint array has a fixed minimum; the ~9 you see quoted is what a filter approaches once `n` is large (about 9.5 at 100k). Size honestly with `fuseBitsPerKey(n, width)`, or the [sizing guide](https://distillate.akxp.net/guides/sizing/).
 
 Also: `toBytes` / `fromBytes`. No `add` / `delete`; rebuild `from` the new set to change membership.
 
