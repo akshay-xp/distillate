@@ -10,7 +10,7 @@
     "test": "vitest run",
     "typecheck": "astro check",
     "test:e2e": "playwright test",
-    "links:check": "node scripts/check-links.mjs dist ../../packages/distillate/README.md"
+    "links:check": "node scripts/check-links.mjs dist ../.."
   },
   "dependencies": {
     "@astrojs/starlight": "^0.41.7",
