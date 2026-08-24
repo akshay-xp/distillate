@@ -8,5 +8,7 @@ filters for JavaScript: Bloom, Blocked Bloom, and Binary Fuse. Each structure
 answers "have I seen this key?" in a fraction of the space an exact set needs,
 at a tunable false positive rate.
 
-This site is under construction. Until it lands, the reference material lives
-in the [repository](https://github.com/akshay-xp/distillate).
+New here? Start with [what an AMQ filter is](/start/what-is-an-amq-filter/),
+watch one work in the [playground](/start/playground/), then
+[install it](/start/install/). To pick between the three, see
+[choosing a structure](/guides/choosing-a-structure/).
