@@ -2,9 +2,7 @@ import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
 import starlightTypeDoc, { typeDocSidebarGroup } from "starlight-typedoc";
 
-// The only definition of the deployed origin. Keep it a root URL so `base`
-// never has to be set and the absolute asset paths Astro emits stay correct.
-export const site = "https://distillate.akxp.net";
+import { site } from "./site.mjs";
 
 export default defineConfig({
   site,

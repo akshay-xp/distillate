@@ -9,12 +9,11 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 
+import { site } from "../site.mjs";
+
 import { findBrokenLinks, findBrokenSiteLinks } from "./links.mjs";
 
 const [root = "dist", sweep] = process.argv.slice(2);
-
-// Kept in step with `site` in astro.config.mjs.
-const SITE = "https://distillate.akxp.net";
 
 /**
  * Path of `file` within `from`, with `/` separators whatever the platform.
@@ -70,7 +69,7 @@ for (const file of sweep === undefined ? [] : markdownFiles(sweep)) {
   const name = within(sweep, file);
   for (const url of findBrokenSiteLinks(
     readFileSync(file, "utf8"),
-    SITE,
+    site,
     routes,
   )) {
     console.log(`${name} -> ${url}`);
