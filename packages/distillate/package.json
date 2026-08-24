@@ -19,7 +19,7 @@
     "type": "git",
     "url": "git+https://github.com/akshay-xp/distillate.git"
   },
-  "homepage": "https://github.com/akshay-xp/distillate#readme",
+  "homepage": "https://distillate.akxp.net",
   "type": "module",
   "sideEffects": false,
   "exports": {
