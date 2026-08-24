@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { expect, test } from "vitest";
@@ -94,10 +94,9 @@ function buildDir(tree: Record<string, string>): string {
   return dir;
 }
 
-function check(dir: string) {
-  const run = spawnSync(process.execPath, [CHECKER, dir], {
-    encoding: "utf8",
-  });
+function check(dir: string, sweep?: string) {
+  const args = sweep === undefined ? [CHECKER, dir] : [CHECKER, dir, sweep];
+  const run = spawnSync(process.execPath, args, { encoding: "utf8" });
   return { status: run.status, output: run.stdout + run.stderr };
 }
 
@@ -122,6 +121,47 @@ test("the checker exits zero once every link resolves", () => {
 });
 
 const SITE = "https://distillate.akxp.net";
+
+/** Writes `{ path: markdown }` into a temp directory laid out like a repo. */
+function markdownDir(tree: Record<string, string>): string {
+  const dir = mkdtempSync(join(tmpdir(), "sweep-"));
+  for (const [path, body] of Object.entries(tree)) {
+    const file = join(dir, path);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, body);
+  }
+  return dir;
+}
+
+function links(...paths: string[]): string {
+  return paths.map((p) => `[x](${SITE}${p})`).join("\n");
+}
+
+// Listing the files to check is what let two dead links survive in this repo:
+// the root README and CONTRIBUTING were never on the list. Sweeping means a
+// doc is checked because it exists, not because someone remembered it.
+test("every markdown under the swept root is checked, whatever its name", () => {
+  const dist = buildDir({ ".": page(), live: page() });
+  const repo = markdownDir({
+    "top.md": links("/live/", "/dead/"),
+    "nested/deep.md": links("/dead/"),
+    // Skipped: vendored, built, hidden, or a record of history.
+    "node_modules/pkg/x.md": links("/dead/"),
+    "sub/dist/y.md": links("/dead/"),
+    ".hidden/z.md": links("/dead/"),
+    "CHANGELOG.md": links("/dead/"),
+  });
+
+  const { status, output } = check(dist, repo);
+
+  expect(status).toBe(1);
+  expect(output).toContain(`top.md -> ${SITE}/dead/`);
+  expect(output).toContain(`nested/deep.md -> ${SITE}/dead/`);
+  for (const skipped of ["x.md", "y.md", "z.md", "CHANGELOG"]) {
+    expect(output).not.toContain(skipped);
+  }
+  expect(output).toContain("2 routes, 2 broken");
+});
 
 test("an absolute link into the site is checked against the same routes", () => {
   const routes = new Set(["/", "/guides/sizing/"]);
