@@ -78,3 +78,20 @@ test("the docs workflow builds and link-checks on every pull request", () => {
   expect(runs.some((r) => r.includes("distillate-docs build"))).toBe(true);
   expect(runs.some((r) => r.includes("links:check"))).toBe(true);
 });
+
+// Deploying from a pull request branch would publish unreviewed content to the
+// live site, so the gate is asserted rather than trusted: both that the deploy
+// job carries it, and that the job running on pull requests cannot deploy.
+test("only a push to main can deploy", () => {
+  const { jobs } = docsWorkflow();
+  const deploy = jobs.deploy;
+
+  expect(deploy?.needs).toContain("build");
+  expect(deploy?.if).toContain("github.event_name == 'push'");
+  expect(deploy?.if).toContain("refs/heads/main");
+
+  const deploying = (jobs.build?.steps ?? []).filter((step) =>
+    step.uses?.includes("wrangler"),
+  );
+  expect(deploying).toEqual([]);
+});
