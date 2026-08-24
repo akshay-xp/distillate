@@ -39,7 +39,7 @@ Design notes, the structure decision matrix, hashing, and the binary format live
 - [choosing a structure](https://distillate.akxp.net/guides/choosing-a-structure/): decision matrix and the full lineup
 - [serialization](https://distillate.akxp.net/reference/serialization/): the binary format spec
 - [architecture](./packages/distillate/docs/architecture.md), [hashing](./packages/distillate/docs/hashing.md): contributor notes, on GitHub
-- [API reference](https://distillate.akxp.net/api/readme/): generated from TSDoc at site build time
+- [API reference](https://distillate.akxp.net/api/overview/): generated from TSDoc at site build time
 
 ## License
 

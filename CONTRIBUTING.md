@@ -90,7 +90,7 @@ Public (exported) API members carry [TSDoc](https://tsdoc.org/) comments, valida
 - Keep them concise: a one-line summary, `@param`/`@returns`, and a short `@example` on the primary types. Long-form narrative, guides, and tutorials belong on the docs site, not in code comments.
 - Internal (non-exported) helpers keep the usual minimal-comment style.
 
-These comments are the source of the [API reference](https://distillate.akxp.net/api/), which the docs site generates at build time. Nothing generated is committed, so there is no output to regenerate.
+These comments are the source of the [API reference](https://distillate.akxp.net/api/overview/), which the docs site generates at build time. Nothing generated is committed, so there is no output to regenerate.
 
 Two gates back this up, both run in CI:
 
