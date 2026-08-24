@@ -35,3 +35,32 @@ jobs:
         with:
           name: docs-dist
           path: apps/docs/dist/
+
+  # Deploys exactly what the build job link-checked, rather than rebuilding, so
+  # what goes live is the artifact that passed. Gated on a push to main: a pull
+  # request must not be able to publish to the live site.
+  deploy:
+    name: deploy
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      # No checkout on purpose. Nothing here needs the repository, only the
+      # artifact, and checking it out would put pnpm-lock.yaml in the workspace,
+      # which makes wrangler-action infer pnpm and install with a package
+      # manager this job does not set up.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: docs-dist
+          path: apps/docs/dist/
+      - uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Stated rather than inferred from a lockfile, so the step does not
+          # change behaviour if the workspace contents ever change.
+          packageManager: npm
+          # Pinned for the same reason the action SHAs are: this runs with a
+          # token that can publish the site, so it must not float.
+          wranglerVersion: "4.125.0"
+          command: pages deploy apps/docs/dist --project-name=distillate-docs --branch=main
