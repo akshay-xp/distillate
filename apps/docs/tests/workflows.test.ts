@@ -28,7 +28,7 @@ function usesLines(yml: string): { line: string; action: string }[] {
 // A moving tag is a supply-chain hole: whoever controls the tag controls what
 // runs against this repo's token. The version comment is what keeps the pin
 // readable, so both halves are required, not just the SHA.
-const PINNED = /^[\w.-]+\/[\w.-]+(?:\/[\w./-]+)*@[0-9a-f]{40}$/;
+const PINNED = /^[\w.-]+\/[\w.-]+(?:\/[\w.-]+)*@[0-9a-f]{40}$/;
 
 test("every action every workflow uses is pinned to a SHA with a version", () => {
   const files = workflowFiles();
