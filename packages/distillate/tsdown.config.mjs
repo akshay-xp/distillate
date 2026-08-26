@@ -6,6 +6,7 @@ export default defineConfig({
     "src/bloom/index.ts",
     "src/blocked/index.ts",
     "src/fuse/index.ts",
+    "src/hll/index.ts",
   ],
   format: ["esm", "cjs"],
   fixedExtension: false,
