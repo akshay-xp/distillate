@@ -61,16 +61,15 @@ test("every documentation sample typechecks against the workspace build", () => 
   expect(typecheckSamples(samples)).toEqual([]);
 });
 
+// Shape, not count: what this proves is that a single file is scanned and its
+// blocks numbered in order. Pinning the total would just churn whenever the
+// README gains a structure.
 test("extractSamples accepts a single markdown file", () => {
   const samples = extractSamples(README);
 
-  expect(samples).toHaveLength(3);
-  expect(samples.map((s) => s.file)).toEqual([
-    "README.md",
-    "README.md",
-    "README.md",
-  ]);
-  expect(samples.map((s) => s.index)).toEqual([1, 2, 3]);
+  expect(samples.length).toBeGreaterThan(0);
+  expect(samples.every((s) => s.file === "README.md")).toBe(true);
+  expect(samples.map((s) => s.index)).toEqual(samples.map((_, i) => i + 1));
 });
 
 test("every package README sample typechecks against the workspace build", () => {

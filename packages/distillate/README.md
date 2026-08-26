@@ -42,11 +42,16 @@ Every push runs a CI smoke matrix that imports the built package on Node 22/24, 
 
 Each structure ships as its own subpath, so you only bundle what you import.
 
-| Import               | Structure     | Mutable? | Use for                                                  |
-| -------------------- | ------------- | -------- | -------------------------------------------------------- |
-| `distillate/bloom`   | Classic Bloom | yes      | Familiar default, migration from `bloom-filters`         |
-| `distillate/blocked` | Blocked Bloom | yes      | Faster lookups and a lower FPR for a small space premium |
-| `distillate/fuse`    | Binary Fuse   | no       | Static set built once and queried a lot; least space     |
+| Import               | Structure     | Answers            | Use for                                                  |
+| -------------------- | ------------- | ------------------ | -------------------------------------------------------- |
+| `distillate/bloom`   | Classic Bloom | seen this key?     | Familiar default, migration from `bloom-filters`         |
+| `distillate/blocked` | Blocked Bloom | seen this key?     | Faster lookups and a lower FPR for a small space premium |
+| `distillate/fuse`    | Binary Fuse   | seen this key?     | Static set built once and queried a lot; least space     |
+| `distillate/hll`     | HyperLogLog   | how many distinct? | Counting distinct users, IPs, or keys in fixed space     |
+
+The filters are mutable except Binary Fuse, which is built once from the whole
+key set. HyperLogLog is not a filter: it counts distinct keys and cannot report
+whether it saw any particular one.
 
 ### Classic Bloom (`distillate/bloom`)
 
@@ -95,6 +100,29 @@ const precise = BinaryFuse16.from(["alice", "bob", "carol"]);
 `bitsPerKey` is the space actually allocated, not the asymptotic figure. Three keys pay 64 bits each because the fingerprint array has a fixed minimum; the ~9 you see quoted is what a filter approaches once `n` is large (about 9.5 at 100k). Size honestly with `fuseBitsPerKey(n, width)`, or the [sizing guide](https://distillate.akxp.net/guides/sizing/).
 
 Also: `toBytes` / `fromBytes`. No `add` / `delete`; rebuild `from` the new set to change membership.
+
+### HyperLogLog (`distillate/hll`)
+
+A **sketch**, not a filter: it counts distinct keys in space fixed by precision rather than by the answer, and cannot report whether it saw any particular key. 12 KiB counts a thousand distinct keys or a billion, at about 0.8% relative error. Full API and sizing: [HyperLogLog guide](https://distillate.akxp.net/guides/hll/).
+
+```ts
+import { HyperLogLog } from "distillate/hll";
+
+const sketch = HyperLogLog.create(0.01); // target relative error
+sketch.add("alice");
+sketch.add("bob");
+sketch.add("alice"); // already counted
+
+sketch.count(); // 2
+
+// Merge per-shard sketches without double-counting the overlap:
+const other = HyperLogLog.from(["bob", "carol"], 0.01);
+sketch.union(other).count(); // 3
+```
+
+Below a few thousand distinct keys the sketch counts rather than estimates, so small answers are exact. It switches to fixed-size registers on its own once that stops paying, with nothing to configure.
+
+Also: `equals`, `toBytes` / `fromBytes`, `toJSON` / `fromJSON`, `standardError`, `hllSizing(relativeError)`, and a low-level `new HyperLogLog({ p, seed })`.
 
 ## Performance
 
