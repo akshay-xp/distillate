@@ -3,8 +3,16 @@ import { hash128KeyInto, type Hash128 } from "../core/hasher.js";
 import { assertUint32, ParamError } from "../core/params.js";
 import { HLL_MAX_P, HLL_MIN_P, hllSizing } from "../core/sizing.js";
 import { estimate } from "./estimate.js";
+import { foldDense } from "./fold.js";
 import { Registers } from "./registers.js";
-import { compact, encodeSparse, foldSparse, SPARSE_P } from "./sparse.js";
+import {
+  compact,
+  encodeSparse,
+  foldSparse,
+  SPARSE_P,
+  sparseIndex,
+  sparseRho,
+} from "./sparse.js";
 
 // Relative standard error of a HyperLogLog with 2**p registers, from the
 // original Flajolet analysis. Reported, never used to correct an estimate.
@@ -123,11 +131,68 @@ export class HyperLogLog {
     this.#len = distinct;
 
     const slack = Math.max(1, sparse.length >> 2);
-    if (distinct > sparse.length - slack) {
-      foldSparse(sparse, distinct, this.#p, this.#registers, this.#p);
-      this.#sparse = null;
-      this.#len = 0;
+    if (distinct > sparse.length - slack) this.#goDense();
+  }
+
+  /**
+   * Merges two sketches, giving a sketch that counts the keys either has seen.
+   *
+   * Both operands are left untouched.
+   *
+   * @param other - The sketch to merge with; must share this one's seed.
+   * @returns A new sketch holding both key sets.
+   * @throws {@link ParamError} if the seeds differ, since the two would have
+   * sent the same key to different registers and the merge would mean nothing.
+   */
+  union(other: HyperLogLog): HyperLogLog {
+    if (other.#seed !== this.#seed) {
+      throw new ParamError(
+        `cannot merge sketches with different seeds, got ${String(this.#seed)} and ${String(other.#seed)}`,
+      );
     }
+
+    const merged = new HyperLogLog({ p: this.#p, seed: this.#seed });
+    merged.#drain(this);
+    merged.#drain(other);
+    return merged;
+  }
+
+  // Folds everything `src` holds into this sketch, whichever representation
+  // either of them is in.
+  #drain(src: HyperLogLog): void {
+    const sparse = src.#sparse;
+    if (sparse === null) {
+      this.#goDense();
+      foldDense(src.#registers, src.#p, this.#registers, this.#p);
+      return;
+    }
+
+    const distinct = compact(sparse, src.#len);
+    src.#len = distinct;
+    for (let i = 0; i < distinct; i++) this.#absorb(sparse[i] ?? 0);
+  }
+
+  // Takes one sparse entry, already expressed at this sketch's precision.
+  #absorb(entry: number): void {
+    const sparse = this.#sparse;
+    if (sparse === null) {
+      const index = sparseIndex(entry) >>> (SPARSE_P - this.#p);
+      this.#registers.raise(index, sparseRho(entry));
+      return;
+    }
+
+    sparse[this.#len++] = entry;
+    if (this.#len === sparse.length) this.#collapse(sparse);
+  }
+
+  // Gives up the sparse buffer, keeping what it held.
+  #goDense(): void {
+    const sparse = this.#sparse;
+    if (sparse === null) return;
+
+    foldSparse(sparse, this.#len, this.#p, this.#registers, this.#p);
+    this.#sparse = null;
+    this.#len = 0;
   }
 
   // The registers this sketch stands for, materialising them if it is still
