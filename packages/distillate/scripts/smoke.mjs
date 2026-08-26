@@ -13,6 +13,7 @@ import {
   BinaryFuse16,
   fuseBitsPerKey,
 } from "../dist/fuse/index.js";
+import { HyperLogLog, hllSizing } from "../dist/hll/index.js";
 
 if (typeof VERSION !== "string") {
   console.error(
@@ -62,6 +63,33 @@ if (fuseBitsPerKey(1000, 8) !== BinaryFuse8.from(fuseKeys).bitsPerKey) {
   process.exit(1);
 }
 
+if (hllSizing(0.01).p !== 14) {
+  console.error(`smoke: hllSizing(0.01) gave p=${hllSizing(0.01).p}`);
+  process.exit(1);
+}
+
+// Under the promotion threshold, so the count is exact on every runtime and a
+// loose bound would not hide a difference between them.
+const hs = new HyperLogLog({ p: 14 });
+for (let i = 0; i < 100; i++) hs.add(`hll:${i}`);
+if (hs.count() !== 100) {
+  console.error(`smoke: HyperLogLog counted ${hs.count()} of 100 keys`);
+  process.exit(1);
+}
+
+const hsOther = new HyperLogLog({ p: 14 });
+for (let i = 100; i < 200; i++) hsOther.add(`hll:${i}`);
+const merged = hs.union(hsOther);
+if (merged.count() !== 200) {
+  console.error(`smoke: union counted ${merged.count()} of 200 keys`);
+  process.exit(1);
+}
+
+if (!HyperLogLog.fromBytes(hs.toBytes()).equals(hs)) {
+  console.error("smoke: HyperLogLog round-trip through toBytes lost state");
+  process.exit(1);
+}
+
 // Cross-runtime byte identity: every runtime must produce the exact committed
 // golden frame for a fixed key set, not merely import and run.
 const golden = JSON.parse(
@@ -73,7 +101,7 @@ const golden = JSON.parse(
 
 const decode = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 
-const rebuild = (kind, keys, epsilon) => {
+const rebuild = (kind, keys, epsilon, p) => {
   switch (kind) {
     case "bloom":
       return BloomFilter.from(keys, epsilon);
@@ -83,18 +111,20 @@ const rebuild = (kind, keys, epsilon) => {
       return BinaryFuse8.from(keys);
     case "fuse16":
       return BinaryFuse16.from(keys);
+    case "hll": {
+      const sketch = new HyperLogLog({ p });
+      for (const key of keys) sketch.add(key);
+      return sketch;
+    }
     default:
       console.error(`smoke: unknown golden kind ${kind}`);
       process.exit(1);
   }
 };
 
-for (const { name, kind, keys, epsilon, frame } of golden) {
+for (const { name, kind, keys, epsilon, p, frame } of golden) {
   if (kind === "v2") continue;
-  // hll frames are checked here once distillate/hll is packaged (#167); until
-  // then there is no dist/hll to import a builder from.
-  if (kind === "hll") continue;
-  const actual = rebuild(kind, keys, epsilon).toBytes();
+  const actual = rebuild(kind, keys, epsilon, p).toBytes();
   const expected = decode(frame);
   if (actual.length !== expected.length) {
     console.error(
@@ -111,5 +141,5 @@ for (const { name, kind, keys, epsilon, frame } of golden) {
 }
 
 console.log(
-  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse work (filters + sizing helpers), toBytes byte-identical to golden`,
+  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll work (filters, sketch, sizing helpers), toBytes byte-identical to golden`,
 );
