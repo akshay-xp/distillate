@@ -39,6 +39,7 @@ export default defineConfig({
             { label: "Classic Bloom", link: "/guides/bloom/" },
             { label: "Blocked Bloom", link: "/guides/blocked/" },
             { label: "Binary Fuse", link: "/guides/fuse/" },
+            { label: "HyperLogLog", link: "/guides/hll/" },
             { label: "Sizing and tuning FPR", link: "/guides/sizing/" },
             {
               label: "Sizing calculator",
