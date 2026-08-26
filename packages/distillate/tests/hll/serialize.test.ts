@@ -3,9 +3,12 @@ import { expect, test } from "vitest";
 import { BloomFilter } from "../../src/bloom/bloom.js";
 import { crc32 } from "../../src/core/crc32.js";
 import {
+  BadMagicError,
+  ChecksumError,
   FORMAT_VERSION,
   SerializationError,
   TruncatedError,
+  UnknownVersionError,
   writeHeader,
 } from "../../src/core/serialize.js";
 import { HyperLogLog } from "../../src/hll/hll.js";
@@ -106,6 +109,44 @@ test("a sparse payload larger than the buffer at that precision is rejected", ()
     body,
   );
   expect(() => HyperLogLog.fromBytes(frame)).toThrow(TruncatedError);
+});
+
+// Exhaustive rather than sampled: the claim is that *no* single-byte change
+// gets through, and the frame has regions (magic, version, declared length,
+// params, payload, CRC) that fail for quite different reasons.
+test("no single corrupted byte survives decoding", () => {
+  for (const frame of [sketchOf(100).toBytes(), sketchOf(10, 4).toBytes()]) {
+    for (let i = 0; i < frame.length; i++) {
+      const corrupt = frame.slice();
+      corrupt[i] ^= 0xff;
+      expect(() => HyperLogLog.fromBytes(corrupt)).toThrow(SerializationError);
+    }
+  }
+});
+
+// Guards the sweep above against passing for one uniform reason: each region
+// has to be reached and rejected on its own terms.
+test("each region of a frame is checked on its own terms", () => {
+  const flip = (at: number): Uint8Array => {
+    const corrupt = sketchOf(100).toBytes().slice();
+    corrupt[at] ^= 0xff;
+    return corrupt;
+  };
+
+  expect(() => HyperLogLog.fromBytes(flip(0))).toThrow(BadMagicError);
+  expect(() => HyperLogLog.fromBytes(flip(4))).toThrow(UnknownVersionError);
+  expect(() => HyperLogLog.fromBytes(flip(8))).toThrow(TruncatedError);
+  expect(() => HyperLogLog.fromBytes(flip(20))).toThrow(ChecksumError);
+});
+
+test("a frame cut short is rejected", () => {
+  const frame = sketchOf(100).toBytes();
+  expect(() =>
+    HyperLogLog.fromBytes(frame.subarray(0, frame.length - 8)),
+  ).toThrow(TruncatedError);
+  expect(() => HyperLogLog.fromBytes(new Uint8Array(3))).toThrow(
+    SerializationError,
+  );
 });
 
 test("a frame of another structure is rejected", () => {
