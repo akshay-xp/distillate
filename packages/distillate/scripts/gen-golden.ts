@@ -30,8 +30,12 @@ const bytes = (kind: string, keys: string[], epsilon: number): Uint8Array => {
     case "fuse16":
       return BinaryFuse16.from(keys).toBytes();
     case "v2": {
-      // A well-formed v3 Bloom frame with the version byte forced to 2. readHeader
-      // rejects on the version byte before the CRC check, so the stale CRC is moot.
+      // A well-formed current-version Bloom frame with the version byte forced
+      // to 2, so it keeps the DSTL magic and reaches the version check. A real
+      // pre-v4 frame would carry AMQF and be rejected on magic first; the
+      // structures' own UNSUPPORTED_V2 fixtures cover that path. readHeader
+      // rejects on the version byte before the CRC check, so the stale CRC is
+      // moot, and the declared body length is left untouched and still valid.
       const v2 = BloomFilter.from(["a", "b", "c"], 0.01).toBytes();
       v2[4] = 2;
       return v2;
