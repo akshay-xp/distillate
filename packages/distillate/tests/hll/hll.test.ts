@@ -40,6 +40,29 @@ test("create meets the requested relative error", () => {
   }
 });
 
+test("from builds a sketch over a key set in one call", () => {
+  const keys = keysUpTo(100, "from");
+  const sketch = HyperLogLog.from(keys, 0.01);
+
+  expect(sketch.p).toBe(14);
+  expect(sketch.count()).toBe(100);
+  expect(sketch.equals(sketchOf(keys))).toBe(true);
+});
+
+test("from accepts any iterable, not just an array", () => {
+  const keys = keysUpTo(100, "from");
+  function* generate(): Generator<string> {
+    yield* keys;
+  }
+
+  expect(HyperLogLog.from(new Set(keys), 0.01).count()).toBe(100);
+  expect(HyperLogLog.from(generate(), 0.01).count()).toBe(100);
+});
+
+test("from over no keys counts zero", () => {
+  expect(HyperLogLog.from([], 0.01).count()).toBe(0);
+});
+
 test("an empty sketch counts exactly zero", () => {
   for (const p of [4, 14, 18]) {
     expect(new HyperLogLog({ p }).count()).toBe(0);
@@ -177,6 +200,7 @@ test("promotion adds nothing to the public surface", () => {
   ]);
   expect(Object.getOwnPropertyNames(HyperLogLog).sort()).toEqual([
     "create",
+    "from",
     "fromBytes",
     "fromJSON",
     "length",

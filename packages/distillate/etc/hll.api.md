@@ -42,6 +42,7 @@ export class HyperLogLog {
     count(): number;
     static create(relativeError: number): HyperLogLog;
     equals(other: HyperLogLog): boolean;
+    static from(keys: Iterable<BytesLike>, relativeError: number): HyperLogLog;
     static fromBytes(bytes: Uint8Array): HyperLogLog;
     static fromJSON(value: unknown): HyperLogLog;
     get p(): number;
