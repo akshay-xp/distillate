@@ -111,6 +111,23 @@ export class HyperLogLog {
   }
 
   /**
+   * Creates a sketch counting `keys`, sized to meet `relativeError`. The
+   * ergonomic entry point when the key set is already in hand.
+   *
+   * Needs no count of the keys first, unlike the filters: a sketch is sized by
+   * the error it targets, not by how many keys it will see.
+   *
+   * @param keys - The keys to record.
+   * @param relativeError - Target relative error, e.g. `0.01` for 1%.
+   * @returns A new sketch holding every key.
+   */
+  static from(keys: Iterable<BytesLike>, relativeError: number): HyperLogLog {
+    const sketch = HyperLogLog.create(relativeError);
+    for (const key of keys) sketch.add(key);
+    return sketch;
+  }
+
+  /**
    * Restores a sketch from its {@link HyperLogLog.toBytes} serialization.
    *
    * @param bytes - The serialized sketch.
