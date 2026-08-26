@@ -4,7 +4,7 @@ import { assertUint32, ParamError } from "../core/params.js";
 import { HLL_MAX_P, HLL_MIN_P, hllSizing } from "../core/sizing.js";
 import { estimate } from "./estimate.js";
 import { Registers } from "./registers.js";
-import { compact, encodeSparse, promote, SPARSE_P } from "./sparse.js";
+import { compact, encodeSparse, foldSparse, SPARSE_P } from "./sparse.js";
 
 // Relative standard error of a HyperLogLog with 2**p registers, from the
 // original Flajolet analysis. Reported, never used to correct an estimate.
@@ -124,7 +124,7 @@ export class HyperLogLog {
 
     const slack = Math.max(1, sparse.length >> 2);
     if (distinct > sparse.length - slack) {
-      promote(sparse, distinct, this.#registers, this.#p);
+      foldSparse(sparse, distinct, this.#p, this.#registers, this.#p);
       this.#sparse = null;
       this.#len = 0;
     }
