@@ -123,7 +123,7 @@ const restored = BlockedBloomFilter.fromBytes(bytes);
 restored.equals(filter); // true
 ```
 
-Frames are AMQF type 2. The lane words are a `Uint32Array` copied verbatim, so
+Frames are DSTL type 2. The lane words are a `Uint32Array` copied verbatim, so
 see [serialization](/reference/serialization/) for the byte-order note.
 
 ## Performance

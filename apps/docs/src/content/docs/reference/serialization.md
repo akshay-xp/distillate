@@ -1,6 +1,6 @@
 ---
 title: Serialization format
-description: The versioned, self-describing AMQF binary format, covering byte layout, per-type params blocks, hash variant, and the rules a reader in any language must follow.
+description: The versioned, self-describing DSTL binary format, covering byte layout, per-type params blocks, hash variant, and the rules a reader in any language must follow.
 ---
 
 Versioned, self-describing, little-endian binary format. Spec'd here so Rust/Go readers can parse it. Not decorator/reflect-metadata magic (that is what breaks incumbents on edge).
@@ -9,20 +9,30 @@ Versioned, self-describing, little-endian binary format. Spec'd here so Rust/Go 
 
 ```
 Offset  Size  Field
-0       4     Magic "AMQF" (0x41 4D 51 46)
+0       4     Magic "DSTL" (0x44 53 54 4C)
 4       1     Format version (u8)         # bump on incompatible layout change
 5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16
-                                          # (5+ reserved: CountingBloom, ScalableBloom, Cuckoo, ...)
+                                          # (5+ reserved: HyperLogLog, CountingBloom, Cuckoo, ...)
 6       1     Flags (u8)                  # bit0-3 hash variant, others reserved
-7       1     Reserved (u8, 0)            # keeps params 8-byte aligned
-8       ...   Params block (fixed per type, see below)
+7       1     Reserved (u8, 0)
+8       4     Body length (u32)           # bytes of body, excluding header and CRC
+12      4     Reserved (u32, 0)           # keeps the body 8-byte aligned
+16      ...   Body: params block (fixed per type, see below)
 ...     ...   Payload: raw backing typed array, host byte order (see Principles)
 end     4     CRC32 of all preceding bytes
 ```
 
-Current `FORMAT_VERSION` is `3`. Readers reject any other version (`UnknownVersionError`), and validate the body length against the declared params before allocating.
+Current `FORMAT_VERSION` is `4`. Readers reject any other version (`UnknownVersionError`).
 
-### Params block per type (version 3)
+The body length makes a frame self-describing: a reader can validate, skip, or stream a frame of a structure type it does not implement, using the header alone. It is checked against the bytes actually present _before_ the CRC, so a frame cut short in transit reports `TruncatedError` rather than the checksum failure truncation also implies. Readers additionally validate the body length against the declared params before allocating, which catches a frame whose header is internally consistent but whose params disagree with the payload size.
+
+### Version 4 is a hard break
+
+Version 4 renamed the magic from `AMQF` (_Approximate Membership Query Filter_) to `DSTL`, because `distillate` serializes structures that are not membership filters. There is no dual-magic read path: a pre-v4 frame fails on magic with `BadMagicError`, not on version. Re-serialize such data with the version you run.
+
+### Params block per type (version 4)
+
+Params offsets below are relative to the start of the body (frame offset 16).
 
 Bloom (type 1), little-endian:
 
@@ -39,13 +49,13 @@ Blocked (type 2): `numBlocks (u32) | seed (u32) | n (u32)`, then the lane words 
 
 ### Hash variant (flags nibble)
 
-Bits 0-3 of the flags byte record which hash produced the stored bits. Version 3 uses one hash for every structure:
+Bits 0-3 of the flags byte record which hash produced the stored bits. Version 4 uses one hash for every structure:
 
 - `0` = murmur3_x86_128 (Bloom, Blocked, Fuse)
 
-All three structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted.
+All three structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header, not the hash.
 
-The version bump (not a flags-only change) was deliberate: the version-2 Fuse reader had no variant check and would silently misread a version-3 frame, so bumping the version makes it reject on the version byte instead.
+That version 3 bump (rather than a flags-only change) was deliberate: the version-2 Fuse reader had no variant check and would silently misread a version-3 frame, so bumping the version made it reject on the version byte instead.
 
 Forward-compat caveat: the version and variant checks protect a newer reader from an older frame (it refuses rather than misreads). An older reader that predates a check would misread a newer frame, so a consumer must be at least as new as the producer.
 
@@ -75,6 +85,7 @@ for transport and debugging, not as a second persistence format.
 - Serialize mathematical params, not JS object internals. That is what makes cross-language real.
 - Pin the hash variant in flags (see [hashing](/internals/hashing/)).
 - Magic byte rejects foreign/corrupt input early; version byte lets readers refuse unknown formats instead of misparsing; CRC32 detects corruption.
+- The header is self-describing: magic, version, type, and body length are readable without knowing the structure, so a generic reader can frame every record in a stream and skip the types it does not implement.
 
 ## Input handling
 
@@ -82,8 +93,8 @@ Accept `Uint8Array` or `ArrayBuffer`. Respect `byteOffset`/`byteLength`: build t
 
 ## Stability
 
-Golden fixtures pin the exact byte layout, which round-trip tests miss (`toBytes`/`fromBytes` drift together and stay mutually consistent). [`tests/fixtures/golden.json`](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/tests/fixtures/golden.json) holds a base64 `frame` per structure (one v3 per type, plus a v2 frame), rebuilt from committed keys. `tests/core/golden.test.ts` asserts each v3 frame parses, contains its keys, re-serializes to the same bytes, and matches a fresh build from the recipe (so a layout change fails the fresh-build check); the v2 frame must throw `UnknownVersionError`. Fixtures are committed and never regenerated in CI; on an intentional format bump, `pnpm golden:gen` (`scripts/gen-golden.ts`) refreshes them, and its output is byte-identical to the committed prettier format.
+Golden fixtures pin the exact byte layout, which round-trip tests miss (`toBytes`/`fromBytes` drift together and stay mutually consistent). [`tests/fixtures/golden.json`](https://github.com/akshay-xp/distillate/blob/main/packages/distillate/tests/fixtures/golden.json) holds a base64 `frame` per structure (one v4 per type, plus a stale-version frame), rebuilt from committed keys. `tests/core/golden.test.ts` asserts each v4 frame parses, contains its keys, re-serializes to the same bytes, and matches a fresh build from the recipe (so a layout change fails the fresh-build check); the stale-version frame must throw `UnknownVersionError`. That fixture is a current frame with its version byte overwritten, so it keeps the `DSTL` magic and reaches the version check; a genuine pre-v4 frame carries `AMQF` and is rejected on magic first, which each structure's own suite covers directly. Fixtures are committed and never regenerated in CI; on an intentional format bump, `pnpm golden:gen` (`scripts/gen-golden.ts`) refreshes them, and its output is byte-identical to the committed prettier format.
 
-Malformed-input fuzzing: bad magic, unknown version, wrong type, truncation, bit-flip, CRC mismatch each throw a typed error, never crash or read out of bounds.
+Malformed-input fuzzing: bad magic, unknown version, wrong type, truncation, declared-length mismatch, bit-flip, CRC mismatch each throw a typed error, never crash or read out of bounds.
 
 The format spec is published as a standalone doc for other-language implementers.

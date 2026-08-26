@@ -113,7 +113,7 @@ restored.equals(filter); // true
 ```
 
 `toJSON` and `fromJSON` wrap the same frame in a base64 envelope for transport
-that cannot carry bytes. Frames are AMQF type 1; the layout is fixed in
+that cannot carry bytes. Frames are DSTL type 1; the layout is fixed in
 [serialization](/reference/serialization/).
 
 ## When to pick it
