@@ -104,7 +104,8 @@ export class HyperLogLog {
   /**
    * Estimates how many distinct keys have been added.
    *
-   * @returns The estimated cardinality; `0` for an empty sketch.
+   * @returns The estimated cardinality, a whole number; `0` for an empty
+   * sketch.
    */
   count(): number {
     const p = this.#p;
@@ -115,6 +116,6 @@ export class HyperLogLog {
       const value = this.#registers.get(i);
       hist[value] = (hist[value] ?? 0) + 1;
     }
-    return estimate(hist, p);
+    return Math.round(estimate(hist, p));
   }
 }
