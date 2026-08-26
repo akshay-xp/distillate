@@ -39,3 +39,52 @@ test("create meets the requested relative error", () => {
     expect(HyperLogLog.create(e).standardError).toBeLessThanOrEqual(e);
   }
 });
+
+test("an empty sketch counts exactly zero", () => {
+  for (const p of [4, 14, 18]) {
+    expect(new HyperLogLog({ p }).count()).toBe(0);
+  }
+});
+
+test("one key counts at least one", () => {
+  const sketch = new HyperLogLog({ p: 14 });
+  sketch.add("alice");
+  expect(sketch.count()).toBeGreaterThanOrEqual(1);
+});
+
+test("re-adding the same key does not change the count", () => {
+  const sketch = new HyperLogLog({ p: 14 });
+  sketch.add("alice");
+  const once = sketch.count();
+  for (let i = 0; i < 100; i++) sketch.add("alice");
+  expect(sketch.count()).toBe(once);
+});
+
+test("count is idempotent", () => {
+  const sketch = new HyperLogLog({ p: 14 });
+  for (let i = 0; i < 1000; i++) sketch.add(`key:${String(i)}`);
+  expect(sketch.count()).toBe(sketch.count());
+});
+
+test("count lands within three standard errors at ten thousand keys", () => {
+  const n = 10_000;
+  const sketch = new HyperLogLog({ p: 14 });
+  for (let i = 0; i < n; i++) sketch.add(`key:${String(i)}`);
+  const error = Math.abs(sketch.count() - n) / n;
+  expect(error).toBeLessThan(3 * sketch.standardError);
+});
+
+test("add accepts every BytesLike form, and they agree", () => {
+  const text = "alice";
+  const bytes = new TextEncoder().encode(text);
+
+  const fromString = new HyperLogLog({ p: 14 });
+  fromString.add(text);
+  const fromBytes = new HyperLogLog({ p: 14 });
+  fromBytes.add(bytes);
+  const fromBuffer = new HyperLogLog({ p: 14 });
+  fromBuffer.add(bytes.buffer);
+
+  expect(fromBytes.count()).toBe(fromString.count());
+  expect(fromBuffer.count()).toBe(fromString.count());
+});
