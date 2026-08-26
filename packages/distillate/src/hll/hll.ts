@@ -1,6 +1,16 @@
 import type { BytesLike } from "../core/bytes.js";
 import { hash128KeyInto, type Hash128 } from "../core/hasher.js";
 import { assertUint32, ParamError } from "../core/params.js";
+import {
+  assertBodyLength,
+  assertMinBodyLength,
+  FORMAT_VERSION,
+  HASH_MURMUR128,
+  readHeader,
+  SerializationError,
+  UnknownHashVariantError,
+  writeFrame,
+} from "../core/serialize.js";
 import { HLL_MAX_P, HLL_MIN_P, hllSizing } from "../core/sizing.js";
 import { estimate } from "./estimate.js";
 import { foldDense } from "./fold.js";
@@ -18,6 +28,13 @@ import {
 // Relative standard error of a HyperLogLog with 2**p registers, from the
 // original Flajolet analysis. Reported, never used to correct an estimate.
 const ERROR_CONSTANT = 1.04;
+
+/** DSTL frame type for a HyperLogLog sketch. */
+const TYPE = 5;
+
+/** Body layout: p (u8) | encoding (u8) | seed (u32 LE) | payload. */
+const PARAMS_SIZE = 6;
+const DENSE = 0;
 
 function assertPrecision(p: number): void {
   if (!Number.isInteger(p) || p < HLL_MIN_P || p > HLL_MAX_P) {
@@ -81,6 +98,65 @@ export class HyperLogLog {
    */
   static create(relativeError: number): HyperLogLog {
     return new HyperLogLog(hllSizing(relativeError));
+  }
+
+  /**
+   * Restores a sketch from its {@link HyperLogLog.toBytes} serialization.
+   *
+   * @param bytes - The serialized sketch.
+   * @returns The reconstructed sketch.
+   */
+  static fromBytes(bytes: Uint8Array): HyperLogLog {
+    const { type, flags, body } = readHeader(bytes);
+    if (type !== TYPE) {
+      throw new SerializationError(
+        `expected DSTL type ${String(TYPE)}, got ${String(type)}`,
+      );
+    }
+    if ((flags & 0x0f) !== HASH_MURMUR128) {
+      throw new UnknownHashVariantError(
+        `unsupported hash variant ${String(flags & 0x0f)}`,
+      );
+    }
+    assertMinBodyLength(body.length, PARAMS_SIZE, "hll");
+
+    const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
+    const p = body[0] ?? 0;
+    const encoding = body[1] ?? 0;
+    const seed = dv.getUint32(2, true);
+    if (encoding !== DENSE) {
+      throw new SerializationError(`unknown hll encoding ${String(encoding)}`);
+    }
+
+    const sketch = new HyperLogLog({ p, seed });
+    assertBodyLength(
+      body.length,
+      PARAMS_SIZE + sketch.#registers.bytes.length,
+      "hll",
+    );
+    sketch.#goDense();
+    sketch.#registers.bytes.set(body.subarray(PARAMS_SIZE));
+    return sketch;
+  }
+
+  /**
+   * Serializes the sketch to a portable little-endian byte layout.
+   *
+   * @returns The serialized sketch, readable by
+   * {@link HyperLogLog.fromBytes}.
+   */
+  toBytes(): Uint8Array {
+    const payload = this.#dense().bytes;
+    return writeFrame(
+      { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
+      PARAMS_SIZE + payload.length,
+      (body, dv) => {
+        body[0] = this.#p;
+        body[1] = DENSE;
+        dv.setUint32(2, this.#seed, true);
+        body.set(payload, PARAMS_SIZE);
+      },
+    );
   }
 
   /** Precision: the sketch holds `2 ** p` registers. */
