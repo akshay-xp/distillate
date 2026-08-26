@@ -4,9 +4,12 @@ import { assertUint32, ParamError } from "../core/params.js";
 import {
   assertBodyLength,
   assertMinBodyLength,
+  type FilterJSON,
   FORMAT_VERSION,
+  fromJSONEnvelope,
   HASH_MURMUR128,
   readHeader,
+  toJSONEnvelope,
   SerializationError,
   TruncatedError,
   UnknownHashVariantError,
@@ -202,6 +205,26 @@ export class HyperLogLog {
         body.set(payload, PARAMS_SIZE);
       },
     );
+  }
+
+  /**
+   * Serializes the sketch to a JSON-safe envelope wrapping
+   * {@link HyperLogLog.toBytes}.
+   *
+   * @returns The envelope, readable by {@link HyperLogLog.fromJSON}.
+   */
+  toJSON(): FilterJSON {
+    return toJSONEnvelope(this.toBytes());
+  }
+
+  /**
+   * Restores a sketch from its {@link HyperLogLog.toJSON} envelope.
+   *
+   * @param value - The parsed envelope.
+   * @returns The reconstructed sketch.
+   */
+  static fromJSON(value: unknown): HyperLogLog {
+    return HyperLogLog.fromBytes(fromJSONEnvelope(value));
   }
 
   /** Precision: the sketch holds `2 ** p` registers. */
