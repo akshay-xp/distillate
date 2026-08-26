@@ -8,6 +8,7 @@ import {
   FORMAT_VERSION,
   SerializationError,
   TruncatedError,
+  UnknownHashVariantError,
   UnknownVersionError,
   writeHeader,
 } from "../../src/core/serialize.js";
@@ -177,6 +178,27 @@ test("a malformed envelope is rejected", () => {
     HyperLogLog.fromJSON({ $: "distillate", v: FORMAT_VERSION }),
   ).toThrow(SerializationError);
   expect(() => HyperLogLog.fromJSON(null)).toThrow(SerializationError);
+});
+
+test("a frame naming a hash this release cannot reproduce is rejected", () => {
+  const body = new Uint8Array(6 + 12);
+  body[0] = 4;
+  const frame = writeHeader(
+    { version: FORMAT_VERSION, type: 5, flags: 1 },
+    body,
+  );
+  expect(() => HyperLogLog.fromBytes(frame)).toThrow(UnknownHashVariantError);
+});
+
+test("a frame naming an encoding this release does not have is rejected", () => {
+  const body = new Uint8Array(6 + 12);
+  body[0] = 4;
+  body[1] = 2;
+  const frame = writeHeader(
+    { version: FORMAT_VERSION, type: 5, flags: 0 },
+    body,
+  );
+  expect(() => HyperLogLog.fromBytes(frame)).toThrow(SerializationError);
 });
 
 test("a frame of another structure is rejected", () => {

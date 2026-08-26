@@ -50,6 +50,13 @@ function assertPrecision(p: number): void {
   }
 }
 
+// The sparse buffer is allowed exactly the memory the dense registers already
+// occupy, four bytes to the entry, so a sketch never costs more than its dense
+// form no matter which representation it is in.
+function sparseCapacity(registers: Registers): number {
+  return registers.bytes.length >> 2;
+}
+
 /** Construction parameters for a {@link HyperLogLog} sketch. */
 export interface HllParams {
   /** Precision: the sketch holds `2 ** p` registers. */
@@ -90,10 +97,7 @@ export class HyperLogLog {
     this.#registers = new Registers(p);
     this.#p = p;
     this.#seed = seed;
-    // The sparse buffer is allowed exactly the memory the dense registers
-    // already occupy, four bytes to the entry, so a sketch never costs more
-    // than its dense form no matter which representation it is in.
-    this.#sparse = new Int32Array(this.#registers.bytes.length >> 2);
+    this.#sparse = new Int32Array(sparseCapacity(this.#registers));
   }
 
   /**
@@ -148,20 +152,19 @@ export class HyperLogLog {
       return sketch;
     }
 
-    const buffer = sketch.#sparse;
-    if (buffer === null) {
-      throw new SerializationError("sparse frame at a precision without one");
-    }
-    if (payload % ENTRY_SIZE !== 0 || payload / ENTRY_SIZE > buffer.length) {
+    const capacity = sparseCapacity(sketch.#registers);
+    if (payload % ENTRY_SIZE !== 0 || payload / ENTRY_SIZE > capacity) {
       throw new TruncatedError(
-        `hll: sparse payload of ${String(payload)} bytes is not up to ${String(buffer.length)} whole entries`,
+        `hll: sparse payload of ${String(payload)} bytes is not up to ${String(capacity)} whole entries`,
       );
     }
 
     const entries = payload / ENTRY_SIZE;
+    const buffer = new Int32Array(capacity);
     for (let i = 0; i < entries; i++) {
       buffer[i] = dv.getUint32(PARAMS_SIZE + i * ENTRY_SIZE, true);
     }
+    sketch.#sparse = buffer;
     sketch.#len = entries;
     return sketch;
   }
