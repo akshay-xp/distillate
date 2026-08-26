@@ -1,0 +1,58 @@
+import fc from "fast-check";
+import { expect, test } from "vitest";
+
+import { Registers } from "../../src/hll/registers.js";
+
+test("byteLength packs six bits per register", () => {
+  for (const p of [4, 14, 18]) {
+    expect(new Registers(p).bytes.byteLength).toBe((3 * 2 ** p) / 4);
+  }
+  expect(new Registers(14).bytes.byteLength).toBe(12288);
+});
+
+test("a fresh store reads zero at every index", () => {
+  const r = new Registers(6);
+  for (let i = 0; i < 2 ** 6; i++) expect(r.get(i)).toBe(0);
+});
+
+test("every written value reads back unchanged (property)", () => {
+  const p = 8;
+  const m = 2 ** p;
+  fc.assert(
+    fc.property(
+      fc.array(fc.tuple(fc.nat({ max: m - 1 }), fc.nat({ max: 63 })), {
+        maxLength: 400,
+      }),
+      (writes) => {
+        const r = new Registers(p);
+        const expected = new Uint8Array(m);
+        for (const [i, v] of writes) {
+          r.set(i, v);
+          expected[i] = v;
+        }
+        for (let i = 0; i < m; i++) expect(r.get(i)).toBe(expected[i]);
+      },
+    ),
+  );
+});
+
+test("the final register round-trips, including the tail byte", () => {
+  for (const p of [4, 14, 18]) {
+    const r = new Registers(p);
+    const last = 2 ** p - 1;
+    r.set(last, 63);
+    expect(r.get(last)).toBe(63);
+    expect(r.get(last - 1)).toBe(0);
+  }
+});
+
+test("writing a register leaves its neighbours untouched", () => {
+  const r = new Registers(8);
+  for (let i = 1; i < 255; i++) {
+    const before = [r.get(i - 1), r.get(i + 1)];
+    r.set(i, 63);
+    expect(r.get(i)).toBe(63);
+    expect([r.get(i - 1), r.get(i + 1)]).toEqual(before);
+    r.set(i, 0);
+  }
+});
