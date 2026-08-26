@@ -35,6 +35,31 @@ test("a coarser precision costs fewer bytes at the same cardinality", () => {
   expect(bytes[1]).toBeLessThan(bytes[2] ?? 0);
 });
 
+// The gate. Bounding every point proves accuracy; bounding the mean *signed*
+// error proves the estimator is unbiased, which a per-point bound would miss if
+// every estimate leaned the same way.
+test("measured error stays inside the analytic bound at every point", () => {
+  for (const row of cardinalityRows(PRECISIONS, SIZES)) {
+    expect({
+      p: row.p,
+      n: row.n,
+      within: row.measuredError < 3 * row.targetError,
+    }).toEqual({ p: row.p, n: row.n, within: true });
+  }
+});
+
+test("the estimator is unbiased across the sweep", () => {
+  const rows = cardinalityRows(PRECISIONS, SIZES);
+  const mean = rows.reduce((a, r) => a + r.signedError, 0) / rows.length;
+  expect(Math.abs(mean)).toBeLessThan(0.01);
+});
+
+test("a coarser precision promises a looser bound", () => {
+  const rows = cardinalityRows(PRECISIONS, [1e4]);
+  expect(rows[0]?.targetError).toBeGreaterThan(rows[1]?.targetError ?? 0);
+  expect(rows[1]?.targetError).toBeGreaterThan(rows[2]?.targetError ?? 0);
+});
+
 test("formatCardinalityRows renders a table naming every precision", () => {
   const table = formatCardinalityRows(cardinalityRows(PRECISIONS, [1e4]));
 
