@@ -54,8 +54,38 @@ The "small" claim is enforced, not asserted. `pnpm size:check` (`scripts/size-ch
 
 - Harness (`bench/harness.ts`): shared primitives so every bench measures by identical code: `hitMissPools` (disjoint hit/miss pools), `cycle`, `benchLookup` (cycle keys through `has()`, consume via `do_not_optimize`), `measureFpr` (empirical FPR of a built filter over a disjoint miss set).
 - Metrics, space/accuracy first: `bench/accuracy.bench.ts` reports target vs measured FPR (over a >= 1e6 disjoint miss set) and analytic bits/key (`backing.byteLength * 8 / n`, not `process.memoryUsage`) across a 1e4/1e5/1e6 sweep; then throughput as separate `add` / `has (hit)` / `has (miss)` benches plus build for static filters.
+- Sketch metrics (`bench/hll.bench.ts`, `bench/cardinality.ts`): measured relative error against the analytic `1.04 / sqrt(2^p)` bound across a precision x cardinality sweep, and bytes per sketch in each encoding. Space is the serialized frame length (`toBytes().length`), the sketch equivalent of analytic bits/key: exact, identical across runtimes, and unaffected by when GC last ran. `tests/bench/cardinality.test.ts` turns the same sweep into a CI gate, bounding every point at `3 * targetError` and the _mean signed_ error at 1 percent, so a uniformly biased estimator fails even where each point stays inside its bound.
 - Anti-optimization: distinct-key pools (never a constant key), keys cycled so V8 can't constant-fold, results consumed with `do_not_optimize`, distinct-key inserts.
 - Machine disclosure: absolute throughput is machine-relative, so published numbers must state the machine and lead with the machine-independent metrics (bits/key, measured FPR).
+
+### Measured: HyperLogLog
+
+`node v24.14.1 | arm64 | Apple M5 | 10 cores`. Error and bytes are machine-independent and reproducible; the timings are not.
+
+```
+p   n        target   measured  bytes
+10  1,000    3.25e-2  2.20e-2   794
+10  10,000   3.25e-2  9.10e-3   794
+10  100,000  3.25e-2  1.44e-2   794
+12  1,000    1.63e-2  2.50e-2   3,098
+12  10,000   1.63e-2  8.40e-3   3,098
+12  100,000  1.63e-2  4.14e-3   3,098
+14  1,000    8.13e-3  0.00e+0   4,026
+14  10,000   8.13e-3  4.60e-3   12,314
+14  100,000  8.13e-3  8.19e-3   12,314
+```
+
+Mean signed error over the sweep is 0.27 percent and the worst point sits at 1.54x its bound, against gates of 1 percent and 3x.
+
+Two rows are worth reading twice. At `p=14, n=1,000` the error is exactly zero: the sketch is still sparse, so it counts rather than estimates. And that same row costs 4,026 bytes against 12,314 once dense, which is the sparse representation paying for itself. Sparse size tracks the key count, not the precision: 100 keys serialize to 426 bytes at every precision.
+
+```
+hll add (dense)      34.89 ns/iter
+hll count (dense)    19.52 us/iter
+hll count (sparse)  212.41 ns/iter
+```
+
+`count` is far slower than `add` because it walks all `2^p` registers to build the histogram, where `add` touches one. Sparse `count` is ~90x faster still, having only its entries to fold.
 
 ## Documentation site
 
