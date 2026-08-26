@@ -84,9 +84,10 @@ export class SerializationError extends Error {
 }
 
 /**
- * Thrown when a frame is shorter than its header plus trailer, or when its
- * body length does not match the length its declared params imply. The bytes
- * were cut short in transit or storage; re-fetch the whole frame.
+ * Thrown when a frame is shorter than its header plus trailer, when the body
+ * length its header declares disagrees with the bytes actually present, or
+ * when its body length does not match the length its declared params imply.
+ * The bytes were cut short in transit or storage; re-fetch the whole frame.
  */
 export class TruncatedError extends SerializationError {
   /** Discriminates this error from other `Error`s. */
@@ -241,6 +242,16 @@ export function readHeader(frame: Uint8Array): ReadResult {
   }
 
   const view = new DataView(frame.buffer, frame.byteOffset, frame.byteLength);
+
+  // Before the checksum, so a frame cut short in transit reports the length it
+  // is missing rather than the corruption that truncation happens to imply.
+  const bodyLength = view.getUint32(BODY_LENGTH_OFFSET, true);
+  if (HEADER_SIZE + bodyLength + TRAILER_SIZE !== frame.length) {
+    throw new TruncatedError(
+      `frame declares a ${String(bodyLength)}-byte body but holds ${String(frame.length - HEADER_SIZE - TRAILER_SIZE)}`,
+    );
+  }
+
   const expected = view.getUint32(frame.length - TRAILER_SIZE, true);
   const actual = crc32(frame.subarray(0, frame.length - TRAILER_SIZE));
   if (expected !== actual) {
@@ -251,6 +262,6 @@ export function readHeader(frame: Uint8Array): ReadResult {
     version,
     type: frame[5] ?? 0,
     flags: frame[6] ?? 0,
-    body: frame.subarray(HEADER_SIZE, frame.length - TRAILER_SIZE),
+    body: frame.subarray(HEADER_SIZE, HEADER_SIZE + bodyLength),
   };
 }

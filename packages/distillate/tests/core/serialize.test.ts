@@ -94,6 +94,16 @@ test("readHeader throws BadMagicError on wrong magic", () => {
   expect(() => readHeader(f)).toThrow(BadMagicError);
 });
 
+test.each([1, -1])(
+  "readHeader reports a body length off by %i as truncation, not corruption",
+  (delta) => {
+    const f = validFrame();
+    const view = new DataView(f.buffer, f.byteOffset, f.byteLength);
+    view.setUint32(8, view.getUint32(8, true) + delta, true);
+    expect(() => readHeader(f)).toThrow(TruncatedError);
+  },
+);
+
 test("readHeader throws UnknownVersionError on unsupported version", () => {
   const f = writeHeader({ version: 255, type: 0, flags: 0 }, new Uint8Array(0));
   expect(() => readHeader(f)).toThrow(UnknownVersionError);
