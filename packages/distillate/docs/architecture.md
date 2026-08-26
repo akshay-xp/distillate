@@ -2,12 +2,21 @@
 
 Deep modules, one narrow interface. Every structure feels identical to use.
 
-## Two families
+## Three families
 
-Static and mutable filters have honestly different lifecycles. Do not pretend everything is a Bloom filter (the mistake incumbents make).
+Static and mutable filters have honestly different lifecycles, and sketches answer a different question entirely. Do not pretend everything is a Bloom filter (the mistake incumbents make).
 
 - Mutable: `add` (and sometimes `delete`) after construction. Bloom, Blocked Bloom, Counting Bloom, Scalable Bloom, Cuckoo.
 - Static: `build(keys)` once, then immutable and queried. Binary Fuse, XOR. Smaller and faster; can fail-and-retry on build.
+- Sketches: `add` then ask an aggregate question, never a per-key one. HyperLogLog (cardinality); Count-Min (frequency), t-digest/KLL (quantiles), MinHash (similarity) are the same family, not yet shipped.
+
+### Why a sketch is not a `Filter`
+
+The split is structural, not taxonomic. `Filter` promises `has(key)` and `bitsPerKey`, and a sketch can honour neither.
+
+A HyperLogLog does not store membership: it keeps `2^p` registers holding the longest run of leading zeros hashed to each, from which a cardinality is inferred. Nothing in there answers "did I see this key". And `bitsPerKey` has no denominator, because a sketch's size is fixed by `p` before it sees a single key. That fixed size is the entire point: 12 KiB counts a thousand distinct keys or a billion.
+
+So sketches get their own narrow interface rather than a widened `Filter` with methods that throw. The union operation is shared in spirit but not in type: filters merge only at identical parameters, while sketches fold to the coarser precision.
 
 ## Interfaces
 
@@ -30,6 +39,18 @@ interface DeletableFilter extends MutableFilter {
 
 // Static family: build-once free functions per structure
 function buildBinaryFuse8(keys: Iterable<BytesLike>, opts?: BuildOpts): Filter;
+
+// Sketch family: aggregate questions, no per-key answer and no bitsPerKey
+interface Sketch<T> {
+  add(key: BytesLike): void;
+  toBytes(): Uint8Array;
+  union(other: T): T;
+}
+
+interface CardinalitySketch extends Sketch<CardinalitySketch> {
+  count(): number;
+  readonly standardError: number; // analytic, for reporting
+}
 ```
 
 Each structure also exposes `fromBytes(bytes: Uint8Array): Filter` (static method).
