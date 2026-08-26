@@ -160,11 +160,14 @@ test("a promoted sketch agrees with one built dense throughout", () => {
   expect(error).toBeLessThan(3 * grown.standardError);
 });
 
+// Pins the surface so a representation change cannot leak into the API. Every
+// entry here is a deliberate addition; promotion contributes none of them.
 test("promotion adds nothing to the public surface", () => {
   expect(Object.getOwnPropertyNames(HyperLogLog.prototype).sort()).toEqual([
     "add",
     "constructor",
     "count",
+    "equals",
     "p",
     "seed",
     "standardError",
@@ -175,6 +178,43 @@ test("promotion adds nothing to the public surface", () => {
     "name",
     "prototype",
   ]);
+});
+
+const keysUpTo = (n: number, tag = "eq"): string[] => {
+  const keys: string[] = [];
+  for (let i = 0; i < n; i++) keys.push(`${tag}:${String(i)}`);
+  return keys;
+};
+
+const sketchOf = (keys: readonly string[], p = 14, seed = 0): HyperLogLog => {
+  const sketch = new HyperLogLog({ p, seed });
+  for (const key of keys) sketch.add(key);
+  return sketch;
+};
+
+test("sketches over the same keys are equal whatever the insertion order", () => {
+  for (const n of [100, 5000]) {
+    const keys = keysUpTo(n);
+    const forwards = sketchOf(keys);
+    const backwards = sketchOf([...keys].reverse());
+    expect(forwards.equals(backwards)).toBe(true);
+    expect(backwards.equals(forwards)).toBe(true);
+  }
+});
+
+test("empty sketches at matching params are equal", () => {
+  expect(new HyperLogLog({ p: 14 }).equals(new HyperLogLog({ p: 14 }))).toBe(
+    true,
+  );
+});
+
+test("sketches differing in precision, seed, or contents are not equal", () => {
+  const keys = keysUpTo(100);
+  const base = sketchOf(keys);
+
+  expect(base.equals(sketchOf(keys, 13))).toBe(false);
+  expect(base.equals(sketchOf(keys, 14, 7))).toBe(false);
+  expect(base.equals(sketchOf([...keys, "eq:extra"]))).toBe(false);
 });
 
 test("add accepts every BytesLike form, and they agree", () => {
