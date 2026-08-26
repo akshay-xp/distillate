@@ -248,7 +248,7 @@ function fuseStateFromBytes(
   const { type, flags, body } = readHeader(bytes);
   if (type !== expectedType) {
     throw new SerializationError(
-      `expected AMQF type ${String(expectedType)}, got ${String(type)}`,
+      `expected DSTL type ${String(expectedType)}, got ${String(type)}`,
     );
   }
   if ((flags & 0x0f) !== HASH_MURMUR128) {

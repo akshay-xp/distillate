@@ -156,7 +156,7 @@ test("fuse16 reports size and ~18-19 bits per key", () => {
   expect(f.bitsPerKey).toBeLessThan(20);
 });
 
-test("toBytes emits an AMQF type-3 frame for fuse8 and type-4 for fuse16", () => {
+test("toBytes emits a DSTL type-3 frame for fuse8 and type-4 for fuse16", () => {
   const f8 = BinaryFuse8.from(sampleStrings(1, 500));
   const frame8 = f8.toBytes();
   expect(frame8[4]).toBe(4);
