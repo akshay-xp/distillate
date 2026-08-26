@@ -8,6 +8,7 @@ import {
   HASH_MURMUR128,
   readHeader,
   SerializationError,
+  TruncatedError,
   UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
@@ -35,6 +36,8 @@ const TYPE = 5;
 /** Body layout: p (u8) | encoding (u8) | seed (u32 LE) | payload. */
 const PARAMS_SIZE = 6;
 const DENSE = 0;
+const SPARSE = 1;
+const ENTRY_SIZE = 4;
 
 function assertPrecision(p: number): void {
   if (!Number.isInteger(p) || p < HLL_MIN_P || p > HLL_MAX_P) {
@@ -124,18 +127,39 @@ export class HyperLogLog {
     const p = body[0] ?? 0;
     const encoding = body[1] ?? 0;
     const seed = dv.getUint32(2, true);
-    if (encoding !== DENSE) {
+    if (encoding !== DENSE && encoding !== SPARSE) {
       throw new SerializationError(`unknown hll encoding ${String(encoding)}`);
     }
 
     const sketch = new HyperLogLog({ p, seed });
-    assertBodyLength(
-      body.length,
-      PARAMS_SIZE + sketch.#registers.bytes.length,
-      "hll",
-    );
-    sketch.#goDense();
-    sketch.#registers.bytes.set(body.subarray(PARAMS_SIZE));
+    const payload = body.length - PARAMS_SIZE;
+
+    if (encoding === DENSE) {
+      assertBodyLength(
+        body.length,
+        PARAMS_SIZE + sketch.#registers.bytes.length,
+        "hll",
+      );
+      sketch.#goDense();
+      sketch.#registers.bytes.set(body.subarray(PARAMS_SIZE));
+      return sketch;
+    }
+
+    const buffer = sketch.#sparse;
+    if (buffer === null) {
+      throw new SerializationError("sparse frame at a precision without one");
+    }
+    if (payload % ENTRY_SIZE !== 0 || payload / ENTRY_SIZE > buffer.length) {
+      throw new TruncatedError(
+        `hll: sparse payload of ${String(payload)} bytes is not up to ${String(buffer.length)} whole entries`,
+      );
+    }
+
+    const entries = payload / ENTRY_SIZE;
+    for (let i = 0; i < entries; i++) {
+      buffer[i] = dv.getUint32(PARAMS_SIZE + i * ENTRY_SIZE, true);
+    }
+    sketch.#len = entries;
     return sketch;
   }
 
@@ -146,7 +170,28 @@ export class HyperLogLog {
    * {@link HyperLogLog.fromBytes}.
    */
   toBytes(): Uint8Array {
-    const payload = this.#dense().bytes;
+    const sparse = this.#sparse;
+    if (sparse !== null) {
+      // Squeeze duplicates out first, so the frame carries one entry per
+      // distinct index and no more.
+      const entries = compact(sparse, this.#len);
+      this.#len = entries;
+
+      return writeFrame(
+        { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
+        PARAMS_SIZE + entries * ENTRY_SIZE,
+        (body, dv) => {
+          body[0] = this.#p;
+          body[1] = SPARSE;
+          dv.setUint32(2, this.#seed, true);
+          for (let i = 0; i < entries; i++) {
+            dv.setUint32(PARAMS_SIZE + i * ENTRY_SIZE, sparse[i] ?? 0, true);
+          }
+        },
+      );
+    }
+
+    const payload = this.#registers.bytes;
     return writeFrame(
       { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
       PARAMS_SIZE + payload.length,
