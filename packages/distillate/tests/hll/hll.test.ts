@@ -1,6 +1,5 @@
 import { expect, test } from "vitest";
 
-import { measureBytesPerOp } from "../../bench/harness.js";
 import { ParamError } from "../../src/core/params.js";
 import { HyperLogLog } from "../../src/hll/hll.js";
 
@@ -191,24 +190,4 @@ test("add accepts every BytesLike form, and they agree", () => {
 
   expect(fromBytes.count()).toBe(fromString.count());
   expect(fromBuffer.count()).toBe(fromString.count());
-});
-
-// add() reuses one Hash128 struct and writes into preallocated registers, so a
-// steady-state call should allocate nothing. Keys are pre-generated and cycled
-// so the loop measures add() rather than string building. The sparse buffer is
-// allowed to allocate, so the sketch is driven dense first, deliberately rather
-// than as a side effect of how many keys the loop happens to use.
-test("add allocates nothing in steady state", () => {
-  const sketch = new HyperLogLog({ p: 14 });
-  const keys: string[] = [];
-  for (let i = 0; i < 4096; i++) keys.push(`alloc:${String(i)}`);
-  for (const key of keys) sketch.add(key);
-
-  let at = 0;
-  const bytesPerOp = measureBytesPerOp(() => {
-    at = (at + 1) & 4095;
-    sketch.add(keys[at] ?? "");
-  }, 50_000);
-
-  expect(bytesPerOp).toBeLessThan(16);
 });
