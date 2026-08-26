@@ -77,6 +77,23 @@ test("re-adding the same key does not change the count", () => {
   expect(sketch.count()).toBe(once);
 });
 
+// Below the promotion threshold the sketch holds every key it has seen at a
+// far finer precision than the dense registers, so it counts rather than
+// estimates. The sizes run past 200, where the dense path first stops being
+// exact (it reports 301 for 300), up to just under the promotion threshold.
+// Exactness assumes no 25-bit hash collision among these keys: ~0.06 expected
+// at n = 2000, and deterministic under a fixed seed.
+test("a small sketch counts distinct keys exactly", () => {
+  for (const n of [1, 2, 10, 50, 100, 300, 500, 1000, 2000]) {
+    const sketch = new HyperLogLog({ p: 14 });
+    for (let i = 0; i < n; i++) sketch.add(`exact:${String(i)}`);
+    expect(sketch.count()).toBe(n);
+
+    for (let i = 0; i < n; i++) sketch.add(`exact:${String(i)}`);
+    expect(sketch.count()).toBe(n);
+  }
+});
+
 test("count is idempotent", () => {
   const sketch = new HyperLogLog({ p: 14 });
   for (let i = 0; i < 1000; i++) sketch.add(`key:${String(i)}`);

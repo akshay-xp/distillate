@@ -4,6 +4,7 @@ import { assertUint32, ParamError } from "../core/params.js";
 import { HLL_MAX_P, HLL_MIN_P, hllSizing } from "../core/sizing.js";
 import { estimate } from "./estimate.js";
 import { Registers } from "./registers.js";
+import { compact, encodeSparse, promote, SPARSE_P } from "./sparse.js";
 
 // Relative standard error of a HyperLogLog with 2**p registers, from the
 // original Flajolet analysis. Reported, never used to correct an estimate.
@@ -41,6 +42,10 @@ export class HyperLogLog {
   readonly #seed: number;
   // Reused across add() so hashing a key allocates nothing per call.
   readonly #scratch: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
+  // Entries seen so far, or null once the sketch has gone dense.
+  #sparse: Int32Array | null;
+  // How much of #sparse is in use.
+  #len = 0;
 
   /**
    * Creates a sketch at an explicit precision.
@@ -53,6 +58,10 @@ export class HyperLogLog {
     this.#registers = new Registers(p);
     this.#p = p;
     this.#seed = seed;
+    // The sparse buffer is allowed exactly the memory the dense registers
+    // already occupy, four bytes to the entry, so a sketch never costs more
+    // than its dense form no matter which representation it is in.
+    this.#sparse = new Int32Array(this.#registers.bytes.length >> 2);
   }
 
   /**
@@ -93,21 +102,53 @@ export class HyperLogLog {
     // Top p bits pick the register; the remaining 64 - p bits of the (w0, w1)
     // lane give rho, the position of the first set bit counted from 1.
     const p = this.#p;
-    const index = s.w0 >>> (32 - p);
     const tail = (s.w0 << p) >>> 0;
     const rho =
       tail !== 0 ? Math.clz32(tail) + 1 : 32 - p + Math.clz32(s.w1) + 1;
 
-    if (rho > this.#registers.get(index)) this.#registers.set(index, rho);
+    const sparse = this.#sparse;
+    if (sparse === null) {
+      const index = s.w0 >>> (32 - p);
+      if (rho > this.#registers.get(index)) this.#registers.set(index, rho);
+      return;
+    }
+
+    sparse[this.#len++] = encodeSparse(s.w0 >>> (32 - SPARSE_P), rho);
+    if (this.#len === sparse.length) this.#collapse(sparse);
+  }
+
+  // Squeezes duplicates out of a full sparse buffer, and goes dense if that did
+  // not win back enough room to be worth doing again.
+  #collapse(sparse: Int32Array): void {
+    const distinct = compact(sparse, this.#len);
+    this.#len = distinct;
+
+    const slack = Math.max(1, sparse.length >> 2);
+    if (distinct > sparse.length - slack) {
+      promote(sparse, distinct, this.#registers, this.#p);
+      this.#sparse = null;
+      this.#len = 0;
+    }
   }
 
   /**
-   * Estimates how many distinct keys have been added.
+   * Counts how many distinct keys have been added. Small sketches answer
+   * exactly; larger ones estimate, within {@link standardError}.
    *
-   * @returns The estimated cardinality, a whole number; `0` for an empty
-   * sketch.
+   * @returns The cardinality, a whole number; `0` for an empty sketch.
    */
   count(): number {
+    const sparse = this.#sparse;
+    if (sparse !== null) {
+      // Every distinct key still has its own sparse index, so this counts
+      // rather than estimates: linear counting over 2 ** SPARSE_P buckets is
+      // off by under half a key for any cardinality a sparse sketch can hold.
+      const distinct = compact(sparse, this.#len);
+      this.#len = distinct;
+      const buckets = 2 ** SPARSE_P;
+      return Math.round(buckets * Math.log(buckets / (buckets - distinct)));
+    }
+
     const p = this.#p;
     const q = 64 - p;
     const m = 2 ** p;
