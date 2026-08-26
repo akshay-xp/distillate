@@ -2,11 +2,11 @@ import fc from "fast-check";
 import { expect, test } from "vitest";
 
 import {
+  BadMagicError,
   FORMAT_VERSION,
   readHeader,
   SerializationError,
   TruncatedError,
-  UnknownVersionError,
   writeHeader,
 } from "../../src/core/serialize.js";
 import { bloomSizing } from "../../src/core/sizing.js";
@@ -138,7 +138,7 @@ test("toBytes emits an AMQF type-1 frame with LE params + payload", () => {
   f.add("x");
   const frame = f.toBytes();
 
-  expect(frame[4]).toBe(3);
+  expect(frame[4]).toBe(4);
   expect((frame[6] ?? 0) & 0x0f).toBe(0);
 
   const { version, type, body } = readHeader(frame);
@@ -358,14 +358,14 @@ test("fromBytes rejects a frame whose body length disagrees with declared params
   expect(() => BloomFilter.fromBytes(short)).toThrow(TruncatedError);
 });
 
-const GOLDEN_V3 =
-  "QU1RRgMBAAAABAAABwAqAAAAZQAAAAAAAAAAQAAAAgAAAAAAAAAQAAAAEACAAIAAAAAAAAAAAAIAAAAAAAACEAAgAAAAQAAAAAAAAAAAAAAAAAAEAAAAAAAAAACAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAEAAAAgAAAAAAAAAAAAAAAAAAAAAAIAAAEAAEAAAACACAi3eVnQ==";
+const GOLDEN_V4 =
+  "RFNUTAQBAAAABAAABwAqAAAAZQAAAAAAAAAAQAAAAgAAAAAAAAAQAAAAEACAAIAAAAAAAAAAAAIAAAAAAAACEAAgAAAAQAAAAAAAAAAAAAAAAAAEAAAAAAAAAACAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAEAAAAgAAAAAAAAAAAAAAAAAAAAAAIAAAEAAEAAAACACAd+5WJg==";
 
 const UNSUPPORTED_V2 =
   "QU1RRgIBAQAABAAABwAqAAAAZQAAAAAAAAAACAACAAAAEAAAAAQEAAAAAAAAAAAGAQAAAAAAAAAIAQAAAIAAAAAIAAAAAAAAAAAQAAgAAAAAAAAgAAAAAAAABAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAIAIAAAAAAAAAAAABAAAAAAL3+yiw==";
 
-test("reads a committed v3 golden frame (locks the format)", () => {
-  const f = BloomFilter.fromBytes(fromBase64(GOLDEN_V3));
+test("reads a committed v4 golden frame (locks the format)", () => {
+  const f = BloomFilter.fromBytes(fromBase64(GOLDEN_V4));
   for (const key of ["alice", "bob", "carol"]) expect(f.has(key)).toBe(true);
   expect(f.m).toBe(1024);
   expect(f.k).toBe(7);
@@ -373,12 +373,12 @@ test("reads a committed v3 golden frame (locks the format)", () => {
 
   const fresh = new BloomFilter({ m: 1024, k: 7, seed: 42 });
   for (const key of ["alice", "bob", "carol"]) fresh.add(key);
-  expect(fresh.toBytes()).toEqual(fromBase64(GOLDEN_V3));
+  expect(fresh.toBytes()).toEqual(fromBase64(GOLDEN_V4));
 });
 
-test("fromBytes rejects a superseded v2 frame", () => {
+test("fromBytes rejects a pre-v4 AMQF frame on magic", () => {
   expect(() => BloomFilter.fromBytes(fromBase64(UNSUPPORTED_V2))).toThrow(
-    UnknownVersionError,
+    BadMagicError,
   );
 });
 

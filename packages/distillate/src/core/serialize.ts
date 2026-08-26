@@ -1,10 +1,13 @@
 import { fromBase64, toBase64 } from "./base64.js";
 import { crc32 } from "./crc32.js";
 
-export const FORMAT_VERSION = 3;
+export const FORMAT_VERSION = 4;
 
 /** Hash variant recorded in the low nibble of the header flags byte. */
 export const HASH_MURMUR128 = 0;
+
+/** Frame sentinel, the ASCII bytes `DSTL`. Superseded `AMQF` in format v4. */
+const MAGIC = Uint8Array.of(0x44, 0x53, 0x54, 0x4c);
 
 const HEADER_SIZE = 8;
 const TRAILER_SIZE = 4;
@@ -27,10 +30,7 @@ export function writeFrame(
   fill: (body: Uint8Array, view: DataView) => void,
 ): Uint8Array {
   const frame = new Uint8Array(HEADER_SIZE + bodyLength + TRAILER_SIZE);
-  frame[0] = 0x41;
-  frame[1] = 0x4d;
-  frame[2] = 0x51;
-  frame[3] = 0x46;
+  frame.set(MAGIC, 0);
   frame[4] = header.version;
   frame[5] = header.type;
   frame[6] = header.flags;
@@ -83,10 +83,12 @@ export class TruncatedError extends SerializationError {
 }
 
 /**
- * Thrown when a frame does not start with the four-byte `AMQF` magic, so it
- * was never produced by `toBytes`. Check that the bytes really are a
- * distillate frame and not another payload, a text encoding of one, or a
- * slice taken at the wrong offset.
+ * Thrown when a frame does not start with the four-byte `DSTL` magic, so it
+ * was never produced by `toBytes`. Frames written before format version 4
+ * carry the older `AMQF` magic and are rejected here; re-serialize them with
+ * the version you run. Otherwise check that the bytes really are a distillate
+ * frame and not another payload, a text encoding of one, or a slice taken at
+ * the wrong offset.
  */
 export class BadMagicError extends SerializationError {
   /** Discriminates this error from other `Error`s. */
@@ -215,13 +217,10 @@ export function readHeader(frame: Uint8Array): ReadResult {
       `frame of ${String(frame.length)} bytes is shorter than the minimum ${String(HEADER_SIZE + TRAILER_SIZE)}`,
     );
   }
-  if (
-    frame[0] !== 0x41 ||
-    frame[1] !== 0x4d ||
-    frame[2] !== 0x51 ||
-    frame[3] !== 0x46
-  ) {
-    throw new BadMagicError("frame does not start with the AMQF magic");
+  for (let i = 0; i < MAGIC.length; i++) {
+    if (frame[i] !== MAGIC[i]) {
+      throw new BadMagicError("frame does not start with the DSTL magic");
+    }
   }
   const version = frame[4] ?? 0;
   if (version !== FORMAT_VERSION) {

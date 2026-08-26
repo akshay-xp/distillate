@@ -2,11 +2,11 @@ import fc from "fast-check";
 import { expect, test } from "vitest";
 
 import {
+  BadMagicError,
   FORMAT_VERSION,
   readHeader,
   SerializationError,
   TruncatedError,
-  UnknownVersionError,
   writeHeader,
 } from "../../src/core/serialize.js";
 import {
@@ -339,7 +339,7 @@ test("toBytes emits an AMQF type-2 frame with LE params + payload", () => {
   f.add("x");
   const frame = f.toBytes();
 
-  expect(frame[4]).toBe(3);
+  expect(frame[4]).toBe(4);
   expect((frame[6] ?? 0) & 0x0f).toBe(0);
 
   const { version, type, body } = readHeader(frame);
@@ -452,14 +452,14 @@ test("fromBytes rejects a frame whose body length disagrees with declared params
   expect(() => BlockedBloomFilter.fromBytes(short)).toThrow(TruncatedError);
 });
 
-const GOLDEN_V3 =
-  "QU1RRgMCAAAFAAAAKgAAAGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAASAAAAgAAAQEAAEBAACgAAAAAEAAQAgAEAAAAiAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAgAAAAAAIAAAAAAEAAAEAAAAAAQgAAAAAEAAA7NBAAA==";
+const GOLDEN_V4 =
+  "RFNUTAQCAAAFAAAAKgAAAGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAASAAAAgAAAQEAAEBAACgAAAAAEAAQAgAEAAAAiAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAgAAAAAAIAAAAAAEAAAEAAAAAAQgAAAAAEAAAB2hQbw==";
 
 const UNSUPPORTED_V2 =
   "QU1RRgICAQAFAAAAKgAAAGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAQAAIAAAAEAAAAABAAAgAAAAQAAAAAAAIAAAEAEAAQAAAAAAQEAIAAgAAQAAgEAAACAAiAAAAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADVRVuw==";
 
-test("reads a committed v3 golden frame (locks the format)", () => {
-  const f = BlockedBloomFilter.fromBytes(fromBase64(GOLDEN_V3));
+test("reads a committed v4 golden frame (locks the format)", () => {
+  const f = BlockedBloomFilter.fromBytes(fromBase64(GOLDEN_V4));
   for (const key of ["alice", "bob", "carol"]) expect(f.has(key)).toBe(true);
 
   const fresh = new BlockedBloomFilter({
@@ -468,13 +468,13 @@ test("reads a committed v3 golden frame (locks the format)", () => {
     seed: 42,
   });
   for (const key of ["alice", "bob", "carol"]) fresh.add(key);
-  expect(fresh.toBytes()).toEqual(fromBase64(GOLDEN_V3));
+  expect(fresh.toBytes()).toEqual(fromBase64(GOLDEN_V4));
 });
 
-test("fromBytes rejects a superseded v2 frame", () => {
+test("fromBytes rejects a pre-v4 AMQF frame on magic", () => {
   expect(() =>
     BlockedBloomFilter.fromBytes(fromBase64(UNSUPPORTED_V2)),
-  ).toThrow(UnknownVersionError);
+  ).toThrow(BadMagicError);
 });
 
 test("fromBytes rejects a frame with an unknown hash variant", () => {

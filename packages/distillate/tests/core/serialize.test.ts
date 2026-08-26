@@ -36,7 +36,9 @@ test("writeHeader frames magic, reserved byte, and round-trips fields", () => {
     { version: FORMAT_VERSION, type: 5, flags: 3 },
     Uint8Array.of(1, 2, 3),
   );
-  expect(Array.from(frame.subarray(0, 4))).toEqual([0x41, 0x4d, 0x51, 0x46]);
+  expect(FORMAT_VERSION).toBe(4);
+  expect(Array.from(frame.subarray(0, 4))).toEqual([0x44, 0x53, 0x54, 0x4c]);
+  expect(frame[4]).toBe(4);
   expect(frame[7]).toBe(0);
   expect(readHeader(frame)).toEqual({
     version: FORMAT_VERSION,
