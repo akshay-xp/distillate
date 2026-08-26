@@ -9,7 +9,14 @@ export const HASH_MURMUR128 = 0;
 /** Frame sentinel, the ASCII bytes `DSTL`. Superseded `AMQF` in format v4. */
 const MAGIC = Uint8Array.of(0x44, 0x53, 0x54, 0x4c);
 
-const HEADER_SIZE = 8;
+/**
+ * Header layout: magic (4) | version | type | flags | reserved | bodyLength
+ * (u32 LE at 8) | reserved (4 at 12). The trailing reserved word keeps the
+ * body 8-byte aligned and leaves room for fields to be added without another
+ * breaking bump.
+ */
+const HEADER_SIZE = 16;
+const BODY_LENGTH_OFFSET = 8;
 const TRAILER_SIZE = 4;
 
 export interface Header {
@@ -19,10 +26,12 @@ export interface Header {
 }
 
 /**
- * Allocates a full frame once, hands `fill` a writable view over the body region
- * (and a `DataView` scoped to it), then seals the CRC trailer. The body view
- * aliases the frame's buffer, so callers write fields and payload straight into
- * the frame with no intermediate body allocation or copy.
+ * Allocates a full frame once, stamps the header (including the declared body
+ * length, so a reader can frame the payload without knowing its type), hands
+ * `fill` a writable view over the body region (and a `DataView` scoped to it),
+ * then seals the CRC trailer. The body view aliases the frame's buffer, so
+ * callers write fields and payload straight into the frame with no intermediate
+ * body allocation or copy.
  */
 export function writeFrame(
   header: Header,
@@ -30,21 +39,23 @@ export function writeFrame(
   fill: (body: Uint8Array, view: DataView) => void,
 ): Uint8Array {
   const frame = new Uint8Array(HEADER_SIZE + bodyLength + TRAILER_SIZE);
+  const frameView = new DataView(
+    frame.buffer,
+    frame.byteOffset,
+    frame.byteLength,
+  );
   frame.set(MAGIC, 0);
   frame[4] = header.version;
   frame[5] = header.type;
   frame[6] = header.flags;
   frame[7] = 0;
+  frameView.setUint32(BODY_LENGTH_OFFSET, bodyLength, true);
 
   const body = frame.subarray(HEADER_SIZE, HEADER_SIZE + bodyLength);
   fill(body, new DataView(frame.buffer, HEADER_SIZE, bodyLength));
 
   const crc = crc32(frame.subarray(0, HEADER_SIZE + bodyLength));
-  new DataView(frame.buffer, frame.byteOffset, frame.byteLength).setUint32(
-    HEADER_SIZE + bodyLength,
-    crc,
-    true,
-  );
+  frameView.setUint32(HEADER_SIZE + bodyLength, crc, true);
   return frame;
 }
 
