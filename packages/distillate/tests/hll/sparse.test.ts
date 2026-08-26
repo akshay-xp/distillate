@@ -1,8 +1,10 @@
 import { expect, test } from "vitest";
 
+import { Registers } from "../../src/hll/registers.js";
 import {
   compact,
   encodeSparse,
+  promote,
   SPARSE_P,
   sparseIndex,
   sparseRho,
@@ -45,6 +47,46 @@ test("compact leaves distinct entries sorted by index", () => {
 
 test("compact of an empty buffer counts nothing", () => {
   expect(compact(new Int32Array(8), 0)).toBe(0);
+});
+
+// Entries are hand-built rather than hashed, so the assertions state what
+// promotion must produce instead of restating how it computes it.
+const SHIFT = SPARSE_P - 14;
+
+test("promotion folds a sparse index down to its dense register", () => {
+  const registers = new Registers(14);
+  const index = 20_000_000;
+  promote(Int32Array.of(encodeSparse(index, 5)), 1, registers, 14);
+  expect(registers.get(9765)).toBe(5);
+});
+
+test("promotion keeps the largest rho among indices sharing a register", () => {
+  const registers = new Registers(14);
+  // Same top 14 bits, so both fold onto register 9000. The larger rho is
+  // written first, so overwriting rather than maximising would lose it.
+  const buf = Int32Array.of(
+    encodeSparse(9000 << SHIFT, 11),
+    encodeSparse((9000 << SHIFT) | 1234, 4),
+  );
+  promote(buf, 2, registers, 14);
+  expect(registers.get(9000)).toBe(11);
+});
+
+test("promotion sends distinct prefixes to distinct registers", () => {
+  const registers = new Registers(14);
+  const buf = Int32Array.of(
+    encodeSparse(3 << SHIFT, 6),
+    encodeSparse(4 << SHIFT, 2),
+  );
+  promote(buf, 2, registers, 14);
+  expect(registers.get(3)).toBe(6);
+  expect(registers.get(4)).toBe(2);
+});
+
+test("promoting nothing leaves every register empty", () => {
+  const registers = new Registers(4);
+  promote(new Int32Array(8), 0, registers, 4);
+  for (let i = 0; i < 16; i++) expect(registers.get(i)).toBe(0);
 });
 
 test("compact reads only the used prefix", () => {
