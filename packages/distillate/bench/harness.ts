@@ -60,3 +60,45 @@ export function benchLookup(
     run();
   });
 }
+
+/**
+ * Heap bytes allocated per call of `fn`, as the median of `rounds` windows of
+ * `ops` calls each. Counts garbage, not just what survives, which is the point:
+ * an object allocated and dropped every call is GC pressure even though it
+ * retains nothing.
+ *
+ * Two things make a single window untrustworthy, and the median answers both.
+ * `heapUsed` is process-wide, so a neighbouring test inflates a reading (a
+ * zero-allocation loop measured 0 bytes/op alone and 36 right after a test that
+ * built a million strings). And a collection inside the window *frees* memory,
+ * so a reading can come out negative: the same allocating loop produced
+ * `[73.4, -16.8, 19.7, 73.6, 74.7, -111.4]`. Neither the minimum nor the mean
+ * survives that; the median lands at ~73 where the true cost is ~73.
+ *
+ * Keep `ops` small enough that most windows stay under the young-generation
+ * threshold and no collection fires at all: 50000 is a good default. At that
+ * size a non-allocating loop reads exactly 0 on every round.
+ *
+ * Deliberately does not force `global.gc()`. Collecting either side of the
+ * window measures surviving heap instead of allocation, which reports 0 for a
+ * loop churning garbage and would miss the regression this exists to catch.
+ */
+export function measureBytesPerOp(
+  fn: () => void,
+  ops: number,
+  rounds = 7,
+): number {
+  // Let the loop reach steady state so one-off setup is not charged to it.
+  for (let i = 0; i < Math.min(ops, 5_000); i++) fn();
+
+  const samples: number[] = [];
+  for (let round = 0; round < rounds; round++) {
+    const before = process.memoryUsage().heapUsed;
+    for (let i = 0; i < ops; i++) fn();
+    const after = process.memoryUsage().heapUsed;
+    samples.push((after - before) / ops);
+  }
+
+  samples.sort((a, b) => a - b);
+  return Math.max(0, samples[samples.length >> 1] ?? 0);
+}

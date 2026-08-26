@@ -6,6 +6,7 @@ import {
   envBanner,
   hitMissPools,
   lookupThunk,
+  measureBytesPerOp,
   measureFpr,
 } from "../../bench/harness.js";
 
@@ -56,4 +57,27 @@ test("lookupThunk queries successive cycling keys", () => {
   run();
   run();
   expect(seen).toEqual(["a", "b", "c", "a"]);
+});
+
+// The probe must separate "allocates nothing" from "allocates a small object".
+// Individual rounds are noisy in both directions (a collection inside a window
+// makes a reading negative), which is why the probe takes a median; measured,
+// an allocating loop lands near 73 bytes/op and a non-allocating one at exactly
+// 0, so the two are never in doubt.
+test("measureBytesPerOp tells an allocating loop from a non-allocating one", () => {
+  const retained: object[] = [];
+  const allocating = measureBytesPerOp(() => {
+    retained.push({ a: 1, b: 2 });
+  }, 50_000);
+
+  let total = 0;
+  const flat = measureBytesPerOp(() => {
+    total += 1;
+  }, 50_000);
+
+  // At least `ops`, since the probe also warms the loop up before measuring.
+  expect(total).toBeGreaterThanOrEqual(50_000);
+  expect(retained.length).toBeGreaterThanOrEqual(50_000);
+  expect(allocating).toBeGreaterThan(24);
+  expect(flat).toBeLessThan(16);
 });
