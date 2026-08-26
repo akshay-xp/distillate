@@ -17,7 +17,7 @@ cannot support, and a frame that will not decode.
 | [`BinaryFuseBuildError`](/api/fuse/classes/binaryfusebuilderror/)                        | `BinaryFuse8.from`, `BinaryFuse16.from`    | The peel stalled on every seed          |
 | [`SerializationError`](/api/bloom/classes/serializationerror/)                           | `fromJSON`, and the base of the five below | The envelope is malformed               |
 | [`TruncatedError`](/api/bloom/classes/truncatederror/)                                   | `fromBytes`                                | The frame is short                      |
-| [`BadMagicError`](/api/bloom/classes/badmagicerror/)                                     | `fromBytes`                                | Not an AMQF frame                       |
+| [`BadMagicError`](/api/bloom/classes/badmagicerror/)                                     | `fromBytes`                                | Not a DSTL frame                        |
 | [`UnknownVersionError`](/api/bloom/classes/unknownversionerror/)                         | `fromBytes`, `fromJSON`                    | A format version this build cannot read |
 | [`UnknownHashVariantError`](/api/bloom/classes/unknownhashvarianterror/)                 | `fromBytes`                                | A hash this build cannot reproduce      |
 | [`ChecksumError`](/api/bloom/classes/checksumerror/)                                     | `fromBytes`                                | CRC32 does not match                    |
@@ -199,12 +199,14 @@ cannot make the reader allocate.
 
 [API reference](/api/bloom/classes/badmagicerror/).
 
-**Thrown when** a frame does not start with the four-byte `AMQF` magic, so it
-was never produced by `toBytes`.
+**Thrown when** a frame does not start with the four-byte `DSTL` magic, so it
+was never produced by `toBytes`. Frames written before format version 4 carry
+the older `AMQF` magic and land here rather than on the version check.
 
 **What to do:** check what you are actually handing it. Common causes are a
-frame from another library (a `bloom-filters` dump lands here), a base64
-string that was never decoded, or a `Uint8Array` sliced at the wrong offset.
+pre-v4 distillate frame (re-serialize it with the version you run), a frame
+from another library (a `bloom-filters` dump lands here), a base64 string that
+was never decoded, or a `Uint8Array` sliced at the wrong offset.
 `fromBytes` respects `byteOffset` and `byteLength`, so a correct subarray view
 is fine; an incorrect one is not.
 
@@ -213,7 +215,7 @@ is fine; an incorrect one is not.
 [API reference](/api/bloom/classes/unknownversionerror/).
 
 **Thrown when** a frame's version byte, or a JSON envelope's `v` field, is not
-the `FORMAT_VERSION` this build reads. That is `3` today.
+the `FORMAT_VERSION` this build reads. That is `4` today.
 
 **What to do:** upgrade `distillate` on the reading side, or re-serialize the
 data with the version you run. A reader must be at least as new as the
@@ -228,7 +230,7 @@ service and read them in another, upgrade the readers first. See
 [API reference](/api/bloom/classes/unknownhashvarianterror/).
 
 **Thrown when** the low nibble of a frame's flags byte names a hash this build
-cannot reproduce. Version 3 defines exactly one variant, `0`, which is
+cannot reproduce. Version 4 defines exactly one variant, `0`, which is
 murmur3_x86_128 for every structure.
 
 **What to do:** rebuild the filter from the source keys with the version you

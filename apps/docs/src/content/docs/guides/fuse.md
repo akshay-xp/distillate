@@ -114,7 +114,7 @@ const restored = BinaryFuse8.fromBytes(bytes);
 restored.equals(filter); // true
 ```
 
-Frames are AMQF type 3 for Fuse 8 and type 4 for Fuse 16, and `fromBytes`
+Frames are DSTL type 3 for Fuse 8 and type 4 for Fuse 16, and `fromBytes`
 rejects a mismatched type. Fingerprints are a `Uint8Array` for the 8-bit
 filter and a `Uint16Array` for the 16-bit one, so see
 [serialization](/reference/serialization/) for the byte-order note on the
