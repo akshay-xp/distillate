@@ -64,6 +64,22 @@ test("lookupThunk queries successive cycling keys", () => {
 // makes a reading negative), which is why the probe takes a median; measured,
 // an allocating loop lands near 73 bytes/op and a non-allocating one at exactly
 // 0, so the two are never in doubt.
+// A cold loop allocates while V8 optimises it, and that is not the loop's
+// steady-state cost. This stands in for a slow CI runner, where the warm-up
+// stretches across several measurement windows: on such a machine the probe
+// read 35 to 40 bytes/op for add(), which allocates nothing.
+test("measureBytesPerOp ignores what a cold loop allocates while warming", () => {
+  const early: object[] = [];
+  let calls = 0;
+  const settles = measureBytesPerOp(() => {
+    calls++;
+    if (calls <= 250_000) early.push({ a: 1, b: 2 });
+  }, 50_000);
+
+  expect(calls).toBeGreaterThan(250_000);
+  expect(settles).toBeLessThan(16);
+});
+
 test("measureBytesPerOp tells an allocating loop from a non-allocating one", () => {
   const retained: object[] = [];
   const allocating = measureBytesPerOp(() => {
