@@ -135,6 +135,49 @@ test("count is accurate and unbiased from a hundred keys to a million", () => {
   expect(Math.abs(mean)).toBeLessThan(0.01);
 });
 
+// The sketch switches representation somewhere in this range. Nothing about
+// the reported count may betray where: a jump at the switch would mean the two
+// representations disagree about the key set they hold.
+test("promotion does not disturb the count", () => {
+  const sketch = new HyperLogLog({ p: 14 });
+  for (let i = 0; i < 3000; i++) sketch.add(`promote:${String(i)}`);
+
+  let previous = sketch.count();
+  const bound = 3 * sketch.standardError * 3200;
+  for (let i = 3000; i < 3200; i++) {
+    sketch.add(`promote:${String(i)}`);
+    const current = sketch.count();
+    expect(Math.abs(current - previous)).toBeLessThan(bound);
+    previous = current;
+  }
+});
+
+test("a promoted sketch agrees with one built dense throughout", () => {
+  const n = 20_000;
+  const grown = new HyperLogLog({ p: 14 });
+  for (let i = 0; i < n; i++) grown.add(`agree:${String(i)}`);
+
+  const error = Math.abs(grown.count() - n) / n;
+  expect(error).toBeLessThan(3 * grown.standardError);
+});
+
+test("promotion adds nothing to the public surface", () => {
+  expect(Object.getOwnPropertyNames(HyperLogLog.prototype).sort()).toEqual([
+    "add",
+    "constructor",
+    "count",
+    "p",
+    "seed",
+    "standardError",
+  ]);
+  expect(Object.getOwnPropertyNames(HyperLogLog).sort()).toEqual([
+    "create",
+    "length",
+    "name",
+    "prototype",
+  ]);
+});
+
 test("add accepts every BytesLike form, and they agree", () => {
   const text = "alice";
   const bytes = new TextEncoder().encode(text);
