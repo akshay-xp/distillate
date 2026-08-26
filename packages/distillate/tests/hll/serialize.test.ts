@@ -149,6 +149,36 @@ test("a frame cut short is rejected", () => {
   );
 });
 
+test("a sketch round-trips through the JSON envelope", () => {
+  for (const sketch of [sketchOf(100), sketchOf(5000)]) {
+    const envelope = sketch.toJSON();
+    expect(HyperLogLog.fromJSON(envelope).equals(sketch)).toBe(true);
+    expect(HyperLogLog.fromJSON(envelope).count()).toBe(sketch.count());
+
+    // Through actual JSON, not just the object it would serialize to.
+    const wire = JSON.parse(JSON.stringify(envelope)) as unknown;
+    expect(HyperLogLog.fromJSON(wire).equals(sketch)).toBe(true);
+  }
+});
+
+test("a malformed envelope is rejected", () => {
+  const envelope = sketchOf(100).toJSON();
+
+  expect(() => HyperLogLog.fromJSON({ ...envelope, $: "nope" })).toThrow(
+    SerializationError,
+  );
+  expect(() => HyperLogLog.fromJSON({ ...envelope, v: 99 })).toThrow(
+    UnknownVersionError,
+  );
+  expect(() =>
+    HyperLogLog.fromJSON({ ...envelope, data: "Z" + envelope.data.slice(1) }),
+  ).toThrow(SerializationError);
+  expect(() =>
+    HyperLogLog.fromJSON({ $: "distillate", v: FORMAT_VERSION }),
+  ).toThrow(SerializationError);
+  expect(() => HyperLogLog.fromJSON(null)).toThrow(SerializationError);
+});
+
 test("a frame of another structure is rejected", () => {
   const bloom = new BloomFilter({ m: 64, k: 3 });
   bloom.add("alice");

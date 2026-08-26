@@ -172,11 +172,13 @@ test("promotion adds nothing to the public surface", () => {
     "seed",
     "standardError",
     "toBytes",
+    "toJSON",
     "union",
   ]);
   expect(Object.getOwnPropertyNames(HyperLogLog).sort()).toEqual([
     "create",
     "fromBytes",
+    "fromJSON",
     "length",
     "name",
     "prototype",
