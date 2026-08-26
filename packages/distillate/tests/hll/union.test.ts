@@ -105,6 +105,77 @@ test("folding a union mixes representations across precisions", () => {
   expect(sketchOf(b, 8).union(sketchOf(a, 14)).equals(reference)).toBe(true);
 });
 
+// A fixed example can pass while the fold is wrong for precision gaps it does
+// not happen to cover, so the fold is pinned over generated inputs instead.
+// The generator is a seeded LCG, so a failure names a reproducible trial.
+const lcg = (seed: number): (() => number) => {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0;
+    return state / 2 ** 32;
+  };
+};
+
+test("a union folds to the sketch the merged keys would have built", () => {
+  const random = lcg(12_345);
+  const precisions = [8, 10, 12, 14];
+  const sizes = [20, 100, 900, 4000];
+
+  for (let trial = 0; trial < 12; trial++) {
+    const p1 = precisions[Math.floor(random() * precisions.length)] ?? 14;
+    const p2 = precisions[Math.floor(random() * precisions.length)] ?? 14;
+    const a = keys(`p${String(trial)}a`, sizes[trial % sizes.length] ?? 100);
+    const b = keys(
+      `p${String(trial)}b`,
+      sizes[(trial + 2) % sizes.length] ?? 100,
+    );
+
+    const merged = sketchOf(a, p1).union(sketchOf(b, p2));
+    const reference = sketchOf([...a, ...b], Math.min(p1, p2));
+
+    expect({ trial, p: merged.p }).toEqual({ trial, p: Math.min(p1, p2) });
+    expect({ trial, same: merged.equals(reference) }).toEqual({
+      trial,
+      same: true,
+    });
+  }
+});
+
+test("union is commutative", () => {
+  const random = lcg(999);
+  const precisions = [8, 10, 12, 14];
+
+  for (let trial = 0; trial < 8; trial++) {
+    const p1 = precisions[Math.floor(random() * precisions.length)] ?? 14;
+    const p2 = precisions[Math.floor(random() * precisions.length)] ?? 14;
+    const a = sketchOf(keys(`c${String(trial)}a`, 900), p1);
+    const b = sketchOf(keys(`c${String(trial)}b`, 4000), p2);
+
+    expect({ trial, same: a.union(b).equals(b.union(a)) }).toEqual({
+      trial,
+      same: true,
+    });
+  }
+});
+
+test("union is associative", () => {
+  const random = lcg(4242);
+  const precisions = [8, 10, 12, 14];
+
+  for (let trial = 0; trial < 8; trial++) {
+    const p1 = precisions[Math.floor(random() * precisions.length)] ?? 14;
+    const p2 = precisions[Math.floor(random() * precisions.length)] ?? 14;
+    const p3 = precisions[Math.floor(random() * precisions.length)] ?? 14;
+    const a = sketchOf(keys(`s${String(trial)}a`, 100), p1);
+    const b = sketchOf(keys(`s${String(trial)}b`, 900), p2);
+    const c = sketchOf(keys(`s${String(trial)}c`, 4000), p3);
+
+    const left = a.union(b).union(c);
+    const right = a.union(b.union(c));
+    expect({ trial, same: left.equals(right) }).toEqual({ trial, same: true });
+  }
+});
+
 // Sketches seeded differently hash the same key to different registers, so
 // merging them would silently produce a count belonging to neither.
 test("union rejects a sketch built with a different seed", () => {
