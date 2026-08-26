@@ -55,6 +55,14 @@
       "import": "./dist/fuse/index.js",
       "require": "./dist/fuse/index.cjs"
     },
+    "./hll": {
+      "types": {
+        "import": "./dist/hll/index.d.ts",
+        "require": "./dist/hll/index.d.cts"
+      },
+      "import": "./dist/hll/index.js",
+      "require": "./dist/hll/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",
