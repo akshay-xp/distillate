@@ -74,6 +74,33 @@ test("count lands within three standard errors at ten thousand keys", () => {
   expect(error).toBeLessThan(3 * sketch.standardError);
 });
 
+// Sweeps the cardinality range at p=14. Keys are generated once per size and
+// the sketch seed is varied to obtain independent trials, so the cost is in
+// hashing rather than in string building. Bounding every trial proves accuracy;
+// bounding the mean *signed* error proves the estimator is unbiased, which a
+// per-trial bound alone would not catch if every estimate leaned the same way.
+test("count is accurate and unbiased from a hundred keys to a million", () => {
+  const p = 14;
+  const bound = 3 * (1.04 / Math.sqrt(2 ** p));
+  const signed: number[] = [];
+
+  for (const n of [1e2, 1e3, 1e4, 1e5, 1e6]) {
+    const keys: string[] = [];
+    for (let i = 0; i < n; i++) keys.push(`sweep:${String(n)}:${String(i)}`);
+
+    for (const seed of [1, 2, 3]) {
+      const sketch = new HyperLogLog({ p, seed });
+      for (const key of keys) sketch.add(key);
+      const relative = (sketch.count() - n) / n;
+      expect(Math.abs(relative)).toBeLessThan(bound);
+      signed.push(relative);
+    }
+  }
+
+  const mean = signed.reduce((a, b) => a + b, 0) / signed.length;
+  expect(Math.abs(mean)).toBeLessThan(0.01);
+});
+
 test("add accepts every BytesLike form, and they agree", () => {
   const text = "alice";
   const bytes = new TextEncoder().encode(text);
