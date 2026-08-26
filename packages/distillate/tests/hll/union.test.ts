@@ -66,6 +66,45 @@ test("union leaves both operands as they were", () => {
   expect(b.equals(sketchOf(keys("b", 5000)))).toBe(true);
 });
 
+// Merging sketches of unequal precision takes the coarser one, matching
+// BigQuery HLL++ and DataSketches. A finer sketch can always be folded down;
+// the reverse would invent detail it never recorded.
+test("union of unequal precisions folds to the coarser one", () => {
+  const a = keys("a", 5000);
+  const b = keys("b", 5000);
+  const reference = sketchOf([...a, ...b], 10);
+
+  const merged = sketchOf(a, 14).union(sketchOf(b, 10));
+  expect(merged.p).toBe(10);
+  expect(merged.equals(reference)).toBe(true);
+
+  const reversed = sketchOf(b, 10).union(sketchOf(a, 14));
+  expect(reversed.p).toBe(10);
+  expect(reversed.equals(reference)).toBe(true);
+});
+
+// The sparse buffer is sized against the dense registers, so it shrinks with
+// precision: 192 entries at p=10 against 3072 at p=14. Fifty keys a side stay
+// inside that, so the merge stays sparse and keeps counting exactly.
+test("folding a union carries sparse operands with it", () => {
+  const a = keys("a", 50);
+  const b = keys("b", 50);
+  const merged = sketchOf(a, 14).union(sketchOf(b, 10));
+
+  expect(merged.p).toBe(10);
+  expect(merged.equals(sketchOf([...a, ...b], 10))).toBe(true);
+  expect(merged.count()).toBe(100);
+});
+
+test("folding a union mixes representations across precisions", () => {
+  const a = keys("a", 100);
+  const b = keys("b", 5000);
+  const reference = sketchOf([...a, ...b], 8);
+
+  expect(sketchOf(a, 14).union(sketchOf(b, 8)).equals(reference)).toBe(true);
+  expect(sketchOf(b, 8).union(sketchOf(a, 14)).equals(reference)).toBe(true);
+});
+
 // Sketches seeded differently hash the same key to different registers, so
 // merging them would silently produce a count belonging to neither.
 test("union rejects a sketch built with a different seed", () => {

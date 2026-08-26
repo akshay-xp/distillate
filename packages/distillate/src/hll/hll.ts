@@ -9,6 +9,7 @@ import {
   compact,
   encodeSparse,
   foldSparse,
+  refoldSparse,
   SPARSE_P,
   sparseIndex,
   sparseRho,
@@ -151,7 +152,10 @@ export class HyperLogLog {
       );
     }
 
-    const merged = new HyperLogLog({ p: this.#p, seed: this.#seed });
+    // The coarser precision wins: a finer sketch folds down cleanly, while the
+    // reverse would invent detail it never recorded.
+    const p = Math.min(this.#p, other.#p);
+    const merged = new HyperLogLog({ p, seed: this.#seed });
     merged.#drain(this);
     merged.#drain(other);
     return merged;
@@ -169,7 +173,9 @@ export class HyperLogLog {
 
     const distinct = compact(sparse, src.#len);
     src.#len = distinct;
-    for (let i = 0; i < distinct; i++) this.#absorb(sparse[i] ?? 0);
+    for (let i = 0; i < distinct; i++) {
+      this.#absorb(refoldSparse(sparse[i] ?? 0, src.#p, this.#p));
+    }
   }
 
   // Takes one sparse entry, already expressed at this sketch's precision.
