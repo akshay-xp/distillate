@@ -130,6 +130,36 @@ export class HyperLogLog {
     }
   }
 
+  // The registers this sketch stands for, materialising them if it is still
+  // sparse. Sparse and dense are two spellings of the same set of registers,
+  // so this is what lets them be compared.
+  #dense(): Registers {
+    const sparse = this.#sparse;
+    if (sparse === null) return this.#registers;
+
+    const out = new Registers(this.#p);
+    foldSparse(sparse, this.#len, this.#p, out, this.#p);
+    return out;
+  }
+
+  /**
+   * Whether two sketches hold the same registers at the same precision and
+   * seed. Which representation each is in does not enter into it.
+   *
+   * @param other - The sketch to compare against.
+   * @returns `true` if the two would answer every query identically.
+   */
+  equals(other: HyperLogLog): boolean {
+    if (other.#p !== this.#p || other.#seed !== this.#seed) return false;
+
+    const mine = this.#dense().bytes;
+    const theirs = other.#dense().bytes;
+    for (let i = 0; i < mine.length; i++) {
+      if (mine[i] !== theirs[i]) return false;
+    }
+    return true;
+  }
+
   /**
    * Counts how many distinct keys have been added. Small sketches answer
    * exactly; larger ones estimate, within {@link standardError}.
