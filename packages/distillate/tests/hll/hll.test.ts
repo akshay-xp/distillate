@@ -47,6 +47,22 @@ test("an empty sketch counts exactly zero", () => {
   }
 });
 
+test("count reports a whole number", () => {
+  const empty = new HyperLogLog({ p: 14 });
+  expect(empty.count()).toBe(0);
+
+  const one = new HyperLogLog({ p: 14 });
+  one.add("alice");
+  expect(Number.isInteger(one.count())).toBe(true);
+
+  const many = new HyperLogLog({ p: 14 });
+  for (let i = 0; i < 10_000; i++) many.add(`whole:${String(i)}`);
+  expect(Number.isInteger(many.count())).toBe(true);
+  expect(Math.abs(many.count() - 10_000) / 10_000).toBeLessThan(
+    3 * many.standardError,
+  );
+});
+
 test("one key counts at least one", () => {
   const sketch = new HyperLogLog({ p: 14 });
   sketch.add("alice");
