@@ -3,6 +3,13 @@ title: Choosing a structure
 description: A decision matrix mapping each membership workload onto the filter that fits it, and what is not shipped yet.
 ---
 
+First, which question are you asking?
+
+- **"Have I seen this key?"** A membership filter. Read on.
+- **"How many distinct keys have I seen?"** A cardinality sketch:
+  [HyperLogLog](/guides/hll/). No filter can answer this, and no sketch can
+  answer the first.
+
 There is no best filter, only a best filter for a workload. Answer three
 questions and the choice is usually forced:
 
@@ -24,11 +31,25 @@ questions and the choice is usually forced:
 | Unbounded growth, `n` unknown             | Scalable Bloom, then InfiniFilter/Aleph **(not yet available)** |
 | Very low FPR (1e-4 or below)              | [Binary Fuse 16](/guides/fuse/)                                 |
 | Migrating from `bloom-filters`            | [Classic Bloom](/guides/bloom/)                                 |
+| Counting distinct keys, not membership    | [HyperLogLog](/guides/hll/)                                     |
 
-Space below is stated as overhead over the information-theoretic floor of
-`log2(1/epsilon)` bits per key: 6.64 bits/key at a 1% FPR, 9.97 at 0.1%.
+For the filters, space below is stated as overhead over the
+information-theoretic floor of `log2(1/epsilon)` bits per key: 6.64 bits/key at
+a 1% FPR, 9.97 at 0.1%. A sketch has no per-key cost to state, its size being
+fixed by precision before it sees a key.
 
 ## What ships today
+
+### [HyperLogLog](/guides/hll/) (`distillate/hll`)
+
+Not a filter. Counts distinct keys in space fixed by precision rather than by
+the answer: 12 KiB at `p = 14` holds a count of a thousand or a billion at
+about 0.8% relative error. Exact below a few thousand keys, and mergeable, so
+per-shard rollups combine without double-counting the overlap.
+
+Reach for it for distinct users, distinct IPs, distinct cache keys, and any
+other "how many different" question. It cannot tell you whether it saw a
+particular key; nothing in a sketch records membership.
 
 ### [Binary Fuse 8 and 16](/guides/fuse/) (`distillate/fuse`)
 
