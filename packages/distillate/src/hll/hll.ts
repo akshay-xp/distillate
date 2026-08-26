@@ -1,5 +1,9 @@
+import type { BytesLike } from "../core/bytes.js";
+import { hash128KeyInto, type Hash128 } from "../core/hasher.js";
 import { assertUint32, ParamError } from "../core/params.js";
 import { HLL_MAX_P, HLL_MIN_P, hllSizing } from "../core/sizing.js";
+import { estimate } from "./estimate.js";
+import { Registers } from "./registers.js";
 
 // Relative standard error of a HyperLogLog with 2**p registers, from the
 // original Flajolet analysis. Reported, never used to correct an estimate.
@@ -32,8 +36,11 @@ export interface HllParams {
  * ```
  */
 export class HyperLogLog {
+  readonly #registers: Registers;
   readonly #p: number;
   readonly #seed: number;
+  // Reused across add() so hashing a key allocates nothing per call.
+  readonly #scratch: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
 
   /**
    * Creates a sketch at an explicit precision.
@@ -43,6 +50,7 @@ export class HyperLogLog {
   constructor({ p, seed = 0 }: HllParams) {
     assertPrecision(p);
     assertUint32(seed, "seed");
+    this.#registers = new Registers(p);
     this.#p = p;
     this.#seed = seed;
   }
@@ -70,5 +78,43 @@ export class HyperLogLog {
   /** Analytic relative standard error, `1.04 / sqrt(2 ** p)`. */
   get standardError(): number {
     return ERROR_CONSTANT / Math.sqrt(2 ** this.#p);
+  }
+
+  /**
+   * Records a key. Adding a key already seen leaves the sketch unchanged, which
+   * is what lets it count distinct values without storing them.
+   *
+   * @param key - The key to record.
+   */
+  add(key: BytesLike): void {
+    const s = this.#scratch;
+    hash128KeyInto(key, this.#seed, s);
+
+    // Top p bits pick the register; the remaining 64 - p bits of the (w0, w1)
+    // lane give rho, the position of the first set bit counted from 1.
+    const p = this.#p;
+    const index = s.w0 >>> (32 - p);
+    const tail = (s.w0 << p) >>> 0;
+    const rho =
+      tail !== 0 ? Math.clz32(tail) + 1 : 32 - p + Math.clz32(s.w1) + 1;
+
+    if (rho > this.#registers.get(index)) this.#registers.set(index, rho);
+  }
+
+  /**
+   * Estimates how many distinct keys have been added.
+   *
+   * @returns The estimated cardinality; `0` for an empty sketch.
+   */
+  count(): number {
+    const p = this.#p;
+    const q = 64 - p;
+    const m = 2 ** p;
+    const hist = new Int32Array(q + 2);
+    for (let i = 0; i < m; i++) {
+      const value = this.#registers.get(i);
+      hist[value] = (hist[value] ?? 0) + 1;
+    }
+    return estimate(hist, p);
   }
 }
