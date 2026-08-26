@@ -26,9 +26,22 @@ test("writeFrame allocates once and equals the writeHeader path", () => {
   });
 
   expect(captured?.buffer).toBe(frame.buffer);
-  expect(captured?.byteOffset).toBe(8);
+  expect(captured?.byteOffset).toBe(16);
   expect(captured?.length).toBe(body.length);
   expect(bytesEqual(frame, writeHeader(header, body))).toBe(true);
+});
+
+test("the header declares its body length and reserves the rest", () => {
+  const body = Uint8Array.of(9, 8, 7, 6, 5);
+  const frame = writeHeader(
+    { version: FORMAT_VERSION, type: 5, flags: 3 },
+    body,
+  );
+
+  const view = new DataView(frame.buffer, frame.byteOffset, frame.byteLength);
+  expect(view.getUint32(8, true)).toBe(body.length);
+  expect(Array.from(frame.subarray(12, 16))).toEqual([0, 0, 0, 0]);
+  expect(frame.length).toBe(16 + body.length + 4);
 });
 
 test("writeHeader frames magic, reserved byte, and round-trips fields", () => {
@@ -88,7 +101,7 @@ test("readHeader throws UnknownVersionError on unsupported version", () => {
 
 test("readHeader throws ChecksumError on a corrupted body", () => {
   const f = validFrame();
-  f[8] ^= 0xff;
+  f[16] ^= 0xff;
   expect(() => readHeader(f)).toThrow(ChecksumError);
 });
 
