@@ -70,6 +70,42 @@
     "frame": "RFNUTAQEAABwAAAAAAAAAAAAAAAQAAAAEAAAAAoAAAAAAAAAAAAAAAAAAAAAAAAAy7kAAAAAAABr5wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAld4AAAAAAAAGaAAAAAAAAAAAAAAAAAAAAAAAAAmQAAAZyhp7OikAAH2OdYXQRP4Z"
   },
   {
+    "name": "hll-sparse",
+    "kind": "hll",
+    "p": 14,
+    "keys": [
+      "alice",
+      "bob",
+      "carol",
+      "dave",
+      "erin",
+      "frank",
+      "grace",
+      "heidi",
+      "ivan",
+      "judy"
+    ],
+    "frame": "RFNUTAQFAAAuAAAAAAAAAA4BAAAAAAUY+huCo2YtwXvnO0KpzD4CjmpbA2raW0KHUGjFEbprw0FQbsKrSnySJn//"
+  },
+  {
+    "name": "hll-dense",
+    "kind": "hll",
+    "p": 4,
+    "keys": [
+      "alice",
+      "bob",
+      "carol",
+      "dave",
+      "erin",
+      "frank",
+      "grace",
+      "heidi",
+      "ivan",
+      "judy"
+    ],
+    "frame": "RFNUTAQFAAASAAAAAAAAAAQAAAAAAAAACEAACAAACEABBN1BFGg="
+  },
+  {
     "name": "v2-reject",
     "kind": "v2",
     "keys": [],

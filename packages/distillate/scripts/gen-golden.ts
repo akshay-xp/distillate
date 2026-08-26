@@ -7,19 +7,26 @@ import { BlockedBloomFilter } from "../src/blocked/index.js";
 import { BloomFilter } from "../src/bloom/index.js";
 import { toBase64 } from "../src/core/base64.js";
 import { BinaryFuse8, BinaryFuse16 } from "../src/fuse/index.js";
+import { HyperLogLog } from "../src/hll/hll.js";
 
 interface Entry {
   name: string;
   kind: string;
   keys: string[];
   epsilon?: number;
+  p?: number;
   frame?: string;
 }
 
 const path = new URL("../tests/fixtures/golden.json", import.meta.url);
 const golden = JSON.parse(readFileSync(path, "utf8")) as Entry[];
 
-const bytes = (kind: string, keys: string[], epsilon: number): Uint8Array => {
+const bytes = (
+  kind: string,
+  keys: string[],
+  epsilon: number,
+  p: number,
+): Uint8Array => {
   switch (kind) {
     case "bloom":
       return BloomFilter.from(keys, epsilon).toBytes();
@@ -29,6 +36,13 @@ const bytes = (kind: string, keys: string[], epsilon: number): Uint8Array => {
       return BinaryFuse8.from(keys).toBytes();
     case "fuse16":
       return BinaryFuse16.from(keys).toBytes();
+    case "hll": {
+      // p picks the encoding: ten keys are far inside the buffer at p=14 and
+      // far past the three entries it holds at p=4.
+      const sketch = new HyperLogLog({ p });
+      for (const key of keys) sketch.add(key);
+      return sketch.toBytes();
+    }
     case "v2": {
       // A well-formed current-version Bloom frame with the version byte forced
       // to 2, so it keeps the DSTL magic and reaches the version check. A real
@@ -46,7 +60,9 @@ const bytes = (kind: string, keys: string[], epsilon: number): Uint8Array => {
 };
 
 for (const entry of golden) {
-  entry.frame = toBase64(bytes(entry.kind, entry.keys, entry.epsilon ?? 0));
+  entry.frame = toBase64(
+    bytes(entry.kind, entry.keys, entry.epsilon ?? 0, entry.p ?? 14),
+  );
 }
 
 writeFileSync(path, JSON.stringify(golden, null, 2) + "\n");

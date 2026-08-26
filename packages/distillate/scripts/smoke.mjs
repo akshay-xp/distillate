@@ -91,6 +91,9 @@ const rebuild = (kind, keys, epsilon) => {
 
 for (const { name, kind, keys, epsilon, frame } of golden) {
   if (kind === "v2") continue;
+  // hll frames are checked here once distillate/hll is packaged (#167); until
+  // then there is no dist/hll to import a builder from.
+  if (kind === "hll") continue;
   const actual = rebuild(kind, keys, epsilon).toBytes();
   const expected = decode(frame);
   if (actual.length !== expected.length) {
