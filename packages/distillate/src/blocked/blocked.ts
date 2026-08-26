@@ -232,7 +232,7 @@ export class BlockedBloomFilter {
     const { type, flags, body } = readHeader(bytes);
     if (type !== TYPE) {
       throw new SerializationError(
-        `expected AMQF type ${String(TYPE)}, got ${String(type)}`,
+        `expected DSTL type ${String(TYPE)}, got ${String(type)}`,
       );
     }
     if ((flags & 0x0f) !== HASH_MURMUR128) {

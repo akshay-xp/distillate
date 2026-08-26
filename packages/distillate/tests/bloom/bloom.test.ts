@@ -133,7 +133,7 @@ test("bitsPerKey reports analytic m / n", () => {
   expect(BloomFilter.create(100000, 0.01).bitsPerKey).toBe(m / 100000);
 });
 
-test("toBytes emits an AMQF type-1 frame with LE params + payload", () => {
+test("toBytes emits a DSTL type-1 frame with LE params + payload", () => {
   const f = new BloomFilter({ m: 64, k: 3, seed: 7 });
   f.add("x");
   const frame = f.toBytes();
@@ -338,6 +338,7 @@ test("serializes k > 255 and keeps params roundtrip-stable (format v2)", () => {
 test("fromBytes rejects a frame belonging to another structure", () => {
   const blocked = BlockedBloomFilter.create(1000, 0.01).toBytes();
   expect(() => BloomFilter.fromBytes(blocked)).toThrow(SerializationError);
+  expect(() => BloomFilter.fromBytes(blocked)).toThrow("DSTL type 1");
 });
 
 test("fromBytes rejects a frame whose body length disagrees with declared params", () => {

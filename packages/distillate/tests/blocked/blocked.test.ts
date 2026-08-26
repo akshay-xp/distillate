@@ -334,7 +334,7 @@ test("union rejects mismatched params with a typed error", () => {
   ).toThrow(/do not match/i);
 });
 
-test("toBytes emits an AMQF type-2 frame with LE params + payload", () => {
+test("toBytes emits a DSTL type-2 frame with LE params + payload", () => {
   const f = new BlockedBloomFilter({ bitsPerKey: 12, capacity: 100, seed: 7 });
   f.add("x");
   const frame = f.toBytes();
