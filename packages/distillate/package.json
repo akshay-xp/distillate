@@ -77,7 +77,7 @@
     "check": "publint --strict && attw --pack . --profile node16",
     "attw": "attw --pack . --profile node16",
     "test": "vitest run",
-    "coverage": "vitest run --coverage",
+    "coverage": "DISTILLATE_COVERAGE=1 vitest run --coverage",
     "api:report": "node scripts/api-extractor.mjs --local",
     "api:check": "node scripts/api-extractor.mjs",
     "docs:check": "typedoc --emit none",
