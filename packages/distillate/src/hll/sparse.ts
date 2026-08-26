@@ -1,3 +1,4 @@
+import { foldRho } from "./fold.js";
 import type { Registers } from "./registers.js";
 
 /**
@@ -49,6 +50,38 @@ export function sparseRho(entry: number): number {
 }
 
 /**
+ * Writes a buffer of sparse entries into dense registers.
+ *
+ * A dense index is a prefix of a sparse one, so many sparse entries fold onto
+ * one register and the largest rho among them wins, exactly as it would have
+ * had the keys gone to the dense path directly.
+ *
+ * Entries carry the rho they were recorded against, so folding below `fromP`
+ * has to recompute it from the index bits being reclaimed. See {@link foldRho}.
+ *
+ * @param buf - The entry buffer; only `[0, len)` is read.
+ * @param len - How much of `buf` is in use.
+ * @param fromP - Dense precision the entries' rho values were recorded at.
+ * @param registers - Destination registers, raised in place.
+ * @param toP - Precision of `registers`; at most `fromP`.
+ */
+export function foldSparse(
+  buf: Int32Array,
+  len: number,
+  fromP: number,
+  registers: Registers,
+  toP: number,
+): void {
+  const d = fromP - toP;
+  for (let i = 0; i < len; i++) {
+    const entry = buf[i] ?? 0;
+    const index = sparseIndex(entry);
+    const at = index >>> (SPARSE_P - fromP);
+    registers.raise(at >>> d, foldRho(at, sparseRho(entry), d));
+  }
+}
+
+/**
  * Collapses a buffer of entries in place to one entry per index, holding the
  * largest rho seen for it, sorted ascending.
  *
@@ -56,31 +89,6 @@ export function sparseRho(entry: number): number {
  * @param len - How much of `buf` is in use.
  * @returns The number of distinct indices, now occupying `[0, len)`.
  */
-/**
- * Writes a buffer of sparse entries into dense registers.
- *
- * A dense index is a prefix of a sparse one, so many sparse entries fold onto
- * one register and the largest rho among them wins, exactly as it would have
- * had the keys gone to the dense path directly.
- *
- * @param buf - The entry buffer; only `[0, len)` is read.
- * @param len - How much of `buf` is in use.
- * @param registers - Destination registers, written in place.
- * @param p - Dense precision.
- */
-export function promote(
-  buf: Int32Array,
-  len: number,
-  registers: Registers,
-  p: number,
-): void {
-  const shift = SPARSE_P - p;
-  for (let i = 0; i < len; i++) {
-    const entry = buf[i] ?? 0;
-    registers.raise(sparseIndex(entry) >>> shift, sparseRho(entry));
-  }
-}
-
 export function compact(buf: Int32Array, len: number): number {
   if (len === 0) return 0;
 

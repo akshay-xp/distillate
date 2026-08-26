@@ -4,7 +4,7 @@ import { Registers } from "../../src/hll/registers.js";
 import {
   compact,
   encodeSparse,
-  promote,
+  foldSparse,
   SPARSE_P,
   sparseIndex,
   sparseRho,
@@ -49,18 +49,18 @@ test("compact of an empty buffer counts nothing", () => {
   expect(compact(new Int32Array(8), 0)).toBe(0);
 });
 
-// Entries are hand-built rather than hashed, so the assertions state what
-// promotion must produce instead of restating how it computes it.
+// Entries are hand-built rather than hashed, so the assertions state what the
+// fold must produce instead of restating how it computes it.
 const SHIFT = SPARSE_P - 14;
 
-test("promotion folds a sparse index down to its dense register", () => {
+test("an entry folds to the dense register its index prefixes", () => {
   const registers = new Registers(14);
   const index = 20_000_000;
-  promote(Int32Array.of(encodeSparse(index, 5)), 1, registers, 14);
+  foldSparse(Int32Array.of(encodeSparse(index, 5)), 1, 14, registers, 14);
   expect(registers.get(9765)).toBe(5);
 });
 
-test("promotion keeps the largest rho among indices sharing a register", () => {
+test("folding keeps the largest rho among indices sharing a register", () => {
   const registers = new Registers(14);
   // Same top 14 bits, so both fold onto register 9000. The larger rho is
   // written first, so overwriting rather than maximising would lose it.
@@ -68,25 +68,57 @@ test("promotion keeps the largest rho among indices sharing a register", () => {
     encodeSparse(9000 << SHIFT, 11),
     encodeSparse((9000 << SHIFT) | 1234, 4),
   );
-  promote(buf, 2, registers, 14);
+  foldSparse(buf, 2, 14, registers, 14);
   expect(registers.get(9000)).toBe(11);
 });
 
-test("promotion sends distinct prefixes to distinct registers", () => {
+test("folding sends distinct prefixes to distinct registers", () => {
   const registers = new Registers(14);
   const buf = Int32Array.of(
     encodeSparse(3 << SHIFT, 6),
     encodeSparse(4 << SHIFT, 2),
   );
-  promote(buf, 2, registers, 14);
+  foldSparse(buf, 2, 14, registers, 14);
   expect(registers.get(3)).toBe(6);
   expect(registers.get(4)).toBe(2);
 });
 
-test("promoting nothing leaves every register empty", () => {
+test("folding nothing leaves every register empty", () => {
   const registers = new Registers(4);
-  promote(new Int32Array(8), 0, registers, 4);
+  foldSparse(new Int32Array(8), 0, 4, registers, 4);
   for (let i = 0; i < 16; i++) expect(registers.get(i)).toBe(0);
+});
+
+// Entries hold the rho they were recorded against, so folding to a coarser
+// precision has to recompute it from the four index bits being reclaimed.
+test("entries fold to a coarser precision than they were recorded at", () => {
+  const registers = new Registers(10);
+  // Dense index 4096 at p=14; its low four bits are zero, so the recorded rho
+  // carries, pushed along by the four reclaimed bits.
+  foldSparse(
+    Int32Array.of(encodeSparse(4096 << SHIFT, 5)),
+    1,
+    14,
+    registers,
+    10,
+  );
+  expect(registers.get(256)).toBe(9);
+});
+
+test("a reclaimed bit overrides the recorded rho when folding", () => {
+  // Dense index 5000 at p=14; its low four bits are 0b1000, so rho is 1 no
+  // matter what the entry recorded.
+  for (const recorded of [1, 40, 63]) {
+    const registers = new Registers(10);
+    foldSparse(
+      Int32Array.of(encodeSparse(5000 << SHIFT, recorded)),
+      1,
+      14,
+      registers,
+      10,
+    );
+    expect(registers.get(312)).toBe(1);
+  }
 });
 
 test("compact reads only the used prefix", () => {
