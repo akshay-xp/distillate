@@ -31,6 +31,15 @@ export class Registers {
     return ((lo | (hi << 8)) >>> (bit & 7)) & MASK;
   }
 
+  /**
+   * Writes `v` into the register at `i` if it is larger than what is there.
+   * Registers only ever climb, which is what makes adding a key idempotent and
+   * merging sketches a matter of taking maxima.
+   */
+  raise(i: number, v: number): void {
+    if (v > this.get(i)) this.set(i, v);
+  }
+
   /** Writes `v`, a value of at most six bits, into the register at `i`. */
   set(i: number, v: number): void {
     const bit = i * WIDTH;

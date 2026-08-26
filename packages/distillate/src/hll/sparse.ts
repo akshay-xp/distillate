@@ -77,9 +77,7 @@ export function promote(
   const shift = SPARSE_P - p;
   for (let i = 0; i < len; i++) {
     const entry = buf[i] ?? 0;
-    const index = sparseIndex(entry) >>> shift;
-    const rho = sparseRho(entry);
-    if (rho > registers.get(index)) registers.set(index, rho);
+    registers.raise(sparseIndex(entry) >>> shift, sparseRho(entry));
   }
 }
 

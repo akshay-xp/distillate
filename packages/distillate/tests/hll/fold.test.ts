@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 
-import { foldRho } from "../../src/hll/fold.js";
+import { foldDense, foldRho } from "../../src/hll/fold.js";
+import { Registers } from "../../src/hll/registers.js";
 
 test("folding to the same precision leaves rho alone", () => {
   for (const rho of [7, 1, 63]) {
@@ -32,4 +33,44 @@ test("all-zero reclaimed bits push rho along by their width", () => {
 test("index bits above the reclaimed window are ignored", () => {
   expect(foldRho(0b1111_000, 5, 3)).toBe(8);
   expect(foldRho(0b1010_010, 5, 3)).toBe(2);
+});
+
+// Registers 36, 37 and 38 all sit above destination register 9 at p=4, and
+// differ only in the two bits the fold reclaims.
+test("a register lands on the register holding its index prefix", () => {
+  const src = new Registers(6);
+  const dst = new Registers(4);
+  src.set(36, 5);
+  foldDense(src, 6, dst, 4);
+  expect(dst.get(9)).toBe(7);
+});
+
+test("folding takes the largest folded value, not the largest raw one", () => {
+  const src = new Registers(6);
+  const dst = new Registers(4);
+  src.set(36, 5); // low bits 00, so 2 + 5 = 7
+  src.set(38, 63); // low bits 10, so 1 whatever the raw value
+  foldDense(src, 6, dst, 4);
+  expect(dst.get(9)).toBe(7);
+});
+
+test("an untouched register contributes nothing", () => {
+  const src = new Registers(6);
+  const dst = new Registers(4);
+  foldDense(src, 6, dst, 4);
+  expect([...dst.bytes].every((b) => b === 0)).toBe(true);
+
+  src.set(36, 5);
+  foldDense(src, 6, dst, 4);
+  for (let i = 0; i < 16; i++) expect(dst.get(i)).toBe(i === 9 ? 7 : 0);
+});
+
+test("folding to the same precision keeps every register where it is", () => {
+  const src = new Registers(6);
+  const dst = new Registers(6);
+  src.set(0, 3);
+  src.set(36, 5);
+  src.set(63, 61);
+  foldDense(src, 6, dst, 6);
+  expect(dst.bytes).toEqual(src.bytes);
 });

@@ -108,8 +108,7 @@ export class HyperLogLog {
 
     const sparse = this.#sparse;
     if (sparse === null) {
-      const index = s.w0 >>> (32 - p);
-      if (rho > this.#registers.get(index)) this.#registers.set(index, rho);
+      this.#registers.raise(s.w0 >>> (32 - p), rho);
       return;
     }
 
