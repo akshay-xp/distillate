@@ -82,6 +82,31 @@ export function foldSparse(
 }
 
 /**
+ * Restates an entry against a coarser precision.
+ *
+ * The index is untouched, being 25 bits regardless of precision; only the rho
+ * has to be recomputed, from the index bits the coarser precision reclaims.
+ *
+ * @param entry - A value from {@link encodeSparse}.
+ * @param fromP - Dense precision the entry's rho was recorded at.
+ * @param toP - Dense precision to restate it against; at most `fromP`.
+ * @returns The entry as the coarser sketch would have recorded it.
+ */
+export function refoldSparse(
+  entry: number,
+  fromP: number,
+  toP: number,
+): number {
+  const index = sparseIndex(entry);
+  const rho = foldRho(
+    index >>> (SPARSE_P - fromP),
+    sparseRho(entry),
+    fromP - toP,
+  );
+  return encodeSparse(index, rho);
+}
+
+/**
  * Collapses a buffer of entries in place to one entry per index, holding the
  * largest rho seen for it, sorted ascending.
  *
