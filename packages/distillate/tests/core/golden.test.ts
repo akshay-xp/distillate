@@ -5,6 +5,7 @@ import { BloomFilter } from "../../src/bloom/index.js";
 import { fromBase64 } from "../../src/core/base64.js";
 import { bytesEqual, UnknownVersionError } from "../../src/core/serialize.js";
 import { BinaryFuse8, BinaryFuse16 } from "../../src/fuse/index.js";
+import { HyperLogLog } from "../../src/hll/hll.js";
 import goldenJson from "../fixtures/golden.json" with { type: "json" };
 
 interface GoldenEntry {
@@ -12,17 +13,23 @@ interface GoldenEntry {
   kind: string;
   keys: string[];
   epsilon?: number;
+  p?: number;
   frame?: string;
 }
 
-interface Filter {
-  has(key: string): boolean;
+/** What every golden entry can do, whatever family it belongs to. */
+interface Serializable {
   toBytes(): Uint8Array;
+}
+
+interface Filter extends Serializable {
+  has(key: string): boolean;
 }
 
 const golden = goldenJson as GoldenEntry[];
 
-const build = (kind: string, keys: string[], epsilon: number): Filter => {
+const build = (entry: GoldenEntry): Serializable => {
+  const { kind, keys, epsilon = 0, p = 14 } = entry;
   switch (kind) {
     case "bloom":
       return BloomFilter.from(keys, epsilon);
@@ -32,12 +39,17 @@ const build = (kind: string, keys: string[], epsilon: number): Filter => {
       return BinaryFuse8.from(keys);
     case "fuse16":
       return BinaryFuse16.from(keys);
+    case "hll": {
+      const sketch = new HyperLogLog({ p });
+      for (const key of keys) sketch.add(key);
+      return sketch;
+    }
     default:
       throw new Error(`unknown kind ${kind}`);
   }
 };
 
-const parse = (kind: string, bytes: Uint8Array): Filter => {
+const parse = (kind: string, bytes: Uint8Array): Serializable => {
   switch (kind) {
     case "bloom":
       return BloomFilter.fromBytes(bytes);
@@ -47,6 +59,8 @@ const parse = (kind: string, bytes: Uint8Array): Filter => {
       return BinaryFuse8.fromBytes(bytes);
     case "fuse16":
       return BinaryFuse16.fromBytes(bytes);
+    case "hll":
+      return HyperLogLog.fromBytes(bytes);
     default:
       throw new Error(`unknown kind ${kind}`);
   }
@@ -64,14 +78,21 @@ const structures = golden.filter((g) => g.kind !== "v2");
 
 describe.each(structures)("golden fixture $name", (entry) => {
   test("parses to the recipe's exact state", () => {
-    const { kind, keys, epsilon } = entry;
+    const { kind, keys } = entry;
     const bytes = frameBytes(entry);
     const parsed = parse(kind, bytes);
-    for (const key of keys) expect(parsed.has(key)).toBe(true);
+
+    // Filters answer for their keys. A sketch is checked against a fresh build
+    // instead: its count is an estimate, and the dense fixture sits at p=4
+    // where sixteen registers hold ten keys, so it reports 8 by design.
+    if (parsed instanceof HyperLogLog) {
+      expect(parsed.equals(build(entry) as HyperLogLog)).toBe(true);
+    } else {
+      for (const key of keys) expect((parsed as Filter).has(key)).toBe(true);
+    }
+
     expect(bytesEqual(parsed.toBytes(), bytes)).toBe(true);
-    expect(bytesEqual(build(kind, keys, epsilon ?? 0).toBytes(), bytes)).toBe(
-      true,
-    );
+    expect(bytesEqual(build(entry).toBytes(), bytes)).toBe(true);
   });
 });
 
