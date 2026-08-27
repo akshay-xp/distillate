@@ -1,6 +1,7 @@
 /// <reference types="node" />
 import { bench, do_not_optimize } from "mitata";
 import * as os from "node:os";
+import { PerformanceObserver } from "node:perf_hooks";
 
 export interface Queryable {
   has(key: string): boolean;
@@ -12,6 +13,10 @@ const MAX_WARMUP_WINDOWS = 20;
 
 // How many times the whole measurement is repeated before the lowest is taken.
 const ATTEMPTS = 3;
+
+// Enough turns for a queued batch of entries to arrive, few enough that a
+// process collecting continuously still finishes.
+const MAX_SETTLE_TICKS = 20;
 
 function runtime(): string {
   const versions = process.versions as Record<string, string | undefined>;
@@ -146,4 +151,46 @@ function measureOnce(fn: () => void, ops: number, rounds: number): number {
 
   samples.sort((a, b) => a - b);
   return Math.max(0, samples[samples.length >> 1] ?? 0);
+}
+
+/**
+ * Garbage collections triggered by `ops` calls of `fn`.
+ *
+ * A loop that allocates nothing triggers none; a loop allocating one small
+ * object per call triggers scavenges in proportion. That makes the two cases
+ * unambiguous without a median, a threshold, or a stability rule.
+ */
+export async function countCollections(
+  fn: () => void,
+  ops: number,
+): Promise<number> {
+  let collections = 0;
+  const observer = new PerformanceObserver((list) => {
+    collections += list.getEntries().length;
+  });
+  observer.observe({ entryTypes: ["gc"] });
+
+  // Entries are delivered on a macrotask turn, not a microtask: `await null`
+  // and `setImmediate` both leave the count at zero where `setTimeout` does
+  // not. So the count is final only once a turn passes without it moving.
+  const settle = async (): Promise<void> => {
+    let previous = -1;
+    for (let i = 0; i < MAX_SETTLE_TICKS && previous !== collections; i++) {
+      previous = collections;
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    }
+  };
+
+  // Drain collections owed to whatever ran before, then start from zero, so a
+  // loop that allocates nothing is not charged for its predecessor's garbage.
+  await settle();
+  collections = 0;
+
+  for (let i = 0; i < ops; i++) fn();
+  await settle();
+
+  observer.disconnect();
+  return collections;
 }

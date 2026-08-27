@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 
 import { BloomFilter } from "../../src/bloom/bloom.js";
 import {
+  countCollections,
   cycle,
   envBanner,
   hitMissPools,
@@ -117,4 +118,32 @@ test("measureBytesPerOp tells an allocating loop from a non-allocating one", () 
   expect(retained.length).toBeGreaterThanOrEqual(50_000);
   expect(allocating).toBeGreaterThan(24);
   expect(flat).toBeLessThan(16);
+});
+
+// Counting collections, rather than differencing `heapUsed`, is what makes the
+// two cases unambiguous. The assertion is the binary, not a magnitude: how many
+// collections a given amount of garbage causes depends on how far V8 has grown
+// the young generation, so the same allocating loop measures 25 collections
+// alone and 5 once the tests above have grown it. What does not vary is that a
+// loop allocating nothing causes none, which is structural rather than lucky:
+// a collection fires when the allocating thread asks for memory, and gc entries
+// are per-isolate, so a loop that never allocates cannot trigger one.
+//
+// The flat loop's counter is asserted too, so an implementation that returns 0
+// without ever running the loop cannot pass.
+test("countCollections tells an allocating loop from a flat one", async () => {
+  const sink: object[] = [];
+  const allocating = await countCollections(() => {
+    sink.length = 0;
+    sink.push({ a: 1, b: 2 });
+  }, 1_000_000);
+
+  let total = 0;
+  const flat = await countCollections(() => {
+    total = (total + 1) | 0;
+  }, 1_000_000);
+
+  expect(allocating).toBeGreaterThan(0);
+  expect(flat).toBe(0);
+  expect(total).toBeGreaterThanOrEqual(1_000_000);
 });
