@@ -1,32 +1,37 @@
 import { expect, test } from "vitest";
 
-import { measureBytesPerOp } from "../../bench/harness.js";
+import { countCollections } from "../../bench/harness.js";
 import { HyperLogLog } from "../../src/hll/hll.js";
 
-// Lives alone in its file on purpose. measureBytesPerOp reads process-wide
-// heap, so a neighbouring test that retains a few thousand keys shows up as
-// bytes charged to the loop under measurement; vitest gives each file its own
-// worker, which is the only reliable way to keep the heap quiet enough to
-// measure. Sharing a file with the accuracy tests reported 40 bytes/op for a
-// loop that allocates nothing.
+// Lives alone in its file on purpose. Garbage collections are per-isolate, and
+// vitest gives each file its own worker, so a neighbouring test that churns a
+// few thousand keys cannot collect inside the window measured here.
 //
 // Skipped under coverage, which is a measurement problem rather than a licence
-// to ignore a failure. The instrumented build allocates about one small object
-// per add() call: the reading is a persistent 40.006 bytes/op on any machine,
-// and unlike a warm-up plateau it does not go away when the measurement is
-// repeated. The claim is about the code that ships, so measuring it under an
-// instrument that changes allocation measures the instrument. `test (node 22)`
-// and `test (node 24)` both run this for real in CI.
+// to ignore a failure. `test (node 22)` and `test (node 24)` both run this for
+// real in CI.
 //
-// The same 40.006 once reached CI from an uninstrumented run, as a warm-up
-// plateau flat enough to defeat the harness warm-up rule. That is the harness's
-// problem, not this test's, and measureBytesPerOp now repeats the whole
-// measurement and keeps the lowest.
+// On the 40.006 bytes/op this once failed CI with: that figure was never an
+// artifact of instrumentation, though the note committed in 418c89c said so.
+// It is one `TextEncoder.encodeInto` result object per key, allocated whenever
+// V8 has not inlined the hash path far enough for escape analysis to remove
+// it, and it stops the moment TurboFan does. Coverage made it look permanent
+// only because the instrument's own machinery stays unoptimised there, so the
+// measured closure never got inlined either. Counting collections sidesteps
+// the whole question: the loop is warmed first, and what is counted after that
+// is what the shipped code actually costs.
 test.skipIf(process.env.DISTILLATE_COVERAGE === "1")(
   "add allocates nothing in steady state",
-  () => {
+  async () => {
     // add() reuses one Hash128 struct and writes into preallocated registers,
-    // so a steady-state call should allocate nothing. Keys are pre-generated
+    // so a steady-state call should allocate nothing. The reuse is what keeps
+    // a call free before TurboFan has run; after it has, escape analysis would
+    // remove a fresh struct too, and replacing #scratch with an object literal
+    // per call measures zero collections all the same. What this probe catches
+    // is allocation that outlives escape analysis, which is the kind that
+    // actually costs: an exact-length subarray view in encodeKey measures 12.
+    //
+    // Keys are pre-generated
     // and cycled so the loop measures add() rather than string building. The
     // sparse buffer is allowed to allocate, so the sketch is driven dense
     // first, deliberately rather than as a side effect of the key count.
@@ -36,11 +41,11 @@ test.skipIf(process.env.DISTILLATE_COVERAGE === "1")(
     for (const key of keys) sketch.add(key);
 
     let at = 0;
-    const bytesPerOp = measureBytesPerOp(() => {
+    const collections = await countCollections(() => {
       at = (at + 1) & 4095;
       sketch.add(keys[at] ?? "");
-    }, 50_000);
+    }, 1_000_000);
 
-    expect(bytesPerOp).toBeLessThan(16);
+    expect(collections).toBe(0);
   },
 );
