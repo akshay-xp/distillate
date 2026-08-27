@@ -11,13 +11,17 @@ import { HyperLogLog } from "../../src/hll/hll.js";
 // loop that allocates nothing.
 //
 // Skipped under coverage, which is a measurement problem rather than a licence
-// to ignore a failure. V8 does not optimise instrumented code the same way, and
-// unoptimised `add` boxes the numbers it writes into its scratch struct: the
-// reading is a deterministic 40.006 bytes/op with instrumentation on, on any
-// machine and with the pre-#168 probe too. The claim is about optimised steady
-// state, which is what ships, so measuring it under an instrument that changes
-// allocation measures the instrument. `test (node 22)` and `test (node 24)`
-// both run this for real in CI.
+// to ignore a failure. The instrumented build allocates about one small object
+// per add() call: the reading is a persistent 40.006 bytes/op on any machine,
+// and unlike a warm-up plateau it does not go away when the measurement is
+// repeated. The claim is about the code that ships, so measuring it under an
+// instrument that changes allocation measures the instrument. `test (node 22)`
+// and `test (node 24)` both run this for real in CI.
+//
+// The same 40.006 once reached CI from an uninstrumented run, as a warm-up
+// plateau flat enough to defeat the harness warm-up rule. That is the harness's
+// problem, not this test's, and measureBytesPerOp now repeats the whole
+// measurement and keeps the lowest.
 test.skipIf(process.env.DISTILLATE_COVERAGE === "1")(
   "add allocates nothing in steady state",
   () => {

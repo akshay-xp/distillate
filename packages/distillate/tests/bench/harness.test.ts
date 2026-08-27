@@ -80,6 +80,27 @@ test("measureBytesPerOp ignores what a cold loop allocates while warming", () =>
   expect(settles).toBeLessThan(16);
 });
 
+// The warm-up rule stops as soon as two consecutive windows agree, and a loop
+// still warming produces agreeing windows just as readily as a settled one.
+// The sink is preallocated so each window grows the heap by the same amount:
+// that makes the cold readings a flat plateau rather than the lumpy ones a
+// growing array gives, and a flat plateau is what defeats the rule. Measured,
+// the windows here run 38.0 40.0 40.1 40.0 40.0 40.0 40.0 0.0 0.0, so warm-up
+// breaks on the second pair and the median of what follows is the warming
+// cost. That is the CI failure exactly: node 24 read a stable 40.006 bytes/op
+// for add(), failed the build, and passed on rerun with no code change.
+test("measureBytesPerOp survives a warm-up that outlasts a single measurement", () => {
+  const early = new Array<object>(400_000);
+  let calls = 0;
+  const settles = measureBytesPerOp(() => {
+    if (calls < 350_000) early[calls] = { a: 1, b: 2 };
+    calls++;
+  }, 50_000);
+
+  expect(calls).toBeGreaterThan(350_000);
+  expect(settles).toBeLessThan(16);
+});
+
 test("measureBytesPerOp tells an allocating loop from a non-allocating one", () => {
   const retained: object[] = [];
   const allocating = measureBytesPerOp(() => {
