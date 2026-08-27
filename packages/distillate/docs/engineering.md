@@ -52,7 +52,7 @@ The "small" claim is enforced, not asserted. `pnpm size:check` (`scripts/size-ch
 
 - Regenerating `apps/bench/RESULTS.md` is a different command: `pnpm --filter distillate-bench bench`, the cross-library harness. It needs a built `distillate` in the same tree, and it must run on an otherwise idle machine, since concurrent load skews the throughput table (the space and accuracy table is seeded and stable). Its raw output is not Prettier-clean, so follow it with `pnpm format` or `format:check` fails.
 
-- Harness (`bench/harness.ts`): shared primitives so every bench measures by identical code: `hitMissPools` (disjoint hit/miss pools), `cycle`, `benchLookup` (cycle keys through `has()`, consume via `do_not_optimize`), `measureFpr` (empirical FPR of a built filter over a disjoint miss set).
+- Harness (`bench/harness.ts`): shared primitives so every bench measures by identical code: `hitMissPools` (disjoint hit/miss pools), `cycle`, `benchLookup` (cycle keys through `has()`, consume via `do_not_optimize`), `measureFpr` (empirical FPR of a built filter over a disjoint miss set), `countCollections` (garbage collections caused by a loop, see below).
 - Metrics, space/accuracy first: `bench/accuracy.bench.ts` reports target vs measured FPR (over a >= 1e6 disjoint miss set) and analytic bits/key (`backing.byteLength * 8 / n`, not `process.memoryUsage`) across a 1e4/1e5/1e6 sweep; then throughput as separate `add` / `has (hit)` / `has (miss)` benches plus build for static filters.
 - Sketch metrics (`bench/hll.bench.ts`, `bench/cardinality.ts`): measured relative error against the analytic `1.04 / sqrt(2^p)` bound across a precision x cardinality sweep, and bytes per sketch in each encoding. Space is the serialized frame length (`toBytes().length`), the sketch equivalent of analytic bits/key: exact, identical across runtimes, and unaffected by when GC last ran. `tests/bench/cardinality.test.ts` turns the same sweep into a CI gate, bounding every point at `3 * targetError` and the _mean signed_ error at 1 percent, so a uniformly biased estimator fails even where each point stays inside its bound.
 - Anti-optimization: distinct-key pools (never a constant key), keys cycled so V8 can't constant-fold, results consumed with `do_not_optimize`, distinct-key inserts.
@@ -86,6 +86,26 @@ hll count (sparse)  212.41 ns/iter
 ```
 
 `count` is far slower than `add` because it walks all `2^p` registers to build the histogram, where `add` touches one. Sparse `count` is ~90x faster still, having only its entries to fold.
+
+### Allocation: what "allocates nothing" covers
+
+`add` allocates nothing per key once V8 has TurboFan-optimised the hash path, and that is the whole of the claim. Below that tier it does allocate, mostly one `TextEncoder.encodeInto` result object per key: `encodeInto` returns `{ read, written }`, `encodeKey` reads only `.written`, and escape analysis removes the object only where the chain is inlined. Maglev does not do it.
+
+GCs per 2M `add()` calls, measured on the built bundle:
+
+| Tier                        | GCs per 2M |
+| --------------------------- | ---------- |
+| TurboFan (default)          | 0          |
+| Maglev only (`--max-opt=1`) | 279        |
+| No opt (`--max-opt=0`)      | 279        |
+
+Steady state is clean everywhere it was tried, so the allocating tier is a warm-up condition and not a caller shape the library exposes. Bytes/op after warm-up, by caller: monomorphic 0.009, megamorphic receiver 0.000, polymorphic across four structures 0.000, `add` buried in a caller too fat to inline 0.000. By key: ASCII 0.009, varying length 1.602, non-ASCII 0.000, emoji surrogate pairs 0.346, keys over 256 bytes 0.000, pre-encoded bytes 0.000.
+
+The gate is `tests/hll/allocation.test.ts` over `countCollections`, which warms 500k calls and then counts only gc entries whose `startTime` falls inside the measured window. It asserts a binary, not a magnitude: the same allocating loop causes 25 collections in a quiet process and 5 in a busy one, because V8 grows the young generation as it goes.
+
+Replacing `encodeInto` with a hand-rolled UTF-8 encoder was considered and rejected. It does not deliver zero allocation below TurboFan: byte keys never reach `encodeInto` and still cost 221 GCs against string keys' 279, so the encoder is about a fifth of the sub-TurboFan garbage and the rest is number boxing TurboFan also removes. That buys a fifth of the garbage in a tier shipped code does not sit in, against owning UTF-8 correctness (surrogate pairs, lone surrogates to U+FFFD) in the hashing path, where an error silently changes every hash and every serialized filter.
+
+The hash path is shared, so this is a library-wide property rather than an HLL one: under Maglev, bloom 200, blocked 141, fuse 230.
 
 ## Documentation site
 
