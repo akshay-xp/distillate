@@ -147,3 +147,22 @@ test("countCollections tells an allocating loop from a flat one", async () => {
   expect(flat).toBe(0);
   expect(total).toBeGreaterThanOrEqual(1_000_000);
 });
+
+// A loop allocates while V8 is still optimising it, and that is not the loop's
+// steady-state cost. This is the shape that failed CI: `add` allocates one
+// object per key until the hash path is inlined, and a probe that starts
+// counting before then measures the warm-up rather than the code.
+test("countCollections excludes what a loop allocates while warming", async () => {
+  const sink: object[] = [];
+  let calls = 0;
+  const settles = await countCollections(() => {
+    calls++;
+    if (calls <= 400_000) {
+      sink.length = 0;
+      sink.push({ a: 1, b: 2 });
+    }
+  }, 1_000_000);
+
+  expect(settles).toBe(0);
+  expect(calls).toBeGreaterThan(1_400_000);
+});

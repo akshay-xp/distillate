@@ -18,6 +18,10 @@ const ATTEMPTS = 3;
 // process collecting continuously still finishes.
 const MAX_SETTLE_TICKS = 20;
 
+// Calls made before the count starts, to let V8 optimise the loop. Ten times
+// the ~50k measured to be enough even with coverage instrumentation on.
+const WARMUP_CALLS = 500_000;
+
 function runtime(): string {
   const versions = process.versions as Record<string, string | undefined>;
   if (versions.bun) return `bun v${versions.bun}`;
@@ -183,8 +187,18 @@ export async function countCollections(
     }
   };
 
-  // Drain collections owed to whatever ran before, then start from zero, so a
-  // loop that allocates nothing is not charged for its predecessor's garbage.
+  // A loop allocates while V8 is still optimising it, which is not its
+  // steady-state cost, so warm it before the count starts.
+  //
+  // Both loops call `fn` directly, and the duplication is deliberate: putting
+  // them behind a shared helper adds a frame between the loop and `fn`, and
+  // that is what stops `fn` being inlined. The instrument this replaced read
+  // 40 bytes/op for a call that allocates nothing precisely because it called
+  // `fn` through its own machinery.
+  for (let i = 0; i < WARMUP_CALLS; i++) fn();
+
+  // Drain collections owed to the warm-up and to whatever ran before, then
+  // start from zero, so a settled loop is charged for neither.
   await settle();
   collections = 0;
 
