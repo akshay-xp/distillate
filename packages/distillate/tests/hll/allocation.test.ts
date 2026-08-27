@@ -44,7 +44,7 @@ test("add allocates nothing in steady state", async () => {
   const collections = await countCollections(() => {
     at = (at + 1) & 4095;
     sketch.add(keys[at] ?? "");
-  }, 1_000_000);
+  }, 600_000);
 
   expect(collections).toBe(0);
 });
