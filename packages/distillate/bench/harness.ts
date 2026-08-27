@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { bench, do_not_optimize } from "mitata";
 import * as os from "node:os";
-import { PerformanceObserver } from "node:perf_hooks";
+import { performance, PerformanceObserver } from "node:perf_hooks";
 
 export interface Queryable {
   has(key: string): boolean;
@@ -169,8 +169,17 @@ export async function countCollections(
   ops: number,
 ): Promise<number> {
   let collections = 0;
+  // Entries are counted only if the collection began inside the measured
+  // window. Without the bound, one that fires after the loop, while the ticks
+  // below run and the test runner does its own work, is charged to the loop:
+  // that read 1 to 3 collections for a call that allocates nothing, but only
+  // when the whole suite ran and there was other work to trigger it.
+  let from = Infinity;
+  let to = Infinity;
   const observer = new PerformanceObserver((list) => {
-    collections += list.getEntries().length;
+    for (const entry of list.getEntries()) {
+      if (entry.startTime >= from && entry.startTime <= to) collections++;
+    }
   });
   observer.observe({ entryTypes: ["gc"] });
 
@@ -188,7 +197,7 @@ export async function countCollections(
   };
 
   // A loop allocates while V8 is still optimising it, which is not its
-  // steady-state cost, so warm it before the count starts.
+  // steady-state cost, so warm it before the window opens.
   //
   // Both loops call `fn` directly, and the duplication is deliberate: putting
   // them behind a shared helper adds a frame between the loop and `fn`, and
@@ -197,12 +206,9 @@ export async function countCollections(
   // `fn` through its own machinery.
   for (let i = 0; i < WARMUP_CALLS; i++) fn();
 
-  // Drain collections owed to the warm-up and to whatever ran before, then
-  // start from zero, so a settled loop is charged for neither.
-  await settle();
-  collections = 0;
-
+  from = performance.now();
   for (let i = 0; i < ops; i++) fn();
+  to = performance.now();
   await settle();
 
   observer.disconnect();
