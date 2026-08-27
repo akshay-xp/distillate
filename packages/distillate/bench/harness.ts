@@ -15,6 +15,10 @@ const MAX_SETTLE_TICKS = 20;
 // the ~50k measured to be enough even with coverage instrumentation on.
 const WARMUP_CALLS = 500_000;
 
+// How many windows to try before giving up on finding a clean one. Reached
+// only when the loop really does allocate, so the cost is paid on failure.
+const MAX_WINDOWS = 40;
+
 function runtime(): string {
   const versions = process.versions as Record<string, string | undefined>;
   if (versions.bun) return `bun v${versions.bun}`;
@@ -145,11 +149,36 @@ export async function countCollections(
   // `fn` through its own machinery.
   for (let i = 0; i < WARMUP_CALLS; i++) fn();
 
-  from = performance.now();
-  for (let i = 0; i < ops; i++) fn();
-  to = performance.now();
-  await settle();
+  // Measured in repeated windows, stopping at the first clean one, and the
+  // lowest is returned. This is not a magic number hunt: the claim is that a
+  // steady state exists in which the call allocates nothing, so one clean
+  // window of `ops` calls settles it, and no number of windows produces one if
+  // the call allocates per key.
+  //
+  // The retry is needed because V8 does not always reach TurboFan promptly. On
+  // a loaded machine its compile jobs are starved, and until they land the
+  // hash path allocates one encodeInto result object per key. That is the same
+  // starvation that made this probe fail CI in the first place, so measuring
+  // once and reporting the number cannot work: a single window read non-zero
+  // in roughly one full-suite run in five, and every window did in one run in
+  // twenty-five. Neither the median nor the lowest of a fixed five separated
+  // it, because the noise scales with the window exactly as the signal does.
+  const counts: number[] = [];
+  for (let window = 0; window < MAX_WINDOWS; window++) {
+    collections = 0;
+    from = performance.now();
+    for (let i = 0; i < ops; i++) fn();
+    to = performance.now();
+    await settle();
+
+    counts.push(collections);
+    from = Infinity;
+    to = Infinity;
+    if (collections === 0) break;
+  }
+
+  const lowest = Math.min(...counts);
 
   observer.disconnect();
-  return collections;
+  return lowest;
 }
