@@ -7,6 +7,12 @@ import { HyperLogLog } from "../../src/hll/hll.js";
 // vitest gives each file its own worker, so a neighbouring test that churns a
 // few thousand keys cannot collect inside the window measured here.
 //
+// It also needs `fileParallelism: false`, set in vitest.config.ts. Workers
+// competing for CPU do not add noise to this measurement, they change what it
+// measures: under load V8 declines to inline the hash path and add() then
+// really does allocate. With files in parallel this failed 1 full-suite run in
+// 30; without, 0 in 30.
+//
 // Runs everywhere, coverage included. The heap-delta instrument had to be
 // skipped there because it read a steady 40.006 bytes/op under instrumentation;
 // counting collections does not, because it warms the loop before the window
