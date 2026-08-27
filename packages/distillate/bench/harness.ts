@@ -106,8 +106,8 @@ export function benchLookup(
  * One window is measured and reported as it stands. Repeating and taking the
  * best was tried, and it is the wrong shape: it hides a caller whose loop V8
  * declines to optimise, which is a real cost rather than noise to average out.
- * It is unnecessary once test files stop competing for CPU, which is what
- * `fileParallelism: false` in vitest.config.ts is for.
+ * It is unnecessary once the loop stops competing for CPU, which is what the
+ * dedicated single-worker project in vitest.config.ts is for.
  */
 export async function countCollections(
   fn: () => void,
