@@ -7,13 +7,6 @@ export interface Queryable {
   has(key: string): boolean;
 }
 
-// Enough windows for a slow machine to settle, few enough that a loop whose
-// readings never settle still finishes.
-const MAX_WARMUP_WINDOWS = 20;
-
-// How many times the whole measurement is repeated before the lowest is taken.
-const ATTEMPTS = 3;
-
 // Enough turns for a queued batch of entries to arrive, few enough that a
 // process collecting continuously still finishes.
 const MAX_SETTLE_TICKS = 20;
@@ -78,91 +71,37 @@ export function benchLookup(
 }
 
 /**
- * Heap bytes allocated per call of `fn`: the median of `rounds` windows of
- * `ops` calls each, and the lowest such median over a few repeats. Counts
- * garbage, not just what survives, which is the point: an object allocated and
- * dropped every call is GC pressure even though it retains nothing.
- *
- * Two things make a single window untrustworthy, and the median answers both.
- * `heapUsed` is process-wide, so a neighbouring test inflates a reading (a
- * zero-allocation loop measured 0 bytes/op alone and 36 right after a test that
- * built a million strings). And a collection inside the window *frees* memory,
- * so a reading can come out negative: the same allocating loop produced
- * `[73.4, -16.8, 19.7, 73.6, 74.7, -111.4]`. Neither the minimum *of windows*
- * nor the mean survives that; the median lands at ~73 where the true cost is
- * ~73.
- *
- * Keep `ops` small enough that most windows stay under the young-generation
- * threshold and no collection fires at all: 50000 is a good default. At that
- * size a non-allocating loop reads exactly 0 on every round.
- *
- * Warm-up runs full-size windows until two consecutive readings agree, rather
- * than a fixed call count. A cold loop allocates while V8 optimises it, and how
- * long that takes scales with the machine: a fixed 5000-call warm-up left the
- * first window at 33 to 49 bytes/op here and several windows inflated on a CI
- * runner, where the median then reported 35 to 40 for a loop allocating
- * nothing.
- *
- * That rule is necessary but not sufficient, which is why the whole
- * measurement is repeated and the lowest median kept. The rule waits for two
- * consecutive readings to agree, and a loop still warming supplies those as
- * readily as a settled one: given a flat enough warm-up the rule lets go early
- * and every round of the median then reads the warming cost. A `add()` that
- * allocates nothing failed CI at a stable 40.006 bytes/op that way and passed
- * on rerun with no code change.
- *
- * Taking the lowest *median* is safe where taking the lowest window is not.
- * Window minima chase collection noise; medians of a loop that genuinely
- * allocates all land on its true cost, attempt after attempt, so the minimum
- * lands there too. Only a cost that stops appearing, which is what warm-up is,
- * can be lowered by repeating.
- *
- * Deliberately does not force `global.gc()`. Collecting either side of the
- * window measures surviving heap instead of allocation, which reports 0 for a
- * loop churning garbage and would miss the regression this exists to catch.
- */
-export function measureBytesPerOp(
-  fn: () => void,
-  ops: number,
-  rounds = 7,
-): number {
-  let best = Infinity;
-  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-    best = Math.min(best, measureOnce(fn, ops, rounds));
-  }
-  return best;
-}
-
-function measureOnce(fn: () => void, ops: number, rounds: number): number {
-  const window = (): number => {
-    const before = process.memoryUsage().heapUsed;
-    for (let i = 0; i < ops; i++) fn();
-    const after = process.memoryUsage().heapUsed;
-    return (after - before) / ops;
-  };
-
-  // Warm up in full windows until two consecutive readings agree, so a slow
-  // machine warms for longer instead of measuring its own JIT.
-  let previous = window();
-  for (let warmups = 1; warmups < MAX_WARMUP_WINDOWS; warmups++) {
-    const current = window();
-    if (Math.abs(current - previous) < 1) break;
-    previous = current;
-  }
-
-  const samples: number[] = [];
-  for (let round = 0; round < rounds; round++) samples.push(window());
-
-  samples.sort((a, b) => a - b);
-  return Math.max(0, samples[samples.length >> 1] ?? 0);
-}
-
-/**
  * Garbage collections triggered by `ops` calls of `fn`.
  *
  * A loop that allocates nothing triggers none; a loop allocating one small
  * object per call triggers scavenges in proportion. That makes the two cases
  * unambiguous without a median, a threshold, or a stability rule.
+ *
+ * Read the result as a binary, not a magnitude. How many collections a given
+ * amount of garbage causes depends on how far V8 has grown the young
+ * generation, so the same allocating loop measures 25 collections in a quiet
+ * process and 5 in one that has been working for a while.
+ *
+ * This replaced an instrument that differenced `process.memoryUsage().heapUsed`
+ * across a window of calls. Three things went wrong with that, none of them
+ * worth rediscovering:
+ *
+ * - `heapUsed` is process-wide, so a neighbouring test inflates a reading. A
+ *   zero-allocation loop measured 0 bytes/op alone and 36 straight after a test
+ *   that built a million strings.
+ * - A collection inside the window *frees* memory, so a reading can come out
+ *   negative. One allocating loop produced `[73.4, -16.8, 19.7, 73.6, 74.7,
+ *   -111.4]`, which is why a median was needed to get a usable number at all.
+ * - Above all, a heap delta cannot tell a loop V8 has not optimised yet from
+ *   one that has settled. Both look like a flat plateau, so a stability rule
+ *   releases on the first and reports the warm-up as the answer. That is what
+ *   failed CI: an `add()` allocating nothing read a stable 40.006 bytes/op, and
+ *   passed on rerun with no code change.
+ *
+ * Deliberately does not force `global.gc()`. Collecting either side of the
+ * window measures surviving heap instead of allocation, which reports nothing
+ * for a loop churning garbage and would miss the regression this exists to
+ * catch.
  */
 export async function countCollections(
   fn: () => void,
