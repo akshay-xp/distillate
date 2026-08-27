@@ -10,6 +10,9 @@ export interface Queryable {
 // readings never settle still finishes.
 const MAX_WARMUP_WINDOWS = 20;
 
+// How many times the whole measurement is repeated before the lowest is taken.
+const ATTEMPTS = 3;
+
 function runtime(): string {
   const versions = process.versions as Record<string, string | undefined>;
   if (versions.bun) return `bun v${versions.bun}`;
@@ -66,18 +69,19 @@ export function benchLookup(
 }
 
 /**
- * Heap bytes allocated per call of `fn`, as the median of `rounds` windows of
- * `ops` calls each. Counts garbage, not just what survives, which is the point:
- * an object allocated and dropped every call is GC pressure even though it
- * retains nothing.
+ * Heap bytes allocated per call of `fn`: the median of `rounds` windows of
+ * `ops` calls each, and the lowest such median over a few repeats. Counts
+ * garbage, not just what survives, which is the point: an object allocated and
+ * dropped every call is GC pressure even though it retains nothing.
  *
  * Two things make a single window untrustworthy, and the median answers both.
  * `heapUsed` is process-wide, so a neighbouring test inflates a reading (a
  * zero-allocation loop measured 0 bytes/op alone and 36 right after a test that
  * built a million strings). And a collection inside the window *frees* memory,
  * so a reading can come out negative: the same allocating loop produced
- * `[73.4, -16.8, 19.7, 73.6, 74.7, -111.4]`. Neither the minimum nor the mean
- * survives that; the median lands at ~73 where the true cost is ~73.
+ * `[73.4, -16.8, 19.7, 73.6, 74.7, -111.4]`. Neither the minimum *of windows*
+ * nor the mean survives that; the median lands at ~73 where the true cost is
+ * ~73.
  *
  * Keep `ops` small enough that most windows stay under the young-generation
  * threshold and no collection fires at all: 50000 is a good default. At that
@@ -88,9 +92,21 @@ export function benchLookup(
  * long that takes scales with the machine: a fixed 5000-call warm-up left the
  * first window at 33 to 49 bytes/op here and several windows inflated on a CI
  * runner, where the median then reported 35 to 40 for a loop allocating
- * nothing. The rule waits for *stability*, not for a small reading, so it
- * cannot warm a genuine allocation away: such a loop's readings keep moving,
- * it exhausts the cap, and it still measures its true cost.
+ * nothing.
+ *
+ * That rule is necessary but not sufficient, which is why the whole
+ * measurement is repeated and the lowest median kept. The rule waits for two
+ * consecutive readings to agree, and a loop still warming supplies those as
+ * readily as a settled one: given a flat enough warm-up the rule lets go early
+ * and every round of the median then reads the warming cost. A `add()` that
+ * allocates nothing failed CI at a stable 40.006 bytes/op that way and passed
+ * on rerun with no code change.
+ *
+ * Taking the lowest *median* is safe where taking the lowest window is not.
+ * Window minima chase collection noise; medians of a loop that genuinely
+ * allocates all land on its true cost, attempt after attempt, so the minimum
+ * lands there too. Only a cost that stops appearing, which is what warm-up is,
+ * can be lowered by repeating.
  *
  * Deliberately does not force `global.gc()`. Collecting either side of the
  * window measures surviving heap instead of allocation, which reports 0 for a
@@ -101,6 +117,14 @@ export function measureBytesPerOp(
   ops: number,
   rounds = 7,
 ): number {
+  let best = Infinity;
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    best = Math.min(best, measureOnce(fn, ops, rounds));
+  }
+  return best;
+}
+
+function measureOnce(fn: () => void, ops: number, rounds: number): number {
   const window = (): number => {
     const before = process.memoryUsage().heapUsed;
     for (let i = 0; i < ops; i++) fn();
