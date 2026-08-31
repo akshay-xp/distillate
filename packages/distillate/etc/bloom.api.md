@@ -39,6 +39,7 @@ export class BloomParamMismatchError extends Error {
 export interface BloomParams {
     k: number;
     m: number;
+    n?: number;
     seed?: number;
 }
 
