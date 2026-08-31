@@ -319,3 +319,29 @@ test("a frame carrying exactly the precision's maximum rho still parses", () => 
 
   expect(HyperLogLog.fromBytes(denseFrame(p, registers.bytes)).p).toBe(p);
 });
+
+const sparseFrame = (p: number, entries: readonly number[]): Uint8Array => {
+  const body = new Uint8Array(6 + entries.length * 4);
+  body[0] = p;
+  body[1] = 1;
+  const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
+  for (let i = 0; i < entries.length; i++) {
+    view.setUint32(6 + i * 4, entries[i] ?? 0, true);
+  }
+  return writeHeader({ version: FORMAT_VERSION, type: 5, flags: 0 }, body);
+};
+
+// Entries are read with getUint32 into an Int32Array, so one with the top bit
+// set lands negative and its index runs to 26 bits. That index addresses past
+// the registers, the TypedArray drops the write, and the entry disappears on
+// the next fold rather than corrupting anything: it counts as a key until
+// something makes it dense, then it is gone.
+test("a sparse entry outside the 31-bit encoding is rejected", () => {
+  expect(() => HyperLogLog.fromBytes(sparseFrame(14, [0xffffffff]))).toThrow(
+    SerializationError,
+  );
+});
+
+test("a sparse entry at the top of the 31-bit encoding still parses", () => {
+  expect(HyperLogLog.fromBytes(sparseFrame(14, [0x7fffffff])).count()).toBe(1);
+});

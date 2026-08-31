@@ -191,7 +191,17 @@ export class HyperLogLog {
     const entries = payload / ENTRY_SIZE;
     const buffer = new Int32Array(capacity);
     for (let i = 0; i < entries; i++) {
-      buffer[i] = dv.getUint32(PARAMS_SIZE + i * ENTRY_SIZE, true);
+      const entry = dv.getUint32(PARAMS_SIZE + i * ENTRY_SIZE, true);
+      // An entry is `index << 6 | rho` with the index under 2 ** SPARSE_P, so
+      // it always fits in 31 bits. Anything wider would land negative in the
+      // Int32Array below and index past the registers, where the write is
+      // dropped and the entry silently disappears on the next fold.
+      if (entry > 0x7fffffff) {
+        throw new SerializationError(
+          `hll: sparse entry ${String(entry)} does not fit the 31-bit encoding`,
+        );
+      }
+      buffer[i] = entry;
     }
     sketch.#sparse = buffer;
     sketch.#len = entries;
