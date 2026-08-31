@@ -214,6 +214,13 @@ test("a frame of another structure is rejected", () => {
 // Capping p at 10 against 300 keys is what puts both encodings in range; the
 // file's usual p=14 needs 3072 and would only ever produce sparse frames.
 const framePrecision = fc.integer({ min: 4, max: 10 });
+
+// Frame offsets, per the published format: 16-byte header, then a 6-byte
+// params block, then the payload, then the CRC.
+const PAYLOAD_AT = 22;
+const CRC_SIZE = 4;
+const ENTRY_SIZE = 4;
+const RHO_BITS = 6;
 const frameKeys = fc.uniqueArray(fc.string(), { maxLength: 300 });
 
 const fromKeys = (keys: readonly string[], p: number): HyperLogLog => {
@@ -239,4 +246,45 @@ test("a generated sketch round-trips in whichever encoding it is in", () => {
       .map(([p, keys]) => fromKeys(keys, p).toBytes()[17]),
   );
   expect([...seen].sort()).toEqual([0, 1]);
+});
+
+// Keys have to repeat for this to mean anything: compact only has work to do
+// when two adds land on the same sparse index, and a set of distinct keys
+// almost never collides at a sparse precision of 25.
+const repeatedKeys = fc
+  .uniqueArray(fc.string(), { maxLength: 60 })
+  .chain((unique) =>
+    fc
+      .array(fc.integer({ min: 1, max: 4 }), {
+        minLength: unique.length,
+        maxLength: unique.length,
+      })
+      .map((times) =>
+        unique.flatMap((key, i) => new Array<string>(times[i] ?? 1).fill(key)),
+      ),
+  );
+
+// What compact guarantees, and the only assertion that notices when it stops:
+// round-trip equality survives duplicate entries untouched, because folding to
+// dense takes the maximum per register and cannot see them.
+test("a sparse frame holds one entry per distinct index", () => {
+  fc.assert(
+    fc.property(framePrecision, repeatedKeys, (p, keys) => {
+      const frame = fromKeys(keys, p).toBytes();
+      fc.pre(frame[17] === 1);
+
+      const payload = frame.length - PAYLOAD_AT - CRC_SIZE;
+      const view = new DataView(
+        frame.buffer,
+        frame.byteOffset + PAYLOAD_AT,
+        payload,
+      );
+      const indices = new Set<number>();
+      for (let i = 0; i < payload / ENTRY_SIZE; i++) {
+        indices.add(view.getUint32(i * ENTRY_SIZE, true) >>> RHO_BITS);
+      }
+
+      expect(indices.size).toBe(payload / ENTRY_SIZE);
+    }),
+  );
 });
