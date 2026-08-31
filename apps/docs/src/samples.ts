@@ -88,7 +88,7 @@ const OPTIONS: ts.CompilerOptions = {
 // Samples are written next to the docs app so Node resolution finds the
 // workspace build through apps/docs/node_modules/distillate. A temp dir
 // elsewhere would resolve nothing.
-const APP_DIR = fileURLToPath(new URL("..", import.meta.url));
+export const APP_DIR = fileURLToPath(new URL("..", import.meta.url));
 
 function sampleFileName(sample: Sample): string {
   const stem = sample.file.replace(/\.md$/, "").replace(/[^\w-]/g, "-");
