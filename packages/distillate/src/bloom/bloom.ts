@@ -39,6 +39,12 @@ export interface BloomParams {
   k: number;
   /** Hash seed; defaults to `0`. */
   seed?: number;
+  /**
+   * Expected number of keys. Omitted, it is derived as `m * ln2 / k`, the
+   * count this geometry is optimal for, which need not be the count the
+   * geometry was solved for.
+   */
+  n?: number;
 }
 
 /**
@@ -125,12 +131,16 @@ export class BloomFilter {
    * Constructs a filter from low-level {@link BloomParams}. Prefer
    * {@link BloomFilter.create} unless restoring a specific configuration.
    */
-  constructor({ m, k, seed = 0 }: BloomParams) {
+  constructor({ m, k, seed = 0, n }: BloomParams) {
     assertPositiveInt(m, "m");
     assertUint32(m, "m");
     assertPositiveInt(k, "k");
     assertUint16(k, "k");
     assertUint32(seed, "seed");
+    if (n !== undefined) {
+      assertPositiveInt(n, "n");
+      assertUint32(n, "n");
+    }
     this.#bits = new BitSet(m);
     this.#m = m;
     this.#k = k;
@@ -138,7 +148,7 @@ export class BloomFilter {
     this.#scratch = new Uint32Array(k);
     // A geometry with far more probes than bits derives a capacity of zero,
     // and m / 0 is Infinity. One key is the smallest honest answer.
-    this.#n = Math.max(1, Math.round((m * Math.LN2) / k));
+    this.#n = n ?? Math.max(1, Math.round((m * Math.LN2) / k));
   }
 
   // Reconstruct with an explicit expected-key count, overriding the #n the

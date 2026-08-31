@@ -59,6 +59,33 @@ test("a geometry that derives no capacity still reports a finite cost", () => {
   expect(Number.isFinite(filter.bitsPerKey)).toBe(true);
 });
 
+// bloomSizing returns only the geometry, so passing its result straight to
+// the constructor used to lose the count it was solved for. The two paths
+// then disagreed about the same filter's cost.
+test("a supplied capacity is reported instead of one derived from m and k", () => {
+  const { m, k } = bloomSizing(1_000_000, 0.01);
+
+  expect(new BloomFilter({ m, k, n: 1_000_000 }).bitsPerKey).toBe(9.585059);
+  expect(new BloomFilter({ m, k, n: 1_000_000 }).bitsPerKey).toBe(
+    BloomFilter.create(1_000_000, 0.01).bitsPerKey,
+  );
+});
+
+test("omitting the capacity still derives one from the geometry", () => {
+  const { m, k } = bloomSizing(1_000_000, 0.01);
+
+  expect(new BloomFilter({ m, k }).bitsPerKey).toBe(10.098869270757605);
+});
+
+test("constructor rejects a capacity outside its serialized width", () => {
+  const { m, k } = bloomSizing(1_000_000, 0.01);
+
+  for (const n of [0, -5, 1.5, 2 ** 32]) {
+    expect(() => new BloomFilter({ m, k, n })).toThrow(ParamError);
+  }
+  expect(() => new BloomFilter({ m, k, n: 2 ** 32 - 1 })).not.toThrow();
+});
+
 test("create rejects invalid n and epsilon", () => {
   for (const n of [0, 1.5, -5]) {
     expect(() => BloomFilter.create(n, 0.01)).toThrow(ParamError);
