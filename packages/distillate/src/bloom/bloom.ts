@@ -65,7 +65,7 @@ export class BloomFilter {
   readonly #k: number;
   readonly #seed: number;
   readonly #scratch: Uint32Array;
-  #n: number;
+  readonly #n: number;
 
   /**
    * Creates a filter sized for `n` expected keys at a target false-positive rate.
@@ -78,7 +78,7 @@ export class BloomFilter {
     assertPositiveInt(n, "n");
     assertUint32(n, "n");
     assertProbability(epsilon, "epsilon");
-    return BloomFilter.#withN(bloomSizing(n, epsilon), n);
+    return new BloomFilter({ ...bloomSizing(n, epsilon), n });
   }
 
   /**
@@ -149,15 +149,6 @@ export class BloomFilter {
     // A geometry with far more probes than bits derives a capacity of zero,
     // and m / 0 is Infinity. One key is the smallest honest answer.
     this.#n = n ?? Math.max(1, Math.round((m * Math.LN2) / k));
-  }
-
-  // Reconstruct with an explicit expected-key count, overriding the #n the
-  // constructor derives from m/k. The single place #n is carried across
-  // reconstruction, so a caller cannot silently drop it.
-  static #withN(params: BloomParams, n: number): BloomFilter {
-    const f = new BloomFilter(params);
-    f.#n = n;
-    return f;
   }
 
   /** Number of bits in the filter. */
@@ -268,10 +259,12 @@ export class BloomFilter {
     const b = other.#bits.bytes;
     const merged = new Uint8Array(a.length);
     for (let i = 0; i < a.length; i++) merged[i] = (a[i] ?? 0) | (b[i] ?? 0);
-    const r = BloomFilter.#withN(
-      { m: this.#m, k: this.#k, seed: this.#seed },
-      this.#n,
-    );
+    const r = new BloomFilter({
+      m: this.#m,
+      k: this.#k,
+      seed: this.#seed,
+      n: this.#n,
+    });
     r.#bits.bytes.set(merged);
     return r;
   }
