@@ -11,8 +11,8 @@ Versioned, self-describing, little-endian binary format. Spec'd here so Rust/Go 
 Offset  Size  Field
 0       4     Magic "DSTL" (0x44 53 54 4C)
 4       1     Format version (u8)         # bump on incompatible layout change
-5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16
-                                          # (5+ reserved: HyperLogLog, CountingBloom, Cuckoo, ...)
+5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog
+                                          # (6+ reserved: CountingBloom, Cuckoo, ...)
 6       1     Flags (u8)                  # bit0-3 hash variant, others reserved
 7       1     Reserved (u8, 0)
 8       4     Body length (u32)           # bytes of body, excluding header and CRC
