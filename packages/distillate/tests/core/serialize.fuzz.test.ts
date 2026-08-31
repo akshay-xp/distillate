@@ -92,6 +92,12 @@ describe.each(entries)(
   },
 );
 
+// Frame geometry, per the published format: a 16-byte header, a 6-byte params
+// block for type 5, then the payload, then the CRC.
+const HEADER_SIZE = 16;
+const PARAMS_SIZE = 6;
+const CRC_SIZE = 4;
+
 interface HllBody {
   p: number;
   encoding: number;
@@ -105,7 +111,7 @@ const denseLength = (p: number): number => (2 ** p * 6) / 8;
 // under a megabyte. The payload length is drawn against the p that came with
 // it: the size a dense body must be, a whole number of sparse entries, or
 // neither. Drawing it independently is what leaves the length checks unreached.
-const hllBody: fc.Arbitrary<HllBody> = fc
+const forgedBody: fc.Arbitrary<HllBody> = fc
   .tuple(fc.integer({ min: 0, max: 20 }), fc.nat({ max: 3 }))
   .chain(([p, encoding]) =>
     fc
@@ -123,6 +129,28 @@ const hllBody: fc.Arbitrary<HllBody> = fc
   );
 
 const inRange = (p: number): boolean => p >= HLL_MIN_P && p <= HLL_MAX_P;
+
+// Bodies the sketch actually accepts. Random bytes stopped being able to
+// produce one once fromBytes started validating registers and entries: almost
+// any 2 ** p random registers hold one above 65 - p, and half of all u32 words
+// fail the 31-bit entry check. Without this branch the robustness property
+// would only ever exercise rejection, which is what the `parses` floor below
+// exists to catch.
+const realBody: fc.Arbitrary<HllBody> = fc
+  .tuple(fc.integer({ min: HLL_MIN_P, max: 12 }), fc.nat({ max: 400 }))
+  .map(([p, n]) => {
+    const sketch = new HyperLogLog({ p });
+    for (let i = 0; i < n; i++) sketch.add(`fuzz:${String(i)}`);
+    const frame = sketch.toBytes();
+    const body = frame.subarray(HEADER_SIZE, frame.length - CRC_SIZE);
+    return {
+      p: body[0] ?? 0,
+      encoding: body[1] ?? 0,
+      payload: body.subarray(PARAMS_SIZE),
+    };
+  });
+
+const hllBody: fc.Arbitrary<HllBody> = fc.oneof(forgedBody, realBody);
 
 /** A well-formed type-5 frame carrying `body` as its params and payload. */
 const hllFrame = (body: HllBody): Uint8Array =>
@@ -152,9 +180,12 @@ const MIN_HITS = SAMPLES * 0.02;
 // at all. So the generator that does reach the params block has to be checked
 // itself, decision by decision.
 test("the hll generator produces every malformed body fromBytes guards against", () => {
-  const samples = fc.sample(hllBody, SAMPLES);
+  // Traps are sampled from the forged branch alone. A real body can never be
+  // in any of them, so mixing the two would only dilute the rates and leave
+  // the floor measuring the mix rather than the generator.
+  const forged = fc.sample(forgedBody, SAMPLES);
   const hits = (predicate: (b: HllBody) => boolean): number =>
-    samples.filter(predicate).length;
+    forged.filter(predicate).length;
 
   expect(hits((b) => !inRange(b.p))).toBeGreaterThan(MIN_HITS);
   expect(hits((b) => b.encoding !== 0 && b.encoding !== 1)).toBeGreaterThan(
@@ -172,9 +203,11 @@ test("the hll generator produces every malformed body fromBytes guards against",
     ),
   ).toBeGreaterThan(MIN_HITS);
 
-  // Without this the four above could all be met by a generator that produces
-  // nothing the sketch accepts, and the property below would prove nothing.
-  expect(hits(parses)).toBeGreaterThan(MIN_HITS);
+  // Parseability is a property of the generator the property below actually
+  // uses, so it is sampled from that one.
+  expect(fc.sample(hllBody, SAMPLES).filter(parses).length).toBeGreaterThan(
+    MIN_HITS,
+  );
 });
 
 describe("fuzz hll fromBytes over well-framed type-5 bodies", () => {
