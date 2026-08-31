@@ -53,6 +53,16 @@ function hllParams(): Map<string, { offset: number; text: string }> {
   return rows;
 }
 
+/** The two values the params table names for the encoding byte. */
+function encodingValues(): Partial<Record<"dense" | "sparse", number>> {
+  const text = hllParams().get("encoding")?.text ?? "";
+  const values: Partial<Record<"dense" | "sparse", number>> = {};
+  for (const [, value, name] of text.matchAll(/(\d+) = (dense|sparse)/g)) {
+    values[name as "dense" | "sparse"] = Number(value);
+  }
+  return values;
+}
+
 /** The offset the params table gives for `field`, relative to the body. */
 function paramOffset(field: string): number {
   const row = hllParams().get(field);
@@ -118,4 +128,14 @@ test("the documented params offsets decode both golden frames", () => {
   });
 
   expect(encodings[0]).not.toBe(encodings[1]);
+});
+
+test("the documented encoding values tell the two golden frames apart", () => {
+  const { dense, sparse } = encodingValues();
+  expect(dense).toBeDefined();
+  expect(sparse).toBeDefined();
+
+  const at = paramOffset("encoding");
+  expect(frameBody(golden("hll-dense").frame).getUint8(at)).toBe(dense);
+  expect(frameBody(golden("hll-sparse").frame).getUint8(at)).toBe(sparse);
 });

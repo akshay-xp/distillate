@@ -52,7 +52,7 @@ HyperLogLog (type 5), little-endian:
 ```
 Offset  Size  Field
 0       1     p: precision, 4..18 (u8)
-1       1     encoding (u8)
+1       1     encoding: 0 = dense, 1 = sparse (u8)
 2       4     seed (u32)
 6       ...   payload: dense registers or sparse entries, see below
 ```
