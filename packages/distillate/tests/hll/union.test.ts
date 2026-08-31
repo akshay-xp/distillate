@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { expect, test } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
@@ -182,4 +183,25 @@ test("union rejects a sketch built with a different seed", () => {
   const a = sketchOf(keys("a", 100));
   const b = sketchOf(keys("b", 100), 14, 7);
   expect(() => a.union(b)).toThrow(ParamError);
+});
+
+// The strongest statement the merge can make, and the one that pins the fold:
+// a union is not merely close to the sketch you would have built from both key
+// sets, it is that sketch, register for register. Exact rather than tolerant
+// because two sketches over the same keys at the same precision are identical.
+test("a union is the sketch the combined keys would have built", () => {
+  fc.assert(
+    fc.property(
+      fc.uniqueArray(fc.string(), { maxLength: 300 }),
+      fc.uniqueArray(fc.string(), { maxLength: 300 }),
+      fc.integer({ min: 4, max: 14 }),
+      fc.integer({ min: 4, max: 14 }),
+      (ka, kb, pa, pb) => {
+        const merged = sketchOf(ka, pa).union(sketchOf(kb, pb));
+        const direct = sketchOf([...new Set([...ka, ...kb])], Math.min(pa, pb));
+
+        expect(merged.equals(direct)).toBe(true);
+      },
+    ),
+  );
 });
