@@ -1,5 +1,72 @@
 # distillate
 
+## 0.9.0
+
+### Minor Changes
+
+- 4ee6bcb: `BloomParams` accepts an optional `n`, the expected key count, so a filter built from explicit geometry can carry the capacity it was sized for.
+
+  ```ts
+  import { BloomFilter, bloomSizing } from "distillate/bloom";
+
+  const { m, k } = bloomSizing(1_000_000, 0.01);
+
+  new BloomFilter({ m, k, seed: 42, n: 1_000_000 }).bitsPerKey; // 9.585059
+  new BloomFilter({ m, k, seed: 42 }).bitsPerKey; // 10.098869270757605
+  ```
+
+  `bloomSizing` returns geometry alone, so passing its result straight to the constructor used to drop the count it was solved for. `bitsPerKey` is `m / n`, and with no `n` to hand the filter derived one as `m * ln2 / k`, the capacity that geometry is optimal for. The two answers differ, and nothing said so. `create` and `fromBytes` have always carried the real `n`; now the public constructor can too, and the getter documents the derivation used when it is omitted.
+
+  `BlockedBloomFilter` has taken `capacity` since it shipped, so this also settles an inconsistency between the two.
+
+  **Fixed: `bitsPerKey` could report `Infinity`.** A geometry with far more probes than bits, such as `{ m: 1000, k: 65535 }`, derives a capacity of zero, and `m / 0` is `Infinity`, which serializes to JSON `null`. The derived value is now at least 1. No forged input was needed to reach this.
+
+  **Fixed: a frame declaring a capacity of zero is now rejected** with `ParamError` rather than restoring a filter that reports an infinite cost. Frames carry `n` as a plain `u32` that no caller has validated, and it is now validated on the way in like every other declared parameter.
+
+- 9d029ab: Bump the binary format to version 4: rename the frame magic from `AMQF` to `DSTL`, and add a 32-bit body-length field to the header.
+
+  **Breaking.** Frames written by earlier versions are rejected with `BadMagicError`, and there is no dual-magic read path. Re-serialize any persisted filters with this version.
+
+  `AMQF` stood for _Approximate Membership Query Filter_, which stops being accurate as `distillate` grows beyond membership filters into probabilistic structures generally. The magic is published in a cross-language format spec, so it was fixed while the package is still pre-1.0 rather than left to outlive the assumption behind it.
+
+  The header is now 16 bytes and carries the body length at offset 8, so a reader can validate, skip, or stream a frame of a structure type it does not implement, using the header alone. Previously body length was inferred from each type's params, which made the format unreadable by anything generic. The length is checked before the CRC, so a frame cut short in transit now reports `TruncatedError` rather than a checksum failure.
+
+- bb4a52c: Add `HyperLogLog`, a cardinality sketch, on the new `distillate/hll` subpath. It answers "how many distinct keys have I seen?" in space fixed by precision rather than by the answer: 12 KiB at `p = 14` holds a count of a thousand or a billion at roughly 0.8% relative error.
+
+  This is the first structure in `distillate` that is not a membership filter, which is why the binary format's naming was fixed in the same release.
+
+  ```ts
+  import { HyperLogLog } from "distillate/hll";
+
+  const sketch = HyperLogLog.create(0.01); // or from(keys, 0.01), or { p }
+  sketch.add("alice");
+  sketch.count();
+
+  const total = shardA.union(shardB); // merges, folding to the coarser precision
+  ```
+
+  `add`, `count`, `union`, `equals`, `toBytes`/`fromBytes`, `toJSON`/`fromJSON`, and `hllSizing` round out the surface, matching the shape the filters already use. Sketches serialize as DSTL type `5`.
+
+  **Small counts are exact, not approximate.** Below a few thousand distinct keys the sketch stores what it has seen at 25-bit precision and counts rather than estimates, so 100 keys report exactly 100. It promotes to dense registers on its own once that stops paying, with no discontinuity in what it reports and nothing to configure. A rollup of many small per-shard sketches keeps that exactness through `union`.
+
+  **Merging sketches of different precision folds to the coarser one**, matching BigQuery HLL++ and Apache DataSketches. Throwing on a mismatch instead would let one misconfigured shard break the rollup that merging exists to serve.
+
+  The estimator is Ertl's improved raw estimator (2017) rather than the empirical bias tables of the HLL++ paper, the same choice Redis 5.0+ and DataSketches made. It needs no per-precision lookup tables, so there is nothing to port, mistranscribe, or fall off the end of.
+
+  Accuracy is gated in CI against the analytic `1.04 / sqrt(2^p)` bound across a precision and cardinality sweep, bounding both every individual point and the mean _signed_ error, so an estimator that drifted uniformly would fail even while each point stayed in range. Measured on the sweep: mean signed error 0.27%, worst point 1.54x its bound. `add` allocates nothing in steady state, asserted by a probe rather than assumed.
+
+### Patch Changes
+
+- 064816f: `HyperLogLog.fromBytes` rejects a sparse frame whose entry carries a rho the precision cannot produce, with `SerializationError`.
+
+  A sparse entry is `index << 6 | rho`. The index half was validated as of the last release, via a 31-bit width check, and the rho half was not, leaving the sparse read path asymmetric with the dense one directly above it, which has always held its registers to `65 - p`.
+
+  The gap was reachable only from a forged frame, and it did not throw. A frame carrying oversized rhos loaded clean, counted correctly, and round-tripped equal to itself, because nothing on the sparse path reads rho. The damage arrived later, when enough keys promoted the sketch and `foldSparse` wrote those rhos into registers: at `p = 14` with 3,000 keys forged to rho 63, the count went on to overstate by 16% (119,223 against a true 102,580) with no error raised. Worse, the frame such a sketch then wrote was one `fromBytes` refused, so a caller could hold a live sketch that could not be persisted.
+
+  Rejecting on load closes both. Only the upper bound is checked: a rho of 0 is a legitimate dense register value, so rejecting it on one encoding and not the other would reintroduce the same asymmetry.
+
+  No effect on frames written by any release.
+
 ## 0.8.2
 
 ### Patch Changes
