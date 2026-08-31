@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { expect, test } from "vitest";
 
 import { BloomFilter } from "../../src/bloom/bloom.js";
@@ -207,4 +208,35 @@ test("a frame of another structure is rejected", () => {
   expect(() => HyperLogLog.fromBytes(bloom.toBytes())).toThrow(
     SerializationError,
   );
+});
+
+// Promotion is at 3 * 2 ** p / 16 entries, so 3 keys at p=4 and 192 at p=10.
+// Capping p at 10 against 300 keys is what puts both encodings in range; the
+// file's usual p=14 needs 3072 and would only ever produce sparse frames.
+const framePrecision = fc.integer({ min: 4, max: 10 });
+const frameKeys = fc.uniqueArray(fc.string(), { maxLength: 300 });
+
+const fromKeys = (keys: readonly string[], p: number): HyperLogLog => {
+  const sketch = new HyperLogLog({ p });
+  for (const key of keys) sketch.add(key);
+  return sketch;
+};
+
+test("a generated sketch round-trips in whichever encoding it is in", () => {
+  fc.assert(
+    fc.property(framePrecision, frameKeys, (p, keys) => {
+      const sketch = fromKeys(keys, p);
+
+      expect(HyperLogLog.fromBytes(sketch.toBytes()).equals(sketch)).toBe(true);
+    }),
+  );
+
+  // Checked, not assumed: the round-trip above is only a claim about both
+  // encodings if the generator actually produces both.
+  const seen = new Set(
+    fc
+      .sample(fc.tuple(framePrecision, frameKeys), 200)
+      .map(([p, keys]) => fromKeys(keys, p).toBytes()[17]),
+  );
+  expect([...seen].sort()).toEqual([0, 1]);
 });
