@@ -181,6 +181,14 @@ const SAMPLES = 400;
 // a shape produced by 0.3% of bodies is one it never actually exercises.
 const MIN_HITS = SAMPLES * 0.02;
 
+// Fixed, because this test characterises the generator's distribution rather
+// than searching for a counterexample. Drawing fresh entropy made it a coin
+// flip: the narrowest category averages 16 hits but has a left tail that
+// reaches the floor, and CI duly failed on a draw of exactly 8. A seed keeps
+// the assertion about the generator; change the generator and these counts
+// still move.
+const SEED = 0x5eed;
+
 // The shared table cannot reach any of this: a random type byte lands on 5 in
 // one run of 256, and over 100,000 runs it produced no body the sketch accepts
 // at all. So the generator that does reach the params block has to be checked
@@ -189,7 +197,7 @@ test("the hll generator produces every malformed body fromBytes guards against",
   // Traps are sampled from the forged branch alone. A real body can never be
   // in any of them, so mixing the two would only dilute the rates and leave
   // the floor measuring the mix rather than the generator.
-  const forged = fc.sample(forgedBody, SAMPLES);
+  const forged = fc.sample(forgedBody, { numRuns: SAMPLES, seed: SEED });
   const hits = (predicate: (b: HllBody) => boolean): number =>
     forged.filter(predicate).length;
 
@@ -219,9 +227,9 @@ test("the hll generator produces every malformed body fromBytes guards against",
 
   // Parseability is a property of the generator the property below actually
   // uses, so it is sampled from that one.
-  expect(fc.sample(hllBody, SAMPLES).filter(parses).length).toBeGreaterThan(
-    MIN_HITS,
-  );
+  expect(
+    fc.sample(hllBody, { numRuns: SAMPLES, seed: SEED }).filter(parses).length,
+  ).toBeGreaterThan(MIN_HITS);
 });
 
 describe("fuzz hll fromBytes over well-framed type-5 bodies", () => {
