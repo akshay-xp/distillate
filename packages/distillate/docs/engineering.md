@@ -77,7 +77,7 @@ p   n        target   measured  bytes
 
 Mean signed error over the sweep is 0.27 percent and the worst point sits at 1.54x its bound, against gates of 1 percent and 3x.
 
-Two rows are worth reading twice. At `p=14, n=1,000` the error is exactly zero: the sketch is still sparse, so it counts rather than estimates. And that same row costs 4,026 bytes against 12,314 once dense, which is the sparse representation paying for itself. Sparse size tracks the key count, not the precision: 100 keys serialize to 426 bytes at every precision.
+Two rows are worth reading twice. At `p=14, n=1,000` the error is exactly zero: the sketch is still sparse, so it counts rather than estimates. And that same row costs 4,026 bytes against 12,314 once dense, which is the sparse representation paying for itself. Sparse size tracks the key count, not the precision, for as long as the sketch is still sparse: 100 keys serialize to 426 bytes at every `p >= 10`. Below that the buffer is too small to hold them and the figure is the dense one instead, 410 bytes at `p=9`, whose 96-entry buffer has already promoted.
 
 ```
 hll add (dense)      34.89 ns/iter
