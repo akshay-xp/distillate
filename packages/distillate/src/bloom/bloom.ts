@@ -171,7 +171,15 @@ export class BloomFilter {
     return this.#bits.count();
   }
 
-  /** Analytic design bits-per-key `m / n`. */
+  /**
+   * Analytic design bits-per-key, `m / n`.
+   *
+   * A filter built without an explicit `n` derives one as `m * ln2 / k`, the
+   * count its geometry is optimal for. That need not be the count the
+   * geometry was solved for, so the same `m` and `k` can report a different
+   * cost depending on how the filter was constructed. `create` and
+   * `fromBytes` always carry the real `n`.
+   */
   get bitsPerKey(): number {
     return this.#m / this.#n;
   }
