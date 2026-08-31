@@ -22,6 +22,33 @@ export class Registers {
     return this.#bytes;
   }
 
+  /**
+   * The largest value any register holds.
+   *
+   * Reads three bytes at a time and unpacks the four registers they hold,
+   * rather than going through {@link Registers.get} per register: `6 * 2 ** p`
+   * divides by 24 for every `p >= 2`, so the groups always come out whole.
+   */
+  max(): number {
+    const bytes = this.#bytes;
+    let max = 0;
+    for (let at = 0; at < bytes.length; at += 3) {
+      const word =
+        (bytes[at] ?? 0) |
+        ((bytes[at + 1] ?? 0) << 8) |
+        ((bytes[at + 2] ?? 0) << 16);
+      const a = word & MASK;
+      const b = (word >>> 6) & MASK;
+      const c = (word >>> 12) & MASK;
+      const d = (word >>> 18) & MASK;
+      if (a > max) max = a;
+      if (b > max) max = b;
+      if (c > max) max = c;
+      if (d > max) max = d;
+    }
+    return max;
+  }
+
   /** Reads the register at `i`. */
   get(i: number): number {
     const bit = i * WIDTH;

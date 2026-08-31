@@ -56,3 +56,39 @@ test("writing a register leaves its neighbours untouched", () => {
     r.set(i, 0);
   }
 });
+
+test("max reports the largest value held", () => {
+  expect(new Registers(8).max()).toBe(0);
+
+  const saturated = new Registers(8);
+  saturated.set(0, 63);
+  expect(saturated.max()).toBe(63);
+
+  const mixed = new Registers(8);
+  mixed.set(5, 12);
+  mixed.set(9, 40);
+  expect(mixed.max()).toBe(40);
+});
+
+// Pinned against get(), which max unpacks four registers at a time to avoid.
+// The two have to agree or the faster path is reading the packing wrong.
+test("max agrees with a scan through get (property)", () => {
+  fc.assert(
+    fc.property(
+      fc.integer({ min: 4, max: 10 }),
+      fc.array(fc.tuple(fc.nat({ max: 1023 }), fc.nat({ max: 63 })), {
+        maxLength: 200,
+      }),
+      (p, writes) => {
+        const m = 2 ** p;
+        const r = new Registers(p);
+        for (const [i, v] of writes) r.set(i % m, v);
+
+        let expected = 0;
+        for (let i = 0; i < m; i++) expected = Math.max(expected, r.get(i));
+
+        expect(r.max()).toBe(expected);
+      },
+    ),
+  );
+});
