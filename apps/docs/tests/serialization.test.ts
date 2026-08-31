@@ -86,6 +86,28 @@ function denseRegisterWidth(): number {
   return Number(width[1]);
 }
 
+/** The entry size and bit split the sparse payload paragraph states. */
+function sparseEntryLayout(): {
+  bytes: number;
+  indexBits: number;
+  rhoBits: number;
+} {
+  const section = hllSection();
+  const bytes = /(\d+) bytes each/.exec(section);
+  const indexBits = /top (\d+) bits/.exec(section);
+  const rhoBits = /low (\d+) bits/.exec(section);
+  if (!bytes || !indexBits || !rhoBits) {
+    throw new Error(
+      "serialization.md does not state the sparse entry encoding",
+    );
+  }
+  return {
+    bytes: Number(bytes[1]),
+    indexBits: Number(indexBits[1]),
+    rhoBits: Number(rhoBits[1]),
+  };
+}
+
 interface Fixture {
   name: string;
   p?: number;
@@ -161,4 +183,31 @@ test("the documented register width sizes the dense payload", () => {
   const payload = frameBody(fixture.frame).byteLength - paramOffset("payload");
 
   expect((payload * 8) / 2 ** fixture.p).toBe(denseRegisterWidth());
+});
+
+test("the documented sparse entry encoding decodes the golden entries", () => {
+  const { bytes, indexBits, rhoBits } = sparseEntryLayout();
+  expect(indexBits + rhoBits).toBe(31);
+
+  const fixture = golden("hll-sparse");
+  const body = frameBody(fixture.frame);
+  const at = paramOffset("payload");
+  const entries = (body.byteLength - at) / bytes;
+
+  expect((body.byteLength - at) % bytes).toBe(0);
+  expect(entries).toBe(new Set(fixture.keys).size);
+  expect(entries).toBe(HyperLogLog.fromBytes(fixture.frame).count());
+
+  let previous = -1;
+  for (let i = 0; i < entries; i++) {
+    const entry = body.getUint32(at + i * bytes, true);
+    const index = entry >>> rhoBits;
+    const rho = entry & ((1 << rhoBits) - 1);
+
+    expect(index).toBeLessThan(2 ** indexBits);
+    expect(index).toBeGreaterThan(previous);
+    expect(rho).toBeGreaterThanOrEqual(1);
+    expect(rho).toBeLessThan(2 ** rhoBits);
+    previous = index;
+  }
 });
