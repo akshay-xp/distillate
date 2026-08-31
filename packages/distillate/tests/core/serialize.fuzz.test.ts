@@ -11,55 +11,69 @@ import {
 } from "../../src/core/serialize.js";
 import { HLL_MAX_P, HLL_MIN_P } from "../../src/core/sizing.js";
 import { BinaryFuse8, BinaryFuse16 } from "../../src/fuse/index.js";
+import { HyperLogLog } from "../../src/hll/hll.js";
 
-interface Filter {
-  has(key: string): boolean;
+interface Structure {
+  parse: (bytes: Uint8Array) => unknown;
+  answers: (value: unknown) => boolean;
 }
 
-const entries: [string, (bytes: Uint8Array) => Filter][] = [
-  ["bloom", (b) => BloomFilter.fromBytes(b)],
-  ["blocked", (b) => BlockedBloomFilter.fromBytes(b)],
-  ["fuse8", (b) => BinaryFuse8.fromBytes(b)],
-  ["fuse16", (b) => BinaryFuse16.fromBytes(b)],
+// Pairs a parser with the call that proves what came back is usable. The call
+// differs by family, a membership probe for the filters and a count for the
+// sketch, so the type it is written against is erased here rather than being
+// widened to something every structure happens to satisfy.
+const structure = <T>(
+  parse: (bytes: Uint8Array) => T,
+  answers: (value: T) => boolean,
+): Structure => ({ parse, answers: (value) => answers(value as T) });
+
+const hll = structure(
+  (b) => HyperLogLog.fromBytes(b),
+  (sketch) => Number.isFinite(sketch.count()),
+);
+
+const answersHas = (filter: { has(key: string): boolean }): boolean =>
+  typeof filter.has("probe") === "boolean";
+
+const entries: [string, Structure][] = [
+  ["bloom", structure((b) => BloomFilter.fromBytes(b), answersHas)],
+  ["blocked", structure((b) => BlockedBloomFilter.fromBytes(b), answersHas)],
+  ["fuse8", structure((b) => BinaryFuse8.fromBytes(b), answersHas)],
+  ["fuse16", structure((b) => BinaryFuse16.fromBytes(b), answersHas)],
+  ["hll", hll],
 ];
 
 // Feeding hostile bytes to fromBytes must never surface an untyped error, OOM,
 // or hang: it either rejects with a typed SerializationError/ParamError or
-// returns a filter that answers has() without throwing.
-const expectRobust = (
-  fn: (bytes: Uint8Array) => Filter,
-  bytes: Uint8Array,
-): void => {
-  let filter: Filter;
+// returns a structure that answers without throwing.
+const expectRobust = (s: Structure, bytes: Uint8Array): void => {
+  let value: unknown;
   try {
-    filter = fn(bytes);
+    value = s.parse(bytes);
   } catch (e) {
     if (e instanceof SerializationError || e instanceof ParamError) return;
     throw e;
   }
-  expect(typeof filter.has("probe")).toBe("boolean");
+  expect(s.answers(value)).toBe(true);
 };
 
-describe.each(entries)(
-  "fuzz %s fromBytes over arbitrary bytes",
-  (_name, fn) => {
-    test("throws a typed error or returns a usable filter", () => {
-      fc.assert(
-        fc.property(fc.uint8Array({ maxLength: 4096 }), (bytes) => {
-          expectRobust(fn, bytes);
-        }),
-      );
-    });
-  },
-);
+describe.each(entries)("fuzz %s fromBytes over arbitrary bytes", (_name, s) => {
+  test("throws a typed error or returns a usable structure", () => {
+    fc.assert(
+      fc.property(fc.uint8Array({ maxLength: 4096 }), (bytes) => {
+        expectRobust(s, bytes);
+      }),
+    );
+  });
+});
 
 // Raw random bytes almost never pass the CRC, so wrap arbitrary type/flags/body
 // in a valid frame to reach each structure's param decode: the finding-6 guard
 // that a declared length can never drive an oversized allocation.
 describe.each(entries)(
   "fuzz %s fromBytes over valid-framed bodies",
-  (_name, fn) => {
-    test("throws a typed error or returns a usable filter", () => {
+  (_name, s) => {
+    test("throws a typed error or returns a usable structure", () => {
       fc.assert(
         fc.property(
           fc.nat({ max: 255 }),
@@ -70,7 +84,7 @@ describe.each(entries)(
               { version: FORMAT_VERSION, type, flags },
               body,
             );
-            expectRobust(fn, frame);
+            expectRobust(s, frame);
           },
         ),
       );
@@ -110,6 +124,22 @@ const hllBody: fc.Arbitrary<HllBody> = fc
 
 const inRange = (p: number): boolean => p >= HLL_MIN_P && p <= HLL_MAX_P;
 
+/** A well-formed type-5 frame carrying `body` as its params and payload. */
+const hllFrame = (body: HllBody): Uint8Array =>
+  writeHeader(
+    { version: FORMAT_VERSION, type: 5, flags: 0 },
+    Uint8Array.from([body.p, body.encoding, 0, 0, 0, 0, ...body.payload]),
+  );
+
+const parses = (body: HllBody): boolean => {
+  try {
+    HyperLogLog.fromBytes(hllFrame(body));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const SAMPLES = 400;
 
 // Two percent of the sample, so a trap has to be a routine outcome rather than
@@ -141,4 +171,18 @@ test("the hll generator produces every malformed body fromBytes guards against",
         b.payload.length !== denseLength(b.p),
     ),
   ).toBeGreaterThan(MIN_HITS);
+
+  // Without this the four above could all be met by a generator that produces
+  // nothing the sketch accepts, and the property below would prove nothing.
+  expect(hits(parses)).toBeGreaterThan(MIN_HITS);
+});
+
+describe("fuzz hll fromBytes over well-framed type-5 bodies", () => {
+  test("throws a typed error or returns a usable structure", () => {
+    fc.assert(
+      fc.property(hllBody, (body) => {
+        expectRobust(hll, hllFrame(body));
+      }),
+    );
+  });
 });
