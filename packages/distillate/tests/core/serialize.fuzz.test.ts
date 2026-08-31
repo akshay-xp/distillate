@@ -186,3 +186,25 @@ describe("fuzz hll fromBytes over well-framed type-5 bodies", () => {
     );
   });
 });
+
+// The property above cannot see either params guard go missing: an out-of-range
+// p just builds a mis-sized register array, and an unknown encoding falls
+// through to the sparse branch, and both still answer count(). Each guard has
+// to be asserted as a rejection instead.
+test("a frame naming a precision outside the supported range is rejected", () => {
+  fc.assert(
+    fc.property(
+      fc.oneof(
+        fc.integer({ min: 0, max: HLL_MIN_P - 1 }),
+        fc.integer({ min: HLL_MAX_P + 1, max: 255 }),
+      ),
+      fc.integer({ min: 0, max: 1 }),
+      fc.uint8Array({ maxLength: 64 }),
+      (p, encoding, payload) => {
+        expect(() =>
+          HyperLogLog.fromBytes(hllFrame({ p, encoding, payload })),
+        ).toThrow(ParamError);
+      },
+    ),
+  );
+});
