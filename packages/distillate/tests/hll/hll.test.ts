@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { expect, test } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
@@ -259,4 +260,44 @@ test("add accepts every BytesLike form, and they agree", () => {
 
   expect(fromBytes.count()).toBe(fromString.count());
   expect(fromBuffer.count()).toBe(fromString.count());
+});
+
+// A sparse sketch counts exactly and a dense one estimates, so the single step
+// that promotes can lose ground: sweeping p from 4 to 14, every fall observed
+// sat exactly at the promotion index, 3 * 2 ** p / 16, with the encoding byte
+// going 1 to 0, and the worst was a drop of 13. Away from that step registers
+// only ever climb, and so does the count.
+test("count rises at every step that does not promote the sketch", () => {
+  fc.assert(
+    fc.property(
+      fc.integer({ min: 4, max: 10 }),
+      fc.uniqueArray(fc.string(), { minLength: 200, maxLength: 300 }),
+      (p, keys) => {
+        const sketch = new HyperLogLog({ p });
+        let previous = sketch.count();
+        let encoding = sketch.toBytes()[17];
+        let promotions = 0;
+
+        for (const key of keys) {
+          sketch.add(key);
+          const current = sketch.count();
+          const now = sketch.toBytes()[17];
+
+          if (now === encoding) {
+            expect(current).toBeGreaterThanOrEqual(previous);
+          } else {
+            promotions++;
+          }
+
+          previous = current;
+          encoding = now;
+        }
+
+        // 200 keys is past promotion for every precision generated, so the
+        // exemption above never covers a whole run, and the representation
+        // changes once and does not change back.
+        expect(promotions).toBe(1);
+      },
+    ),
+  );
 });
