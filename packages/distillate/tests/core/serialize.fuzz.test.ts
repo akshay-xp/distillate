@@ -123,7 +123,13 @@ const forgedBody: fc.Arbitrary<HllBody> = fc
         fc.nat({ max: 64 }),
       )
       .chain((length) =>
-        fc.uint8Array({ minLength: length, maxLength: length }),
+        // Saturating the payload is drawn for, not left to chance: every byte
+        // 0xff puts every register at 63, which is the shape that used to send
+        // count() to Infinity, and random bytes never land on it.
+        fc.oneof(
+          fc.uint8Array({ minLength: length, maxLength: length }),
+          fc.constant(new Uint8Array(length).fill(0xff)),
+        ),
       )
       .map((payload) => ({ p, encoding, payload })),
   );
@@ -201,6 +207,14 @@ test("the hll generator produces every malformed body fromBytes guards against",
         inRange(b.p) &&
         b.payload.length !== denseLength(b.p),
     ),
+  ).toBeGreaterThan(MIN_HITS);
+
+  // The class that hid the register defect. A saturated dense payload is what
+  // sends the estimator to Infinity, and the hll entry's Number.isFinite answer
+  // was always able to catch it: the generator simply never produced one, since
+  // random bytes are never all 0xff at any useful length.
+  expect(
+    hits((b) => b.payload.length > 0 && b.payload.every((v) => v === 0xff)),
   ).toBeGreaterThan(MIN_HITS);
 
   // Parseability is a property of the generator the property below actually
