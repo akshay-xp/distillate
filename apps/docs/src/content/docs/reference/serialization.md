@@ -47,6 +47,16 @@ Offset  Size  Field
 
 Blocked (type 2): `numBlocks (u32) | seed (u32) | n (u32)`, then the lane words (`numBlocks * 32` bytes). Fuse (types 3 and 4): `seed (u32) | seg (u32) | segCountLen (u32) | size (u32)`, then the fingerprint array.
 
+HyperLogLog (type 5), little-endian:
+
+```
+Offset  Size  Field
+0       1     p: precision, 4..18 (u8)
+1       1     encoding (u8)
+2       4     seed (u32)
+6       ...   payload: dense registers or sparse entries, see below
+```
+
 ### Hash variant (flags nibble)
 
 Bits 0-3 of the flags byte record which hash produced the stored bits. Version 4 uses one hash for every structure:
