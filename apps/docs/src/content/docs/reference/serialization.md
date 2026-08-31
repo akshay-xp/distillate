@@ -59,6 +59,8 @@ Offset  Size  Field
 
 Dense payload: the register array. `2 ** p` registers of 6 bits each, packed LSB-first into `2 ** p * 6 / 8` bytes with no padding (`6 * 2 ** p` divides by 8 for every `p >= 2`). Register `i` spans bits `[6i, 6i + 6)`, so it straddles at most two bytes: with `bit = 6 * i` and `at = bit >>> 3`, its value is `((bytes[at] | (bytes[at + 1] << 8)) >>> (bit & 7)) & 0x3f`. Each register holds the largest rho seen for it, rho being the 1-based position of the first set bit in the `64 - p` hash bits below the index; six bits suffice because rho never exceeds `65 - p`.
 
+Sparse payload: `n` entries of 4 bytes each, `u32` little-endian, one per distinct index, sorted ascending. An entry is 31 bits wide, `index << 6 | rho`: the index in the top 25 bits, rho in the low 6 bits, and bit 31 always clear. The index is taken at a fixed sparse precision of 25 whatever `p` is, so a small sketch counts distinct indices rather than estimating; the rho beside it is the _dense_ rho for this frame's `p`, not one measured at 25. A reader materialises the registers with `register = index >>> (25 - p)`, keeping the largest rho that lands on each. Either encoding can appear for any `p`: a sketch starts sparse and rewrites itself dense once the entries stop being cheaper than the register array.
+
 ### Hash variant (flags nibble)
 
 Bits 0-3 of the flags byte record which hash produced the stored bits. Version 4 uses one hash for every structure:
