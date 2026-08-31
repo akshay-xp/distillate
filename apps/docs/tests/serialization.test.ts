@@ -30,15 +30,22 @@ function typeRows(): { types: string; reserved: string } {
   return { types: lines[at] ?? "", reserved: lines[at + 1] ?? "" };
 }
 
+/** The spec from `start` up to the next heading of `stop`'s depth. */
+function sectionFrom(start: string, stop: string, missing: string): string {
+  const spec = doc();
+  const at = spec.indexOf(start);
+  if (at === -1) throw new Error(missing);
+  const end = spec.indexOf(stop, at);
+  return end === -1 ? spec.slice(at) : spec.slice(at, end);
+}
+
 /** Everything the spec says about the HyperLogLog frame. */
 function hllSection(): string {
-  const spec = doc();
-  const at = spec.indexOf("HyperLogLog (type 5), little-endian:");
-  if (at === -1) {
-    throw new Error("serialization.md has no HyperLogLog params block");
-  }
-  const end = spec.indexOf("\n### ", at);
-  return end === -1 ? spec.slice(at) : spec.slice(at, end);
+  return sectionFrom(
+    "HyperLogLog (type 5), little-endian:",
+    "\n### ",
+    "serialization.md has no HyperLogLog params block",
+  );
 }
 
 /** The HyperLogLog params table, keyed by the field name each row names. */
@@ -105,6 +112,27 @@ function sparseEntryLayout(): {
     bytes: Number(bytes[1]),
     indexBits: Number(indexBits[1]),
     rhoBits: Number(rhoBits[1]),
+  };
+}
+
+const NUMERALS = ["zero", "one", "two", "three", "four", "five", "six"];
+
+/** The structures the hash-variant section lists, and the count it claims. */
+function hashVariant(): { families: string[]; count: string } {
+  const section = sectionFrom(
+    "### Hash variant (flags nibble)",
+    "\n## ",
+    "serialization.md has no hash variant section",
+  );
+
+  const listed = /murmur3_x86_128 \(([^)]+)\)/.exec(section);
+  const count = /All (\w+) structures write variant/.exec(section);
+  if (!listed || !count) {
+    throw new Error("serialization.md does not say who writes variant 0");
+  }
+  return {
+    families: listed[1].split(",").map((f) => f.trim()),
+    count: count[1],
   };
 }
 
@@ -210,4 +238,11 @@ test("the documented sparse entry encoding decodes the golden entries", () => {
     expect(rho).toBeLessThan(2 ** rhoBits);
     previous = index;
   }
+});
+
+test("the hash variant section counts every structure that writes variant 0", () => {
+  const { families, count } = hashVariant();
+
+  expect(families).toContain("HyperLogLog");
+  expect(count).toBe(NUMERALS[families.length]);
 });
