@@ -49,6 +49,16 @@ test("constructor rejects m and k beyond their serialized widths", () => {
   expect(() => new BloomFilter({ m: 2 ** 20, k: 7 })).not.toThrow();
 });
 
+// The construction directly above is legal, and `round(m * ln2 / k)` floors
+// to 0 for it, so bitsPerKey divided by zero and answered Infinity, which
+// serializes to JSON null.
+test("a geometry that derives no capacity still reports a finite cost", () => {
+  const filter = new BloomFilter({ m: 1000, k: 65535 });
+
+  expect(filter.bitsPerKey).toBe(1000);
+  expect(Number.isFinite(filter.bitsPerKey)).toBe(true);
+});
+
 test("create rejects invalid n and epsilon", () => {
   for (const n of [0, 1.5, -5]) {
     expect(() => BloomFilter.create(n, 0.01)).toThrow(ParamError);

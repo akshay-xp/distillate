@@ -136,7 +136,9 @@ export class BloomFilter {
     this.#k = k;
     this.#seed = seed;
     this.#scratch = new Uint32Array(k);
-    this.#n = Math.round((m * Math.LN2) / k);
+    // A geometry with far more probes than bits derives a capacity of zero,
+    // and m / 0 is Infinity. One key is the smallest honest answer.
+    this.#n = Math.max(1, Math.round((m * Math.LN2) / k));
   }
 
   // Reconstruct with an explicit expected-key count, overriding the #n the
