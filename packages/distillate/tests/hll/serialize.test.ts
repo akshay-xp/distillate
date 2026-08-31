@@ -15,6 +15,7 @@ import {
 } from "../../src/core/serialize.js";
 import { HyperLogLog } from "../../src/hll/hll.js";
 import { Registers } from "../../src/hll/registers.js";
+import { encodeSparse } from "../../src/hll/sparse.js";
 
 const sketchOf = (n: number, p = 14, tag = "ser"): HyperLogLog => {
   const sketch = new HyperLogLog({ p });
@@ -340,6 +341,22 @@ test("a sparse entry outside the 31-bit encoding is rejected", () => {
   expect(() => HyperLogLog.fromBytes(sparseFrame(14, [0xffffffff]))).toThrow(
     SerializationError,
   );
+});
+
+// The rho half of the same entry, which the 31-bit check above does not reach:
+// six bits hold 63, but no sketch at p can record a rho above 65 - p, the bound
+// the dense branch already enforces on its registers.
+//
+// This needs its own rejection assertion because the robustness property cannot
+// see it. A forged rho leaves count() finite and round-trips equals, so
+// expectRobust in serialize.fuzz.test.ts is satisfied either way; the damage
+// only appears once promotion folds the rho into a register, where it inflates
+// the estimate, and then on the reload of a frame toBytes has just written.
+// Same reason the second finding in #180 needed a targeted test.
+test("a sparse entry whose rho the precision cannot produce is rejected", () => {
+  expect(() =>
+    HyperLogLog.fromBytes(sparseFrame(14, [encodeSparse(0, 52)])),
+  ).toThrow(SerializationError);
 });
 
 // The largest index, 2 ** SPARSE_P - 1, beside the largest rho p permits. Not
