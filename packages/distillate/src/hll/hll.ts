@@ -166,6 +166,18 @@ export class HyperLogLog {
       );
       sketch.#goDense();
       sketch.#registers.bytes.set(body.subarray(PARAMS_SIZE));
+
+      // Six bits hold 63, but `add` cannot record a rho above 65 - p and the
+      // folds preserve that bound, so anything larger is a frame no release
+      // wrote. Left alone it reaches the estimator, where a saturated register
+      // array divides by zero and counts Infinity.
+      const maxRho = 65 - p;
+      const largest = sketch.#registers.max();
+      if (largest > maxRho) {
+        throw new SerializationError(
+          `hll: register holds ${String(largest)}, above the maximum ${String(maxRho)} at p ${String(p)}`,
+        );
+      }
       return sketch;
     }
 

@@ -14,6 +14,7 @@ import {
   writeHeader,
 } from "../../src/core/serialize.js";
 import { HyperLogLog } from "../../src/hll/hll.js";
+import { Registers } from "../../src/hll/registers.js";
 
 const sketchOf = (n: number, p = 14, tag = "ser"): HyperLogLog => {
   const sketch = new HyperLogLog({ p });
@@ -287,4 +288,34 @@ test("a sparse frame holds one entry per distinct index", () => {
       expect(indices.size).toBe(payload / ENTRY_SIZE);
     }),
   );
+});
+
+const denseFrame = (p: number, payload: Uint8Array): Uint8Array => {
+  const body = new Uint8Array(6 + payload.length);
+  body[0] = p;
+  body[1] = 0;
+  body.set(payload, 6);
+  return writeHeader({ version: FORMAT_VERSION, type: 5, flags: 0 }, body);
+};
+
+// Six bits hold 63, but the largest rho a sketch at precision p can record is
+// 65 - p. A frame carrying more than that is not one any release wrote, and
+// left alone it makes count() diverge: every register saturated sends the
+// histogram to all zeros, so the estimator divides by zero and returns
+// Infinity, which serializes to null.
+test("a frame carrying a register above the precision's maximum is rejected", () => {
+  const p = 14;
+  const saturated = new Uint8Array((2 ** p * 6) / 8).fill(0xff);
+
+  expect(() => HyperLogLog.fromBytes(denseFrame(p, saturated))).toThrow(
+    SerializationError,
+  );
+});
+
+test("a frame carrying exactly the precision's maximum rho still parses", () => {
+  const p = 14;
+  const registers = new Registers(p);
+  registers.set(0, 65 - p);
+
+  expect(HyperLogLog.fromBytes(denseFrame(p, registers.bytes)).p).toBe(p);
 });
