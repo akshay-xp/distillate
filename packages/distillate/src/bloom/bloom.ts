@@ -122,7 +122,7 @@ export class BloomFilter {
     const seed = dv.getUint32(6, true);
     const n = dv.getUint32(10, true);
     assertBodyLength(body.length, 14 + Math.ceil(m / 8), "bloom");
-    const f = BloomFilter.#withN({ m, k, seed }, n);
+    const f = new BloomFilter({ m, k, seed, n });
     f.#bits.bytes.set(body.subarray(14));
     return f;
   }
