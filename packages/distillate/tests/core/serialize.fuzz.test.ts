@@ -208,3 +208,18 @@ test("a frame naming a precision outside the supported range is rejected", () =>
     ),
   );
 });
+
+test("a frame naming an encoding the release does not have is rejected", () => {
+  fc.assert(
+    fc.property(
+      fc.integer({ min: HLL_MIN_P, max: HLL_MAX_P }),
+      fc.integer({ min: 2, max: 255 }),
+      fc.uint8Array({ maxLength: 64 }),
+      (p, encoding, payload) => {
+        expect(() =>
+          HyperLogLog.fromBytes(hllFrame({ p, encoding, payload })),
+        ).toThrow(SerializationError);
+      },
+    ),
+  );
+});
