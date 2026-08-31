@@ -255,3 +255,51 @@ test("union with itself changes nothing at any precision", () => {
     }),
   );
 });
+
+/** The encoding byte of a sketch's frame: 0 dense, 1 sparse. */
+const encoding = (sketch: HyperLogLog): number => sketch.toBytes()[17] ?? -1;
+
+// "Covers its inputs" is exact when stated as algebra rather than arithmetic:
+// merging an operand back into a union that already holds it cannot change it.
+//
+// The count-level version is not an invariant. A union can promote to dense
+// while its operands are still sparse and counting exactly, and a dense sketch
+// estimates. fc found [[""], [" ", "!", "\"", "Q", "#"], 5, 5]: one key and
+// five at p=5, where the buffer holds six, so the operands count exactly, 1 and
+// 5, and their six-key union tips over and estimates 7, above the sum of both.
+// Sweeping every size pair around the boundary for p in 4..9, the sum bound
+// fails 195 times and even the lower bound fails 9 times in 26,946, while the
+// covering statement below fails 0 times in 13,473.
+test("a union covers each of its inputs", () => {
+  fc.assert(
+    fc.property(keySet, keySet, precision, precision, (ka, kb, pa, pb) => {
+      const merged = sketchOf(ka, pa).union(sketchOf(kb, pb));
+
+      expect(merged.union(sketchOf(ka, pa)).equals(merged)).toBe(true);
+      expect(merged.union(sketchOf(kb, pb)).equals(merged)).toBe(true);
+    }),
+  );
+});
+
+// The count-level bound, held to where it is sound: one precision, and nobody
+// switching representation across the merge. Both conditions are needed, since
+// either a fold to a coarser p or a promotion to dense replaces an exact count
+// with an estimate. 0 violations in the 6,291 pairs of the sweep that qualify.
+test("a union counts at least its larger input, representation held", () => {
+  fc.assert(
+    fc.property(keySet, keySet, precision, (ka, kb, p) => {
+      const a = sketchOf(ka, p);
+      const b = sketchOf(kb, p);
+      const merged = sketchOf(ka, p).union(sketchOf(kb, p));
+      // fc.pre rather than an early return: a skipped run is counted, so if
+      // this ever swallowed most of the inputs the run would fail instead of
+      // passing on nothing.
+      fc.pre(encoding(a) === encoding(merged));
+      fc.pre(encoding(b) === encoding(merged));
+
+      expect(merged.count()).toBeGreaterThanOrEqual(
+        Math.max(a.count(), b.count()),
+      );
+    }),
+  );
+});
