@@ -418,8 +418,9 @@ export class HyperLogLog {
   }
 
   /**
-   * Counts how many distinct keys have been added. Small sketches answer
-   * exactly; larger ones estimate, within {@link standardError}.
+   * Counts how many distinct keys have been added. Below a few thousand
+   * distinct keys the answer is exact; above that, and once the sketch has
+   * gone dense, it estimates within {@link standardError}.
    *
    * @returns The cardinality, a whole number; `0` for an empty sketch.
    */
@@ -427,8 +428,12 @@ export class HyperLogLog {
     const sparse = this.#sparse;
     if (sparse !== null) {
       // Every distinct key still has its own sparse index, so this counts
-      // rather than estimates: linear counting over 2 ** SPARSE_P buckets is
-      // off by under half a key for any cardinality a sparse sketch can hold.
+      // rather than estimates. What bounds the exactness is the cardinality,
+      // not p: a pair colliding at 2 ** SPARSE_P costs a key that linear
+      // counting only corrects in expectation, and even collision-free the
+      // rounded estimator departs from n at 5,793. Measured, exact to 2,000
+      // and first off at 3,000. A p <= 14 buffer promotes at 3,072 and never
+      // reaches that; p = 18 holds 49,152 entries and drifts by tens.
       const distinct = compact(sparse, this.#len);
       this.#len = distinct;
       const buckets = 2 ** SPARSE_P;

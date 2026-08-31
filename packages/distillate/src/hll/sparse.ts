@@ -4,8 +4,10 @@ import type { Registers } from "./registers.js";
 /**
  * Precision of the sparse representation. A sparse sketch holds far fewer
  * entries than it has room for indices, so it can afford a much finer index
- * than the dense one and count exactly instead of estimating: at `2 ** 25`
- * indices, a hundred keys collide with probability ~1.5e-4.
+ * than the dense one and count rather than estimate while the cardinality is
+ * small: at `2 ** 25` indices, a hundred keys collide with probability
+ * ~1.5e-4. The count stays exact to a few thousand keys and drifts above that,
+ * so a buffer big enough to hold more (`p >= 15`) outlives the guarantee.
  */
 export const SPARSE_P = 25;
 
