@@ -88,7 +88,7 @@ building anything:
 import { hllSizing } from "distillate/hll";
 
 hllSizing(0.01).p; // 14
-hllSizing(0.05).p; // 10
+hllSizing(0.05).p; // 9
 ```
 
 `standardError` reads the bound back off a sketch you already have.
