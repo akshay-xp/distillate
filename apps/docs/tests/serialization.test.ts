@@ -30,18 +30,25 @@ function typeRows(): { types: string; reserved: string } {
   return { types: lines[at] ?? "", reserved: lines[at + 1] ?? "" };
 }
 
-/** The HyperLogLog params table, keyed by the field name each row names. */
-function hllParams(): Map<string, { offset: number; text: string }> {
+/** Everything the spec says about the HyperLogLog frame. */
+function hllSection(): string {
   const spec = doc();
   const at = spec.indexOf("HyperLogLog (type 5), little-endian:");
   if (at === -1) {
     throw new Error("serialization.md has no HyperLogLog params block");
   }
+  const end = spec.indexOf("\n### ", at);
+  return end === -1 ? spec.slice(at) : spec.slice(at, end);
+}
 
-  const open = spec.indexOf("```", at);
-  const close = spec.indexOf("```", open + 3);
+/** The HyperLogLog params table, keyed by the field name each row names. */
+function hllParams(): Map<string, { offset: number; text: string }> {
+  const section = hllSection();
+  const open = section.indexOf("```");
+  const close = section.indexOf("```", open + 3);
+
   const rows = new Map<string, { offset: number; text: string }>();
-  for (const line of spec
+  for (const line of section
     .slice(open + 3, close)
     .trim()
     .split("\n")
@@ -51,6 +58,13 @@ function hllParams(): Map<string, { offset: number; text: string }> {
     rows.set(text.split(/[:\s(]/)[0] ?? "", { offset: Number(offset), text });
   }
   return rows;
+}
+
+/** The offset the params table gives for `field`, relative to the body. */
+function paramOffset(field: string): number {
+  const row = hllParams().get(field);
+  if (!row) throw new Error(`HyperLogLog params block has no ${field} row`);
+  return row.offset;
 }
 
 /** The two values the params table names for the encoding byte. */
@@ -63,11 +77,13 @@ function encodingValues(): Partial<Record<"dense" | "sparse", number>> {
   return values;
 }
 
-/** The offset the params table gives for `field`, relative to the body. */
-function paramOffset(field: string): number {
-  const row = hllParams().get(field);
-  if (!row) throw new Error(`HyperLogLog params block has no ${field} row`);
-  return row.offset;
+/** The register width, in bits, the dense payload paragraph states. */
+function denseRegisterWidth(): number {
+  const width = /(\d+) bits each/.exec(hllSection());
+  if (!width) {
+    throw new Error("serialization.md does not state the dense register width");
+  }
+  return Number(width[1]);
 }
 
 interface Fixture {
@@ -138,4 +154,11 @@ test("the documented encoding values tell the two golden frames apart", () => {
   const at = paramOffset("encoding");
   expect(frameBody(golden("hll-dense").frame).getUint8(at)).toBe(dense);
   expect(frameBody(golden("hll-sparse").frame).getUint8(at)).toBe(sparse);
+});
+
+test("the documented register width sizes the dense payload", () => {
+  const fixture = golden("hll-dense");
+  const payload = frameBody(fixture.frame).byteLength - paramOffset("payload");
+
+  expect((payload * 8) / 2 ** fixture.p).toBe(denseRegisterWidth());
 });

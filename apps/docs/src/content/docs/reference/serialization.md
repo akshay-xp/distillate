@@ -57,6 +57,8 @@ Offset  Size  Field
 6       ...   payload: dense registers or sparse entries, see below
 ```
 
+Dense payload: the register array. `2 ** p` registers of 6 bits each, packed LSB-first into `2 ** p * 6 / 8` bytes with no padding (`6 * 2 ** p` divides by 8 for every `p >= 2`). Register `i` spans bits `[6i, 6i + 6)`, so it straddles at most two bytes: with `bit = 6 * i` and `at = bit >>> 3`, its value is `((bytes[at] | (bytes[at + 1] << 8)) >>> (bit & 7)) & 0x3f`. Each register holds the largest rho seen for it, rho being the 1-based position of the first set bit in the `64 - p` hash bits below the index; six bits suffice because rho never exceeds `65 - p`.
+
 ### Hash variant (flags nibble)
 
 Bits 0-3 of the flags byte record which hash produced the stored bits. Version 4 uses one hash for every structure:
