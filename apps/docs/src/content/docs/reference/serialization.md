@@ -65,9 +65,9 @@ Sparse payload: `n` entries of 4 bytes each, `u32` little-endian, one per distin
 
 Bits 0-3 of the flags byte record which hash produced the stored bits. Version 4 uses one hash for every structure:
 
-- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse)
+- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog)
 
-All three structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header, not the hash.
+All four structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header, not the hash.
 
 That version 3 bump (rather than a flags-only change) was deliberate: the version-2 Fuse reader had no variant check and would silently misread a version-3 frame, so bumping the version made it reject on the version byte instead.
 
