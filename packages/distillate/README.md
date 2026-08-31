@@ -91,7 +91,7 @@ import { BinaryFuse8, BinaryFuse16 } from "distillate/fuse";
 const filter = BinaryFuse8.from(["alice", "bob", "carol"]);
 filter.has("alice"); // true
 filter.size; // 3
-filter.bitsPerKey; // 64 at this size; see below
+filter.bitsPerKey; // 64
 
 // Lower false-positive rate, twice the space:
 const precise = BinaryFuse16.from(["alice", "bob", "carol"]);
