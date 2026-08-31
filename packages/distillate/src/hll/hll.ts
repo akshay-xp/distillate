@@ -158,6 +158,11 @@ export class HyperLogLog {
     const sketch = new HyperLogLog({ p, seed });
     const payload = body.length - PARAMS_SIZE;
 
+    // Six bits hold 63, but `add` cannot record a rho above 65 - p and the
+    // folds preserve that bound, so anything larger is a frame no release
+    // wrote. Both encodings carry rhos, so both are held to it.
+    const maxRho = 65 - p;
+
     if (encoding === DENSE) {
       assertBodyLength(
         body.length,
@@ -167,11 +172,8 @@ export class HyperLogLog {
       sketch.#goDense();
       sketch.#registers.bytes.set(body.subarray(PARAMS_SIZE));
 
-      // Six bits hold 63, but `add` cannot record a rho above 65 - p and the
-      // folds preserve that bound, so anything larger is a frame no release
-      // wrote. Left alone it reaches the estimator, where a saturated register
-      // array divides by zero and counts Infinity.
-      const maxRho = 65 - p;
+      // Left alone an oversized register reaches the estimator, where a
+      // saturated array divides by zero and counts Infinity.
       const largest = sketch.#registers.max();
       if (largest > maxRho) {
         throw new SerializationError(
@@ -199,6 +201,15 @@ export class HyperLogLog {
       if (entry > 0x7fffffff) {
         throw new SerializationError(
           `hll: sparse entry ${String(entry)} does not fit the 31-bit encoding`,
+        );
+      }
+      // Unchecked, the rho survives the sparse count untouched and only lands
+      // once a fold writes it into a register, inflating the estimate. The
+      // frame it then writes back is one this very check refuses.
+      const rho = sparseRho(entry);
+      if (rho > maxRho) {
+        throw new SerializationError(
+          `hll: sparse entry holds rho ${String(rho)}, above the maximum ${String(maxRho)} at p ${String(p)}`,
         );
       }
       buffer[i] = entry;
