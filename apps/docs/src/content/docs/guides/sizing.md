@@ -55,7 +55,6 @@ import { BloomFilter, bloomSizing } from "distillate/bloom";
 const { m, k } = bloomSizing(1_000_000, 0.01);
 const bits = m / 1_000_000; // 9.59 bits per key
 const filter = new BloomFilter({ m, k, seed: 42 });
-filter.bitsPerKey; // 9.585059
 ```
 
 Classic Bloom is fixed at 1.44 times the floor at every target, so its cost is
