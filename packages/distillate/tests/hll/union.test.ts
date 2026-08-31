@@ -185,23 +185,73 @@ test("union rejects a sketch built with a different seed", () => {
   expect(() => a.union(b)).toThrow(ParamError);
 });
 
+const keySet = fc.uniqueArray(fc.string(), { maxLength: 300 });
+const precision = fc.integer({ min: 4, max: 14 });
+
 // The strongest statement the merge can make, and the one that pins the fold:
 // a union is not merely close to the sketch you would have built from both key
 // sets, it is that sketch, register for register. Exact rather than tolerant
 // because two sketches over the same keys at the same precision are identical.
 test("a union is the sketch the combined keys would have built", () => {
   fc.assert(
-    fc.property(
-      fc.uniqueArray(fc.string(), { maxLength: 300 }),
-      fc.uniqueArray(fc.string(), { maxLength: 300 }),
-      fc.integer({ min: 4, max: 14 }),
-      fc.integer({ min: 4, max: 14 }),
-      (ka, kb, pa, pb) => {
-        const merged = sketchOf(ka, pa).union(sketchOf(kb, pb));
-        const direct = sketchOf([...new Set([...ka, ...kb])], Math.min(pa, pb));
+    fc.property(keySet, keySet, precision, precision, (ka, kb, pa, pb) => {
+      const merged = sketchOf(ka, pa).union(sketchOf(kb, pb));
+      const direct = sketchOf([...new Set([...ka, ...kb])], Math.min(pa, pb));
 
-        expect(merged.equals(direct)).toBe(true);
+      expect(merged.equals(direct)).toBe(true);
+    }),
+  );
+});
+
+// Each operand is rebuilt rather than reused: union compacts an operand's
+// sparse buffer in place, so sharing one across both sides of an equality
+// would be comparing a sketch against a version of itself it had already
+// rearranged.
+test("union is commutative at any precision pair", () => {
+  fc.assert(
+    fc.property(keySet, keySet, precision, precision, (ka, kb, pa, pb) => {
+      expect(
+        sketchOf(ka, pa)
+          .union(sketchOf(kb, pb))
+          .equals(sketchOf(kb, pb).union(sketchOf(ka, pa))),
+      ).toBe(true);
+    }),
+  );
+});
+
+// The one law of the three that the fold can actually break: the two groupings
+// reach the coarsest precision by different routes, one of them in two steps.
+// Commutativity and idempotence fold symmetrically, so they survive a broken
+// foldRho and cannot stand in for this.
+test("union is associative at any precision triple", () => {
+  fc.assert(
+    fc.property(
+      keySet,
+      keySet,
+      keySet,
+      precision,
+      precision,
+      precision,
+      (ka, kb, kc, pa, pb, pc) => {
+        const left = sketchOf(ka, pa)
+          .union(sketchOf(kb, pb))
+          .union(sketchOf(kc, pc));
+        const right = sketchOf(ka, pa).union(
+          sketchOf(kb, pb).union(sketchOf(kc, pc)),
+        );
+
+        expect(left.equals(right)).toBe(true);
       },
     ),
+  );
+});
+
+test("union with itself changes nothing at any precision", () => {
+  fc.assert(
+    fc.property(keySet, precision, (ka, pa) => {
+      expect(
+        sketchOf(ka, pa).union(sketchOf(ka, pa)).equals(sketchOf(ka, pa)),
+      ).toBe(true);
+    }),
   );
 });
