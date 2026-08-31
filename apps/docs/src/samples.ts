@@ -19,10 +19,19 @@ export interface Sample {
   index: number;
   /** The block's contents. */
   code: string;
+  /** Whether the block may be executed; `false` for a `no-run` fence. */
+  run: boolean;
 }
 
-// A ```ts fence and its body. Only `ts`, so `sh` and `js` blocks are ignored.
-const TS_FENCE = /^```ts[ \t]*\r?\n([\s\S]*?)^```[ \t]*$/gm;
+// A ```ts fence, its meta word, and its body. Only `ts`, so `sh` and `js`
+// blocks are ignored; the meta has to be whitespace-separated so `tsx` is not
+// read as `ts` carrying meta `x`.
+const TS_FENCE = /^```ts(?:[ \t]+([^\n]*?))?[ \t]*\r?\n([\s\S]*?)^```[ \t]*$/gm;
+
+// The one marker a fence may carry. A sample that cannot be executed says so
+// itself, rather than being guessed at by a rule that would silently grow to
+// cover things it should not.
+const NO_RUN = "no-run";
 
 // starlight-typedoc regenerates this tree on every build. Its ts fences are
 // extracted signatures, not samples, so they neither compile alone nor say
@@ -63,7 +72,8 @@ export function extractSamples(target: string): Sample[] {
       samples.push({
         file: nameOf(file),
         index,
-        code: match[1],
+        code: match[2],
+        run: match[1] !== NO_RUN,
       });
     }
   }

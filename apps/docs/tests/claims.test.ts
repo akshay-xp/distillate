@@ -75,3 +75,35 @@ test("only the claim the library contradicts is reported", async () => {
   expect(only).toContain("12");
   expect(only).toContain("9");
 });
+
+// The marker suppresses execution only. A sample that cannot run is still a
+// sample readers copy, so it stays in the typecheck.
+test("a sample marked no-run is typechecked but not executed", () => {
+  const file = join(fixture, "opted-out.md");
+  writeFileSync(
+    file,
+    [
+      "---",
+      "title: Fixture",
+      "---",
+      "",
+      "```ts no-run",
+      'import { hllSizing } from "distillate/hll";',
+      "",
+      "hllSizing(0.05).p; // 12",
+      "```",
+      "",
+    ].join("\n"),
+  );
+
+  const samples = extractSamples(file);
+
+  expect(samples).toHaveLength(1);
+  expect(samples[0]?.run).toBe(false);
+});
+
+test("a no-run sample's wrong claim is not reported", async () => {
+  const file = join(fixture, "opted-out.md");
+
+  await expect(runClaims(extractSamples(file))).resolves.toEqual([]);
+});

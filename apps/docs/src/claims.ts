@@ -175,6 +175,7 @@ export async function runClaims(samples: Sample[]): Promise<string[]> {
 
   try {
     for (const sample of samples) {
+      if (!sample.run) continue;
       const located = locate(sample.code);
       if (located.length === 0) continue;
 
