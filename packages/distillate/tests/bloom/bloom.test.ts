@@ -14,6 +14,7 @@ import { BloomFilter } from "../../src/bloom/bloom.js";
 import { BlockedBloomFilter } from "../../src/blocked/blocked.js";
 import { measureFpr, sampleStrings } from "../helpers/fpr.js";
 import { fromBase64 } from "../helpers/base64.js";
+import { crc32 } from "../../src/core/crc32.js";
 import { ParamError } from "../../src/core/params.js";
 
 test("constructor rejects non-positive-integer m and k", () => {
@@ -206,6 +207,22 @@ test("fromBytes preserves membership answers for absent keys", () => {
   for (const key of sampleStrings(1, 200)) f.add(key);
   const g = BloomFilter.fromBytes(f.toBytes());
   for (const key of sampleStrings(2, 50)) expect(g.has(key)).toBe(f.has(key));
+});
+
+// A frame is the one path that carries a capacity a caller never validated,
+// and n sits at body offset 10, so frame offset 26. Declaring zero used to
+// restore a filter whose bitsPerKey was Infinity.
+test("fromBytes rejects a frame declaring a capacity of zero", () => {
+  const frame = BloomFilter.create(1000, 0.01).toBytes();
+  const dv = new DataView(frame.buffer, frame.byteOffset, frame.byteLength);
+  dv.setUint32(26, 0, true);
+  dv.setUint32(
+    frame.length - 4,
+    crc32(frame.subarray(0, frame.length - 4)),
+    true,
+  );
+
+  expect(() => BloomFilter.fromBytes(frame)).toThrow(ParamError);
 });
 
 test("fromBytes throws SerializationError on corrupt or foreign input", () => {
