@@ -1,11 +1,14 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { afterAll, beforeAll, expect, test } from "vitest";
 
 import { claimsIn, runClaims } from "../src/claims.js";
 import { extractSamples } from "../src/samples.js";
+
+const DOCS = fileURLToPath(new URL("../src/content/docs", import.meta.url));
 
 let fixture: string;
 
@@ -106,4 +109,10 @@ test("a no-run sample's wrong claim is not reported", async () => {
   const file = join(fixture, "opted-out.md");
 
   await expect(runClaims(extractSamples(file))).resolves.toEqual([]);
+});
+
+// The whole point of the mechanism: the published guides, checked against the
+// library they document rather than against a number someone typed once.
+test("every documentation sample quotes results the library reproduces", async () => {
+  await expect(runClaims(extractSamples(DOCS))).resolves.toEqual([]);
 });

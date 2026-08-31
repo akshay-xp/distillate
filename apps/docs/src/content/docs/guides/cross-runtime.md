@@ -80,7 +80,7 @@ import { BloomFilter } from "distillate/bloom";
 const filter = BloomFilter.create(1000, 0.01);
 filter.add("alice");
 
-const envelope = filter.toJSON(); // { $: "distillate", v: 3, data: "..." }
+const envelope = filter.toJSON(); // { $: "distillate", v: 4, data: "..." }
 const restored = BloomFilter.fromJSON(envelope);
 restored.has("alice"); // true
 ```
