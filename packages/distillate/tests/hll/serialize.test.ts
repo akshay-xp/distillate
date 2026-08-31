@@ -342,6 +342,12 @@ test("a sparse entry outside the 31-bit encoding is rejected", () => {
   );
 });
 
-test("a sparse entry at the top of the 31-bit encoding still parses", () => {
-  expect(HyperLogLog.fromBytes(sparseFrame(14, [0x7fffffff])).count()).toBe(1);
+// The largest index, 2 ** SPARSE_P - 1, beside the largest rho p permits. Not
+// 0x7fffffff, which is the top of the encoding but carries rho 63: no sketch at
+// p 14 can record a rho above 51, so that literal pinned a frame no release
+// writes rather than the boundary this is about.
+test("a sparse entry at the top of what a release can write still parses", () => {
+  expect(
+    HyperLogLog.fromBytes(sparseFrame(14, [0x7fffffc0 | 51])).count(),
+  ).toBe(1);
 });
