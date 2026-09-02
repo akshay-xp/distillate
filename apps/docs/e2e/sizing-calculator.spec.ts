@@ -83,7 +83,7 @@ test("does not scroll horizontally on a narrow viewport", async ({ page }) => {
   expect(overflow).toBeLessThanOrEqual(0);
 
   // The results table is allowed to scroll, but inside its own box.
-  const table = page.locator(".sizing-results");
+  const table = page.locator("[data-sizing-results]");
   await expect(table).toHaveCSS("overflow-x", "auto");
 });
 

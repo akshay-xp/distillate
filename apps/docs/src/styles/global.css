@@ -1,0 +1,290 @@
+/*!
+DIRECTION CONTRACT
+THESIS: distillate's every claim is already a statistic; render the site as
+  the honest data-graphics instrument that reports it, not a themed docs
+  template bolted onto the library.
+OWN-WORLD: Starlight's own neutral ground plus hairline rules, with purple
+  (#7611a6, coincident with Starlight's built-in purple hue 281) as the sole
+  "measured" data-ink against a gray "target" line. Geist for UI and prose,
+  Geist Mono for every number, so figures always land in tabular columns.
+  Small-caps, letter-spaced captions for axis-style labels.
+STORY: a reader meets a bounded claim (a false-positive rate, a bits/key
+  figure) as an honest instrument, target against measured, before reading
+  prose about it, and carries that trust into the reference pages.
+FIRST VIEWPORT: the Playground's measured-rate column renders as a labeled
+  target/measured instrument for the two structures a target actually binds;
+  guide and reference tables read as tabular mono spec sheets; Starlight's
+  own chrome (nav, headings, code) inherits the same type and accent system
+  rather than a bolted-on skin, per the site's own principle of extending
+  Starlight's structure rather than replacing it.
+FORM: Control chart / statistical-instrument direction (own pick, candidate
+  1 of an ordered 7; the dice assigned candidate 4, "Certificate of
+  Analysis," considered seriously and not built). Raised nothing further:
+  the two competitive/declined challengers (a normalled patchbay, an exposed
+  Coptic binding) were weighed against the pick, not the assignment, since
+  the user's explicit choice outranks the roll. Seed key 266a07d1.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the
+  finish review, the verdict, DESIGN.md, and every shipping raster carrying
+  its provenance.
+
+Placement note: Starlight owns the root HTML layout and this project
+introduces no override of it, so this contract lives here, atop the one
+stylesheet every page loads, rather than as the first child of <body> in a
+layout this project does not control.
+*/
+
+@import "tailwindcss";
+
+/* Track Starlight's own dark/light switch (a `data-theme` attribute on the
+   root), not the media query, so `dark:` utilities agree with the rest of
+   the page. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ---------------------------------------------------------------------- *
+ * Starlight variable bridge
+ *
+ * Unlayered on purpose. Starlight's own tokens live in `@layer
+ * starlight.base` and Tailwind's reset lives in `@layer base`; plain rules
+ * beat both regardless of source order, so this bridge does not have to
+ * chase either library's layer position, only override the custom
+ * properties both of them read.
+ * ---------------------------------------------------------------------- */
+/* Catppuccin Mocha (dark) / Latte (light), mauve accent, the same flavor
+   pair the code blocks below are set to so chrome and code never mismatch.
+   Values are copied from the official `@catppuccin/starlight` plugin's
+   mauve theme (not installed: it ships its own `@layer catppuccin`, and our
+   unlayered bridge below would silently beat it anyway per the layer note
+   above, so the values are pulled in directly instead). That plugin is the
+   reason `-low` is a solid dark/light tint rather than a translucent one:
+   Starlight reuses `--sl-color-accent-low` as `--sl-color-text-invert`, the
+   solid text color on the active sidebar item, so an alpha value there
+   renders as barely-there text on its own highlight. */
+:root,
+::backdrop {
+  --sl-color-white: #cdd6f4; /* text */
+  --sl-color-gray-1: #bac2de; /* subtext1 */
+  --sl-color-gray-2: #a6adc8; /* subtext0 */
+  --sl-color-gray-3: #9399b2; /* overlay2 */
+  --sl-color-gray-4: #45475a; /* surface1 */
+  --sl-color-gray-5: #313244; /* surface0 */
+  --sl-color-gray-6: #181825; /* mantle */
+  --sl-color-gray-7: #11111b; /* crust */
+  --sl-color-black: #1e1e2e; /* base */
+
+  --sl-color-accent-low: hsl(267, 84%, 21%);
+  --sl-color-accent: hsl(267, 84%, 61%); /* mauve */
+  --sl-color-accent-high: hsl(267, 84%, 81%);
+  --sl-color-purple-low: var(--sl-color-accent-low);
+  --sl-color-purple: var(--sl-color-accent);
+  --sl-color-purple-high: var(--sl-color-accent-high);
+  --sl-color-red-low: hsl(343, 26%, 25%);
+  --sl-color-red: hsl(343, 61%, 75%);
+  --sl-color-red-high: hsl(343, 81%, 75%);
+  --sl-color-orange-low: hsl(23, 32%, 25%);
+  --sl-color-orange: hsl(23, 72%, 76%); /* peach */
+  --sl-color-orange-high: hsl(23, 92%, 76%);
+  --sl-color-green-low: hsl(115, 14%, 26%);
+  --sl-color-green: hsl(115, 34%, 76%);
+  --sl-color-green-high: hsl(115, 54%, 76%);
+  --sl-color-blue-low: hsl(217, 32%, 26%);
+  --sl-color-blue: hsl(217, 72%, 76%);
+  --sl-color-blue-high: hsl(217, 92%, 76%);
+
+  /* Brighter body text than Starlight's own gray-2 default, matching the
+     plugin's own contrast tweak. */
+  --sl-color-text: var(--sl-color-white);
+
+  --sl-font: "Geist", var(--sl-font-system);
+  --sl-font-mono: "Geist Mono", var(--sl-font-system-mono);
+
+  /* Design-system tokens the shared components read. Aliases onto
+     Starlight's own scale rather than new raw colors, so both themes stay
+     correct for free. */
+  --dstl-ink: var(--sl-color-white);
+  --dstl-paper: var(--sl-color-bg);
+  --dstl-hairline: var(--sl-color-hairline-light);
+  --dstl-pass: var(--sl-color-green);
+  --dstl-warn: var(--sl-color-orange);
+  --dstl-warn-low: var(--sl-color-orange-low);
+}
+
+:root[data-theme="light"],
+[data-theme="light"] ::backdrop {
+  --sl-color-white: #4c4f69; /* text */
+  --sl-color-gray-1: #5c5f77; /* subtext1 */
+  --sl-color-gray-2: #6c6f85; /* subtext0 */
+  --sl-color-gray-3: #7c7f93; /* overlay2 */
+  --sl-color-gray-4: #bcc0cc; /* surface1 */
+  --sl-color-gray-5: #ccd0da; /* surface0 */
+  --sl-color-gray-6: #e6e9ef; /* mantle */
+  --sl-color-gray-7: #dce0e8; /* crust */
+  --sl-color-black: #eff1f5; /* base */
+
+  --sl-color-accent-low: hsl(266, 85%, 80%);
+  --sl-color-accent: hsl(266, 85%, 58%); /* mauve */
+  --sl-color-accent-high: hsl(266, 85%, 48%);
+  --sl-color-purple-low: var(--sl-color-accent-low);
+  --sl-color-purple: var(--sl-color-accent);
+  --sl-color-purple-high: var(--sl-color-accent-high);
+  --sl-color-red-low: hsl(347, 56%, 84%);
+  --sl-color-red: hsl(347, 87%, 34%);
+  --sl-color-red-high: hsl(347, 87%, 44%);
+  --sl-color-orange-low: hsl(22, 69%, 87%);
+  --sl-color-orange: hsl(22, 99%, 42%); /* peach */
+  --sl-color-orange-high: hsl(22, 99%, 52%);
+  --sl-color-green-low: hsl(109, 27%, 75%);
+  --sl-color-green: hsl(109, 58%, 30%);
+  --sl-color-green-high: hsl(109, 58%, 40%);
+  --sl-color-blue-low: hsl(220, 61%, 89%);
+  --sl-color-blue: hsl(220, 91%, 44%);
+  --sl-color-blue-high: hsl(220, 91%, 54%);
+}
+
+/* Shiki's own catppuccin-latte/mocha `editor.background` equals our page
+   ground exactly, so a code block had zero visual separation from the
+   surrounding prose. One step onto the nav/mantle surface (also the
+   official plugin's fix) gives it a panel again. */
+.expressive-code pre {
+  --code-background: var(--sl-color-gray-6);
+}
+
+/* Starlight's own stylesheet loads after ours, so its `starlight.reset`
+   layer (which sets `font: inherit` on input/button/textarea/select)
+   registers later in the cascade-layer order than `@layer components`
+   below and beats it regardless of specificity. Unlayered rules always
+   win over any layered one, so the form-control type declarations that
+   fight that reset live here rather than in the layer. */
+.dstl-field input {
+  font-family: var(--sl-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@layer components {
+  /* ---- Form layout --------------------------------------------------
+     Shared by the Playground's build form and the Sizing calculator: two
+     fields side by side past 30rem, each field's label/input/hint riding
+     one shared row grid via subgrid so a wrapped label in one column never
+     knocks the other input out of line. */
+  .dstl-form-grid {
+    display: grid;
+    gap: 1rem;
+    margin-block: 1.5rem;
+  }
+  @media (min-width: 30rem) {
+    .dstl-form-grid {
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto auto;
+    }
+    .dstl-form-grid > .dstl-field {
+      grid-template-rows: subgrid;
+      grid-row: span 3;
+    }
+    .dstl-form-grid > .dstl-btn {
+      grid-column: 1 / -1;
+    }
+  }
+  .dstl-form-stack {
+    display: grid;
+    gap: 0.5rem;
+    margin-block: 1.5rem;
+  }
+
+  /* ---- Form field ------------------------------------------------- */
+  .dstl-field {
+    display: grid;
+    row-gap: 0.35rem;
+    align-content: start;
+  }
+  .dstl-field label {
+    font-weight: 600;
+    font-size: var(--sl-text-sm);
+  }
+  .dstl-field input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.25rem;
+    background: var(--dstl-paper);
+    color: var(--dstl-ink);
+  }
+  .dstl-field input:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: 1px;
+  }
+  .dstl-hint {
+    margin: 0;
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+  }
+
+  /* ---- Button ------------------------------------------------------
+     Outlined, not filled: the One Ink Rule (see DESIGN.md) treats purple
+     as a mark, never a background field, and a full-bleed accent fill was
+     the one place that rule was broken. Hover/press read as a light accent
+     tint, same register as the status panel's tinted ground. */
+  .dstl-btn {
+    justify-self: start;
+    padding: 0.5rem 1.1rem;
+    border: 1px solid var(--sl-color-accent);
+    border-radius: 0.25rem;
+    background: transparent;
+    color: var(--sl-color-accent);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .dstl-btn:hover {
+    background: var(--sl-color-accent-low);
+  }
+
+  /* ---- Spec/result table -------------------------------------------
+     A "spec sheet" register: hairline rules only (never a filled zebra
+     stripe or a colored left border), small-caps tracked headers, every
+     number in tabular mono so columns of figures actually align. */
+  .dstl-table {
+    width: 100%;
+    display: block;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: var(--sl-text-sm);
+  }
+  .dstl-table th,
+  .dstl-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--dstl-hairline);
+    text-align: left;
+  }
+  .dstl-table thead th {
+    font-size: var(--sl-text-2xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sl-color-gray-3);
+    border-bottom: 1px solid var(--sl-color-gray-4);
+  }
+  .dstl-table td:not(:first-child),
+  .dstl-table tbody th {
+    font-family: var(--sl-font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .dstl-subpath {
+    display: block;
+    font-weight: 400;
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+    font-family: var(--sl-font-mono);
+  }
+
+  /* ---- Status / warning box ------------------------------------------
+     No colored border-left bar: a hairline all-round border plus a tinted
+     ground carries the state, so the box reads as a labeled panel rather
+     than a stripe with text next to it. */
+  .dstl-status:not(:empty) {
+    margin-block: 1rem;
+    padding: 0.65rem 0.9rem;
+    border: 1px solid var(--dstl-warn);
+    border-radius: 0.25rem;
+    background: var(--dstl-warn-low);
+    font-size: var(--sl-text-sm);
+  }
+}

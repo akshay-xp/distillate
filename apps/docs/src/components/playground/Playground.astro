@@ -13,12 +13,12 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
 
 <noscript>
   <style>
-    .pg,
-    .pg-add,
-    .pg-query,
-    .pg-status,
-    .pg-results,
-    .pg-note {
+    [data-pg],
+    [data-pg-add],
+    [data-pg-query],
+    [data-pg-status],
+    [data-pg-results],
+    [data-pg-notes] {
       display: none;
     }
   </style>
@@ -29,8 +29,8 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   </p>
 </noscript>
 
-<form class="pg" data-pg novalidate>
-  <div class="field">
+<form class="dstl-form-grid" data-pg novalidate>
+  <div class="dstl-field">
     <label for="pg-keys">Keys to insert</label>
     <input
       id="pg-keys"
@@ -39,12 +39,12 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       inputmode="numeric"
       value="10000"
     />
-    <p class="hint">
+    <p class="dstl-hint">
       Up to {bound}. Past that the playground refuses rather than freeze the
       tab.
     </p>
   </div>
-  <div class="field">
+  <div class="dstl-field">
     <label for="pg-target">Target false positive rate</label>
     <input
       id="pg-target"
@@ -53,40 +53,40 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       inputmode="decimal"
       value="0.01"
     />
-    <p class="hint">
+    <p class="dstl-hint">
       Binary Fuse ignores this; its rate is fixed by fingerprint width.
     </p>
   </div>
-  <button type="submit">Build</button>
+  <button class="dstl-btn" type="submit">Build</button>
 </form>
 
-<form class="pg-query" data-pg-query novalidate>
-  <div class="field">
+<form class="dstl-form-stack" data-pg-query novalidate>
+  <div class="dstl-field">
     <label for="pg-query">Query a key</label>
     <input id="pg-query" name="key" type="text" value="key-5" />
-    <p class="hint">
+    <p class="dstl-hint">
       Inserted keys are <code>key-0</code> through <code>key-9999</code>. Try
       <code>miss-22</code>, which none of them ever saw.
     </p>
   </div>
-  <button type="submit">Query</button>
+  <button class="dstl-btn" type="submit">Query</button>
 </form>
 
-<form class="pg-add" data-pg-add novalidate>
-  <div class="field">
+<form class="dstl-form-stack" data-pg-add novalidate>
+  <div class="dstl-field">
     <label for="pg-add">Add a key after the build</label>
     <input id="pg-add" name="key" type="text" value="late-key" />
-    <p class="hint">
+    <p class="dstl-hint">
       Both Bloom filters take it. Binary Fuse is static and cannot, which is the
       trade it makes for its size.
     </p>
   </div>
-  <button type="submit">Add</button>
+  <button class="dstl-btn" type="submit">Add</button>
 </form>
 
-<div class="pg-status" data-pg-status role="status" aria-live="polite"></div>
+<div class="dstl-status" data-pg-status role="status" aria-live="polite"></div>
 
-<table class="pg-results">
+<table class="dstl-table" data-pg-results>
   <thead>
     <tr>
       <th>Structure</th>
@@ -104,7 +104,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
         <tr data-row={s.key}>
           <th scope="row">
             {s.label}
-            <span class="subpath">{s.subpath}</span>
+            <span class="dstl-subpath">{s.subpath}</span>
           </th>
           <td data-cell="held" />
           <td data-cell="missing" />
@@ -118,115 +118,23 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   </tbody>
 </table>
 
-<p class="pg-note">
-  <strong>A false positive is the filter working, not a bug.</strong> These structures
-  trade exactness for space: a key that was never inserted can still answer yes, at
-  roughly the target rate. What they never do is the reverse.
-</p>
+<div data-pg-notes>
+  <p class="dstl-hint">
+    <strong>A false positive is the filter working, not a bug.</strong> These structures
+    trade exactness for space: a key that was never inserted can still answer yes,
+    at roughly the target rate. What they never do is the reverse.
+  </p>
 
-<p class="pg-note">
-  <strong>Not found is zero, and stays zero.</strong> That column counts inserted
-  keys the filter cannot find. It is guaranteed to be zero by how these structures
-  are built, not a lucky property of this sample: a key that was added always answers
-  yes. The measured rate is the opposite direction, counted over {probes} keys that
-  were never inserted, and it is an estimate, so expect it within roughly a factor
-  of two of the target at these sample sizes.
-</p>
-
-<style>
-  .pg {
-    display: grid;
-    gap: 1rem;
-    margin-block: 1.5rem;
-  }
-  .field {
-    display: grid;
-    row-gap: 0.35rem;
-    align-content: start;
-  }
-  @media (min-width: 30rem) {
-    .pg {
-      grid-template-columns: 1fr 1fr;
-      /* label, input, hint. Each field inherits these rows through subgrid, so
-         both inputs sit on the same line even when one label wraps and the
-         other does not. */
-      grid-template-rows: auto auto auto;
-    }
-    .field {
-      grid-template-rows: subgrid;
-      grid-row: span 3;
-    }
-  }
-  .field label {
-    font-weight: 600;
-  }
-  .field input {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 0.5rem 0.65rem;
-    border: 1px solid var(--sl-color-gray-5);
-    border-radius: 0.35rem;
-    background: var(--sl-color-black);
-    color: var(--sl-color-white);
-    font-family: var(--sl-font-mono, monospace);
-  }
-  .field input:focus-visible {
-    outline: 2px solid var(--sl-color-accent);
-  }
-  .pg-add,
-  .pg-query {
-    display: grid;
-    gap: 0.5rem;
-    margin-block: 1.5rem;
-  }
-  .pg button,
-  .pg-add button,
-  .pg-query button {
-    justify-self: start;
-    padding: 0.5rem 1.1rem;
-    border: 1px solid var(--sl-color-accent);
-    border-radius: 0.35rem;
-    background: var(--sl-color-accent);
-    color: var(--sl-color-black);
-    font-weight: 600;
-    cursor: pointer;
-  }
-  /* The build form is two columns at this width, so its button spans both.
-     The query form stays one column and needs no span. */
-  @media (min-width: 30rem) {
-    .pg button {
-      grid-column: 1 / -1;
-    }
-  }
-  .hint {
-    margin: 0;
-    font-size: var(--sl-text-xs);
-    color: var(--sl-color-gray-3);
-  }
-  .pg-results {
-    width: 100%;
-    display: block;
-    overflow-x: auto;
-  }
-  .subpath {
-    display: block;
-    font-weight: 400;
-    font-size: var(--sl-text-xs);
-    color: var(--sl-color-gray-3);
-    font-family: var(--sl-font-mono, monospace);
-  }
-  .pg-status:not(:empty) {
-    margin-block: 1rem;
-    padding: 0.75rem 1rem;
-    border-inline-start: 4px solid var(--sl-color-orange);
-    background: var(--sl-color-orange-low);
-    border-radius: 0.25rem;
-  }
-  .pg-note {
-    font-size: var(--sl-text-sm);
-    color: var(--sl-color-gray-2);
-  }
-</style>
+  <p class="dstl-hint">
+    <strong>Not found is zero, and stays zero.</strong> That column counts inserted
+    keys the filter cannot find. It is guaranteed to be zero by how these structures
+    are built, not a lucky property of this sample: a key that was added always answers
+    yes. The measured rate is the false positive rate, checked over {probes} keys
+    that were never inserted; it is an estimate, so expect it within roughly a factor
+    of two of the target at these sample sizes. Binary Fuse ignores the target entirely,
+    so its rate is not compared against one.
+  </p>
+</div>
 
 <script>
   import { Playground } from "./engine.js";
@@ -256,11 +164,17 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   // read this rather than rebuild.
   let current: Playground | null = null;
 
+  function cell(key: StructureKey, name: string): Element | null {
+    return document.querySelector(`[data-row='${key}'] [data-cell='${name}']`);
+  }
+
   function set(key: StructureKey, name: string, text: string): void {
-    const cell = document.querySelector(
-      `[data-row='${key}'] [data-cell='${name}']`,
-    );
-    if (cell) cell.textContent = text;
+    const el = cell(key, name);
+    if (el) el.textContent = text;
+  }
+
+  function formatPercent(rate: number): string {
+    return `${(rate * 100).toFixed(3)}%`;
   }
 
   // Anything that changes the key set invalidates the last query, so the
@@ -272,7 +186,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       set(key, "missing", String(s.missing));
       set(key, "bits", s.bitsPerKey.toFixed(2));
       set(key, "size", formatBytes(s.totalBytes));
-      set(key, "fpr", s.measuredFpr.toFixed(5));
+      set(key, "fpr", formatPercent(s.measuredFpr));
       set(key, "verdict", "");
     }
   }
