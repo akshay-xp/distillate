@@ -1,3 +1,4 @@
+import tailwindcss from "@tailwindcss/vite";
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
 import starlightTypeDoc, { typeDocSidebarGroup } from "starlight-typedoc";
@@ -6,9 +7,43 @@ import { site } from "./site.mjs";
 
 export default defineConfig({
   site,
+  vite: {
+    plugins: [tailwindcss()],
+  },
   integrations: [
     starlight({
       title: "distillate",
+      customCss: ["./src/styles/global.css"],
+      // Same flavor pair as the chrome (see global.css): Mocha dark, Latte
+      // light, both bundled in Shiki already, so code blocks never clash
+      // with the rest of the page.
+      expressiveCode: {
+        themes: ["catppuccin-mocha", "catppuccin-latte"],
+      },
+      // Geist and Geist Mono, the design system's two faces (see the
+      // direction contract atop global.css). Preconnect before the
+      // stylesheet request so the font fetch does not wait on DNS/TLS.
+      head: [
+        {
+          tag: "link",
+          attrs: { rel: "preconnect", href: "https://fonts.googleapis.com" },
+        },
+        {
+          tag: "link",
+          attrs: {
+            rel: "preconnect",
+            href: "https://fonts.gstatic.com",
+            crossorigin: "anonymous",
+          },
+        },
+        {
+          tag: "link",
+          attrs: {
+            rel: "stylesheet",
+            href: "https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap",
+          },
+        },
+      ],
       // Starlight's own /404 route collides with the /404 the catch-all docs
       // route emits for src/content/docs/404.md, and Astro 7 warns on the
       // conflict. Dropping Starlight's route leaves the authored page.

@@ -9,13 +9,13 @@ const STRUCTURES = [
 
 <noscript>
   <style>
-    .sizing,
-    .sizing-results,
-    .sizing-warnings {
+    [data-sizing],
+    [data-sizing-results],
+    [data-sizing-warnings] {
       display: none;
     }
   </style>
-  <p class="sizing-nojs">
+  <p class="dstl-hint">
     The calculator runs in your browser and needs JavaScript. With it off, the
     tables in <a href="/guides/sizing/">Sizing and tuning FPR</a> give bits per key
     for classic Bloom at every common target, the blocked equivalents, and both fuse
@@ -23,8 +23,8 @@ const STRUCTURES = [
   </p>
 </noscript>
 
-<form class="sizing" data-sizing novalidate>
-  <div class="field">
+<form class="dstl-form-grid" data-sizing novalidate>
+  <div class="dstl-field">
     <label for="sizing-capacity">Capacity (distinct keys)</label>
     <input
       id="sizing-capacity"
@@ -34,7 +34,7 @@ const STRUCTURES = [
       value="1,000,000"
     />
   </div>
-  <div class="field">
+  <div class="dstl-field">
     <label for="sizing-epsilon">Target false positive rate</label>
     <input
       id="sizing-epsilon"
@@ -43,22 +43,17 @@ const STRUCTURES = [
       inputmode="decimal"
       value="0.01"
     />
-    <p class="hint">
+    <p class="dstl-hint">
       1e-2 is 1%. Binary Fuse ignores this; its rate is fixed by fingerprint
       width.
     </p>
   </div>
 </form>
 
-<div
-  class="sizing-warnings"
-  data-sizing-warnings
-  role="status"
-  aria-live="polite"
->
+<div class="dstl-status" data-sizing-warnings role="status" aria-live="polite">
 </div>
 
-<table class="sizing-results">
+<table class="dstl-table" data-sizing-results>
   <thead>
     <tr><th>Structure</th><th>Bits/key</th><th>Total size</th></tr>
   </thead>
@@ -68,7 +63,7 @@ const STRUCTURES = [
         <tr data-row={s.key}>
           <th scope="row">
             {s.label}
-            <span class="subpath">{s.subpath}</span>
+            <span class="dstl-subpath">{s.subpath}</span>
           </th>
           <td data-cell="bits" colspan="2">
             Calculating…
@@ -80,69 +75,6 @@ const STRUCTURES = [
 </table>
 
 <style>
-  .sizing {
-    display: grid;
-    gap: 1rem;
-    margin-block: 1.5rem;
-  }
-  .field {
-    display: grid;
-    row-gap: 0.35rem;
-    align-content: start;
-  }
-  @media (min-width: 30rem) {
-    .sizing {
-      grid-template-columns: 1fr 1fr;
-      /* label, input, hint. Each field inherits these rows through subgrid, so
-         both inputs sit on the same line even when one label wraps and the
-         other does not. */
-      grid-template-rows: auto auto auto;
-    }
-    .field {
-      grid-template-rows: subgrid;
-      grid-row: span 3;
-    }
-  }
-  .field label {
-    font-weight: 600;
-  }
-  .field input {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 0.5rem 0.65rem;
-    border: 1px solid var(--sl-color-gray-5);
-    border-radius: 0.35rem;
-    background: var(--sl-color-black);
-    color: var(--sl-color-white);
-    font-family: var(--sl-font-mono, monospace);
-  }
-  .field input:focus-visible {
-    outline: 2px solid var(--sl-color-accent);
-  }
-  .hint {
-    margin: 0;
-    font-size: var(--sl-text-xs);
-    color: var(--sl-color-gray-3);
-  }
-  .sizing-results {
-    width: 100%;
-    display: block;
-    overflow-x: auto;
-  }
-  .subpath {
-    display: block;
-    font-weight: 400;
-    font-size: var(--sl-text-xs);
-    color: var(--sl-color-gray-3);
-    font-family: var(--sl-font-mono, monospace);
-  }
-  .sizing-warnings:not(:empty) {
-    margin-block: 1rem;
-    padding: 0.75rem 1rem;
-    border-inline-start: 4px solid var(--sl-color-orange);
-    background: var(--sl-color-orange-low);
-    border-radius: 0.25rem;
-  }
   .failed {
     color: var(--sl-color-gray-3);
   }
