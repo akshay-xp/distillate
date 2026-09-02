@@ -1,0 +1,1069 @@
+---
+// The homepage is the persuasive entry point (PRODUCT.md, Product Principle
+// 1); everything past it stays the reference-dense Control Chart system in
+// DESIGN.md. This page deliberately bypasses Starlight's own layout instead
+// of extending the `--sl-*` bridge, so it owns its own head, fonts, and
+// chrome. It still reads and writes Starlight's `starlight-theme` localStorage
+// key so the theme choice carries over when a visitor moves into the docs.
+import distillate from "../../../../packages/distillate/package.json";
+
+const version = distillate.version;
+const license = distillate.license;
+const repo = "https://github.com/akshay-xp/distillate";
+const npm = "https://www.npmjs.com/package/distillate";
+const docsStart = "/start/what-is-an-amq-filter/";
+const playground = "/start/playground/";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>distillate</title>
+    <meta
+      name="description"
+      content="Probabilistic data structures for JavaScript: AMQ filters and HyperLogLog, zero dependencies, sized by a target you set."
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@700;800;900&family=Geist+Mono:wght@400;500;600;700&display=swap"
+    />
+    {
+      /* Inlined and run before paint, same reason as Starlight's own ThemeProvider: no flash of the wrong theme. */
+    }
+    <script is:inline>
+      (function () {
+        const stored = localStorage.getItem("starlight-theme");
+        const theme =
+          stored === "light" || stored === "dark"
+            ? stored
+            : matchMedia("(prefers-color-scheme: light)").matches
+              ? "light"
+              : "dark";
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="hero-outer">
+      <div id="hero-bg"></div>
+      <nav class="station-bar">
+        <span class="brand">DISTILLATE</span>
+        <span class="links">
+          <a href={docsStart}>DOCS</a>
+          <a href={playground}>PLAYGROUND</a>
+          <a href={repo}>GITHUB</a>
+          <button class="theme-toggle" id="theme-toggle" type="button"
+            >Auto</button
+          >
+        </span>
+      </nav>
+      <div class="hero">
+        <div class="dm-wrap">
+          <h1
+            class="dm-line"
+            id="dm-h1"
+            aria-label="Fixed by precision. Not by the data."
+          >
+          </h1>
+        </div>
+        <p class="sub">
+          Probabilistic structures that trade a little certainty for a lot less
+          memory, and say exactly how much.
+        </p>
+        <div class="cta-pair">
+          <div class="cta-cell install">
+            <span><span class="prompt">$</span>npm i distillate</span>
+            <button
+              type="button"
+              class="copy-btn"
+              id="copy-btn"
+              aria-label="Copy install command"
+            >
+              <svg
+                class="icon-copy"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><rect x="9" y="9" width="13" height="13" rx="2"></rect><path
+                  d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                ></path></svg
+              >
+              <svg
+                class="icon-check"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><polyline points="20 6 9 17 4 12"></polyline></svg
+              >
+            </button>
+          </div>
+          <a class="cta-cell docs" href={docsStart}>Read the docs</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="features-section">
+      <p class="cap">The specifics</p>
+      <div class="features-grid">
+        <div class="feature-cell">
+          <p class="num">01</p>
+          <h3>Zero false negatives</h3>
+          <p>
+            Every inserted key answers yes, guaranteed by construction, not by
+            sample.
+          </p>
+        </div>
+        <div class="feature-cell">
+          <p class="num">02</p>
+          <h3>Tunable false-positive rate</h3>
+          <p>Set the target; the sizing calculator picks bits/key to hit it.</p>
+        </div>
+        <div class="feature-cell">
+          <p class="num">03</p>
+          <h3>~75x lookup throughput</h3>
+          <p>
+            Same space, same accuracy, ~75x the lookup throughput of
+            bloom-filters.
+          </p>
+        </div>
+        <div class="feature-cell">
+          <p class="num">04</p>
+          <h3>Runs anywhere</h3>
+          <p>
+            Node 22+, Bun, Deno, browsers, Cloudflare and Vercel edge. Zero
+            runtime dependencies.
+          </p>
+        </div>
+        <div class="feature-cell">
+          <p class="num">05</p>
+          <h3>Portable binary format</h3>
+          <p>
+            Versioned toBytes / fromBytes; a filter built in one runtime loads
+            in another.
+          </p>
+        </div>
+        <div class="feature-cell">
+          <p class="num">06</p>
+          <h3>Tree-shakable</h3>
+          <p>
+            Each structure ships its own subpath import, so a bundler only keeps
+            what you use.
+          </p>
+        </div>
+        <div class="feature-cell">
+          <p class="num">07</p>
+          <h3>TypeScript-first</h3>
+          <p>Typed end to end, zero dependencies, nothing pulled in.</p>
+        </div>
+        <div class="feature-cell">
+          <p class="num">08</p>
+          <h3>CI-gated correctness</h3>
+          <p>
+            Property tests plus a statistical validation gate on every push.
+          </p>
+        </div>
+        <div class="feature-cell">
+          <p class="num">09</p>
+          <h3>Interactive Playground</h3>
+          <p>
+            Build real filters in the browser; watch the guarantee before
+            installing.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="board-table">
+      <p class="cap">Structures, at a glance</p>
+      <div class="filters-grid">
+        <div class="stat-card">
+          <p class="subpath2">
+            <a href="/guides/bloom/"
+              >distillate/bloom<span class="arrow">&rarr;</span></a>
+          </p>
+          <h3>Classic Bloom</h3>
+          <p class="headline-stat">9.59</p>
+          <p class="stat-label">bits/key @ 1% target</p>
+          <p class="guarantee">zero false negatives</p>
+        </div>
+        <div class="stat-card">
+          <p class="subpath2">
+            <a href="/guides/blocked/"
+              >distillate/blocked<span class="arrow">&rarr;</span></a>
+          </p>
+          <h3>Blocked Bloom</h3>
+          <p class="headline-stat">10.2</p>
+          <p class="stat-label">bits/key @ 1% target</p>
+          <p class="guarantee">zero false negatives</p>
+        </div>
+        <div class="stat-card">
+          <p class="subpath2">
+            <a href="/guides/fuse/"
+              >distillate/fuse<span class="arrow">&rarr;</span></a>
+          </p>
+          <h3>Binary Fuse 8</h3>
+          <p class="headline-stat">9.50</p>
+          <p class="stat-label">bits/key @ 100k, 0.39% fixed</p>
+          <p class="guarantee">zero false negatives</p>
+        </div>
+        <div class="stat-card">
+          <p class="subpath2">
+            <a href="/guides/fuse/"
+              >distillate/fuse<span class="arrow">&rarr;</span></a>
+          </p>
+          <h3>Binary Fuse 16</h3>
+          <p class="headline-stat">19.0</p>
+          <p class="stat-label">bits/key @ 100k, ~0.0015% fixed</p>
+          <p class="guarantee">zero false negatives</p>
+        </div>
+      </div>
+      <div class="sketch-wide">
+        <div>
+          <span class="tag">Sketch, not a filter</span>
+          <p class="subpath2">
+            <a href="/guides/hll/"
+              >distillate/hll<span class="arrow">&rarr;</span></a>
+          </p>
+          <h3>HyperLogLog</h3>
+        </div>
+        <div class="facts">
+          <div class="fact">
+            <p class="headline-stat">12 KiB</p><p class="stat-label">memory</p>
+          </div>
+          <div class="fact">
+            <p class="headline-stat">~0.8%</p><p class="stat-label">error</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bulletin-strip">
+      <p>
+        <b>A false positive is the filter working, not a bug.</b> These structures
+        trade exactness for space: a key that was never inserted can still answer
+        yes, at roughly the target rate. What they never do is the reverse.
+      </p>
+    </div>
+
+    <footer class="site-footer">
+      <div class="row">
+        <div class="left">
+          <span class="brand">DISTILLATE</span><span
+            >v{version} &middot; {license}</span>
+        </div>
+        <nav class="links">
+          <a href={docsStart}>Docs</a>
+          <a href={playground}>Playground</a>
+          <a href={repo}>GitHub</a>
+          <a href={npm}>npm</a>
+        </nav>
+      </div>
+      <p class="signoff">
+        Built by <a href="https://github.com/akshay-xp">@akshay-xp</a>
+      </p>
+    </footer>
+
+    <style>
+      :root {
+        --crust: #dce0e8;
+        --mantle: #e6e9ef;
+        --base: #eff1f5;
+        --surface0: #ccd0da;
+        --surface1: #bcc0cc;
+        --surface2: #acb0be;
+        --text: #4c4f69;
+        --subtext1: #5c5f77;
+        --subtext0: #6c6f85;
+        --peach: #fe640b;
+        --green: #40a02b;
+        --blue: #1e66f5;
+      }
+      :root[data-theme="dark"] {
+        --crust: #11111b;
+        --mantle: #181825;
+        --base: #1e1e2e;
+        --surface0: #313244;
+        --surface1: #45475a;
+        --surface2: #585b70;
+        --text: #cdd6f4;
+        --subtext1: #bac2de;
+        --subtext0: #a6adc8;
+        --peach: #fab387;
+        --green: #a6e3a1;
+        --blue: #89b4fa;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: var(--crust);
+        color: var(--text);
+        font-family: "Geist Mono", ui-monospace, "SFMono-Regular", monospace;
+      }
+      h1 {
+        text-wrap: balance;
+        margin: 0;
+      }
+      button {
+        font: inherit;
+        cursor: pointer;
+      }
+      a {
+        color: inherit;
+      }
+
+      .station-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        row-gap: 0.6rem;
+        max-width: 60rem;
+        margin: 0 auto;
+        padding: 1.5rem 1.5rem 0;
+        font-size: 0.78rem;
+        color: var(--subtext0);
+        position: relative;
+        z-index: 2;
+      }
+      .station-bar .brand {
+        font-family: "Archivo Expanded", sans-serif;
+        font-weight: 800;
+        color: var(--text);
+        letter-spacing: 0.06em;
+      }
+      .station-bar .links {
+        display: flex;
+        align-items: center;
+        gap: 1.15rem;
+        letter-spacing: 0.04em;
+      }
+      .station-bar .links a {
+        text-decoration: none;
+      }
+      .station-bar .links a:hover {
+        color: var(--text);
+      }
+      @media (max-width: 26rem) {
+        .station-bar .links a {
+          display: none;
+        }
+      }
+      .theme-toggle {
+        background: none;
+        border: 1px solid var(--surface1);
+        border-radius: 999px;
+        padding: 0.3rem 0.7rem;
+        color: var(--subtext0);
+        font-size: 0.72rem;
+      }
+
+      .hero-outer {
+        position: relative;
+        overflow: hidden;
+      }
+      #hero-bg {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+      }
+      #hero-bg canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .hero {
+        position: relative;
+        z-index: 2;
+        max-width: 60rem;
+        margin: 0 auto;
+        padding: 3.5rem 1.5rem 4rem;
+        text-align: center;
+      }
+
+      .dm-wrap {
+        padding: 1rem 0;
+      }
+      .dm-line {
+        font-family: "Geist Mono", ui-monospace, monospace;
+        font-weight: 700;
+        font-size: clamp(1.6rem, 4.6vw, 2.7rem);
+        line-height: 1.25;
+        letter-spacing: -0.01em;
+      }
+      /* dm-char/dm-word are created via document.createElement, so they never
+         carry Astro's scope attribute; :global() is required for these rules
+         to reach them at all. */
+      :global(.dm-char) {
+        display: inline-block;
+        color: var(--green);
+        font-variant-numeric: tabular-nums;
+        transition: color 0.1s linear;
+      }
+      :global(.dm-char.locked) {
+        color: var(--text);
+      }
+      :global(.dm-char.glitching) {
+        color: var(--peach);
+      }
+      :global(.dm-word) {
+        display: inline-block;
+        white-space: nowrap;
+      }
+      .sub {
+        margin: 1.5rem auto 0;
+        max-width: 32rem;
+        color: var(--subtext1);
+        font-size: 1rem;
+        line-height: 1.7;
+        text-wrap: balance;
+      }
+
+      .cta-pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+        max-width: 28rem;
+        margin: 2rem auto 0;
+      }
+      .cta-cell {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.85rem 1rem;
+        border: 1px solid var(--surface0);
+        border-radius: 0.3rem;
+        background: var(--mantle);
+        font-family: "Geist Mono", monospace;
+        font-size: 0.85rem;
+        color: var(--text);
+        height: 100%;
+        text-align: left;
+        text-decoration: none;
+      }
+      .cta-cell.install {
+        justify-content: space-between;
+        font-size: 0.78rem;
+      }
+      .cta-cell.install > span {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .cta-cell.install .prompt {
+        color: var(--green);
+        margin-right: 0.3rem;
+      }
+      .cta-cell.install button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        color: var(--subtext0);
+        padding: 0.25rem;
+        flex: none;
+        border-radius: 0.25rem;
+      }
+      .cta-cell.install button:hover {
+        color: var(--text);
+        background: var(--surface0);
+      }
+      .cta-cell.install button.copied {
+        color: var(--green) !important;
+      }
+      .cta-cell.install button svg {
+        width: 15px;
+        height: 15px;
+        display: block;
+      }
+      .cta-cell.install button .icon-check {
+        display: none;
+      }
+      .cta-cell.install button.copied .icon-copy {
+        display: none;
+      }
+      .cta-cell.install button.copied .icon-check {
+        display: block;
+      }
+      .cta-cell.docs {
+        justify-content: center;
+        font-weight: 700;
+      }
+      .cta-cell:hover {
+        border-color: var(--subtext0);
+      }
+      @media (max-width: 26rem) {
+        .cta-pair {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .board-table {
+        max-width: 56rem;
+        margin: 3rem auto 0;
+        padding: 0 1.5rem;
+      }
+      .board-table .cap {
+        font-family: "Archivo Expanded", sans-serif;
+        font-size: 0.72rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--subtext0);
+        margin-bottom: 0.9rem;
+      }
+
+      .stat-card {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        padding: 1.1rem 1rem;
+        background: var(--mantle);
+        border: 1px solid var(--surface0);
+        border-radius: 0.4rem;
+      }
+      .stat-card .subpath2 {
+        font-size: 0.68rem;
+        color: var(--subtext0);
+      }
+      .subpath2 .arrow {
+        margin-left: 0.3rem;
+        opacity: 0.6;
+      }
+      .subpath2 a {
+        color: inherit;
+        text-decoration: none;
+      }
+      .subpath2 a:hover {
+        color: var(--text);
+        text-decoration: underline;
+      }
+      .stat-card h3 {
+        margin: 0.3rem 0 0;
+        font-family: "Archivo Expanded", sans-serif;
+        font-size: 0.88rem;
+        font-weight: 800;
+      }
+      .stat-card .headline-stat {
+        margin-top: 0.7rem;
+        font-size: 1.15rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      .stat-card .stat-label {
+        font-size: 0.65rem;
+        color: var(--subtext0);
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+      .stat-card .guarantee {
+        margin-top: auto;
+        padding-top: 0.6rem;
+        border-top: 1px dashed var(--surface1);
+        font-size: 0.72rem;
+        color: var(--subtext1);
+        min-height: 2rem;
+        display: flex;
+        align-items: center;
+      }
+      .filters-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.85rem;
+      }
+
+      .sketch-wide {
+        margin-top: 0.85rem;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.1rem 1.25rem;
+        background: var(--mantle);
+        border: 1px solid var(--blue);
+        border-radius: 0.4rem;
+      }
+      .sketch-wide .tag {
+        font-family: "Archivo Expanded", sans-serif;
+        font-size: 0.65rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--blue);
+        flex: none;
+      }
+      .sketch-wide .subpath2 {
+        font-size: 0.68rem;
+        color: var(--subtext0);
+      }
+      .sketch-wide h3 {
+        font-family: "Archivo Expanded", sans-serif;
+        font-size: 0.95rem;
+        font-weight: 800;
+        margin: 0.2rem 0 0;
+      }
+      .sketch-wide .facts {
+        display: flex;
+        gap: 1.5rem;
+        margin-left: auto;
+      }
+      .sketch-wide .fact {
+        text-align: right;
+      }
+      .sketch-wide .fact .headline-stat {
+        font-size: 1.1rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      .sketch-wide .fact .stat-label {
+        font-size: 0.63rem;
+        color: var(--subtext0);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+      @media (max-width: 42rem) {
+        .filters-grid {
+          grid-template-columns: 1fr;
+        }
+        .sketch-wide .facts {
+          margin-left: 0;
+          width: 100%;
+          justify-content: space-between;
+        }
+      }
+
+      .bulletin-strip {
+        max-width: 56rem;
+        margin: 1.5rem auto 0;
+        padding: 0 1.5rem;
+      }
+      .bulletin-strip p {
+        padding: 0.75rem 1rem;
+        background: var(--mantle);
+        border: 1px solid var(--surface0);
+        border-left: 3px solid var(--peach);
+        font-size: 0.82rem;
+        color: var(--subtext1);
+        line-height: 1.6;
+        margin: 0;
+      }
+      .bulletin-strip b {
+        color: var(--peach);
+      }
+
+      .site-footer {
+        margin-top: 3rem;
+        border-top: 1px solid var(--surface0);
+        padding: 2.25rem 1.5rem;
+      }
+      .site-footer .row {
+        max-width: 56rem;
+        margin: 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem 1.5rem;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 0.76rem;
+        color: var(--subtext0);
+      }
+      .site-footer .left {
+        display: flex;
+        align-items: baseline;
+        gap: 0.6rem;
+      }
+      .site-footer .left .brand {
+        font-family: "Archivo Expanded", sans-serif;
+        font-weight: 800;
+        color: var(--text);
+        letter-spacing: 0.06em;
+        font-size: 0.78rem;
+      }
+      .site-footer .links {
+        display: flex;
+        gap: 1.25rem;
+        letter-spacing: 0.02em;
+      }
+      .site-footer a {
+        color: inherit;
+        text-decoration: none;
+      }
+      .site-footer a:hover {
+        color: var(--peach);
+      }
+      .site-footer .signoff {
+        max-width: 56rem;
+        margin: 1rem auto 0;
+        font-size: 0.72rem;
+        color: var(--subtext0);
+        text-align: center;
+      }
+      .site-footer .signoff a {
+        color: var(--subtext0);
+        border-bottom: 1px dashed var(--surface1);
+      }
+      .site-footer .signoff a:hover {
+        color: var(--peach);
+        border-color: var(--peach);
+      }
+
+      .features-section {
+        max-width: 56rem;
+        margin: 3.5rem auto 0;
+        padding: 0 1.5rem;
+      }
+      .features-section .cap {
+        font-family: "Archivo Expanded", sans-serif;
+        font-size: 0.72rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--subtext0);
+        margin-bottom: 0.6rem;
+      }
+      .features-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        border: 1px solid var(--surface0);
+        border-radius: 0.4rem;
+        overflow: hidden;
+        background: var(--mantle);
+      }
+      .feature-cell {
+        padding: 1.25rem 1.15rem;
+        border-left: 1px solid var(--surface0);
+        border-top: 1px solid var(--surface0);
+      }
+      .feature-cell:nth-child(3n + 1) {
+        border-left: none;
+      }
+      .feature-cell:nth-child(-n + 3) {
+        border-top: none;
+      }
+      .feature-cell .num {
+        font-family: "Archivo Expanded", sans-serif;
+        font-size: 0.66rem;
+        color: var(--subtext0);
+        letter-spacing: 0.05em;
+      }
+      .feature-cell h3 {
+        margin: 0.4rem 0 0;
+        font-family: "Archivo Expanded", sans-serif;
+        font-size: 0.88rem;
+        font-weight: 800;
+      }
+      .feature-cell p {
+        margin: 0.4rem 0 0;
+        font-size: 0.78rem;
+        color: var(--subtext1);
+        line-height: 1.5;
+      }
+      @media (max-width: 40rem) {
+        .features-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+        .feature-cell:nth-child(3n + 1) {
+          border-left: 1px solid var(--surface0);
+        }
+        .feature-cell:nth-child(2n + 1) {
+          border-left: none;
+        }
+        .feature-cell:nth-child(-n + 3) {
+          border-top: 1px solid var(--surface0);
+        }
+        .feature-cell:nth-child(-n + 2) {
+          border-top: none;
+        }
+      }
+      @media (max-width: 26rem) {
+        .features-grid {
+          grid-template-columns: 1fr;
+        }
+        .feature-cell {
+          border-left: none !important;
+          border-top: 1px solid var(--surface0);
+        }
+        .feature-cell:first-child {
+          border-top: none;
+        }
+      }
+    </style>
+
+    <script>
+      /* ---- Data Matrix headline (scramble to resolve) ---- */
+      (function () {
+        const CHARSET = "01";
+        const text = "Fixed by precision. Not by the data.";
+        const h1 = document.getElementById("dm-h1");
+        if (!h1) return;
+        const reduced = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+        const chars: { el: HTMLSpanElement; final: string }[] = [];
+        let ambientTimer: ReturnType<typeof setInterval> | null = null;
+
+        function build() {
+          h1!.innerHTML = "";
+          chars.length = 0;
+          const words = text.split(" ");
+          words.forEach((word, wi) => {
+            const wordSpan = document.createElement("span");
+            wordSpan.className = "dm-word";
+            [...word].forEach((ch) => {
+              const span = document.createElement("span");
+              span.className = "dm-char";
+              span.textContent = reduced
+                ? ch
+                : CHARSET[Math.floor(Math.random() * CHARSET.length)]!;
+              chars.push({ el: span, final: ch });
+              wordSpan.appendChild(span);
+            });
+            h1!.appendChild(wordSpan);
+            if (wi < words.length - 1)
+              h1!.appendChild(document.createTextNode(" "));
+          });
+        }
+
+        function resolveChar(
+          entry: { el: HTMLSpanElement; final: string },
+          delay: number,
+        ) {
+          if (reduced) {
+            entry.el.textContent = entry.final;
+            entry.el.classList.add("locked");
+            return;
+          }
+          setTimeout(() => {
+            let ticks = 0;
+            const maxTicks = 6 + Math.floor(Math.random() * 5);
+            const iv = setInterval(() => {
+              entry.el.textContent =
+                CHARSET[Math.floor(Math.random() * CHARSET.length)]!;
+              ticks++;
+              if (ticks >= maxTicks) {
+                clearInterval(iv);
+                entry.el.textContent = entry.final;
+                entry.el.classList.add("locked");
+              }
+            }, 35);
+          }, delay);
+        }
+
+        function ambientGlitch() {
+          if (reduced || chars.length === 0) return;
+          const entry = chars[Math.floor(Math.random() * chars.length)]!;
+          const original = entry.final;
+          entry.el.classList.add("glitching");
+          entry.el.textContent =
+            CHARSET[Math.floor(Math.random() * CHARSET.length)]!;
+          setTimeout(() => {
+            entry.el.textContent = original;
+            entry.el.classList.remove("glitching");
+          }, 130);
+        }
+
+        function play() {
+          build();
+          chars.forEach((entry, i) => resolveChar(entry, i * 45));
+          if (ambientTimer) clearInterval(ambientTimer);
+          if (!reduced) ambientTimer = setInterval(ambientGlitch, 2600);
+        }
+
+        play();
+      })();
+
+      /* ---- copy button ---- */
+      document
+        .getElementById("copy-btn")
+        ?.addEventListener("click", function (this: HTMLButtonElement) {
+          navigator.clipboard
+            .writeText("npm install distillate")
+            .catch(() => {});
+          this.classList.add("copied");
+          setTimeout(() => this.classList.remove("copied"), 1300);
+        });
+
+      /* ---- theme toggle, sharing Starlight's own storage key so the
+         preference carries over between this page and the docs ---- */
+      (function () {
+        const toggle = document.getElementById("theme-toggle");
+        const root = document.documentElement;
+        if (!toggle) return;
+
+        function loadStored(): "auto" | "dark" | "light" {
+          const raw = localStorage.getItem("starlight-theme");
+          return raw === "light" || raw === "dark" ? raw : "auto";
+        }
+        function preferredSystem(): "light" | "dark" {
+          return matchMedia("(prefers-color-scheme: light)").matches
+            ? "light"
+            : "dark";
+        }
+        function applyLabel(stored: "auto" | "dark" | "light") {
+          toggle!.textContent =
+            stored === "dark" ? "Dark" : stored === "light" ? "Light" : "Auto";
+        }
+        function setTheme(stored: "auto" | "dark" | "light") {
+          root.dataset.theme = stored === "auto" ? preferredSystem() : stored;
+          localStorage.setItem(
+            "starlight-theme",
+            stored === "auto" ? "" : stored,
+          );
+          applyLabel(stored);
+          startSweep();
+        }
+
+        toggle.addEventListener("click", () => {
+          const current = loadStored();
+          const next =
+            current === "dark"
+              ? "light"
+              : current === "light"
+                ? "auto"
+                : "dark";
+          setTheme(next);
+        });
+        applyLabel(loadStored());
+      })();
+
+      /* ---- Scan Sweep background ---- */
+      const reducedMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      function cssVar(name: string, fallback: string): string {
+        const v = getComputedStyle(document.documentElement)
+          .getPropertyValue(name)
+          .trim();
+        return v || fallback;
+      }
+      function hexToRgbArr(hex: string): [number, number, number] {
+        const h = hex.replace("#", "");
+        const v =
+          h.length === 3
+            ? h
+                .split("")
+                .map((c) => c + c)
+                .join("")
+            : h;
+        const num = parseInt(v, 16);
+        return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+      }
+      function hexToRgba(hex: string, alpha: number): string {
+        const [r, g, b] = hexToRgbArr(hex);
+        return `rgba(${r},${g},${b},${alpha})`;
+      }
+      function mixColor(
+        hexA: string,
+        hexB: string,
+        t: number,
+        alpha: number,
+      ): string {
+        const a = hexToRgbArr(hexA),
+          b = hexToRgbArr(hexB);
+        const r = Math.round(a[0] + (b[0] - a[0]) * t);
+        const g = Math.round(a[1] + (b[1] - a[1]) * t);
+        const bl = Math.round(a[2] + (b[2] - a[2]) * t);
+        return `rgba(${r},${g},${bl},${alpha})`;
+      }
+
+      let sweepTeardown: (() => void) | null = null;
+      function startSweep() {
+        if (sweepTeardown) {
+          sweepTeardown();
+          sweepTeardown = null;
+        }
+        const container = document.getElementById("hero-bg");
+        if (!container) return;
+        container.innerHTML = "";
+        const canvas = document.createElement("canvas");
+        canvas.style.maskImage =
+          "linear-gradient(to bottom, transparent, black 20%, black 80%, transparent)";
+        canvas.style.webkitMaskImage = canvas.style.maskImage;
+        container.appendChild(canvas);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        const dim = cssVar("--surface1", "#45475a");
+        const bright = cssVar("--peach", "#fab387");
+        const spacing = 36;
+        const skew = Math.tan((18 * Math.PI) / 180);
+        const bandRadius = 130;
+        const duration = 6800;
+        let dots: { x: number; y: number; jitter: number }[] = [];
+        let raf: number;
+        const start = performance.now();
+
+        function resize() {
+          canvas.width = container!.clientWidth;
+          canvas.height = container!.clientHeight;
+          dots = [];
+          for (let y = spacing / 2; y < canvas.height; y += spacing) {
+            for (let x = spacing / 2; x < canvas.width; x += spacing) {
+              dots.push({ x, y, jitter: Math.random() * 0.4 + 0.8 });
+            }
+          }
+        }
+        resize();
+        window.addEventListener("resize", resize);
+
+        if (reducedMotion) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          for (const d of dots) {
+            ctx.fillStyle = hexToRgba(dim, 0.3);
+            ctx.beginPath();
+            ctx.arc(d.x, d.y, 1.3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          sweepTeardown = () => window.removeEventListener("resize", resize);
+          return;
+        }
+
+        function frame(now: number) {
+          const elapsed = now - start;
+          const span = canvas.width + bandRadius * 4;
+          const baseT = (elapsed % duration) / duration;
+          const wobble = 0.025 * Math.sin(elapsed / 900);
+          const t = (((baseT + wobble) % 1) + 1) % 1;
+          const beamCenter = -bandRadius * 2 + t * span;
+
+          ctx!.clearRect(0, 0, canvas.width, canvas.height);
+          for (const d of dots) {
+            const axis = d.x - d.y * skew;
+            const dist = Math.abs(axis - beamCenter);
+            let b = Math.max(0, 1 - dist / (bandRadius * d.jitter));
+            b = b * b * (3 - 2 * b);
+            const alpha = 0.18 + b * 0.72;
+            ctx!.fillStyle = mixColor(dim, bright, b, alpha);
+            ctx!.beginPath();
+            ctx!.arc(d.x, d.y, 1.2 + b * 1.1, 0, Math.PI * 2);
+            ctx!.fill();
+          }
+          raf = requestAnimationFrame(frame);
+        }
+        raf = requestAnimationFrame(frame);
+        sweepTeardown = () => {
+          cancelAnimationFrame(raf);
+          window.removeEventListener("resize", resize);
+        };
+      }
+
+      startSweep();
+    </script>
+  </body>
+</html>
