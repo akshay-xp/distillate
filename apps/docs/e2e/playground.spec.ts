@@ -26,11 +26,14 @@ test("the page builds all three structures at the defaults", async ({
     await expect(row.locator("[data-cell='fpr']")).not.toBeEmpty();
   }
 
+  // The cell renders the measured rate as a percentage, so the parsed
+  // figure is compared against percentage bounds (half to double the 1%
+  // default target), not the raw fraction.
   const bloom = await page
     .locator("[data-row='bloom'] [data-cell='fpr']")
     .textContent();
-  expect(rate(bloom)).toBeGreaterThanOrEqual(0.005);
-  expect(rate(bloom)).toBeLessThanOrEqual(0.02);
+  expect(rate(bloom)).toBeGreaterThanOrEqual(0.5);
+  expect(rate(bloom)).toBeLessThanOrEqual(2);
   expect(errors).toEqual([]);
 });
 

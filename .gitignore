@@ -19,3 +19,10 @@ apps/docs/src/content/docs/api/
 # Playwright run artifacts
 apps/docs/test-results/
 apps/docs/playwright-report/
+
+# Impeccable design-skill review evidence (screenshots, local config)
+.impeccable/
+
+# Local design-process docs, not part of the shipped site
+apps/docs/DESIGN.md
+apps/docs/PRODUCT.md
