@@ -317,10 +317,15 @@ const description =
         --surface2: #acb0be;
         --text: #4c4f69;
         --subtext1: #5c5f77;
-        --subtext0: #6c6f85;
+        --subtext0: #595c6e;
         --peach: #fe640b;
-        --green: #40a02b;
-        --blue: #1e66f5;
+        /* Small bold text on the mantle/crust panels needs 4.5:1; the
+           decorative --peach (used at large sizes and in the glitch
+           animation) only clears ~2.5:1 here, so this pairing gets its own
+           AA-safe shade instead of darkening --peach everywhere. */
+        --peach-text: #ad4001;
+        --green: #2d711e;
+        --blue: #0a50dc;
       }
       :root[data-theme="dark"] {
         --crust: #11111b;
@@ -333,6 +338,7 @@ const description =
         --subtext1: #bac2de;
         --subtext0: #a6adc8;
         --peach: #fab387;
+        --peach-text: #fab387;
         --green: #a6e3a1;
         --blue: #89b4fa;
       }
@@ -701,7 +707,7 @@ const description =
         margin: 0;
       }
       .bulletin-strip b {
-        color: var(--peach);
+        color: var(--peach-text);
       }
 
       .site-footer {
