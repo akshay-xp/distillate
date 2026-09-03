@@ -1,0 +1,30 @@
+---
+// Overrides Starlight's default SiteTitle to use the BBH Bartle wordmark
+// (see src/pages/index.astro), in the same green accent as the homepage
+// logo rather than the docs' mauve, so the mark reads the same everywhere.
+const { siteTitleHref } = Astro.locals.starlightRoute;
+---
+
+<a href={siteTitleHref} class="site-title sl-flex">
+  <span translate="no">Distillate</span>
+</a>
+
+<style>
+  @layer starlight.core {
+    .site-title {
+      align-items: center;
+      gap: var(--sl-nav-gap);
+      color: var(--dstl-logo-green);
+      text-decoration: none;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    span {
+      font-family: "BBH Bartle", "Archivo Expanded", sans-serif;
+      font-weight: 400;
+      font-size: 1.15rem;
+      letter-spacing: 0.01em;
+      overflow: hidden;
+    }
+  }
+</style>
