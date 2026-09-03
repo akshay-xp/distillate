@@ -39,12 +39,31 @@ export default defineConfig({
             crossorigin: "anonymous",
           },
         },
+        // A plain blocking stylesheet link here held up first paint by
+        // ~800ms (PSI's render-blocking-requests insight); preload+swap
+        // fetches it at high priority without blocking render, and
+        // font-display:swap already covers the flash while it loads.
+        {
+          tag: "link",
+          attrs: {
+            rel: "preload",
+            as: "style",
+            href: "https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&family=BBH+Bartle&display=swap",
+          },
+        },
         {
           tag: "link",
           attrs: {
             rel: "stylesheet",
             href: "https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&family=BBH+Bartle&display=swap",
+            media: "print",
+            onload: "this.media='all'",
           },
+        },
+        {
+          tag: "noscript",
+          content:
+            '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&family=BBH+Bartle&display=swap">',
         },
         // Starlight already emits per-page og:title/description/url/type and
         // twitter:card; it never sets an image, which LinkedIn, Discord, and

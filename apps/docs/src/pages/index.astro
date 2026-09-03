@@ -49,10 +49,30 @@ const description =
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    {
+      /* A plain blocking <link rel="stylesheet"> here held up first paint
+         by ~800ms (PSI's render-blocking-requests insight); the
+         preload+swap trick fetches it at high priority without blocking
+         the render, and font-display:swap already covers the flash while
+         it loads. */
+    }
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@700;800;900&family=Geist+Mono:wght@400;500;600;700&family=BBH+Bartle&display=swap"
+    />
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@700;800;900&family=Geist+Mono:wght@400;500;600;700&family=BBH+Bartle&display=swap"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@700;800;900&family=Geist+Mono:wght@400;500;600;700&family=BBH+Bartle&display=swap"
+      />
+    </noscript>
     {
       /* Inlined and run before paint, same reason as Starlight's own ThemeProvider: no flash of the wrong theme. */
     }
