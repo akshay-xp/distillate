@@ -70,217 +70,223 @@ const description =
     </script>
   </head>
   <body>
-    <div class="hero-outer">
-      <div id="hero-bg"></div>
-      <nav class="station-bar">
-        <span class="brand">Distillate</span>
-        <span class="links">
-          <a href={docsStart}>DOCS</a>
-          <a href={playground}>PLAYGROUND</a>
-          <a href={repo}>GITHUB</a>
-          <button class="theme-toggle" id="theme-toggle" type="button"
-            >Auto</button
-          >
-        </span>
-      </nav>
-      <div class="hero">
-        <div class="dm-wrap">
-          <h1
-            class="dm-line"
-            id="dm-h1"
-            aria-label="Fixed by precision. Not by the data."
-          >
-          </h1>
+    <main>
+      <div class="hero-outer">
+        <div id="hero-bg"></div>
+        <nav class="station-bar">
+          <span class="brand">Distillate</span>
+          <span class="links">
+            <a href={docsStart}>DOCS</a>
+            <a href={playground}>PLAYGROUND</a>
+            <a href={repo}>GITHUB</a>
+            <button class="theme-toggle" id="theme-toggle" type="button"
+              >Auto</button
+            >
+          </span>
+        </nav>
+        <div class="hero">
+          <div class="dm-wrap">
+            <h1
+              class="dm-line"
+              id="dm-h1"
+              aria-label="Fixed by precision. Not by the data."
+            >
+            </h1>
+          </div>
+          <p class="sub">
+            Probabilistic structures that trade a little certainty for a lot
+            less memory, and say exactly how much.
+          </p>
+          <div class="cta-pair">
+            <div class="cta-cell install">
+              <span><span class="prompt">$</span>npm i distillate</span>
+              <button
+                type="button"
+                class="copy-btn"
+                id="copy-btn"
+                aria-label="Copy install command"
+              >
+                <svg
+                  class="icon-copy"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  ><rect x="9" y="9" width="13" height="13" rx="2"></rect><path
+                    d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                  ></path></svg
+                >
+                <svg
+                  class="icon-check"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  ><polyline points="20 6 9 17 4 12"></polyline></svg
+                >
+              </button>
+            </div>
+            <a class="cta-cell docs" href={docsStart}>Read the docs</a>
+          </div>
         </div>
-        <p class="sub">
-          Probabilistic structures that trade a little certainty for a lot less
-          memory, and say exactly how much.
+      </div>
+
+      <div class="features-section">
+        <h2 class="cap">The specifics</h2>
+        <div class="features-grid">
+          <div class="feature-cell">
+            <p class="num">01</p>
+            <h3>Zero false negatives</h3>
+            <p>
+              Every inserted key answers yes, guaranteed by construction, not by
+              sample.
+            </p>
+          </div>
+          <div class="feature-cell">
+            <p class="num">02</p>
+            <h3>Tunable false-positive rate</h3>
+            <p>
+              Set the target; the sizing calculator picks bits/key to hit it.
+            </p>
+          </div>
+          <div class="feature-cell">
+            <p class="num">03</p>
+            <h3>~75x lookup throughput</h3>
+            <p>
+              Same space, same accuracy, ~75x the lookup throughput of
+              bloom-filters.
+            </p>
+          </div>
+          <div class="feature-cell">
+            <p class="num">04</p>
+            <h3>Runs anywhere</h3>
+            <p>
+              Node 22+, Bun, Deno, browsers, Cloudflare and Vercel edge. Zero
+              runtime dependencies.
+            </p>
+          </div>
+          <div class="feature-cell">
+            <p class="num">05</p>
+            <h3>Portable binary format</h3>
+            <p>
+              Versioned toBytes / fromBytes; a filter built in one runtime loads
+              in another.
+            </p>
+          </div>
+          <div class="feature-cell">
+            <p class="num">06</p>
+            <h3>Tree-shakable</h3>
+            <p>
+              Each structure ships its own subpath import, so a bundler only
+              keeps what you use.
+            </p>
+          </div>
+          <div class="feature-cell">
+            <p class="num">07</p>
+            <h3>TypeScript-first</h3>
+            <p>Typed end to end, zero dependencies, nothing pulled in.</p>
+          </div>
+          <div class="feature-cell">
+            <p class="num">08</p>
+            <h3>CI-gated correctness</h3>
+            <p>
+              Property tests plus a statistical validation gate on every push.
+            </p>
+          </div>
+          <div class="feature-cell">
+            <p class="num">09</p>
+            <h3>Interactive Playground</h3>
+            <p>
+              Build real filters in the browser; watch the guarantee before
+              installing.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="board-table">
+        <h2 class="cap">Structures, at a glance</h2>
+        <div class="filters-grid">
+          <div class="stat-card">
+            <p class="subpath2">
+              <a href="/guides/bloom/"
+                >distillate/bloom<span class="arrow">&rarr;</span></a
+              >
+            </p>
+            <h3>Classic Bloom</h3>
+            <p class="headline-stat">9.59</p>
+            <p class="stat-label">bits/key @ 1% target</p>
+            <p class="guarantee">zero false negatives</p>
+          </div>
+          <div class="stat-card">
+            <p class="subpath2">
+              <a href="/guides/blocked/"
+                >distillate/blocked<span class="arrow">&rarr;</span></a
+              >
+            </p>
+            <h3>Blocked Bloom</h3>
+            <p class="headline-stat">10.2</p>
+            <p class="stat-label">bits/key @ 1% target</p>
+            <p class="guarantee">zero false negatives</p>
+          </div>
+          <div class="stat-card">
+            <p class="subpath2">
+              <a href="/guides/fuse/"
+                >distillate/fuse<span class="arrow">&rarr;</span></a
+              >
+            </p>
+            <h3>Binary Fuse 8</h3>
+            <p class="headline-stat">9.50</p>
+            <p class="stat-label">bits/key @ 100k, 0.39% fixed</p>
+            <p class="guarantee">zero false negatives</p>
+          </div>
+          <div class="stat-card">
+            <p class="subpath2">
+              <a href="/guides/fuse/"
+                >distillate/fuse<span class="arrow">&rarr;</span></a
+              >
+            </p>
+            <h3>Binary Fuse 16</h3>
+            <p class="headline-stat">19.0</p>
+            <p class="stat-label">bits/key @ 100k, ~0.0015% fixed</p>
+            <p class="guarantee">zero false negatives</p>
+          </div>
+        </div>
+        <div class="sketch-wide">
+          <div>
+            <span class="tag">Sketch, not a filter</span>
+            <p class="subpath2">
+              <a href="/guides/hll/"
+                >distillate/hll<span class="arrow">&rarr;</span></a
+              >
+            </p>
+            <h3>HyperLogLog</h3>
+          </div>
+          <div class="facts">
+            <div class="fact">
+              <p class="headline-stat">12 KiB</p><p class="stat-label">
+                memory
+              </p>
+            </div>
+            <div class="fact">
+              <p class="headline-stat">~0.8%</p><p class="stat-label">error</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bulletin-strip">
+        <p>
+          <b>A false positive is the filter working, not a bug.</b> These structures
+          trade exactness for space: a key that was never inserted can still answer
+          yes, at roughly the target rate. What they never do is the reverse.
         </p>
-        <div class="cta-pair">
-          <div class="cta-cell install">
-            <span><span class="prompt">$</span>npm i distillate</span>
-            <button
-              type="button"
-              class="copy-btn"
-              id="copy-btn"
-              aria-label="Copy install command"
-            >
-              <svg
-                class="icon-copy"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                ><rect x="9" y="9" width="13" height="13" rx="2"></rect><path
-                  d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
-                ></path></svg
-              >
-              <svg
-                class="icon-check"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                ><polyline points="20 6 9 17 4 12"></polyline></svg
-              >
-            </button>
-          </div>
-          <a class="cta-cell docs" href={docsStart}>Read the docs</a>
-        </div>
       </div>
-    </div>
-
-    <div class="features-section">
-      <p class="cap">The specifics</p>
-      <div class="features-grid">
-        <div class="feature-cell">
-          <p class="num">01</p>
-          <h3>Zero false negatives</h3>
-          <p>
-            Every inserted key answers yes, guaranteed by construction, not by
-            sample.
-          </p>
-        </div>
-        <div class="feature-cell">
-          <p class="num">02</p>
-          <h3>Tunable false-positive rate</h3>
-          <p>Set the target; the sizing calculator picks bits/key to hit it.</p>
-        </div>
-        <div class="feature-cell">
-          <p class="num">03</p>
-          <h3>~75x lookup throughput</h3>
-          <p>
-            Same space, same accuracy, ~75x the lookup throughput of
-            bloom-filters.
-          </p>
-        </div>
-        <div class="feature-cell">
-          <p class="num">04</p>
-          <h3>Runs anywhere</h3>
-          <p>
-            Node 22+, Bun, Deno, browsers, Cloudflare and Vercel edge. Zero
-            runtime dependencies.
-          </p>
-        </div>
-        <div class="feature-cell">
-          <p class="num">05</p>
-          <h3>Portable binary format</h3>
-          <p>
-            Versioned toBytes / fromBytes; a filter built in one runtime loads
-            in another.
-          </p>
-        </div>
-        <div class="feature-cell">
-          <p class="num">06</p>
-          <h3>Tree-shakable</h3>
-          <p>
-            Each structure ships its own subpath import, so a bundler only keeps
-            what you use.
-          </p>
-        </div>
-        <div class="feature-cell">
-          <p class="num">07</p>
-          <h3>TypeScript-first</h3>
-          <p>Typed end to end, zero dependencies, nothing pulled in.</p>
-        </div>
-        <div class="feature-cell">
-          <p class="num">08</p>
-          <h3>CI-gated correctness</h3>
-          <p>
-            Property tests plus a statistical validation gate on every push.
-          </p>
-        </div>
-        <div class="feature-cell">
-          <p class="num">09</p>
-          <h3>Interactive Playground</h3>
-          <p>
-            Build real filters in the browser; watch the guarantee before
-            installing.
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <div class="board-table">
-      <p class="cap">Structures, at a glance</p>
-      <div class="filters-grid">
-        <div class="stat-card">
-          <p class="subpath2">
-            <a href="/guides/bloom/"
-              >distillate/bloom<span class="arrow">&rarr;</span></a
-            >
-          </p>
-          <h3>Classic Bloom</h3>
-          <p class="headline-stat">9.59</p>
-          <p class="stat-label">bits/key @ 1% target</p>
-          <p class="guarantee">zero false negatives</p>
-        </div>
-        <div class="stat-card">
-          <p class="subpath2">
-            <a href="/guides/blocked/"
-              >distillate/blocked<span class="arrow">&rarr;</span></a
-            >
-          </p>
-          <h3>Blocked Bloom</h3>
-          <p class="headline-stat">10.2</p>
-          <p class="stat-label">bits/key @ 1% target</p>
-          <p class="guarantee">zero false negatives</p>
-        </div>
-        <div class="stat-card">
-          <p class="subpath2">
-            <a href="/guides/fuse/"
-              >distillate/fuse<span class="arrow">&rarr;</span></a
-            >
-          </p>
-          <h3>Binary Fuse 8</h3>
-          <p class="headline-stat">9.50</p>
-          <p class="stat-label">bits/key @ 100k, 0.39% fixed</p>
-          <p class="guarantee">zero false negatives</p>
-        </div>
-        <div class="stat-card">
-          <p class="subpath2">
-            <a href="/guides/fuse/"
-              >distillate/fuse<span class="arrow">&rarr;</span></a
-            >
-          </p>
-          <h3>Binary Fuse 16</h3>
-          <p class="headline-stat">19.0</p>
-          <p class="stat-label">bits/key @ 100k, ~0.0015% fixed</p>
-          <p class="guarantee">zero false negatives</p>
-        </div>
-      </div>
-      <div class="sketch-wide">
-        <div>
-          <span class="tag">Sketch, not a filter</span>
-          <p class="subpath2">
-            <a href="/guides/hll/"
-              >distillate/hll<span class="arrow">&rarr;</span></a
-            >
-          </p>
-          <h3>HyperLogLog</h3>
-        </div>
-        <div class="facts">
-          <div class="fact">
-            <p class="headline-stat">12 KiB</p><p class="stat-label">memory</p>
-          </div>
-          <div class="fact">
-            <p class="headline-stat">~0.8%</p><p class="stat-label">error</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="bulletin-strip">
-      <p>
-        <b>A false positive is the filter working, not a bug.</b> These structures
-        trade exactness for space: a key that was never inserted can still answer
-        yes, at roughly the target rate. What they never do is the reverse.
-      </p>
-    </div>
+    </main>
 
     <footer class="site-footer">
       <div class="row">
@@ -554,10 +560,11 @@ const description =
       .board-table .cap {
         font-family: "Archivo Expanded", sans-serif;
         font-size: 0.72rem;
+        font-weight: 400;
         letter-spacing: 0.06em;
         text-transform: uppercase;
         color: var(--subtext0);
-        margin-bottom: 0.9rem;
+        margin: 0 0 0.9rem;
       }
 
       .stat-card {
@@ -761,10 +768,11 @@ const description =
       .features-section .cap {
         font-family: "Archivo Expanded", sans-serif;
         font-size: 0.72rem;
+        font-weight: 400;
         letter-spacing: 0.06em;
         text-transform: uppercase;
         color: var(--subtext0);
-        margin-bottom: 0.6rem;
+        margin: 0 0 0.6rem;
       }
       .features-grid {
         display: grid;
