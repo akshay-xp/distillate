@@ -116,7 +116,7 @@ layout this project does not control.
 [data-theme="light"] ::backdrop {
   --sl-color-white: #4c4f69; /* text */
   --sl-color-gray-1: #5c5f77; /* subtext1 */
-  --sl-color-gray-2: #6c6f85; /* subtext0 */
+  --sl-color-gray-2: #595c6e; /* subtext0, darkened for AA text contrast */
   --sl-color-gray-3: #7c7f93; /* overlay2 */
   --sl-color-gray-4: #bcc0cc; /* surface1 */
   --sl-color-gray-5: #ccd0da; /* surface0 */
@@ -142,7 +142,7 @@ layout this project does not control.
   --sl-color-blue-low: hsl(220, 61%, 89%);
   --sl-color-blue: hsl(220, 91%, 44%);
   --sl-color-blue-high: hsl(220, 91%, 54%);
-  --dstl-logo-green: #40a02b;
+  --dstl-logo-green: #2d711e;
 }
 
 /* Shiki's own catppuccin-latte/mocha `editor.background` equals our page
