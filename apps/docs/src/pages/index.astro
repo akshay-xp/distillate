@@ -26,11 +26,14 @@ const playground = "/start/playground/";
       content="Probabilistic data structures for JavaScript: AMQ filters and HyperLogLog, zero dependencies, sized by a target you set."
     />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@700;800;900&family=Geist+Mono:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@700;800;900&family=Geist+Mono:wght@400;500;600;700&family=BBH+Bartle&display=swap"
     />
     {
       /* Inlined and run before paint, same reason as Starlight's own ThemeProvider: no flash of the wrong theme. */
@@ -52,7 +55,7 @@ const playground = "/start/playground/";
     <div class="hero-outer">
       <div id="hero-bg"></div>
       <nav class="station-bar">
-        <span class="brand">DISTILLATE</span>
+        <span class="brand">Distillate</span>
         <span class="links">
           <a href={docsStart}>DOCS</a>
           <a href={playground}>PLAYGROUND</a>
@@ -264,7 +267,7 @@ const playground = "/start/playground/";
     <footer class="site-footer">
       <div class="row">
         <div class="left">
-          <span class="brand">DISTILLATE</span><span
+          <span class="brand">Distillate</span><span
             >v{version} &middot; {license}</span
           >
         </div>
@@ -349,10 +352,11 @@ const playground = "/start/playground/";
         z-index: 2;
       }
       .station-bar .brand {
-        font-family: "Archivo Expanded", sans-serif;
-        font-weight: 800;
-        color: var(--text);
-        letter-spacing: 0.06em;
+        font-family: "BBH Bartle", "Archivo Expanded", sans-serif;
+        font-weight: 400;
+        font-size: 1.05rem;
+        color: var(--green);
+        letter-spacing: 0.01em;
       }
       .station-bar .links {
         display: flex;
@@ -697,11 +701,11 @@ const playground = "/start/playground/";
         gap: 0.6rem;
       }
       .site-footer .left .brand {
-        font-family: "Archivo Expanded", sans-serif;
-        font-weight: 800;
-        color: var(--text);
-        letter-spacing: 0.06em;
-        font-size: 0.78rem;
+        font-family: "BBH Bartle", "Archivo Expanded", sans-serif;
+        font-weight: 400;
+        color: var(--green);
+        letter-spacing: 0.01em;
+        font-size: 0.95rem;
       }
       .site-footer .links {
         display: flex;

@@ -14,6 +14,9 @@ export default defineConfig({
     starlight({
       title: "distillate",
       customCss: ["./src/styles/global.css"],
+      components: {
+        SiteTitle: "./src/components/SiteTitle.astro",
+      },
       // Same flavor pair as the chrome (see global.css): Mocha dark, Latte
       // light, both bundled in Shiki already, so code blocks never clash
       // with the rest of the page.
@@ -40,7 +43,7 @@ export default defineConfig({
           tag: "link",
           attrs: {
             rel: "stylesheet",
-            href: "https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap",
+            href: "https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&family=BBH+Bartle&display=swap",
           },
         },
       ],

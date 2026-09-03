@@ -106,6 +106,10 @@ layout this project does not control.
   --dstl-pass: var(--sl-color-green);
   --dstl-warn: var(--sl-color-orange);
   --dstl-warn-low: var(--sl-color-orange-low);
+  /* Exact Catppuccin green, matching the homepage logo (index.astro) pixel
+     for pixel; --sl-color-green is an approximated HSL conversion and drifts
+     from it, most visibly in light mode. */
+  --dstl-logo-green: #a6e3a1;
 }
 
 :root[data-theme="light"],
@@ -138,6 +142,7 @@ layout this project does not control.
   --sl-color-blue-low: hsl(220, 61%, 89%);
   --sl-color-blue: hsl(220, 91%, 44%);
   --sl-color-blue-high: hsl(220, 91%, 54%);
+  --dstl-logo-green: #40a02b;
 }
 
 /* Shiki's own catppuccin-latte/mocha `editor.background` equals our page
