@@ -46,6 +46,35 @@ export default defineConfig({
             href: "https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&family=BBH+Bartle&display=swap",
           },
         },
+        // Starlight already emits per-page og:title/description/url/type and
+        // twitter:card; it never sets an image, which LinkedIn, Discord, and
+        // Slack all require before they'll render a preview card at all, and
+        // Twitter/X silently drops otherwise. One site-wide card image
+        // (index.astro carries its own copy of these, since it bypasses
+        // Starlight's layout entirely) covers every docs page.
+        {
+          tag: "meta",
+          attrs: { property: "og:image", content: `${site}/og-image.png` },
+        },
+        {
+          tag: "meta",
+          attrs: { property: "og:image:width", content: "1200" },
+        },
+        {
+          tag: "meta",
+          attrs: { property: "og:image:height", content: "630" },
+        },
+        {
+          tag: "meta",
+          attrs: {
+            property: "og:image:alt",
+            content: "distillate: fixed by precision, not by the data",
+          },
+        },
+        {
+          tag: "meta",
+          attrs: { name: "twitter:image", content: `${site}/og-image.png` },
+        },
       ],
       // Starlight's own /404 route collides with the /404 the catch-all docs
       // route emits for src/content/docs/404.md, and Astro 7 warns on the
