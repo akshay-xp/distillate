@@ -14,12 +14,15 @@ export interface CountableSketch {
 
 export interface CardinalityAdapter {
   name: string;
+  /** Prefix for throughput rows, kept distinct from the filter benches of the same library. */
+  benchLabel: string;
   format: SketchFormat;
   create(p: number): CountableSketch;
 }
 
 export const distillateHllAdapter: CardinalityAdapter = {
   name: "distillate/hll",
+  benchLabel: "distillate/hll",
   format: "binary",
   create(p) {
     const sketch = new HyperLogLog({ p });
@@ -36,6 +39,7 @@ export const distillateHllAdapter: CardinalityAdapter = {
 
 export const incumbentHllAdapter: CardinalityAdapter = {
   name: "bloom-filters",
+  benchLabel: "bloom-filters hll",
   format: "json",
   create(p) {
     const sketch = new IncumbentHll(2 ** p);
@@ -90,4 +94,21 @@ export function cardinalityRows(
     }
   }
   return rows;
+}
+
+export const HLL_PRECISION = 14;
+
+// Swept so both of the incumbent's regimes are visible: it is roughly 50% off
+// below n of about 2.5 * m, and accurate once n is well past m.
+export const HLL_CARDINALITIES = [1_000, 10_000, 100_000];
+
+// The incumbent adds at about 8k ops/s, so a 100k sketch costs it 12.5 seconds.
+// That is what caps the build size for the throughput benches.
+export const HLL_BENCH_KEYS = 20_000;
+
+export function cardinalityBenchLabels(): string[] {
+  return cardinalityAdapters.flatMap((a) => [
+    `${a.benchLabel} add`,
+    `${a.benchLabel} count`,
+  ]);
 }

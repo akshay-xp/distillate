@@ -1,9 +1,32 @@
 import { BlockedBloomFilter } from "distillate/blocked";
 import { BinaryFuse16, BinaryFuse8 } from "distillate/fuse";
-import { bench } from "mitata";
+import { bench, do_not_optimize } from "mitata";
 
 import { adapters, TARGET_FPR } from "./adapters.js";
+import {
+  cardinalityAdapters,
+  HLL_BENCH_KEYS,
+  HLL_PRECISION,
+} from "./cardinality.js";
 import { benchLookup, cycle, hitMissPools } from "./harness.js";
+
+export function registerCardinalityBenches(p: number): void {
+  const hit = hitMissPools(HLL_BENCH_KEYS).hit;
+
+  for (const a of cardinalityAdapters) {
+    const empty = a.create(p);
+    const nextAdd = cycle(hit);
+    bench(`${a.benchLabel} add`, () => {
+      empty.add(nextAdd());
+    });
+
+    const built = a.create(p);
+    for (const key of hit) built.add(key);
+    bench(`${a.benchLabel} count`, () => {
+      do_not_optimize(built.count());
+    });
+  }
+}
 
 export function registerThroughputBenches(n: number): void {
   const { hit, miss } = hitMissPools(n);
@@ -31,4 +54,6 @@ export function registerThroughputBenches(n: number): void {
   const fuse16 = BinaryFuse16.from(hit);
   benchLookup("fuse16 has (hit)", fuse16, hit);
   benchLookup("fuse16 has (miss)", fuse16, miss);
+
+  registerCardinalityBenches(HLL_PRECISION);
 }
