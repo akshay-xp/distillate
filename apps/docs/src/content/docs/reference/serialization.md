@@ -17,20 +17,28 @@ Offset  Size  Field
 7       1     Reserved (u8, 0)
 8       4     Body length (u32)           # bytes of body, excluding header and CRC
 12      4     Reserved (u32, 0)           # keeps the body 8-byte aligned
-16      ...   Body: params block (fixed per type, see below)
+16      ...   Body: params block, padded to a multiple of 8 (fixed per type, see below)
 ...     ...   Payload: raw backing typed array, host byte order (see Principles)
 end     4     CRC32 of all preceding bytes
 ```
 
-Current `FORMAT_VERSION` is `4`. Readers reject any other version (`UnknownVersionError`).
+Current `FORMAT_VERSION` is `5`. Readers reject any other version (`UnknownVersionError`).
 
-The body length makes a frame self-describing: a reader can validate, skip, or stream a frame of a structure type it does not implement, using the header alone. It is checked against the bytes actually present _before_ the CRC, so a frame cut short in transit reports `TruncatedError` rather than the checksum failure truncation also implies. Readers additionally validate the body length against the declared params before allocating, which catches a frame whose header is internally consistent but whose params disagree with the payload size.
+The body length makes a frame self-describing: the layout lets a reader validate, skip, or stream a frame of a structure type it does not implement, using the header alone. It is checked against the bytes actually present _before_ the CRC, so a frame cut short in transit reports `TruncatedError` rather than the checksum failure truncation also implies. Readers additionally validate the body length against the declared params before allocating, which catches a frame whose header is internally consistent but whose params disagree with the payload size.
 
-### Version 4 is a hard break
+### Payload alignment
 
-Version 4 renamed the magic from `AMQF` (_Approximate Membership Query Filter_) to `DSTL`, because `distillate` serializes structures that are not membership filters. There is no dual-magic read path: a pre-v4 frame fails on magic with `BadMagicError`, not on version. Re-serialize such data with the version you run.
+Every type's params block is padded to a multiple of 8, so **the payload always begins at a frame offset that is a multiple of 8**. A reader that holds a frame at an 8-byte aligned address can therefore map the payload as a typed slice (`&[u32]`, `&[u16]`) instead of copying it. The padding bytes are zero and a reader must reject a frame that sets them, for the same reason it rejects a reserved header bit: they are space a later version may spend.
 
-### Params block per type (version 4)
+The guarantee is **per frame, not across a stream**. A frame occupies `16 + bodyLength + 4` bytes, which is not itself a multiple of 8, so frames concatenated in a log do not each start aligned. A reader walking such a log gets the alignment guarantee only for frames it has positioned itself.
+
+Padding is what makes the guarantee a rule rather than an accident. Through version 4 the payload offsets were 30, 28, 32, 32 and 22, and only held because of the lane widths that happened to sit there; HyperLogLog's sparse entries are `u32` at offset 22, which no language permits a typed view over. `writeFrame` now refuses a params block that would put a payload off an 8-byte boundary, so a new structure type cannot reintroduce it.
+
+### Versions 4 and 5 are hard breaks
+
+Version 4 renamed the magic from `AMQF` (_Approximate Membership Query Filter_) to `DSTL`, because `distillate` serializes structures that are not membership filters. There is no dual-magic read path: a pre-v4 frame fails on magic with `BadMagicError`, not on version. Version 5 then padded every params block to align the payload, which moved every payload offset. A v4 frame keeps the `DSTL` magic and so fails on the version byte with `UnknownVersionError`. Re-serialize such data with the version you run.
+
+### Params block per type (version 5)
 
 Params offsets below are relative to the start of the body (frame offset 16).
 
@@ -42,10 +50,11 @@ Offset  Size  Field
 4       2     k: number of hash probes (u16)
 6       4     seed (u32)
 10      4     n: expected key count (u32)
-14      ...   payload: bit array, ceil(m / 8) bytes
+14      2     padding (0)
+16      ...   payload: bit array, ceil(m / 8) bytes
 ```
 
-Blocked (type 2): `numBlocks (u32) | seed (u32) | n (u32)`, then the lane words (`numBlocks * 32` bytes). Fuse (types 3 and 4): `seed (u32) | seg (u32) | segCountLen (u32) | size (u32)`, then the fingerprint array.
+Blocked (type 2): `numBlocks (u32) | seed (u32) | n (u32) | 4 bytes padding`, then the lane words (`numBlocks * 32` bytes) at body offset 16. Fuse (types 3 and 4): `seed (u32) | seg (u32) | segCountLen (u32) | size (u32)`, which fills 16 exactly, then the fingerprint array.
 
 HyperLogLog (type 5), little-endian:
 
@@ -54,7 +63,8 @@ Offset  Size  Field
 0       1     p: precision, 4..18 (u8)
 1       1     encoding: 0 = dense, 1 = sparse (u8)
 2       4     seed (u32)
-6       ...   payload: dense registers or sparse entries, see below
+6       2     padding (0)
+8       ...   payload: dense registers or sparse entries, see below
 ```
 
 Dense payload: the register array. `2 ** p` registers of 6 bits each, packed LSB-first into `2 ** p * 6 / 8` bytes with no padding (`6 * 2 ** p` divides by 8 for every `p >= 2`). Register `i` spans bits `[6i, 6i + 6)`, so it straddles at most two bytes: with `bit = 6 * i` and `at = bit >>> 3`, its value is `((bytes[at] | (bytes[at + 1] << 8)) >>> (bit & 7)) & 0x3f`. Each register holds the largest rho seen for it, rho being the 1-based position of the first set bit in the `64 - p` hash bits below the index; six bits suffice because rho never exceeds `65 - p`.
@@ -63,11 +73,11 @@ Sparse payload: `n` entries of 4 bytes each, `u32` little-endian, one per distin
 
 ### Hash variant (flags nibble)
 
-Bits 0-3 of the flags byte record which hash produced the stored bits. Version 4 uses one hash for every structure:
+Bits 0-3 of the flags byte record which hash produced the stored bits. Version 5 uses one hash for every structure:
 
 - `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog)
 
-All four structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header, not the hash.
+All four structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header and version 5 only the params padding; neither touched the hash.
 
 That version 3 bump (rather than a flags-only change) was deliberate: the version-2 Fuse reader had no variant check and would silently misread a version-3 frame, so bumping the version made it reject on the version byte instead.
 

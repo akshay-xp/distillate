@@ -11,9 +11,12 @@ const MAGIC = Uint8Array.of(0x44, 0x53, 0x54, 0x4c);
 
 /**
  * Header layout: magic (4) | version | type | flags | reserved | bodyLength
- * (u32 LE at 8) | reserved (4 at 12). The trailing reserved word keeps the
- * body 8-byte aligned and leaves room for fields to be added without another
- * breaking bump.
+ * (u32 LE at 8) | reserved (4 at 12). The trailing reserved word leaves room
+ * for fields to be added without another breaking bump, and brings the header
+ * to 16 so a params block that is itself a multiple of 8 lands the payload on
+ * an 8-byte boundary. Aligning the body start alone was not enough: every
+ * type opens its body with params, so through version 4 the payload sat
+ * wherever those happened to end.
  */
 const HEADER_SIZE = 16;
 const BODY_LENGTH_OFFSET = 8;
