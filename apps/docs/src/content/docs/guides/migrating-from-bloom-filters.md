@@ -83,6 +83,30 @@ it ships. Its Cuckoo filter is [not yet
 available](/guides/choosing-a-structure/), and it will ship with that property
 test as its headline.
 
+### Its HyperLogLog is wrong for small counts
+
+Its HyperLogLog has no working small-range correction, so it is off by about
+half whenever the cardinality is below roughly `2.5 *` its register count.
+
+**The consequence:** asked to count 1,000 distinct keys in a 16,384-register
+sketch, it answers **504**. That is a 49.63% error on a number a caller has no
+reason to distrust, and nothing about the call reports a problem. It is not
+wrong everywhere, which is what makes it awkward: at 100k keys against the same
+16,384 registers it measures 0.78%, and past that it behaves like any
+HyperLogLog. The failure is confined to the low end, which is exactly where a
+sketch is easiest to sanity-check against a real count and therefore easiest to
+adopt on a small sample and ship at scale.
+
+distillate answers 1,000 for that same input, and it does so for an unglamorous
+reason: below the promotion threshold it is still storing sparse entries, so it
+is counting rather than estimating. Its estimator is not better. Once it
+promotes to dense registers it carries the same theoretical error as any
+HyperLogLog at that precision, and the two sketches land within noise of each
+other from 100k upward.
+
+Both columns are measured at a matched register count over the same keys; see
+[benchmark results](/bench/results/).
+
 ## What changes in your code
 
 The common path is nearly identical.
