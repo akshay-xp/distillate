@@ -4,6 +4,8 @@ import { pathToFileURL } from "node:url";
 
 import { run } from "mitata";
 
+import { cardinalityRows } from "./cardinality.js";
+import type { CardinalityRow } from "./cardinality.js";
 import { comparisonRows } from "./compare.js";
 import type { ComparisonRow } from "./compare.js";
 import { TARGET_FPR } from "./adapters.js";
@@ -27,6 +29,17 @@ export function spaceAccuracyTable(rows: ComparisonRow[]): string {
   return [header, ...body].join("\n");
 }
 
+export function cardinalityTable(rows: CardinalityRow[]): string {
+  const header =
+    "| Sketch | n | registers | estimate | rel. error | size |\n" +
+    "| --- | --- | --- | --- | --- | --- |";
+  const body = rows.map(
+    (r) =>
+      `| ${r.name} | ${capacityLabel(r.n)} | ${String(r.registers)} | ${String(Math.round(r.estimate))} | ${(r.relativeError * 100).toFixed(2)}% | ${String(r.bytes)} B ${r.format} |`,
+  );
+  return [header, ...body].join("\n");
+}
+
 export interface ResultsOptions {
   banner: string;
   version: string;
@@ -35,6 +48,24 @@ export interface ResultsOptions {
   throughputCapacity: number;
   spaceTable: string;
   throughputTable: string;
+  cardinalityTable?: string;
+}
+
+function cardinalitySection(table: string): string[] {
+  return [
+    "## Cardinality",
+    "",
+    "Both sketches are built at a matched register count (`m = 2 ** p`), so they carry the same theoretical error of `1.04 / sqrt(m)`.",
+    "Equal memory was rejected as the basis: it would hand the incumbent roughly a eleventh of the registers, making its accuracy look bad for a reason that is really about representation rather than estimation.",
+    "",
+    "The two sizes are not the same encoding. distillate writes a binary payload and `bloom-filters` writes JSON, so each row names its format.",
+    "",
+    "distillate is exact at small cardinalities because it is still holding sparse entries there, not because its estimator is better.",
+    "Once it promotes to dense registers it carries the same theoretical error as any HyperLogLog at that precision.",
+    "",
+    table,
+    "",
+  ];
 }
 
 export function renderResults(opts: ResultsOptions): string {
@@ -52,6 +83,7 @@ export function renderResults(opts: ResultsOptions): string {
     "",
     opts.spaceTable,
     "",
+    ...(opts.cardinalityTable ? cardinalitySection(opts.cardinalityTable) : []),
     `## Throughput (n = ${capacityLabel(opts.throughputCapacity)})`,
     "",
     "Absolute throughput is machine-relative: it depends on the CPU, the runtime, and the load on the box at measurement time.",
@@ -76,6 +108,10 @@ export function throughputTable(opsByLabel: Map<string, number>): string {
 
 const CAPACITIES = [100_000, 1_000_000];
 const THROUGHPUT_CAPACITY = 100_000;
+const HLL_PRECISION = 14;
+// Swept so both of the incumbent's regimes are visible: it is roughly 50% off
+// below n of about 2.5 * m, and accurate once n is well past m.
+const HLL_CARDINALITIES = [1_000, 10_000, 100_000];
 
 interface MitataResult {
   benchmarks: { alias: string; runs: { stats: { avg: number } }[] }[];
@@ -104,10 +140,14 @@ async function main(): Promise<void> {
   const banner = envBanner();
 
   const spaceTable = spaceAccuracyTable(comparisonRows(CAPACITIES));
+  const cardTable = cardinalityTable(
+    cardinalityRows(HLL_PRECISION, HLL_CARDINALITIES),
+  );
   const tput = throughputTable(await collectThroughput(THROUGHPUT_CAPACITY));
 
   console.log(banner);
   console.log("\n" + spaceTable);
+  console.log("\n" + cardTable);
   console.log("\n" + tput);
 
   const md = renderResults({
@@ -117,6 +157,7 @@ async function main(): Promise<void> {
     targetFpr: TARGET_FPR,
     throughputCapacity: THROUGHPUT_CAPACITY,
     spaceTable,
+    cardinalityTable: cardTable,
     throughputTable: tput,
   });
   writeFileSync(new URL("../RESULTS.md", import.meta.url), md);
