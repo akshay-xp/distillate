@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { expect, test } from "vitest";
 
 import type { CardinalityRow } from "../src/cardinality.js";
@@ -142,4 +145,16 @@ test("renderResults places cardinality before throughput and states the basis", 
   expect(md.indexOf("## Cardinality")).toBeLessThan(
     md.indexOf("## Throughput"),
   );
+});
+
+test("METHODOLOGY states the cardinality matching basis and why", () => {
+  const md = readFileSync(
+    fileURLToPath(new URL("../METHODOLOGY.md", import.meta.url)),
+    "utf8",
+  );
+  expect(md).toContain("HyperLogLog");
+  expect(md).toContain("matched register count");
+  expect(md).toContain("m = 2 ** p");
+  // The reason equal memory was rejected as the basis.
+  expect(md).toContain("representation");
 });
