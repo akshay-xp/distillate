@@ -14,6 +14,10 @@ import {
   writeFrame,
   writeHeader,
 } from "../../src/core/serialize.js";
+import { BloomFilter } from "../../src/bloom/bloom.js";
+import { BlockedBloomFilter } from "../../src/blocked/blocked.js";
+import { HyperLogLog } from "../../src/hll/hll.js";
+import { crc32 } from "../../src/core/crc32.js";
 
 test("writeFrame allocates once and equals the writeHeader path", () => {
   const body = Uint8Array.of(9, 8, 7, 6, 5);
@@ -51,6 +55,45 @@ test("writeFrame refuses a params block that would unalign the payload", () => {
     expect(frame.length).toBe(16 + paramsSize + 8 + 4);
     expect((16 + paramsSize) % 8).toBe(0);
     expect(16 + paramsSize).toBe(payloadAt);
+  }
+});
+
+test("params padding carrying data is rejected, not ignored", () => {
+  // The padding v5 introduced is reserved space inside the body. Left
+  // unchecked it repeats the header's defect: a later release could put a
+  // field there and this one would read the frame under the old meaning.
+  const cases = [
+    ["bloom", new BloomFilter({ m: 1024, k: 7 }), 14, 16],
+    ["blocked", BlockedBloomFilter.create(100, 0.01), 12, 16],
+    ["hll", new HyperLogLog({ p: 14 }), 6, 8],
+  ] as const;
+
+  for (const [name, structure, fieldsEnd, paramsSize] of cases) {
+    structure.add("alice");
+    const clean = structure.toBytes();
+    expect(Array.from(clean.subarray(16 + fieldsEnd, 16 + paramsSize))).toEqual(
+      new Array(paramsSize - fieldsEnd).fill(0),
+    );
+
+    for (let at = fieldsEnd; at < paramsSize; at++) {
+      const dirty = clean.slice();
+      dirty[16 + at] = 0xff;
+      const dv = new DataView(dirty.buffer);
+      dv.setUint32(
+        dirty.length - 4,
+        crc32(dirty.subarray(0, dirty.length - 4)),
+        true,
+      );
+
+      const parse = {
+        bloom: () => BloomFilter.fromBytes(dirty),
+        blocked: () => BlockedBloomFilter.fromBytes(dirty),
+        hll: () => HyperLogLog.fromBytes(dirty),
+      }[name];
+      expect(parse, `${name} padding byte ${String(at)}`).toThrow(
+        SerializationError,
+      );
+    }
   }
 });
 

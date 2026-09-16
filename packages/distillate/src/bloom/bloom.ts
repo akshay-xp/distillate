@@ -4,6 +4,7 @@ import { probeInto } from "../core/hasher.js";
 import {
   assertBodyLength,
   assertMinBodyLength,
+  assertParamsPadding,
   bytesEqual,
   type FilterJSON,
   FORMAT_VERSION,
@@ -30,6 +31,7 @@ const TYPE = 1;
  * at frame offset 32 and a foreign reader can map it without a copy.
  */
 const PARAMS_SIZE = 16;
+const PARAMS_FIELDS_END = 14;
 
 /** Thrown when an operation requires two filters built with identical parameters. */
 export class BloomParamMismatchError extends Error {
@@ -122,6 +124,7 @@ export class BloomFilter {
       );
     }
     assertMinBodyLength(body.length, PARAMS_SIZE, "bloom");
+    assertParamsPadding(body, PARAMS_FIELDS_END, PARAMS_SIZE, "bloom");
     const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
     const m = dv.getUint32(0, true);
     const k = dv.getUint16(4, true);

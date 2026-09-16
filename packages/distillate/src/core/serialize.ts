@@ -234,6 +234,28 @@ export function assertMinBodyLength(
 }
 
 /**
+ * Asserts the bytes between a structure's last params field and the start of
+ * its payload are zero. That gap is reserved space introduced by the v5
+ * alignment padding, and reserved space only stays usable while a reader
+ * refuses a frame that writes to it: ignoring it would let a later release
+ * put a field there that this one silently reads under the old meaning.
+ */
+export function assertParamsPadding(
+  body: Uint8Array,
+  fieldsEnd: number,
+  paramsSize: number,
+  context: string,
+): void {
+  for (let at = fieldsEnd; at < paramsSize; at++) {
+    if (body[at] !== 0) {
+      throw new SerializationError(
+        `${context}: params padding at byte ${String(at)} is not zero`,
+      );
+    }
+  }
+}
+
+/**
  * Asserts a frame body is exactly the length its declared params imply, so a
  * hostile or truncated frame is rejected before any backing store is allocated.
  */

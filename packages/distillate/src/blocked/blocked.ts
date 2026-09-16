@@ -10,6 +10,7 @@ import {
 import {
   assertBodyLength,
   assertMinBodyLength,
+  assertParamsPadding,
   bytesEqual,
   type FilterJSON,
   FORMAT_VERSION,
@@ -29,6 +30,7 @@ const TYPE = 2;
  * start at frame offset 32 and a foreign reader can map them as `u32`.
  */
 const PARAMS_SIZE = 16;
+const PARAMS_FIELDS_END = 12;
 
 // Canonical split-block bit-position multipliers (Parquet/Impala): odd 32-bit
 // constants that spread one 32-bit hash across the 8 lanes of a block.
@@ -247,6 +249,7 @@ export class BlockedBloomFilter {
       );
     }
     assertMinBodyLength(body.length, PARAMS_SIZE, "blocked");
+    assertParamsPadding(body, PARAMS_FIELDS_END, PARAMS_SIZE, "blocked");
     const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
     const numBlocks = dv.getUint32(0, true);
     const seed = dv.getUint32(4, true);
