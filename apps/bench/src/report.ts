@@ -33,13 +33,23 @@ export function spaceAccuracyTable(rows: ComparisonRow[]): string {
   return [header, ...body].join("\n");
 }
 
+function ops(v: number): string {
+  return v >= 1_000_000
+    ? `${(v / 1_000_000).toFixed(2)} M ops/s`
+    : `${(v / 1_000).toFixed(0)} k ops/s`;
+}
+
+function duration(ms: number): string {
+  return ms >= 1000 ? `${(ms / 1000).toFixed(2)} s` : `${ms.toFixed(0)} ms`;
+}
+
 export function cardinalityTable(rows: CardinalityRow[]): string {
   const header =
-    "| Sketch | n | registers | estimate | rel. error | size |\n" +
-    "| --- | --- | --- | --- | --- | --- |";
+    "| Sketch | n | registers | estimate | rel. error | size | build |\n" +
+    "| --- | --- | --- | --- | --- | --- | --- |";
   const body = rows.map(
     (r) =>
-      `| ${r.name} | ${capacityLabel(r.n)} | ${String(r.registers)} | ${String(Math.round(r.estimate))} | ${(r.relativeError * 100).toFixed(2)}% | ${String(r.bytes)} B ${r.format} |`,
+      `| ${r.name} | ${capacityLabel(r.n)} | ${String(r.registers)} | ${String(Math.round(r.estimate))} | ${(r.relativeError * 100).toFixed(2)}% | ${String(r.bytes)} B ${r.format} | ${duration(r.buildMs)} (${ops(r.addOpsPerSec)}) |`,
   );
   return [header, ...body].join("\n");
 }
@@ -96,12 +106,6 @@ export function renderResults(opts: ResultsOptions): string {
     opts.throughputTable,
     "",
   ].join("\n");
-}
-
-function ops(v: number): string {
-  return v >= 1_000_000
-    ? `${(v / 1_000_000).toFixed(2)} M ops/s`
-    : `${(v / 1_000).toFixed(0)} k ops/s`;
 }
 
 export function throughputTable(opsByLabel: Map<string, number>): string {

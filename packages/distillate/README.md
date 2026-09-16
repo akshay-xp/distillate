@@ -137,13 +137,14 @@ Same space, same accuracy, **~75x the lookup throughput** of [`bloom-filters`](h
 
 Cardinality is a separate head-to-head, at a **matched register count** (`m = 2 ** p`, `p = 14`, the configuration Redis uses) over the same keys, swept from 1k to 10M distinct:
 
-| p = 14, m = 16384  | distillate      | bloom-filters |
-| ------------------ | --------------- | ------------- |
-| rel. error, n=1k   | 0.00%           | 49.63%        |
-| rel. error, n=100k | 0.82%           | 0.78%         |
-| rel. error, n=10M  | 0.15%           | 0.41%         |
-| serialized, n=10M  | 12,314 B binary | 40,247 B JSON |
-| `add` throughput   | ~25.6 M ops/s   | ~8 k ops/s    |
+| p = 14, m = 16384    | distillate      | bloom-filters    |
+| -------------------- | --------------- | ---------------- |
+| rel. error, n=1k     | 0.00%           | 49.63%           |
+| rel. error, n=100k   | 0.82%           | 0.78%            |
+| rel. error, n=10M    | 0.15%           | 0.41%            |
+| serialized, n=10M    | 12,314 B binary | 40,247 B JSON    |
+| build 10M keys       | 0.63 s          | 1,165 s (19 min) |
+| sustained add, n=10M | ~16 M ops/s     | ~9 k ops/s       |
 
 Both sketches carry the same theoretical error at this precision (`1.04 / sqrt(m)`, about 0.81%), and once `n` is well past `m` both stay inside it. The differences are elsewhere.
 
@@ -151,7 +152,7 @@ Both sketches carry the same theoretical error at this precision (`1.04 / sqrt(m
 
 **Memory does not grow.** From 10k distinct keys to 10M, distillate stays at exactly 12,314 bytes. The incumbent's JSON grows from 32,904 to 40,247 bytes over the same range, because larger register values take more digits to spell out.
 
-**Building the sketch.** At roughly 8k `add` ops/s, `bloom-filters` needs about 105 seconds to count 1M distinct keys and about 18 minutes for 10M. distillate does the 1M in a tenth of a second.
+**Building the sketch.** `bloom-filters` holds a flat 9k adds/sec at every size, so its cost is purely linear: 10.6 seconds for 100k distinct keys, 109 seconds for 1M, and 1,165 seconds for 10M. distillate counts the same 10M in 0.63 seconds, and its rate climbs with `n` rather than staying flat, reaching about 16 M ops/s once the registers are dense.
 
 These are a point-in-time snapshot on one machine. The full report (blocked/fuse, 1M capacity, the `bloomfilter` micro-package) and exactly how it is measured live in the [`apps/bench`](https://github.com/akshay-xp/distillate/tree/main/apps/bench) workspace: [RESULTS.md](https://github.com/akshay-xp/distillate/blob/main/apps/bench/RESULTS.md), [METHODOLOGY.md](https://github.com/akshay-xp/distillate/blob/main/apps/bench/METHODOLOGY.md).
 
