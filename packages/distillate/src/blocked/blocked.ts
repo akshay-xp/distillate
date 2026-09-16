@@ -275,7 +275,8 @@ export class BlockedBloomFilter {
     );
     return writeFrame(
       { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
-      PARAMS_SIZE + lanes.length,
+      PARAMS_SIZE,
+      lanes.length,
       (body, dv) => {
         dv.setUint32(0, this.#numBlocks, true);
         dv.setUint32(4, this.#seed, true);

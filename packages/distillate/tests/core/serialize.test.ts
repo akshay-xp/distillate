@@ -20,7 +20,7 @@ test("writeFrame allocates once and equals the writeHeader path", () => {
   const header = { version: FORMAT_VERSION, type: 5, flags: 3 };
 
   let captured: Uint8Array | undefined;
-  const frame = writeFrame(header, body.length, (b) => {
+  const frame = writeFrame(header, 0, body.length, (b) => {
     captured = b;
     b.set(body);
   });
@@ -29,6 +29,29 @@ test("writeFrame allocates once and equals the writeHeader path", () => {
   expect(captured?.byteOffset).toBe(16);
   expect(captured?.length).toBe(body.length);
   expect(bytesEqual(frame, writeHeader(header, body))).toBe(true);
+});
+
+test("writeFrame refuses a params block that would unalign the payload", () => {
+  const header = { version: FORMAT_VERSION, type: 5, flags: 0 };
+  const noop = () => undefined;
+
+  // 16 + paramsSize is where the payload starts, so paramsSize has to be a
+  // multiple of 8. The 6 here is exactly what HyperLogLog used to declare.
+  for (const paramsSize of [1, 2, 4, 6, 12, 14, 20]) {
+    expect(() => writeFrame(header, paramsSize, 8, noop)).toThrow(RangeError);
+  }
+
+  for (const [paramsSize, payloadAt] of [
+    [0, 16],
+    [8, 24],
+    [16, 32],
+    [24, 40],
+  ] as const) {
+    const frame = writeFrame(header, paramsSize, 8, noop);
+    expect(frame.length).toBe(16 + paramsSize + 8 + 4);
+    expect((16 + paramsSize) % 8).toBe(0);
+    expect(16 + paramsSize).toBe(payloadAt);
+  }
 });
 
 test("the header declares its body length and reserves the rest", () => {

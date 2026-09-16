@@ -19,6 +19,13 @@ const HEADER_SIZE = 16;
 const BODY_LENGTH_OFFSET = 8;
 const TRAILER_SIZE = 4;
 
+/**
+ * Every payload starts on a multiple of this, so a reader in any language can
+ * map it as a typed slice instead of copying. Eight rather than four so a
+ * future `u64` or `f64` lane lands correctly too.
+ */
+const PAYLOAD_ALIGNMENT = 8;
+
 export interface Header {
   version: number;
   type: number;
@@ -32,12 +39,27 @@ export interface Header {
  * then seals the CRC trailer. The body view aliases the frame's buffer, so
  * callers write fields and payload straight into the frame with no intermediate
  * body allocation or copy.
+ *
+ * The body is split into a fixed params block and the payload after it, and
+ * `paramsSize` must leave the payload 8-byte aligned. That is the whole
+ * guarantee a foreign reader maps typed slices on, and declaring the split
+ * here is what stops a new structure reintroducing the misalignment that
+ * HyperLogLog's 6-byte block shipped with through format version 4.
+ *
+ * @throws RangeError when the params block would unalign the payload.
  */
 export function writeFrame(
   header: Header,
-  bodyLength: number,
+  paramsSize: number,
+  payloadLength: number,
   fill: (body: Uint8Array, view: DataView) => void,
 ): Uint8Array {
+  if ((HEADER_SIZE + paramsSize) % PAYLOAD_ALIGNMENT !== 0) {
+    throw new RangeError(
+      `a ${String(paramsSize)}-byte params block puts the payload at ${String(HEADER_SIZE + paramsSize)}, which is not a multiple of ${String(PAYLOAD_ALIGNMENT)}`,
+    );
+  }
+  const bodyLength = paramsSize + payloadLength;
   const frame = new Uint8Array(HEADER_SIZE + bodyLength + TRAILER_SIZE);
   const frameView = new DataView(
     frame.buffer,
@@ -59,9 +81,13 @@ export function writeFrame(
   return frame;
 }
 
-/** Convenience adapter for callers that already hold the full body bytes. */
+/**
+ * Convenience adapter for callers that already hold the full body bytes. The
+ * body is passed as payload with no params block, so it carries no alignment
+ * claim of its own; structures call {@link writeFrame} directly instead.
+ */
 export function writeHeader(header: Header, body: Uint8Array): Uint8Array {
-  return writeFrame(header, body.length, (b) => {
+  return writeFrame(header, 0, body.length, (b) => {
     b.set(body);
   });
 }
