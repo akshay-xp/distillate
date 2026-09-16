@@ -53,3 +53,17 @@ test("union folds to the coarser precision, where merge demands a match", () => 
 
   expect(GUIDE).toContain("coarser precision");
 });
+
+test("the small-range defect names both of the incumbent's regimes", () => {
+  const at = (heading: string): number => GUIDE.indexOf(heading);
+
+  // Where it fails, and where it is fine. One without the other is a
+  // half-truth: past about 2.5 * m the incumbent is a reasonable sketch.
+  expect(GUIDE).toContain("49.63%");
+  expect(GUIDE).toContain("0.78%");
+  expect(GUIDE).toContain("/bench/results/");
+
+  const section = at("### Its HyperLogLog is wrong for small counts");
+  expect(section).toBeGreaterThan(at("## What the incumbent costs you"));
+  expect(section).toBeLessThan(at("## What changes in your code"));
+});
