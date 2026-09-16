@@ -36,3 +36,19 @@ test("cardinality rows carry the measured relative error", () => {
     expect(r.relativeError).toBeLessThanOrEqual(bound);
   }
 });
+
+test("cardinality rows carry serialized bytes and name the format", () => {
+  const rows = cardinalityRows(12, [20_000]);
+  const distillate = rows.find((r) => r.name === "distillate/hll")!;
+  const incumbent = rows.find((r) => r.name === "bloom-filters")!;
+
+  expect(distillate.format).toBe("binary");
+  // Dense payload at p = 12 is 2 ** 12 * 6 / 8 bytes, plus the header.
+  expect(distillate.bytes).toBeGreaterThan((2 ** 12 * 6) / 8 - 64);
+  expect(distillate.bytes).toBeLessThan((2 ** 12 * 6) / 8 + 64);
+
+  expect(incumbent.format).toBe("json");
+  expect(incumbent.bytes).toBeGreaterThan(distillate.bytes);
+
+  expect(distillate.format).not.toBe(incumbent.format);
+});
