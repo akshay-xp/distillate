@@ -1,7 +1,9 @@
 import { expect, test } from "vitest";
 
+import type { CardinalityRow } from "../src/cardinality.js";
 import type { ComparisonRow } from "../src/compare.js";
 import {
+  cardinalityTable,
   renderResults,
   spaceAccuracyTable,
   throughputTable,
@@ -88,4 +90,56 @@ test("renderResults calls throughput machine-relative between the two tables", (
   expect(caveat).toBeGreaterThan(-1);
   expect(caveat).toBeGreaterThan(md.indexOf("SPACE_TBL"));
   expect(caveat).toBeLessThan(md.indexOf("TPUT_TBL"));
+});
+
+const cardinalityRow: CardinalityRow = {
+  name: "distillate/hll",
+  p: 14,
+  registers: 16384,
+  n: 100000,
+  estimate: 100080,
+  relativeError: 0.0008,
+  bytes: 12314,
+  format: "binary",
+};
+
+test("cardinalityTable leads with accuracy and space, size carrying its format", () => {
+  const table = cardinalityTable([cardinalityRow]);
+  const columns = [
+    "Sketch",
+    "n",
+    "registers",
+    "estimate",
+    "rel. error",
+    "size",
+  ];
+  let cursor = -1;
+  for (const column of columns) {
+    const at = table.indexOf(column);
+    expect(at).toBeGreaterThan(cursor);
+    cursor = at;
+  }
+  expect(table).toContain("distillate/hll");
+  expect(table).toContain("0.08%");
+  expect(table).toContain("12314");
+  expect(table).toContain("binary");
+});
+
+test("renderResults places cardinality before throughput and states the basis", () => {
+  const md = renderResults({
+    banner: "distillate-bench | node v24 | arm64 | Apple M1 | 8 cores",
+    version: "0.1.1",
+    date: "2026-07-31",
+    targetFpr: 0.01,
+    throughputCapacity: 100000,
+    spaceTable: "SPACE_TBL",
+    throughputTable: "TPUT_TBL",
+    cardinalityTable: "CARD_TBL",
+  });
+  expect(md).toContain("## Cardinality");
+  expect(md).toContain("matched register count");
+  expect(md).toContain("CARD_TBL");
+  expect(md.indexOf("## Cardinality")).toBeLessThan(
+    md.indexOf("## Throughput"),
+  );
 });
