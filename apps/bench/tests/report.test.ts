@@ -104,6 +104,8 @@ const cardinalityRow: CardinalityRow = {
   relativeError: 0.0008,
   bytes: 12314,
   format: "binary",
+  buildMs: 580,
+  addOpsPerSec: 17_241_379,
 };
 
 test("cardinalityTable leads with accuracy and space, size carrying its format", () => {
@@ -126,6 +128,18 @@ test("cardinalityTable leads with accuracy and space, size carrying its format",
   expect(table).toContain("0.08%");
   expect(table).toContain("12314");
   expect(table).toContain("binary");
+  expect(table).toContain("580 ms");
+  expect(table).toContain("17.24 M ops/s");
+});
+
+test("cardinalityTable switches build time from ms to s past a second", () => {
+  expect(cardinalityTable([{ ...cardinalityRow, buildMs: 42.5 }])).toContain(
+    "43 ms",
+  );
+  // The incumbent's 1M row, measured.
+  expect(cardinalityTable([{ ...cardinalityRow, buildMs: 104_900 }])).toContain(
+    "104.90 s",
+  );
 });
 
 test("renderResults places cardinality before throughput and states the basis", () => {

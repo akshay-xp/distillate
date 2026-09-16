@@ -54,10 +54,12 @@ the small-range one. Memory is the point being shown: the dense sketch does not 
 with `n`, so the size column stays flat while the cardinality moves four orders of
 magnitude.
 
-The sweep's cost is almost entirely the incumbent, which adds at 8k to 9.4k ops/s
-depending on the run: about 105 seconds for its 1M row and about 18 minutes for its
-10M row, against a tenth of a second for distillate at 1M. The full sweep takes
-about 20 minutes, essentially all of it waiting on `bloom-filters`.
+Each row records the wall time to add its keys, so build cost is reported alongside
+accuracy and space rather than needing a separate run. The sweep's cost is almost
+entirely the incumbent, which holds a flat 9k adds/sec at every size: 10.6 seconds
+at 100k, 109 seconds at 1M and 1,165 seconds at 10M, against 626 milliseconds for
+distillate at 10M. The full sweep takes about 21 minutes, essentially all of it
+waiting on `bloom-filters`.
 
 The sketch throughput benches build at 20,000 keys rather than the 100k the filter
 benches use. The incumbent adds at roughly 8k ops/s, so a 100k-key sketch costs it

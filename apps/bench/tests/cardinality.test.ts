@@ -65,3 +65,15 @@ test("cardinality bench labels distinguish the sketch from the filter benches", 
     "bloom-filters hll count",
   ]);
 });
+
+test("cardinality rows carry the time taken to build the sketch", () => {
+  const rows = cardinalityRows(12, [20_000]);
+  for (const r of rows) {
+    expect(r.buildMs).toBeGreaterThan(0);
+    expect(r.addOpsPerSec).toBeCloseTo(r.n / (r.buildMs / 1000), 6);
+  }
+  // The incumbent is the slow one; this is the gap the sweep exists to show.
+  const distillate = rows.find((r) => r.name === "distillate/hll")!;
+  const incumbent = rows.find((r) => r.name === "bloom-filters")!;
+  expect(distillate.buildMs).toBeLessThan(incumbent.buildMs);
+});

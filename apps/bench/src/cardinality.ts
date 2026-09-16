@@ -68,6 +68,9 @@ export interface CardinalityRow {
   relativeError: number;
   bytes: number;
   format: SketchFormat;
+  /** Wall time to add all `n` keys. The incumbent's is the headline cost. */
+  buildMs: number;
+  addOpsPerSec: number;
 }
 
 export function cardinalityRows(
@@ -78,7 +81,9 @@ export function cardinalityRows(
   for (const n of cardinalities) {
     for (const adapter of cardinalityAdapters) {
       const sketch = adapter.create(p);
+      const started = performance.now();
       for (const key of hitKeys(n)) sketch.add(key);
+      const buildMs = performance.now() - started;
       const estimate = sketch.count();
       rows.push({
         name: adapter.name,
@@ -89,6 +94,8 @@ export function cardinalityRows(
         relativeError: Math.abs(estimate - n) / n,
         bytes: sketch.bytes(),
         format: adapter.format,
+        buildMs,
+        addOpsPerSec: n / (buildMs / 1000),
       });
     }
   }

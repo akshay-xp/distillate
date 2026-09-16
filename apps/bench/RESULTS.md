@@ -44,18 +44,25 @@ Past 10k the distillate column does not move: 12,314 bytes at 10k and the same
 JSON does grow, from 32,904 to 40,247 bytes over the same range, since larger
 register values take more digits to spell out.
 
-| Sketch         | n    | registers | estimate | rel. error | size           |
-| -------------- | ---- | --------- | -------- | ---------- | -------------- |
-| distillate/hll | 1k   | 16384     | 1000     | 0.00%      | 4026 B binary  |
-| bloom-filters  | 1k   | 16384     | 504      | 49.63%     | 32904 B json   |
-| distillate/hll | 10k  | 16384     | 9954     | 0.46%      | 12314 B binary |
-| bloom-filters  | 10k  | 16384     | 5049     | 49.51%     | 32912 B json   |
-| distillate/hll | 100k | 16384     | 99181    | 0.82%      | 12314 B binary |
-| bloom-filters  | 100k | 16384     | 100778   | 0.78%      | 32991 B json   |
-| distillate/hll | 1M   | 16384     | 997042   | 0.30%      | 12314 B binary |
-| bloom-filters  | 1M   | 16384     | 994642   | 0.54%      | 33831 B json   |
-| distillate/hll | 10M  | 16384     | 10015492 | 0.15%      | 12314 B binary |
-| bloom-filters  | 10M  | 16384     | 9959055  | 0.41%      | 40247 B json   |
+The build column is wall time to add every key. `bloom-filters` holds a flat 9k
+adds/sec at every size, so its cost is purely linear: 10.6 seconds at 100k, 109
+seconds at 1M, 1,165 seconds at 10M. distillate's rate instead climbs with `n`, from
+1.12 M ops/s at 1k to about 16 M ops/s once dense, since the fixed cost per run is
+amortised and the sparse-to-dense promotion is behind it. At 10M that is 626
+milliseconds against 19 minutes.
+
+| Sketch         | n    | registers | estimate | rel. error | size           | build                  |
+| -------------- | ---- | --------- | -------- | ---------- | -------------- | ---------------------- |
+| distillate/hll | 1k   | 16384     | 1000     | 0.00%      | 4026 B binary  | 1 ms (1.12 M ops/s)    |
+| bloom-filters  | 1k   | 16384     | 504      | 49.63%     | 32904 B json   | 109 ms (9 k ops/s)     |
+| distillate/hll | 10k  | 16384     | 9954     | 0.46%      | 12314 B binary | 2 ms (4.35 M ops/s)    |
+| bloom-filters  | 10k  | 16384     | 5049     | 49.51%     | 32912 B json   | 1.06 s (9 k ops/s)     |
+| distillate/hll | 100k | 16384     | 99181    | 0.82%      | 12314 B binary | 9 ms (10.91 M ops/s)   |
+| bloom-filters  | 100k | 16384     | 100778   | 0.78%      | 32991 B json   | 10.60 s (9 k ops/s)    |
+| distillate/hll | 1M   | 16384     | 997042   | 0.30%      | 12314 B binary | 62 ms (16.18 M ops/s)  |
+| bloom-filters  | 1M   | 16384     | 994642   | 0.54%      | 33831 B json   | 109.32 s (9 k ops/s)   |
+| distillate/hll | 10M  | 16384     | 10015492 | 0.15%      | 12314 B binary | 626 ms (15.96 M ops/s) |
+| bloom-filters  | 10M  | 16384     | 9959055  | 0.41%      | 40247 B json   | 1164.62 s (9 k ops/s)  |
 
 ## Throughput (n = 100k)
 
@@ -79,7 +86,7 @@ Compare the ratios between rows, not these figures against a run on another mach
 | fuse8 has (miss)            | 11.04 M ops/s |
 | fuse16 has (hit)            | 10.95 M ops/s |
 | fuse16 has (miss)           | 10.95 M ops/s |
-| distillate/hll add          | 25.58 M ops/s |
-| distillate/hll count        | 45 k ops/s    |
+| distillate/hll add          | 17.63 M ops/s |
+| distillate/hll count        | 38 k ops/s    |
 | bloom-filters hll add       | 8 k ops/s     |
 | bloom-filters hll count     | 3 k ops/s     |
