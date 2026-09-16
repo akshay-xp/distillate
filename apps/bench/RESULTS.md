@@ -39,6 +39,11 @@ The two sizes are not the same encoding. distillate writes a binary payload and 
 distillate is exact at small cardinalities because it is still holding sparse entries there, not because its estimator is better.
 Once it promotes to dense registers it carries the same theoretical error as any HyperLogLog at that precision.
 
+Past 10k the distillate column does not move: 12,314 bytes at 10k and the same
+12,314 bytes at 10M, because dense registers do not grow with `n`. The incumbent's
+JSON does grow, from 32,904 to 40,247 bytes over the same range, since larger
+register values take more digits to spell out.
+
 | Sketch         | n    | registers | estimate | rel. error | size           |
 | -------------- | ---- | --------- | -------- | ---------- | -------------- |
 | distillate/hll | 1k   | 16384     | 1000     | 0.00%      | 4026 B binary  |
@@ -47,6 +52,10 @@ Once it promotes to dense registers it carries the same theoretical error as any
 | bloom-filters  | 10k  | 16384     | 5049     | 49.51%     | 32912 B json   |
 | distillate/hll | 100k | 16384     | 99181    | 0.82%      | 12314 B binary |
 | bloom-filters  | 100k | 16384     | 100778   | 0.78%      | 32991 B json   |
+| distillate/hll | 1M   | 16384     | 997042   | 0.30%      | 12314 B binary |
+| bloom-filters  | 1M   | 16384     | 994642   | 0.54%      | 33831 B json   |
+| distillate/hll | 10M  | 16384     | 10015492 | 0.15%      | 12314 B binary |
+| bloom-filters  | 10M  | 16384     | 9959055  | 0.41%      | 40247 B json   |
 
 ## Throughput (n = 100k)
 
@@ -70,7 +79,7 @@ Compare the ratios between rows, not these figures against a run on another mach
 | fuse8 has (miss)            | 11.04 M ops/s |
 | fuse16 has (hit)            | 10.95 M ops/s |
 | fuse16 has (miss)           | 10.95 M ops/s |
-| distillate/hll add          | 29.36 M ops/s |
-| distillate/hll count        | 51 k ops/s    |
-| bloom-filters hll add       | 10 k ops/s    |
+| distillate/hll add          | 25.58 M ops/s |
+| distillate/hll count        | 45 k ops/s    |
+| bloom-filters hll add       | 8 k ops/s     |
 | bloom-filters hll count     | 3 k ops/s     |
