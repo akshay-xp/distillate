@@ -4,7 +4,11 @@ import { pathToFileURL } from "node:url";
 
 import { run } from "mitata";
 
-import { cardinalityRows } from "./cardinality.js";
+import {
+  cardinalityRows,
+  HLL_CARDINALITIES,
+  HLL_PRECISION,
+} from "./cardinality.js";
 import type { CardinalityRow } from "./cardinality.js";
 import { comparisonRows } from "./compare.js";
 import type { ComparisonRow } from "./compare.js";
@@ -108,10 +112,6 @@ export function throughputTable(opsByLabel: Map<string, number>): string {
 
 const CAPACITIES = [100_000, 1_000_000];
 const THROUGHPUT_CAPACITY = 100_000;
-const HLL_PRECISION = 14;
-// Swept so both of the incumbent's regimes are visible: it is roughly 50% off
-// below n of about 2.5 * m, and accurate once n is well past m.
-const HLL_CARDINALITIES = [1_000, 10_000, 100_000];
 
 interface MitataResult {
   benchmarks: { alias: string; runs: { stats: { avg: number } }[] }[];
