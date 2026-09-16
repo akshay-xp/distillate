@@ -238,3 +238,20 @@ identical code:
 Same space, same accuracy, roughly 75 times the lookup throughput. Method and
 the full report: [benchmark results](/bench/results/) and
 [methodology](/bench/methodology/).
+
+### And in cardinality
+
+Sketches are matched on register count rather than on bytes, so both carry the
+same theoretical error and space is left as the differentiator. Counting
+10,000,000 distinct keys at `m = 16384`:
+
+| HyperLogLog    | build time | serialized     | rel. error |
+| -------------- | ---------- | -------------- | ---------- |
+| **distillate** | 0.63 s     | 12314 B binary | 0.15%      |
+| bloom-filters  | 1164.62 s  | 40247 B json   | 0.41%      |
+
+Both land inside the theoretical error at this cardinality, so accuracy is not
+the difference here; build time and space are. The two sizes are different
+encodings, binary against JSON, and distillate's does not grow: it is the same
+12314 bytes at 10,000 distinct keys as at 10,000,000, where the incumbent's JSON
+climbs from 32904 to 40247 bytes over that range.
