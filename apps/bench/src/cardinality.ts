@@ -1,6 +1,8 @@
 import { HyperLogLog as IncumbentHll } from "bloom-filters";
 import { HyperLogLog } from "distillate/hll";
 
+import { hitMissPools } from "./harness.js";
+
 export interface CountableSketch {
   add(key: string): void;
   count(): number;
@@ -47,3 +49,36 @@ export const cardinalityAdapters: CardinalityAdapter[] = [
   distillateHllAdapter,
   incumbentHllAdapter,
 ];
+
+export interface CardinalityRow {
+  name: string;
+  p: number;
+  registers: number;
+  n: number;
+  estimate: number;
+  relativeError: number;
+}
+
+export function cardinalityRows(
+  p: number,
+  cardinalities: number[],
+): CardinalityRow[] {
+  const rows: CardinalityRow[] = [];
+  for (const n of cardinalities) {
+    const hit = hitMissPools(n).hit;
+    for (const adapter of cardinalityAdapters) {
+      const sketch = adapter.create(p);
+      for (const key of hit) sketch.add(key);
+      const estimate = sketch.count();
+      rows.push({
+        name: adapter.name,
+        p,
+        registers: sketch.registers,
+        n,
+        estimate,
+        relativeError: Math.abs(estimate - n) / n,
+      });
+    }
+  }
+  return rows;
+}
