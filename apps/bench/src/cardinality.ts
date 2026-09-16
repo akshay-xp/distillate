@@ -3,6 +3,8 @@ import { HyperLogLog } from "distillate/hll";
 
 import { hitMissPools } from "./harness.js";
 
+export type SketchFormat = "binary" | "json";
+
 export interface CountableSketch {
   add(key: string): void;
   count(): number;
@@ -12,11 +14,13 @@ export interface CountableSketch {
 
 export interface CardinalityAdapter {
   name: string;
+  format: SketchFormat;
   create(p: number): CountableSketch;
 }
 
 export const distillateHllAdapter: CardinalityAdapter = {
   name: "distillate/hll",
+  format: "binary",
   create(p) {
     const sketch = new HyperLogLog({ p });
     return {
@@ -25,13 +29,14 @@ export const distillateHllAdapter: CardinalityAdapter = {
       },
       count: () => sketch.count(),
       registers: 2 ** sketch.p,
-      bytes: () => 0,
+      bytes: () => sketch.toBytes().length,
     };
   },
 };
 
 export const incumbentHllAdapter: CardinalityAdapter = {
   name: "bloom-filters",
+  format: "json",
   create(p) {
     const sketch = new IncumbentHll(2 ** p);
     return {
@@ -40,7 +45,7 @@ export const incumbentHllAdapter: CardinalityAdapter = {
       },
       count: () => sketch.count(),
       registers: sketch.nbRegisters,
-      bytes: () => 0,
+      bytes: () => JSON.stringify(sketch.saveAsJSON()).length,
     };
   },
 };
@@ -57,6 +62,8 @@ export interface CardinalityRow {
   n: number;
   estimate: number;
   relativeError: number;
+  bytes: number;
+  format: SketchFormat;
 }
 
 export function cardinalityRows(
@@ -77,6 +84,8 @@ export function cardinalityRows(
         n,
         estimate,
         relativeError: Math.abs(estimate - n) / n,
+        bytes: sketch.bytes(),
+        format: adapter.format,
       });
     }
   }
