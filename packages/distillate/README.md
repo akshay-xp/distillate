@@ -135,6 +135,17 @@ Classic Bloom head-to-head at a **matched 1% false-positive rate** over the same
 
 Same space, same accuracy, **~75x the lookup throughput** of [`bloom-filters`](https://www.npmjs.com/package/bloom-filters) (the package distillate replaces), while hashing UTF-8 bytes with MurmurHash3 so filters stay portable and cross-language readable.
 
+Cardinality is a separate head-to-head, at a **matched register count** (`m = 2 ** p`, `p = 14`) over the same keys. Both sketches carry the same theoretical error there (`1.04 / sqrt(m)`, about 0.81%), and at 100k distinct keys both hit it: 0.82% for distillate against 0.78% for `bloom-filters`. The difference is at the low end, where the incumbent has no working small-range correction:
+
+| p = 14, m = 16384  | distillate      | bloom-filters |
+| ------------------ | --------------- | ------------- |
+| rel. error, n=1k   | 0.00%           | 49.63%        |
+| rel. error, n=10k  | 0.46%           | 49.51%        |
+| rel. error, n=100k | 0.82%           | 0.78%         |
+| serialized, n=100k | 12,314 B binary | 32,991 B JSON |
+
+Counting a few thousand distinct keys in a 16k-register sketch, `bloom-filters` answers wrong by about half. distillate is exact at that end because it is still holding sparse entries, not because its estimator is better.
+
 These are a point-in-time snapshot on one machine. The full report (blocked/fuse, 1M capacity, the `bloomfilter` micro-package) and exactly how it is measured live in the [`apps/bench`](https://github.com/akshay-xp/distillate/tree/main/apps/bench) workspace: [RESULTS.md](https://github.com/akshay-xp/distillate/blob/main/apps/bench/RESULTS.md), [METHODOLOGY.md](https://github.com/akshay-xp/distillate/blob/main/apps/bench/METHODOLOGY.md).
 
 ## Docs

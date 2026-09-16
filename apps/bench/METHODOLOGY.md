@@ -20,6 +20,35 @@ All classic-Bloom libraries are configured for the **same target FPR (1%)** over
 `bits/key` is read from each filter's actual allocated bit count divided by `n`,
 not from the requested target, so all three land at the same ~9.59 bits/key.
 
+## Configuration at matched precision
+
+HyperLogLog is compared at a **matched register count**. `bloom-filters` takes the
+register count `m` directly and distillate takes a precision `p`, so `m = 2 ** p`
+puts both on the same number of registers and therefore the same theoretical error
+of `1.04 / sqrt(m)`. Accuracy is then comparable and space is the differentiator.
+
+Equal _memory_ was rejected as the basis. It would hand the incumbent roughly a
+eleventh of the registers, so its accuracy would look bad for a reason that is
+really about representation rather than estimation. That is the misleading table,
+so the comparison does not use it.
+
+Sizes are not the same encoding: distillate writes a binary payload, `bloom-filters`
+writes JSON via `saveAsJSON`. Each row names its format rather than presenting the
+two as interchangeable.
+
+Accuracy is reported across a **sweep** of cardinalities, not at one point, because
+the incumbent has no working small-range correction: it is roughly 50% off whenever
+`n` is below about `2.5 * m`, and accurate once `n` is well past `m`. A single
+point would hide which of the two regimes it is in.
+
+distillate is exact at the low end of that sweep because it is still storing sparse
+entries there, not because its estimator is better. Once it promotes to dense
+registers it carries the same theoretical error as any HyperLogLog at that precision.
+
+The sketch throughput benches build at 20,000 keys rather than the 100k the filter
+benches use. The incumbent adds at roughly 8k ops/s, so a 100k-key sketch costs it
+about 12.5 seconds to build.
+
 ## Keys
 
 `hitMissPools(n)` builds two disjoint sets: inserted "hit" keys `0:0 … 0:(n-1)`
@@ -48,6 +77,8 @@ Reported as ops/sec (`1e9 / avg_ns`).
 
 - **Classic Bloom** is a head-to-head: `distillate/bloom` vs `bloom-filters` vs
   `bloomfilter`.
+- **HyperLogLog** is a head-to-head: `distillate/hll` vs the `bloom-filters` sketch,
+  at a matched register count (see above).
 - **blocked**, **fuse8**, **fuse16** are distillate-only and shown standalone; no
   audited incumbent offers an equivalent, so there is nothing fair to compare them
   to. fuse8 targets 2⁻⁸, fuse16 targets 2⁻¹⁶.
@@ -62,4 +93,5 @@ serialize and re-read across languages. The throughput gap is that tradeoff.
 ## Scope
 
 Node only, single machine (disclosed in the banner). No Bun/Deno, no CI runs, no
-charts. Capacities: 100k and 1M for space/accuracy, 100k for throughput.
+charts. Capacities: 100k and 1M for space/accuracy, 100k for throughput. Cardinality is
+swept at 1k/10k/100k against `p = 14`, with the sketch throughput built at 20k.
