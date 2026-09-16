@@ -121,6 +121,44 @@ filter.has("alice");
 `create(n, epsilon)` means the same thing in both: capacity and target false
 positive rate.
 
+### The cardinality sketch
+
+`bloom-filters` also ships a HyperLogLog, and it maps across too. The one
+difference worth reading is how the two are sized: it takes a register count,
+distillate takes a precision `p`, and `2 ** p` is that register count.
+
+| `bloom-filters`                | distillate                             |
+| ------------------------------ | -------------------------------------- |
+| `require("bloom-filters")`     | `import ... from "distillate/hll"`     |
+| `new HyperLogLog(nbRegisters)` | `new HyperLogLog({ p })`               |
+| `sketch.update(item)`          | `sketch.add(key)`                      |
+| `sketch.count()`               | `sketch.count()`                       |
+| `a.merge(b)`                   | `a.union(b)`                           |
+| `sketch.saveAsJSON()`          | `sketch.toJSON()` / `sketch.toBytes()` |
+
+Before:
+
+```js
+const { HyperLogLog } = require("bloom-filters");
+
+const sketch = new HyperLogLog(16384);
+sketch.update("alice");
+sketch.count();
+```
+
+After:
+
+```ts
+import { HyperLogLog } from "distillate/hll";
+
+const sketch = new HyperLogLog({ p: 14 });
+sketch.add("alice");
+sketch.count();
+```
+
+`16384` registers is `p = 14`, so the two sketches above carry the same
+theoretical error.
+
 ### Serialized filters do not carry over
 
 The two formats are unrelated. distillate cannot read a `bloom-filters`
