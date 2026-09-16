@@ -36,8 +36,13 @@ const ERROR_CONSTANT = 1.04;
 /** DSTL frame type for a HyperLogLog sketch. */
 const TYPE = 5;
 
-/** Body layout: p (u8) | encoding (u8) | seed (u32 LE) | payload. */
-const PARAMS_SIZE = 6;
+/**
+ * Body layout: p (u8) | encoding (u8) | seed (u32 LE) | 2 bytes padding |
+ * payload. Params occupy 6 bytes; the block is padded to 8 so the sparse
+ * entries, which are u32, start at frame offset 24 rather than 22, where no
+ * language permits a typed view over them.
+ */
+const PARAMS_SIZE = 8;
 const DENSE = 0;
 const SPARSE = 1;
 const ENTRY_SIZE = 4;
