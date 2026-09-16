@@ -67,3 +67,15 @@ test("the small-range defect names both of the incumbent's regimes", () => {
   expect(section).toBeGreaterThan(at("## What the incumbent costs you"));
   expect(section).toBeLessThan(at("## What changes in your code"));
 });
+
+test("the exactness the guide claims is the sparse store, not the estimator", () => {
+  const sketch = new HyperLogLog({ p: 14 });
+  for (let i = 0; i < 1000; i++) sketch.add(`key:${String(i)}`);
+
+  // Exact, because below promotion it is still counting entries rather than
+  // estimating from registers. This is the fact the guide attributes.
+  expect(sketch.count()).toBe(1000);
+
+  expect(GUIDE).toContain("sparse");
+  expect(GUIDE).toContain("Its estimator is not better");
+});
