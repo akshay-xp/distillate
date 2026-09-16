@@ -166,8 +166,19 @@ test("toBytes emits a DSTL type-3 frame for fuse8 and type-4 for fuse16", () => 
   expect(h8.version).toBe(FORMAT_VERSION);
   expect(h8.body.length).toBeGreaterThan(16);
 
+  // Fuse's params already fill 16, so its fingerprints were aligned before
+  // v5. Derived from the frame rather than assumed, so a future params field
+  // that shortened or grew the block would fail here.
+  const lanes8 = computeParams(500).arrayLength;
+  expect(h8.body.length - lanes8).toBe(16);
+  expect((16 + (h8.body.length - lanes8)) % 8).toBe(0);
+
   const f16 = BinaryFuse16.from(sampleStrings(1, 500));
-  expect(readHeader(f16.toBytes()).type).toBe(4);
+  const h16 = readHeader(f16.toBytes());
+  expect(h16.type).toBe(4);
+
+  // u16 fingerprints, so this is the offset that has to stay even.
+  expect(h16.body.length - lanes8 * 2).toBe(16);
 });
 
 test.each([

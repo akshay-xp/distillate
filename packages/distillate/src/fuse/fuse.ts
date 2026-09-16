@@ -26,6 +26,12 @@ const ARITY = 3;
 const TYPE_FUSE8 = 3;
 const TYPE_FUSE16 = 4;
 
+/**
+ * Params fill 16 exactly, so the fingerprints already start at frame offset
+ * 32. Named so a future field cannot shorten the block and unalign them.
+ */
+const PARAMS_SIZE = 16;
+
 /** Thrown when binary fuse construction fails to converge on the key set. */
 export class BinaryFuseBuildError extends Error {
   /** Discriminates this error from other `Error`s. */
@@ -256,7 +262,7 @@ function fuseStateFromBytes(
       `unsupported hash variant ${String(flags & 0x0f)}`,
     );
   }
-  assertMinBodyLength(body.length, 16, "fuse");
+  assertMinBodyLength(body.length, PARAMS_SIZE, "fuse");
   const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
   const seed = dv.getUint32(0, true);
   const seg = dv.getUint32(4, true);
@@ -276,8 +282,12 @@ function fuseStateFromBytes(
   // An empty filter carries params but zero fingerprints; otherwise the array
   // length is fixed by the segment geometry (arrayLength = segCountLen + 2*seg).
   const expectedArrayLength = size === 0 ? 0 : segCountLen + 2 * seg;
-  assertBodyLength(body.length, 16 + expectedArrayLength * bpe, "fuse");
-  const laneBytes = body.subarray(16);
+  assertBodyLength(
+    body.length,
+    PARAMS_SIZE + expectedArrayLength * bpe,
+    "fuse",
+  );
+  const laneBytes = body.subarray(PARAMS_SIZE);
   const arrayLength = laneBytes.length / bpe;
   const fp =
     bpe === 1 ? new Uint8Array(arrayLength) : new Uint16Array(arrayLength);
@@ -341,13 +351,13 @@ abstract class BinaryFuse {
     const type = this.#fp.BYTES_PER_ELEMENT === 1 ? TYPE_FUSE8 : TYPE_FUSE16;
     return writeFrame(
       { version: FORMAT_VERSION, type, flags: HASH_MURMUR128 },
-      16 + laneBytes.length,
+      PARAMS_SIZE + laneBytes.length,
       (body, dv) => {
         dv.setUint32(0, this.#seed, true);
         dv.setUint32(4, this.#seg, true);
         dv.setUint32(8, this.#segCountLen, true);
         dv.setUint32(12, this.#size, true);
-        body.set(laneBytes, 16);
+        body.set(laneBytes, PARAMS_SIZE);
       },
     );
   }
