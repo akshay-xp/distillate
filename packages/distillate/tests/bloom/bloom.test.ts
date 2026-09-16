@@ -187,7 +187,13 @@ test("toBytes emits a DSTL type-1 frame with LE params + payload", () => {
   expect(dv.getUint32(0, true)).toBe(64);
   expect(dv.getUint16(4, true)).toBe(3);
   expect(dv.getUint32(6, true)).toBe(7);
-  expect(body).toHaveLength(14 + Math.ceil(64 / 8));
+  expect(body).toHaveLength(16 + Math.ceil(64 / 8));
+
+  // The params block is padded to 16 so the bit array starts at frame offset
+  // 32, which a foreign reader may rely on being 8-byte aligned.
+  expect(body.byteOffset + 16).toBe(32);
+  expect((body.byteOffset + 16) % 8).toBe(0);
+  expect(Array.from(body.subarray(14, 16))).toEqual([0, 0]);
 });
 
 test("fromBytes round-trips params and membership (property)", () => {
@@ -414,7 +420,7 @@ test("fromBytes rejects a frame whose body length disagrees with declared params
 });
 
 const GOLDEN_V5 =
-  "RFNUTAUBAACOAAAAAAAAAAAEAAAHACoAAABlAAAAAAAAAABAAAACAAAAAAAAABAAAAAQAIAAgAAAAAAAAAAAAgAAAAAAAAIQACAAAABAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAIAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAQAAACAAAAAAAAAAAAAAAAAAAAAAAgAAAQAAQAAAAIAICHOncN";
+  "RFNUTAUBAACQAAAAAAAAAAAEAAAHACoAAABlAAAAAAAAAAAAAEAAAAIAAAAAAAAAEAAAABAAgACAAAAAAAAAAAACAAAAAAAAAhAAIAAAAEAAAAAAAAAAAAAAAAAABAAAAAAAAAAAgAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAABAAAAIAAAAAAAAAAAAAAAAAAAAAACAAABAABAAAAAgAgJUroEM=";
 
 const UNSUPPORTED_V2 =
   "QU1RRgIBAQAABAAABwAqAAAAZQAAAAAAAAAACAACAAAAEAAAAAQEAAAAAAAAAAAGAQAAAAAAAAAIAQAAAIAAAAAIAAAAAAAAAAAQAAgAAAAAAAAgAAAAAAAABAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAIAIAAAAAAAAAAAABAAAAAAL3+yiw==";
