@@ -79,3 +79,17 @@ test("the exactness the guide claims is the sparse store, not the estimator", ()
   expect(GUIDE).toContain("sparse");
   expect(GUIDE).toContain("Its estimator is not better");
 });
+
+test("the measured gains section carries the sketch, not just the filters", () => {
+  const rows = parseTable(GUIDE, "And in cardinality");
+  const flat = rows.flat().join(" ");
+
+  // Quoted from the 10M row of apps/bench/RESULTS.md, at a matched m = 16384.
+  for (const figure of ["0.63 s", "1164.62 s", "12314", "40247"]) {
+    expect(flat, `${figure} missing from the cardinality table`).toContain(
+      figure,
+    );
+  }
+
+  expect(GUIDE).toContain("/bench/methodology/");
+});
