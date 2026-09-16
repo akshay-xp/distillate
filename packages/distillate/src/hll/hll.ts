@@ -240,7 +240,8 @@ export class HyperLogLog {
 
       return writeFrame(
         { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
-        PARAMS_SIZE + entries * ENTRY_SIZE,
+        PARAMS_SIZE,
+        entries * ENTRY_SIZE,
         (body, dv) => {
           body[0] = this.#p;
           body[1] = SPARSE;
@@ -255,7 +256,8 @@ export class HyperLogLog {
     const payload = this.#registers.bytes;
     return writeFrame(
       { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
-      PARAMS_SIZE + payload.length,
+      PARAMS_SIZE,
+      payload.length,
       (body, dv) => {
         body[0] = this.#p;
         body[1] = DENSE;

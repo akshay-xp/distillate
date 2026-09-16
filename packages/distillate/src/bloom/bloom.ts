@@ -210,7 +210,8 @@ export class BloomFilter {
     const payload = this.#bits.bytes;
     return writeFrame(
       { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
-      PARAMS_SIZE + payload.length,
+      PARAMS_SIZE,
+      payload.length,
       (body, dv) => {
         dv.setUint32(0, this.#m, true);
         dv.setUint16(4, this.#k, true);

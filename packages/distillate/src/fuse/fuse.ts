@@ -351,7 +351,8 @@ abstract class BinaryFuse {
     const type = this.#fp.BYTES_PER_ELEMENT === 1 ? TYPE_FUSE8 : TYPE_FUSE16;
     return writeFrame(
       { version: FORMAT_VERSION, type, flags: HASH_MURMUR128 },
-      PARAMS_SIZE + laneBytes.length,
+      PARAMS_SIZE,
+      laneBytes.length,
       (body, dv) => {
         dv.setUint32(0, this.#seed, true);
         dv.setUint32(4, this.#seg, true);
