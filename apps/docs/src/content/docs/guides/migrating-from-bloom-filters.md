@@ -222,6 +222,9 @@ code anyway:
   0.39%, against 11.5 for classic at the same rate, and faster to query.
 - **Lookups dominate and the filter is large?**
   [Blocked Bloom](/guides/blocked/) touches one cache line instead of `k`.
+- **Migrating a HyperLogLog?** You gave the old one a register count. Pick the
+  precision that produces it, or the error you actually want, in
+  [choose a precision](/guides/hll/#choose-a-precision).
 
 [Choosing a structure](/guides/choosing-a-structure/) maps this out.
 

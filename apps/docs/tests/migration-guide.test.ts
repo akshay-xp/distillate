@@ -93,3 +93,7 @@ test("the measured gains section carries the sketch, not just the filters", () =
 
   expect(GUIDE).toContain("/bench/methodology/");
 });
+
+test("a reader holding a register count is pointed at picking a precision", () => {
+  expect(GUIDE).toContain("/guides/hll/#choose-a-precision");
+});
