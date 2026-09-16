@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { HyperLogLog } from "distillate/hll";
@@ -36,4 +37,12 @@ test("the README HyperLogLog sample counts distinct keys, not additions", () => 
 
 test("every package README sample quotes results the library reproduces", async () => {
   await expect(runClaims(extractSamples(README))).resolves.toEqual([]);
+});
+
+test("the README Performance section does not leave the sketch unmentioned", () => {
+  const md = readFileSync(README, "utf8");
+  const start = md.indexOf("## Performance");
+  expect(start).toBeGreaterThan(-1);
+  const section = md.slice(start, md.indexOf("\n## ", start + 1));
+  expect(section).toMatch(/cardinality|HyperLogLog/i);
 });
