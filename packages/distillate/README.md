@@ -135,17 +135,23 @@ Classic Bloom head-to-head at a **matched 1% false-positive rate** over the same
 
 Same space, same accuracy, **~75x the lookup throughput** of [`bloom-filters`](https://www.npmjs.com/package/bloom-filters) (the package distillate replaces), while hashing UTF-8 bytes with MurmurHash3 so filters stay portable and cross-language readable.
 
-Cardinality is a separate head-to-head, at a **matched register count** (`m = 2 ** p`, `p = 14`) over the same keys. Both sketches carry the same theoretical error there (`1.04 / sqrt(m)`, about 0.81%), and at 100k distinct keys both hit it: 0.82% for distillate against 0.78% for `bloom-filters`. The difference is at the low end, where the incumbent has no working small-range correction:
+Cardinality is a separate head-to-head, at a **matched register count** (`m = 2 ** p`, `p = 14`, the configuration Redis uses) over the same keys, swept from 1k to 10M distinct:
 
 | p = 14, m = 16384  | distillate      | bloom-filters |
 | ------------------ | --------------- | ------------- |
 | rel. error, n=1k   | 0.00%           | 49.63%        |
-| rel. error, n=10k  | 0.46%           | 49.51%        |
 | rel. error, n=100k | 0.82%           | 0.78%         |
-| serialized, n=100k | 12,314 B binary | 32,991 B JSON |
-| `add` throughput   | ~29.4 M ops/s   | ~10 k ops/s   |
+| rel. error, n=10M  | 0.15%           | 0.41%         |
+| serialized, n=10M  | 12,314 B binary | 40,247 B JSON |
+| `add` throughput   | ~25.6 M ops/s   | ~8 k ops/s    |
 
-Counting a few thousand distinct keys in a 16k-register sketch, `bloom-filters` answers wrong by about half. distillate is exact at that end because it is still holding sparse entries, not because its estimator is better.
+Both sketches carry the same theoretical error at this precision (`1.04 / sqrt(m)`, about 0.81%), and once `n` is well past `m` both stay inside it. The differences are elsewhere.
+
+**Small counts.** `bloom-filters` has no working small-range correction, so below roughly `2.5 * m` it is off by about half: counting a few thousand distinct keys in a 16k-register sketch, it answers 504 for 1,000. distillate is exact there because it is still holding sparse entries, not because its estimator is better.
+
+**Memory does not grow.** From 10k distinct keys to 10M, distillate stays at exactly 12,314 bytes. The incumbent's JSON grows from 32,904 to 40,247 bytes over the same range, because larger register values take more digits to spell out.
+
+**Building the sketch.** At roughly 8k `add` ops/s, `bloom-filters` needs about 105 seconds to count 1M distinct keys and about 18 minutes for 10M. distillate does the 1M in a tenth of a second.
 
 These are a point-in-time snapshot on one machine. The full report (blocked/fuse, 1M capacity, the `bloomfilter` micro-package) and exactly how it is measured live in the [`apps/bench`](https://github.com/akshay-xp/distillate/tree/main/apps/bench) workspace: [RESULTS.md](https://github.com/akshay-xp/distillate/blob/main/apps/bench/RESULTS.md), [METHODOLOGY.md](https://github.com/akshay-xp/distillate/blob/main/apps/bench/METHODOLOGY.md).
 

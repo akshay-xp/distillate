@@ -45,6 +45,20 @@ distillate is exact at the low end of that sweep because it is still storing spa
 entries there, not because its estimator is better. Once it promotes to dense
 registers it carries the same theoretical error as any HyperLogLog at that precision.
 
+`p = 14` is not an arbitrary pick. It gives `m = 16384` six-bit registers, the same
+configuration Redis uses for its own HyperLogLog, so the precision under test is one
+people actually run rather than one chosen to flatter a table.
+
+The sweep runs to 10M distinct keys so the asymptotic regime is visible and not just
+the small-range one. Memory is the point being shown: the dense sketch does not grow
+with `n`, so the size column stays flat while the cardinality moves four orders of
+magnitude.
+
+The sweep's cost is almost entirely the incumbent, which adds at 8k to 9.4k ops/s
+depending on the run: about 105 seconds for its 1M row and about 18 minutes for its
+10M row, against a tenth of a second for distillate at 1M. The full sweep takes
+about 20 minutes, essentially all of it waiting on `bloom-filters`.
+
 The sketch throughput benches build at 20,000 keys rather than the 100k the filter
 benches use. The incumbent adds at roughly 8k ops/s, so a 100k-key sketch costs it
 about 12.5 seconds to build.
@@ -94,4 +108,5 @@ serialize and re-read across languages. The throughput gap is that tradeoff.
 
 Node only, single machine (disclosed in the banner). No Bun/Deno, no CI runs, no
 charts. Capacities: 100k and 1M for space/accuracy, 100k for throughput. Cardinality is
-swept at 1k/10k/100k against `p = 14`, with the sketch throughput built at 20k.
+swept at 1k/10k/100k/1M/10M against `p = 14`, with the sketch throughput built at
+20k.
