@@ -1,7 +1,7 @@
 import { fromBase64, toBase64 } from "./base64.js";
 import { crc32 } from "./crc32.js";
 
-export const FORMAT_VERSION = 4;
+export const FORMAT_VERSION = 5;
 
 /** Hash variant recorded in the low nibble of the header flags byte. */
 export const HASH_MURMUR128 = 0;

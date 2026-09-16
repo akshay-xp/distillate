@@ -23,7 +23,7 @@ const sketchOf = (n: number, p = 14, tag = "ser"): HyperLogLog => {
   return sketch;
 };
 
-test("a frame declares itself a version 4 DSTL sketch", () => {
+test("a frame declares itself a version 5 DSTL sketch", () => {
   const frame = sketchOf(5000).toBytes();
   expect([...frame.subarray(0, 4)]).toEqual([0x44, 0x53, 0x54, 0x4c]);
   expect(frame[4]).toBe(FORMAT_VERSION);

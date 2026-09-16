@@ -176,7 +176,7 @@ test("toBytes emits a DSTL type-1 frame with LE params + payload", () => {
   f.add("x");
   const frame = f.toBytes();
 
-  expect(frame[4]).toBe(4);
+  expect(frame[4]).toBe(5);
   expect((frame[6] ?? 0) & 0x0f).toBe(0);
 
   const { version, type, body } = readHeader(frame);
@@ -413,14 +413,14 @@ test("fromBytes rejects a frame whose body length disagrees with declared params
   expect(() => BloomFilter.fromBytes(short)).toThrow(TruncatedError);
 });
 
-const GOLDEN_V4 =
-  "RFNUTAQBAACOAAAAAAAAAAAEAAAHACoAAABlAAAAAAAAAABAAAACAAAAAAAAABAAAAAQAIAAgAAAAAAAAAAAAgAAAAAAAAIQACAAAABAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAIAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAQAAACAAAAAAAAAAAAAAAAAAAAAAAgAAAQAAQAAAAIAIADExAG";
+const GOLDEN_V5 =
+  "RFNUTAUBAACOAAAAAAAAAAAEAAAHACoAAABlAAAAAAAAAABAAAACAAAAAAAAABAAAAAQAIAAgAAAAAAAAAAAAgAAAAAAAAIQACAAAABAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAIAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAQAAACAAAAAAAAAAAAAAAAAAAAAAAgAAAQAAQAAAAIAICHOncN";
 
 const UNSUPPORTED_V2 =
   "QU1RRgIBAQAABAAABwAqAAAAZQAAAAAAAAAACAACAAAAEAAAAAQEAAAAAAAAAAAGAQAAAAAAAAAIAQAAAIAAAAAIAAAAAAAAAAAQAAgAAAAAAAAgAAAAAAAABAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAIAIAAAAAAAAAAAABAAAAAAL3+yiw==";
 
-test("reads a committed v4 golden frame (locks the format)", () => {
-  const f = BloomFilter.fromBytes(fromBase64(GOLDEN_V4));
+test("reads a committed v5 golden frame (locks the format)", () => {
+  const f = BloomFilter.fromBytes(fromBase64(GOLDEN_V5));
   for (const key of ["alice", "bob", "carol"]) expect(f.has(key)).toBe(true);
   expect(f.m).toBe(1024);
   expect(f.k).toBe(7);
@@ -428,7 +428,7 @@ test("reads a committed v4 golden frame (locks the format)", () => {
 
   const fresh = new BloomFilter({ m: 1024, k: 7, seed: 42 });
   for (const key of ["alice", "bob", "carol"]) fresh.add(key);
-  expect(fresh.toBytes()).toEqual(fromBase64(GOLDEN_V4));
+  expect(fresh.toBytes()).toEqual(fromBase64(GOLDEN_V5));
 });
 
 test("fromBytes rejects a pre-v4 AMQF frame on magic", () => {

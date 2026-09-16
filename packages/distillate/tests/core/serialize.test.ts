@@ -49,9 +49,9 @@ test("writeHeader frames magic, reserved byte, and round-trips fields", () => {
     { version: FORMAT_VERSION, type: 5, flags: 3 },
     Uint8Array.of(1, 2, 3),
   );
-  expect(FORMAT_VERSION).toBe(4);
+  expect(FORMAT_VERSION).toBe(5);
   expect(Array.from(frame.subarray(0, 4))).toEqual([0x44, 0x53, 0x54, 0x4c]);
-  expect(frame[4]).toBe(4);
+  expect(frame[4]).toBe(5);
   expect(frame[7]).toBe(0);
   expect(readHeader(frame)).toEqual({
     version: FORMAT_VERSION,
@@ -106,6 +106,13 @@ test.each([1, -1])(
 
 test("readHeader throws UnknownVersionError on unsupported version", () => {
   const f = writeHeader({ version: 255, type: 0, flags: 0 }, new Uint8Array(0));
+  expect(() => readHeader(f)).toThrow(UnknownVersionError);
+});
+
+test("a version 4 frame is rejected rather than misread", () => {
+  // v5 moved every payload, so a v4 frame that still carries the DSTL magic
+  // reaches the version check and must stop there rather than parse.
+  const f = writeHeader({ version: 4, type: 1, flags: 0 }, new Uint8Array(32));
   expect(() => readHeader(f)).toThrow(UnknownVersionError);
 });
 
