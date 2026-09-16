@@ -30,6 +30,28 @@ test("a frame declares itself a version 5 DSTL sketch", () => {
   expect(frame[5]).toBe(5);
 });
 
+test("a sparse payload can be mapped as u32 by a foreign reader", () => {
+  const sketch = sketchOf(10);
+  const frame = sketch.toBytes();
+
+  // Sparse entries are u32, so they must begin at a multiple of 4. The
+  // 6-byte params block put them at 22 and no language permits a view
+  // there; padding the block to 8 moves them to 24.
+  const bodyLength = frame.length - 16 - 4;
+  expect(bodyLength % 4).toBe(0);
+
+  const entries = (bodyLength - 8) / 4;
+
+  const mapped = new Uint32Array(frame.buffer, frame.byteOffset + 24, entries);
+  const dv = new DataView(frame.buffer, frame.byteOffset, frame.byteLength);
+  for (let i = 0; i < entries; i++) {
+    expect(mapped[i]).toBe(dv.getUint32(24 + i * 4, true));
+  }
+
+  expect(Array.from(frame.subarray(22, 24))).toEqual([0, 0]);
+  expect(HyperLogLog.fromBytes(frame).equals(sketch)).toBe(true);
+});
+
 test("a dense sketch round-trips to an identical sketch", () => {
   // 5000 keys at p=14 and 10 at p=4 are both well past their buffers.
   for (const [n, p] of [
@@ -59,8 +81,8 @@ test("a sparse sketch is written as entries, not as registers", () => {
   const sparse = sketchOf(100).toBytes();
   const dense = sketchOf(5000).toBytes();
 
-  // 16 header + 6 params + 12288 registers + 4 CRC.
-  expect(dense.length).toBe(12_314);
+  // 16 header + 8 params + 12288 registers + 4 CRC.
+  expect(dense.length).toBe(12_316);
   expect(sparse.length).toBeLessThan(1000);
   // The body opens after the 16-byte header: p, then the encoding byte.
   expect(sparse[17]).toBe(1);
@@ -105,7 +127,7 @@ test("a sparse payload that is not whole entries is rejected", () => {
 
 test("a sparse payload larger than the buffer at that precision is rejected", () => {
   // p=4 holds three entries; hand it four.
-  const body = new Uint8Array(6 + 4 * 4);
+  const body = new Uint8Array(8 + 4 * 4);
   body[0] = 4;
   body[1] = 1;
   const frame = writeHeader(
@@ -184,7 +206,7 @@ test("a malformed envelope is rejected", () => {
 });
 
 test("a frame naming a hash this release cannot reproduce is rejected", () => {
-  const body = new Uint8Array(6 + 12);
+  const body = new Uint8Array(8 + 12);
   body[0] = 4;
   const frame = writeHeader(
     { version: FORMAT_VERSION, type: 5, flags: 1 },
@@ -194,7 +216,7 @@ test("a frame naming a hash this release cannot reproduce is rejected", () => {
 });
 
 test("a frame naming an encoding this release does not have is rejected", () => {
-  const body = new Uint8Array(6 + 12);
+  const body = new Uint8Array(8 + 12);
   body[0] = 4;
   body[1] = 2;
   const frame = writeHeader(
@@ -219,7 +241,7 @@ const framePrecision = fc.integer({ min: 4, max: 10 });
 
 // Frame offsets, per the published format: 16-byte header, then a 6-byte
 // params block, then the payload, then the CRC.
-const PAYLOAD_AT = 22;
+const PAYLOAD_AT = 24;
 const CRC_SIZE = 4;
 const ENTRY_SIZE = 4;
 const RHO_BITS = 6;
@@ -292,10 +314,10 @@ test("a sparse frame holds one entry per distinct index", () => {
 });
 
 const denseFrame = (p: number, payload: Uint8Array): Uint8Array => {
-  const body = new Uint8Array(6 + payload.length);
+  const body = new Uint8Array(8 + payload.length);
   body[0] = p;
   body[1] = 0;
-  body.set(payload, 6);
+  body.set(payload, 8);
   return writeHeader({ version: FORMAT_VERSION, type: 5, flags: 0 }, body);
 };
 
@@ -322,12 +344,12 @@ test("a frame carrying exactly the precision's maximum rho still parses", () => 
 });
 
 const sparseFrame = (p: number, entries: readonly number[]): Uint8Array => {
-  const body = new Uint8Array(6 + entries.length * 4);
+  const body = new Uint8Array(8 + entries.length * 4);
   body[0] = p;
   body[1] = 1;
   const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
   for (let i = 0; i < entries.length; i++) {
-    view.setUint32(6 + i * 4, entries[i] ?? 0, true);
+    view.setUint32(8 + i * 4, entries[i] ?? 0, true);
   }
   return writeHeader({ version: FORMAT_VERSION, type: 5, flags: 0 }, body);
 };

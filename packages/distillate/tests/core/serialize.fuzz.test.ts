@@ -95,7 +95,7 @@ describe.each(entries)(
 // Frame geometry, per the published format: a 16-byte header, a 6-byte params
 // block for type 5, then the payload, then the CRC.
 const HEADER_SIZE = 16;
-const PARAMS_SIZE = 6;
+const PARAMS_SIZE = 8;
 const CRC_SIZE = 4;
 
 interface HllBody {
@@ -162,7 +162,7 @@ const hllBody: fc.Arbitrary<HllBody> = fc.oneof(forgedBody, realBody);
 const hllFrame = (body: HllBody): Uint8Array =>
   writeHeader(
     { version: FORMAT_VERSION, type: 5, flags: 0 },
-    Uint8Array.from([body.p, body.encoding, 0, 0, 0, 0, ...body.payload]),
+    Uint8Array.from([body.p, body.encoding, 0, 0, 0, 0, 0, 0, ...body.payload]),
   );
 
 const parses = (body: HllBody): boolean => {
