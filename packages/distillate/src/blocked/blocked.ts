@@ -24,6 +24,12 @@ import {
 
 const TYPE = 2;
 
+/**
+ * Params occupy 12 bytes and the block is padded to 16, so the lane words
+ * start at frame offset 32 and a foreign reader can map them as `u32`.
+ */
+const PARAMS_SIZE = 16;
+
 // Canonical split-block bit-position multipliers (Parquet/Impala): odd 32-bit
 // constants that spread one 32-bit hash across the 8 lanes of a block.
 const SALT = Uint32Array.of(
@@ -240,7 +246,7 @@ export class BlockedBloomFilter {
         `unsupported hash variant ${String(flags & 0x0f)}`,
       );
     }
-    assertMinBodyLength(body.length, 12, "blocked");
+    assertMinBodyLength(body.length, PARAMS_SIZE, "blocked");
     const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
     const numBlocks = dv.getUint32(0, true);
     const seed = dv.getUint32(4, true);
@@ -250,9 +256,9 @@ export class BlockedBloomFilter {
         `blocked frame declares numBlocks=${String(numBlocks)}, n=${String(n)}; both must be positive`,
       );
     }
-    assertBodyLength(body.length, 12 + numBlocks * 32, "blocked");
+    assertBodyLength(body.length, PARAMS_SIZE + numBlocks * 32, "blocked");
     const f = BlockedBloomFilter.#fromNumBlocks(numBlocks, seed, n);
-    new Uint8Array(f.#lanes.buffer).set(body.subarray(12));
+    new Uint8Array(f.#lanes.buffer).set(body.subarray(PARAMS_SIZE));
     return f;
   }
 
@@ -269,12 +275,12 @@ export class BlockedBloomFilter {
     );
     return writeFrame(
       { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
-      12 + lanes.length,
+      PARAMS_SIZE + lanes.length,
       (body, dv) => {
         dv.setUint32(0, this.#numBlocks, true);
         dv.setUint32(4, this.#seed, true);
         dv.setUint32(8, this.#n, true);
-        body.set(lanes, 12);
+        body.set(lanes, PARAMS_SIZE);
       },
     );
   }

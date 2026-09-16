@@ -300,7 +300,7 @@ test("from([]) builds an empty filter", () => {
 test("fromBytes rejects numBlocks=0 and n=0 frames", () => {
   const { type } = readHeader(BlockedBloomFilter.create(10, 0.01).toBytes());
   const craftBlocked = (numBlocks: number, n: number) => {
-    const body = new Uint8Array(12 + numBlocks * 32);
+    const body = new Uint8Array(16 + numBlocks * 32);
     const dv = new DataView(body.buffer);
     dv.setUint32(0, numBlocks, true);
     dv.setUint32(8, n, true);
@@ -351,7 +351,19 @@ test("toBytes emits a DSTL type-2 frame with LE params + payload", () => {
   expect(dv.getUint32(0, true)).toBe(numBlocks);
   expect(dv.getUint32(4, true)).toBe(7);
   expect(dv.getUint32(8, true)).toBe(100);
-  expect(body).toHaveLength(12 + numBlocks * 32);
+  expect(body).toHaveLength(16 + numBlocks * 32);
+
+  // The lane words are the payload a foreign reader wants to map, so the
+  // params block is padded to 16 to put them at frame offset 32.
+  expect(body.byteOffset + 16).toBe(32);
+  expect(Array.from(body.subarray(12, 16))).toEqual([0, 0, 0, 0]);
+
+  const lanes = new Uint32Array(
+    frame.buffer,
+    frame.byteOffset + 32,
+    numBlocks * 8,
+  );
+  expect(lanes.some((word) => word !== 0)).toBe(true);
 });
 
 test("fromBytes round-trips params and membership", () => {
@@ -453,7 +465,7 @@ test("fromBytes rejects a frame whose body length disagrees with declared params
 });
 
 const GOLDEN_V5 =
-  "RFNUTAUCAACsAAAAAAAAAAUAAAAqAAAAZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgABIAAACAAABAQAAQEAAKAAAAAAQABACAAQAAACIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAACAAAAAAAgAAAAAAQAAAQAAAAABCAAAAAAQAABZWCIS";
+  "RFNUTAUCAACwAAAAAAAAAAUAAAAqAAAAZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAASAAAAgAAAQEAAEBAACgAAAAAEAAQAgAEAAAAiAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAgAAAAAAIAAAAAAEAAAEAAAAAAQgAAAAAEAAAe28oYA==";
 
 const UNSUPPORTED_V2 =
   "QU1RRgICAQAFAAAAKgAAAGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAQAAIAAAAEAAAAABAAAgAAAAQAAAAAAAIAAAEAEAAQAAAAAAQEAIAAgAAQAAgEAAACAAiAAAAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADVRVuw==";
