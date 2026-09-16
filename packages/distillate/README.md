@@ -143,6 +143,7 @@ Cardinality is a separate head-to-head, at a **matched register count** (`m = 2 
 | rel. error, n=10k  | 0.46%           | 49.51%        |
 | rel. error, n=100k | 0.82%           | 0.78%         |
 | serialized, n=100k | 12,314 B binary | 32,991 B JSON |
+| `add` throughput   | ~29.4 M ops/s   | ~10 k ops/s   |
 
 Counting a few thousand distinct keys in a 16k-register sketch, `bloom-filters` answers wrong by about half. distillate is exact at that end because it is still holding sparse entries, not because its estimator is better.
 

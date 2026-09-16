@@ -1,11 +1,16 @@
 # distillate-bench results
 
 - Machine: distillate-bench | node v24.14.1 | arm64 | Apple M5 | 10 cores
-- Package: distillate@0.7.0
-- Date: 2026-08-20
+- Package: distillate@0.9.0
+- Date: 2026-09-16
 
 All filters are configured at the same target FPR (1%) and measured by identical code.
 See [METHODOLOGY.md](./METHODOLOGY.md) for how these benches are run.
+
+The filter numbers are carried forward from the distillate@0.7.0 run dated
+2026-08-20. Nothing in those structures has changed since, so rerunning them only
+moves the figures by run-to-run variance. The cardinality section was measured on
+0.9.0, which is the release that first ships the sketch.
 
 ## Space and accuracy
 
@@ -23,6 +28,25 @@ See [METHODOLOGY.md](./METHODOLOGY.md) for how these benches are run.
 | blocked          | 1M       | 11.00    | 0.83%        | no incumbent equivalent |
 | fuse8            | 1M       | 9.04     | 0.38%        | no incumbent equivalent |
 | fuse16           | 1M       | 18.09    | 0.00%        | no incumbent equivalent |
+
+## Cardinality
+
+Both sketches are built at a matched register count (`m = 2 ** p`), so they carry the same theoretical error of `1.04 / sqrt(m)`.
+Equal memory was rejected as the basis: it would hand the incumbent roughly a eleventh of the registers, making its accuracy look bad for a reason that is really about representation rather than estimation.
+
+The two sizes are not the same encoding. distillate writes a binary payload and `bloom-filters` writes JSON, so each row names its format.
+
+distillate is exact at small cardinalities because it is still holding sparse entries there, not because its estimator is better.
+Once it promotes to dense registers it carries the same theoretical error as any HyperLogLog at that precision.
+
+| Sketch         | n    | registers | estimate | rel. error | size           |
+| -------------- | ---- | --------- | -------- | ---------- | -------------- |
+| distillate/hll | 1k   | 16384     | 1000     | 0.00%      | 4026 B binary  |
+| bloom-filters  | 1k   | 16384     | 504      | 49.63%     | 32904 B json   |
+| distillate/hll | 10k  | 16384     | 9954     | 0.46%      | 12314 B binary |
+| bloom-filters  | 10k  | 16384     | 5049     | 49.51%     | 32912 B json   |
+| distillate/hll | 100k | 16384     | 99181    | 0.82%      | 12314 B binary |
+| bloom-filters  | 100k | 16384     | 100778   | 0.78%      | 32991 B json   |
 
 ## Throughput (n = 100k)
 
@@ -46,3 +70,7 @@ Compare the ratios between rows, not these figures against a run on another mach
 | fuse8 has (miss)            | 11.04 M ops/s |
 | fuse16 has (hit)            | 10.95 M ops/s |
 | fuse16 has (miss)           | 10.95 M ops/s |
+| distillate/hll add          | 29.36 M ops/s |
+| distillate/hll count        | 51 k ops/s    |
+| bloom-filters hll add       | 10 k ops/s    |
+| bloom-filters hll count     | 3 k ops/s     |
