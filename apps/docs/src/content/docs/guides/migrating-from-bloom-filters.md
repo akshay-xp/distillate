@@ -159,6 +159,12 @@ sketch.count();
 `16384` registers is `p = 14`, so the two sketches above carry the same
 theoretical error.
 
+`merge` and `union` differ in one way that matters if you combine sketches from
+different sources. `bloom-filters` requires both sides to have the same register
+count and throws otherwise. `union` accepts any two precisions and folds the
+result down to the coarser precision of the pair, because a finer sketch reduces
+cleanly while the reverse would invent detail it never recorded.
+
 ### Serialized filters do not carry over
 
 The two formats are unrelated. distillate cannot read a `bloom-filters`
