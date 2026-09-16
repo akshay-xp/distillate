@@ -25,6 +25,12 @@ import { bloomSizing } from "../core/sizing.js";
 
 const TYPE = 1;
 
+/**
+ * Params occupy 14 bytes and the block is padded to 16, so the payload starts
+ * at frame offset 32 and a foreign reader can map it without a copy.
+ */
+const PARAMS_SIZE = 16;
+
 /** Thrown when an operation requires two filters built with identical parameters. */
 export class BloomParamMismatchError extends Error {
   /** Discriminates this error from other `Error`s. */
@@ -115,15 +121,15 @@ export class BloomFilter {
         `unsupported hash variant ${String(flags & 0x0f)}`,
       );
     }
-    assertMinBodyLength(body.length, 14, "bloom");
+    assertMinBodyLength(body.length, PARAMS_SIZE, "bloom");
     const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
     const m = dv.getUint32(0, true);
     const k = dv.getUint16(4, true);
     const seed = dv.getUint32(6, true);
     const n = dv.getUint32(10, true);
-    assertBodyLength(body.length, 14 + Math.ceil(m / 8), "bloom");
+    assertBodyLength(body.length, PARAMS_SIZE + Math.ceil(m / 8), "bloom");
     const f = new BloomFilter({ m, k, seed, n });
-    f.#bits.bytes.set(body.subarray(14));
+    f.#bits.bytes.set(body.subarray(PARAMS_SIZE));
     return f;
   }
 
@@ -204,13 +210,13 @@ export class BloomFilter {
     const payload = this.#bits.bytes;
     return writeFrame(
       { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
-      14 + payload.length,
+      PARAMS_SIZE + payload.length,
       (body, dv) => {
         dv.setUint32(0, this.#m, true);
         dv.setUint16(4, this.#k, true);
         dv.setUint32(6, this.#seed, true);
         dv.setUint32(10, this.#n, true);
-        body.set(payload, 14);
+        body.set(payload, PARAMS_SIZE);
       },
     );
   }
