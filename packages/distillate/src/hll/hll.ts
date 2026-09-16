@@ -4,6 +4,7 @@ import { assertUint32, ParamError } from "../core/params.js";
 import {
   assertBodyLength,
   assertMinBodyLength,
+  assertParamsPadding,
   type FilterJSON,
   FORMAT_VERSION,
   fromJSONEnvelope,
@@ -43,6 +44,7 @@ const TYPE = 5;
  * language permits a typed view over them.
  */
 const PARAMS_SIZE = 8;
+const PARAMS_FIELDS_END = 6;
 const DENSE = 0;
 const SPARSE = 1;
 const ENTRY_SIZE = 4;
@@ -151,6 +153,7 @@ export class HyperLogLog {
       );
     }
     assertMinBodyLength(body.length, PARAMS_SIZE, "hll");
+    assertParamsPadding(body, PARAMS_FIELDS_END, PARAMS_SIZE, "hll");
 
     const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
     const p = body[0] ?? 0;
