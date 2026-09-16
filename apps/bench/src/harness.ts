@@ -23,13 +23,18 @@ export function envBanner(): string {
   return `distillate-bench | ${runtime()} | ${process.arch} | ${model} | ${String(cpus.length)} cores`;
 }
 
+/**
+ * The inserted "hit" keys, streamed. Cardinality sweeps run to tens of millions
+ * of keys, where materializing the pool costs more memory than the sketches do.
+ */
+export function* hitKeys(n: number): Generator<string> {
+  for (let i = 0; i < n; i++) yield `0:${String(i)}`;
+}
+
 export function hitMissPools(n: number): { hit: string[]; miss: string[] } {
-  const hit = new Array<string>(n);
+  const hit = [...hitKeys(n)];
   const miss = new Array<string>(n);
-  for (let i = 0; i < n; i++) {
-    hit[i] = `0:${String(i)}`;
-    miss[i] = `1:${String(i)}`;
-  }
+  for (let i = 0; i < n; i++) miss[i] = `1:${String(i)}`;
   return { hit, miss };
 }
 
