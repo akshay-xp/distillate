@@ -159,7 +159,7 @@ test("fuse16 reports size and ~18-19 bits per key", () => {
 test("toBytes emits a DSTL type-3 frame for fuse8 and type-4 for fuse16", () => {
   const f8 = BinaryFuse8.from(sampleStrings(1, 500));
   const frame8 = f8.toBytes();
-  expect(frame8[4]).toBe(4);
+  expect(frame8[4]).toBe(5);
   expect((frame8[6] ?? 0) & 0x0f).toBe(0);
   const h8 = readHeader(frame8);
   expect(h8.type).toBe(3);
@@ -273,24 +273,24 @@ test("fromBytes rejects a frame whose body length disagrees with declared params
   expect(() => BinaryFuse8.fromBytes(short)).toThrow(TruncatedError);
 });
 
-const GOLDEN8_V4 =
-  "RFNUTAQDAAAoAAAAAAAAAAAAAAAIAAAACAAAAAQAAAAAAAAAAAAAAAAAAAAfAAAAABkAAACVdQCZTRK2";
-const GOLDEN16_V4 =
-  "RFNUTAQEAABAAAAAAAAAAAAAAAAIAAAACAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAfogAAAAAAAAAAGcoAAAAAAACV3nWFAACqGLXo";
+const GOLDEN8_V5 =
+  "RFNUTAUDAAAoAAAAAAAAAAAAAAAIAAAACAAAAAQAAAAAAAAAAAAAAAAAAAAfAAAAABkAAACVdQCUsd7f";
+const GOLDEN16_V5 =
+  "RFNUTAUEAABAAAAAAAAAAAAAAAAIAAAACAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAfogAAAAAAAAAAGcoAAAAAAACV3nWFAACUqfdm";
 
 const UNSUPPORTED8_V2 =
   "QU1RRgIDAAAAAAAACAAAAAgAAAAEAAAAAAAAAAAAAABFAAAAAAAAAAAAAD4AAHcNqOrAzw==";
 
-test("reads committed v4 golden frames (locks the format)", () => {
+test("reads committed v5 golden frames (locks the format)", () => {
   const keys = ["alice", "bob", "carol", "dave"];
 
-  const f8 = BinaryFuse8.fromBytes(fromBase64(GOLDEN8_V4));
+  const f8 = BinaryFuse8.fromBytes(fromBase64(GOLDEN8_V5));
   for (const key of keys) expect(f8.has(key)).toBe(true);
-  expect(BinaryFuse8.from(keys).toBytes()).toEqual(fromBase64(GOLDEN8_V4));
+  expect(BinaryFuse8.from(keys).toBytes()).toEqual(fromBase64(GOLDEN8_V5));
 
-  const f16 = BinaryFuse16.fromBytes(fromBase64(GOLDEN16_V4));
+  const f16 = BinaryFuse16.fromBytes(fromBase64(GOLDEN16_V5));
   for (const key of keys) expect(f16.has(key)).toBe(true);
-  expect(BinaryFuse16.from(keys).toBytes()).toEqual(fromBase64(GOLDEN16_V4));
+  expect(BinaryFuse16.from(keys).toBytes()).toEqual(fromBase64(GOLDEN16_V5));
 });
 
 test("fromBytes rejects a pre-v4 AMQF frame on magic", () => {

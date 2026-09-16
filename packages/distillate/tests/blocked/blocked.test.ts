@@ -339,7 +339,7 @@ test("toBytes emits a DSTL type-2 frame with LE params + payload", () => {
   f.add("x");
   const frame = f.toBytes();
 
-  expect(frame[4]).toBe(4);
+  expect(frame[4]).toBe(5);
   expect((frame[6] ?? 0) & 0x0f).toBe(0);
 
   const { version, type, body } = readHeader(frame);
@@ -452,14 +452,14 @@ test("fromBytes rejects a frame whose body length disagrees with declared params
   expect(() => BlockedBloomFilter.fromBytes(short)).toThrow(TruncatedError);
 });
 
-const GOLDEN_V4 =
-  "RFNUTAQCAACsAAAAAAAAAAUAAAAqAAAAZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgABIAAACAAABAQAAQEAAKAAAAAAQABACAAQAAACIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAACAAAAAAAgAAAAAAQAAAQAAAAABCAAAAAAQAADc1Mbn";
+const GOLDEN_V5 =
+  "RFNUTAUCAACsAAAAAAAAAAUAAAAqAAAAZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgABIAAACAAABAQAAQEAAKAAAAAAQABACAAQAAACIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAACAAAAAAAgAAAAAAQAAAQAAAAABCAAAAAAQAABZWCIS";
 
 const UNSUPPORTED_V2 =
   "QU1RRgICAQAFAAAAKgAAAGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAQAAIAAAAEAAAAABAAAgAAAAQAAAAAAAIAAAEAEAAQAAAAAAQEAIAAgAAQAAgEAAACAAiAAAAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADVRVuw==";
 
-test("reads a committed v4 golden frame (locks the format)", () => {
-  const f = BlockedBloomFilter.fromBytes(fromBase64(GOLDEN_V4));
+test("reads a committed v5 golden frame (locks the format)", () => {
+  const f = BlockedBloomFilter.fromBytes(fromBase64(GOLDEN_V5));
   for (const key of ["alice", "bob", "carol"]) expect(f.has(key)).toBe(true);
 
   const fresh = new BlockedBloomFilter({
@@ -468,7 +468,7 @@ test("reads a committed v4 golden frame (locks the format)", () => {
     seed: 42,
   });
   for (const key of ["alice", "bob", "carol"]) fresh.add(key);
-  expect(fresh.toBytes()).toEqual(fromBase64(GOLDEN_V4));
+  expect(fresh.toBytes()).toEqual(fromBase64(GOLDEN_V5));
 });
 
 test("fromBytes rejects a pre-v4 AMQF frame on magic", () => {
