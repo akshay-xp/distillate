@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import {
   cycle,
   envBanner,
+  hitKeys,
   hitMissPools,
   lookupThunk,
   measureFpr,
@@ -48,4 +49,13 @@ test("lookupThunk queries successive cycling keys", () => {
   run();
   run();
   expect(seen).toEqual(["a", "b", "c", "a"]);
+});
+
+test("hitKeys streams the hit pool without materializing it", () => {
+  // A billion keys would exhaust memory if this built an array.
+  const huge = hitKeys(1_000_000_000);
+  expect(huge.next().value).toBe("0:0");
+  expect(huge.next().value).toBe("0:1");
+
+  expect([...hitKeys(5)]).toEqual(hitMissPools(5).hit);
 });

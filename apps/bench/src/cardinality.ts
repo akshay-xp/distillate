@@ -1,7 +1,7 @@
 import { HyperLogLog as IncumbentHll } from "bloom-filters";
 import { HyperLogLog } from "distillate/hll";
 
-import { hitMissPools } from "./harness.js";
+import { hitKeys } from "./harness.js";
 
 export type SketchFormat = "binary" | "json";
 
@@ -76,10 +76,9 @@ export function cardinalityRows(
 ): CardinalityRow[] {
   const rows: CardinalityRow[] = [];
   for (const n of cardinalities) {
-    const hit = hitMissPools(n).hit;
     for (const adapter of cardinalityAdapters) {
       const sketch = adapter.create(p);
-      for (const key of hit) sketch.add(key);
+      for (const key of hitKeys(n)) sketch.add(key);
       const estimate = sketch.count();
       rows.push({
         name: adapter.name,
@@ -100,7 +99,9 @@ export const HLL_PRECISION = 14;
 
 // Swept so both of the incumbent's regimes are visible: it is roughly 50% off
 // below n of about 2.5 * m, and accurate once n is well past m.
-export const HLL_CARDINALITIES = [1_000, 10_000, 100_000];
+export const HLL_CARDINALITIES = [
+  1_000, 10_000, 100_000, 1_000_000, 10_000_000,
+];
 
 // The incumbent adds at about 8k ops/s, so a 100k sketch costs it 12.5 seconds.
 // That is what caps the build size for the throughput benches.
