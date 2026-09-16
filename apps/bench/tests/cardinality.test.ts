@@ -1,6 +1,10 @@
 import { expect, test } from "vitest";
 
-import { cardinalityAdapters, cardinalityRows } from "../src/cardinality.js";
+import {
+  cardinalityAdapters,
+  cardinalityBenchLabels,
+  cardinalityRows,
+} from "../src/cardinality.js";
 import { hitMissPools } from "../src/harness.js";
 
 test("cardinality adapters build at a matched register count", () => {
@@ -51,4 +55,13 @@ test("cardinality rows carry serialized bytes and name the format", () => {
   expect(incumbent.bytes).toBeGreaterThan(distillate.bytes);
 
   expect(distillate.format).not.toBe(incumbent.format);
+});
+
+test("cardinality bench labels distinguish the sketch from the filter benches", () => {
+  expect(cardinalityBenchLabels()).toEqual([
+    "distillate/hll add",
+    "distillate/hll count",
+    "bloom-filters hll add",
+    "bloom-filters hll count",
+  ]);
 });
