@@ -13,10 +13,10 @@ Offset  Size  Field
 4       1     Format version (u8)         # bump on incompatible layout change
 5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog
                                           # (6+ reserved: CountingBloom, Cuckoo, ...)
-6       1     Flags (u8)                  # bit0-3 hash variant, others reserved
-7       1     Reserved (u8, 0)
+6       1     Flags (u8)                  # bit0-3 hash variant, bit4-7 reserved (must be 0)
+7       1     Reserved (u8)               # must be 0
 8       4     Body length (u32)           # bytes of body, excluding header and CRC
-12      4     Reserved (u32, 0)           # keeps the body 8-byte aligned
+12      4     Reserved (u32)              # must be 0; keeps the body 8-byte aligned
 16      ...   Body: params block, padded to a multiple of 8 (fixed per type, see below)
 ...     ...   Payload: raw backing typed array, host byte order (see Principles)
 end     4     CRC32 of all preceding bytes
@@ -33,6 +33,14 @@ Every type's params block is padded to a multiple of 8, so **the payload always 
 The guarantee is **per frame, not across a stream**. A frame occupies `16 + bodyLength + 4` bytes, which is not itself a multiple of 8, so frames concatenated in a log do not each start aligned. A reader walking such a log gets the alignment guarantee only for frames it has positioned itself.
 
 Padding is what makes the guarantee a rule rather than an accident. Through version 4 the payload offsets were 30, 28, 32, 32 and 22, and only held because of the lane widths that happened to sit there; HyperLogLog's sparse entries are `u32` at offset 22, which no language permits a typed view over. `writeFrame` now refuses a params block that would put a payload off an 8-byte boundary, so a new structure type cannot reintroduce it.
+
+### Reserved bits
+
+The header reserves 44 bits: flags bits 4-7, byte 7, and the `u32` at offset 12. All of them **must be 0**, and a reader that finds any of them set must reject the frame, not ignore it. `distillate` throws `ReservedBitsError`, naming which field was set.
+
+Rejection is what keeps the space spendable. Only a newer writer sets a reserved bit, and a reader that ignored it would read that frame under the older meaning and return a wrong answer with no error, so every real extension would need a breaking version bump anyway. This is the same reasoning that made the version 3 hash change a version bump (see [hash variant](#hash-variant-flags-nibble)), applied to the reserved space. Zstd makes the same rule for its reserved frame-header bit. Protobuf instead skips unknown fields, but only because each field carries its own wire type and length; these bits carry no length, so skipping them is not safe.
+
+The check runs after the CRC. A reserved bit flipped in transit therefore reports `ChecksumError`, and `ReservedBitsError` means the frame is intact and was written by a newer format.
 
 ### Versions 4 and 5 are hard breaks
 
