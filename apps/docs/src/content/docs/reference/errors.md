@@ -9,19 +9,19 @@ from a plain `Error`, so you can narrow with `instanceof` or switch on `name`.
 They fall into three groups by cause: bad parameters, an operation two filters
 cannot support, and a frame that will not decode.
 
-| Error                                                                                    | Thrown by                                 | Cause                                   |
-| ---------------------------------------------------------------------------------------- | ----------------------------------------- | --------------------------------------- |
-| [`ParamError`](/api/bloom/classes/paramerror/)                                           | constructors, `create`, sizing            | A parameter is out of range             |
-| [`BloomParamMismatchError`](/api/bloom/classes/bloomparammismatcherror/)                 | `BloomFilter.union`                       | Filters disagree on geometry            |
-| [`BlockedBloomParamMismatchError`](/api/blocked/classes/blockedbloomparammismatcherror/) | `BlockedBloomFilter.union`                | Filters disagree on geometry            |
-| [`BinaryFuseBuildError`](/api/fuse/classes/binaryfusebuilderror/)                        | `BinaryFuse8.from`, `BinaryFuse16.from`   | The peel stalled on every seed          |
-| [`SerializationError`](/api/bloom/classes/serializationerror/)                           | `fromJSON`, and the base of the six below | The envelope is malformed               |
-| [`TruncatedError`](/api/bloom/classes/truncatederror/)                                   | `fromBytes`                               | The frame is short                      |
-| [`BadMagicError`](/api/bloom/classes/badmagicerror/)                                     | `fromBytes`                               | Not a DSTL frame                        |
-| [`UnknownVersionError`](/api/bloom/classes/unknownversionerror/)                         | `fromBytes`, `fromJSON`                   | A format version this build cannot read |
-| [`UnknownHashVariantError`](/api/bloom/classes/unknownhashvarianterror/)                 | `fromBytes`                               | A hash this build cannot reproduce      |
-| [`ReservedBitsError`](/api/bloom/classes/reservedbitserror/)                             | `fromBytes`                               | A newer frame sets reserved header bits |
-| [`ChecksumError`](/api/bloom/classes/checksumerror/)                                     | `fromBytes`                               | CRC32 does not match                    |
+| Error                                                                                    | Thrown by                                 | Cause                                     |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------- |
+| [`ParamError`](/api/bloom/classes/paramerror/)                                           | constructors, `create`, sizing            | A parameter is out of range               |
+| [`BloomParamMismatchError`](/api/bloom/classes/bloomparammismatcherror/)                 | `BloomFilter.union`                       | Filters disagree on geometry              |
+| [`BlockedBloomParamMismatchError`](/api/blocked/classes/blockedbloomparammismatcherror/) | `BlockedBloomFilter.union`                | Filters disagree on geometry              |
+| [`BinaryFuseBuildError`](/api/fuse/classes/binaryfusebuilderror/)                        | `BinaryFuse8.from`, `BinaryFuse16.from`   | The peel stalled on every seed            |
+| [`SerializationError`](/api/bloom/classes/serializationerror/)                           | `fromJSON`, and the base of the six below | The envelope is malformed                 |
+| [`TruncatedError`](/api/bloom/classes/truncatederror/)                                   | `fromBytes`                               | The frame is short                        |
+| [`BadMagicError`](/api/bloom/classes/badmagicerror/)                                     | `fromBytes`                               | Not a DSTL frame                          |
+| [`UnknownVersionError`](/api/bloom/classes/unknownversionerror/)                         | `fromBytes`, `fromJSON`                   | A format version this build cannot read   |
+| [`UnknownHashVariantError`](/api/bloom/classes/unknownhashvarianterror/)                 | `fromBytes`                               | A hash scheme this build cannot reproduce |
+| [`ReservedBitsError`](/api/bloom/classes/reservedbitserror/)                             | `fromBytes`                               | A newer frame sets reserved header bits   |
+| [`ChecksumError`](/api/bloom/classes/checksumerror/)                                     | `fromBytes`                               | CRC32 does not match                      |
 
 The seven serialization errors are exported from all four subpaths. The rest
 are exported from the subpath of the structure that throws them, except
@@ -230,12 +230,13 @@ service and read them in another, upgrade the readers first. See
 
 [API reference](/api/bloom/classes/unknownhashvarianterror/).
 
-**Thrown when** the low nibble of a frame's flags byte names a hash this build
-cannot reproduce. Version 5 defines exactly one variant, `0`, which is
-murmur3_x86_128 for every structure.
+**Thrown when** the low nibble of a frame's flags byte names a hash or index
+mapping this build cannot reproduce. Version 5 defines exactly one variant,
+`0`, which is murmur3_x86_128 with each structure's current index mapping.
+See [serialization](/reference/serialization/#hash-variant-flags-nibble).
 
 **What to do:** rebuild the filter from the source keys with the version you
-run. The stored bits are unreadable without the hash that produced them, so
+run. The stored bits are unreadable without the scheme that produced them, so
 there is nothing to recover from the frame itself.
 
 ### `ReservedBitsError`
