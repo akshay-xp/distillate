@@ -149,8 +149,8 @@ export class UnknownVersionError extends SerializationError {
 }
 
 /**
- * Thrown when a frame's flags nibble names a hash this release cannot
- * reproduce, so its stored bits are unreadable. Rebuild the filter from the
+ * Thrown when a frame's flags nibble names a hash or index mapping this
+ * release cannot reproduce, so its stored bits are unreadable. Rebuild the filter from the
  * source keys with the version you run.
  */
 export class UnknownHashVariantError extends SerializationError {

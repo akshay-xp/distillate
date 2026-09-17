@@ -17,7 +17,7 @@ Kirsch and Mitzenmacher, "Less Hashing, Same Performance" (2006); RocksDB issue 
 
 ## Default hasher
 
-One hash for every structure, pinned in the serialized header flags nibble as variant `0` (see [serialization.md](serialization.md)):
+One hash for every structure, pinned together with how each structure maps it to positions as flags variant `0` (see [serialization.md](serialization.md)):
 
 - **murmur3_x86_128** (flags variant `0`). Pure `Math.imul`, one pass over the key, four 32-bit output words. No emulated 64-bit multiply, so it is fast on V8 for every structure. Bloom and Blocked read two words as the double-hash `a`/`b`; Fuse reads the first 64-bit lane (`h1lo`/`h1hi`) for its fingerprints, retry `mixSeed`, and Lemire `mulhi64` reduction.
 
@@ -51,7 +51,7 @@ Lemire multiply-shift `((h * m) >>> shift)` instead of modulo. For m > 2^32 this
 
 ## Portability
 
-The hash variant is pinned in the serialized header flags nibble (`0` = murmur3_x86_128), so a reader knows which hash produced the bits. A filter is only cross-language-readable if both sides hash identically; murmur3_x86_128 is fully specified and trivially reimplementable in Rust/Go. A reader rejects a frame whose version or variant it does not implement (`UnknownVersionError`/`UnknownHashVariantError`) rather than misread it. The caveat runs one way: a newer reader rejects an older frame, but an older reader predates the check and would silently misread a newer frame, so a consumer must be at least as new as the producer.
+The flags variant tells a reader which scheme produced the stored bits, and it pins the hash **and** the index mapping: which output words a structure reads, the probe scheme, the reduction to range, and each structure's bit layout (the per-structure list is in [serialization.md](serialization.md)). Any change to one of those takes a new variant even when the hash is unchanged, because the stored bits change while variant `0` would still claim to describe them. Guava hit exactly this: `MURMUR128_MITZ_32` and `MURMUR128_MITZ_64` share a hash and still needed a new `Strategy` ordinal. A filter is only cross-language-readable if both sides hash identically; murmur3_x86_128 is fully specified and trivially reimplementable in Rust/Go. A reader rejects a frame whose version or variant it does not implement (`UnknownVersionError`/`UnknownHashVariantError`) rather than misread it. The caveat runs one way: a newer reader rejects an older frame, but an older reader predates the check and would silently misread a newer frame, so a consumer must be at least as new as the producer.
 
 ## Related
 
