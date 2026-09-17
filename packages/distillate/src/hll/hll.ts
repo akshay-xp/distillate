@@ -315,6 +315,7 @@ export class HyperLogLog {
     const s = this.#scratch;
     hash128KeyInto(key, this.#seed, s);
 
+    // Part of hash variant 0: changing this mapping needs a new variant (see HASH_MURMUR128).
     // Top p bits pick the register; the remaining 64 - p bits of the (w0, w1)
     // lane give rho, the position of the first set bit counted from 1.
     const p = this.#p;

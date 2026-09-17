@@ -373,6 +373,7 @@ export class BlockedBloomFilter {
   }
 }
 
+// Part of hash variant 0: changing this mapping needs a new variant (see HASH_MURMUR128).
 // Split-block probe: derive one block index and 8 single-bit lane masks for
 // `key`. Writes lane word indices into `outWords` and their masks into `outBits`
 // (both length 8, caller-owned so no per-call allocation). A block is 256 bits =

@@ -3,7 +3,16 @@ import { crc32 } from "./crc32.js";
 
 export const FORMAT_VERSION = 5;
 
-/** Hash variant recorded in the low nibble of the header flags byte. */
+/**
+ * Hash variant recorded in the low nibble of the header flags byte. Variant 0
+ * is murmur3_x86_128 together with every structure's mapping from its output
+ * words to stored positions: word selection, probe scheme, reduction, and bit
+ * layout. Changing any of those, even with the hash untouched, needs a new
+ * variant constant; otherwise a reader still on variant 0 reads every stored
+ * frame at the wrong positions with no error. Guava's `MURMUR128_MITZ_32` to
+ * `MURMUR128_MITZ_64` change kept its hash and still took a new ordinal for
+ * this reason. The per-structure list is in the serialization reference.
+ */
 export const HASH_MURMUR128 = 0;
 
 /** Frame sentinel, the ASCII bytes `DSTL`. Superseded `AMQF` in format v4. */

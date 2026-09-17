@@ -69,6 +69,7 @@ function mulhi64(lo: number, hi: number, n: number): number {
   return (aHi + carry) >>> 0;
 }
 
+// Part of hash variant 0: changing this mapping needs a new variant (see HASH_MURMUR128).
 function positionsInto(
   mlo: number,
   mhi: number,
