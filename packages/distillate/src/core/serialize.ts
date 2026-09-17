@@ -20,6 +20,8 @@ const MAGIC = Uint8Array.of(0x44, 0x53, 0x54, 0x4c);
  */
 const HEADER_SIZE = 16;
 const BODY_LENGTH_OFFSET = 8;
+const RESERVED_BYTE_OFFSET = 7;
+const RESERVED_WORD_OFFSET = 12;
 const TRAILER_SIZE = 4;
 
 /**
@@ -73,7 +75,7 @@ export function writeFrame(
   frame[4] = header.version;
   frame[5] = header.type;
   frame[6] = header.flags;
-  frame[7] = 0;
+  frame[RESERVED_BYTE_OFFSET] = 0;
   frameView.setUint32(BODY_LENGTH_OFFSET, bodyLength, true);
 
   const body = frame.subarray(HEADER_SIZE, HEADER_SIZE + bodyLength);
@@ -327,6 +329,17 @@ export function readHeader(frame: Uint8Array): ReadResult {
   if ((flags & 0xf0) !== 0) {
     throw new ReservedBitsError(
       `frame sets reserved flags bits 4-7 (flags 0x${flags.toString(16)})`,
+    );
+  }
+  if (frame[RESERVED_BYTE_OFFSET] !== 0) {
+    throw new ReservedBitsError(
+      `frame sets reserved byte 7 (0x${(frame[RESERVED_BYTE_OFFSET] ?? 0).toString(16)})`,
+    );
+  }
+  const reservedWord = view.getUint32(RESERVED_WORD_OFFSET, true);
+  if (reservedWord !== 0) {
+    throw new ReservedBitsError(
+      `frame sets the reserved u32 at offset 12 (0x${reservedWord.toString(16)})`,
     );
   }
 

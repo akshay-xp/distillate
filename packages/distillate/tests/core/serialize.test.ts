@@ -204,6 +204,35 @@ test.each([4, 5, 6, 7])(
   },
 );
 
+const resealed = (f: Uint8Array): Uint8Array => {
+  const view = new DataView(f.buffer, f.byteOffset, f.byteLength);
+  view.setUint32(f.length - 4, crc32(f.subarray(0, f.length - 4)), true);
+  return f;
+};
+
+test("readHeader rejects a frame that sets the reserved byte 7", () => {
+  const f = validFrame();
+  f[7] = 1;
+  expect(() => readHeader(resealed(f))).toThrow(ReservedBitsError);
+  expect(() => readHeader(f)).toThrow(/byte 7/);
+});
+
+test("readHeader rejects a frame that sets the reserved word at offset 12", () => {
+  const f = validFrame();
+  new DataView(f.buffer, f.byteOffset, f.byteLength).setUint32(
+    12,
+    0xdeadbeef,
+    true,
+  );
+  expect(() => readHeader(resealed(f))).toThrow(ReservedBitsError);
+  expect(() => readHeader(f)).toThrow(/offset 12/);
+
+  // The whole word is reserved, not only its low byte.
+  const top = validFrame();
+  top[15] = 0x80;
+  expect(() => readHeader(resealed(top))).toThrow(ReservedBitsError);
+});
+
 test("a reserved flags bit flipped in transit reports corruption", () => {
   const f = validFrame();
   f[6] = (f[6] ?? 0) | 0x10;
