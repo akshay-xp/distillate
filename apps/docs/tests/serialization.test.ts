@@ -268,3 +268,24 @@ test("the reserved bits section tells a reader to reject every reserved field", 
     expect(section).toContain(field);
   }
 });
+
+test("the hash variant covers the index mapping of every structure", () => {
+  // A variant that pins only the hash lets a probe-scheme change keep variant
+  // 0 and silently misread every stored frame.
+  const section = sectionFrom(
+    "### Hash variant (flags nibble)",
+    "\n## ",
+    "serialization.md has no hash variant section",
+  );
+
+  expect(section).toContain("index mapping");
+  expect(section).toContain("MURMUR128_MITZ_32");
+  expect(section).toContain("MURMUR128_MITZ_64");
+  const bullets = section.split("\n").filter((l) => l.startsWith("- **"));
+  for (const family of hashVariant().families) {
+    expect(
+      bullets.some((l) => l.startsWith(`- **${family}:**`)),
+      family,
+    ).toBe(true);
+  }
+});
