@@ -8,6 +8,7 @@ import {
   FORMAT_VERSION,
   fromJSONEnvelope,
   readHeader,
+  ReservedBitsError,
   SerializationError,
   TruncatedError,
   UnknownVersionError,
@@ -131,7 +132,7 @@ test("readHeader(writeHeader(...)) is identity (property)", () => {
   fc.assert(
     fc.property(
       fc.nat({ max: 255 }),
-      fc.nat({ max: 255 }),
+      fc.nat({ max: 15 }),
       fc.uint8Array({ maxLength: 64 }),
       (type, flags, body) => {
         const header = { version: FORMAT_VERSION, type, flags };
@@ -185,6 +186,27 @@ test("a version 4 frame is rejected rather than misread", () => {
 test("readHeader throws ChecksumError on a corrupted body", () => {
   const f = validFrame();
   f[16] ^= 0xff;
+  expect(() => readHeader(f)).toThrow(ChecksumError);
+});
+
+test.each([4, 5, 6, 7])(
+  "readHeader rejects a frame that sets reserved flags bit %i",
+  (bit) => {
+    // A valid CRC is what a future writer would produce, so it must not make
+    // the frame legitimate to a reader that does not know the bit.
+    const f = writeHeader(
+      { version: FORMAT_VERSION, type: 5, flags: 3 | (1 << bit) },
+      Uint8Array.of(1, 2, 3),
+    );
+    expect(() => readHeader(f)).toThrow(ReservedBitsError);
+    expect(() => readHeader(f)).toThrow(SerializationError);
+    expect(() => readHeader(f)).toThrow(/flags bits 4-7/);
+  },
+);
+
+test("a reserved flags bit flipped in transit reports corruption", () => {
+  const f = validFrame();
+  f[6] = (f[6] ?? 0) | 0x10;
   expect(() => readHeader(f)).toThrow(ChecksumError);
 });
 

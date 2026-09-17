@@ -157,6 +157,18 @@ export class UnknownHashVariantError extends SerializationError {
 }
 
 /**
+ * Thrown when a frame sets a header bit this format reserves: the flags high
+ * nibble, the byte at offset 7, or the word at offset 12. Only a newer writer
+ * puts anything there, and reading its frame under this release's meaning
+ * would give a wrong answer with no error. Upgrade `distillate` on the reading
+ * side; a reader must be at least as new as the producer.
+ */
+export class ReservedBitsError extends SerializationError {
+  /** Discriminates this error from other `Error`s. */
+  override readonly name = "ReservedBitsError";
+}
+
+/**
  * Thrown when a frame's CRC32 trailer does not match its contents, so the
  * bytes were corrupted after they were written. Discard them and re-fetch;
  * the payload cannot be trusted even where it still parses.
@@ -309,10 +321,19 @@ export function readHeader(frame: Uint8Array): ReadResult {
     throw new ChecksumError("frame CRC32 does not match its contents");
   }
 
+  // After the checksum, so a reserved bit flipped in transit reports the
+  // corruption rather than a newer format that never existed.
+  const flags = frame[6] ?? 0;
+  if ((flags & 0xf0) !== 0) {
+    throw new ReservedBitsError(
+      `frame sets reserved flags bits 4-7 (flags 0x${flags.toString(16)})`,
+    );
+  }
+
   return {
     version,
     type: frame[5] ?? 0,
-    flags: frame[6] ?? 0,
+    flags,
     body: frame.subarray(HEADER_SIZE, HEADER_SIZE + bodyLength),
   };
 }
