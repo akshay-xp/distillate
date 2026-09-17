@@ -44,6 +44,11 @@ export interface FilterJSON {
 export function fuseBitsPerKey(n: number, width: 8 | 16): number;
 
 // @public
+export class ReservedBitsError extends SerializationError {
+    override readonly name = "ReservedBitsError";
+}
+
+// @public
 export class SerializationError extends Error {
     override readonly name: string;
 }

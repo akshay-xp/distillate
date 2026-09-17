@@ -13,6 +13,7 @@ test("the barrel exports the sketch, its sizing, and the shared errors", () => {
     "ChecksumError",
     "HyperLogLog",
     "ParamError",
+    "ReservedBitsError",
     "SerializationError",
     "TruncatedError",
     "UnknownHashVariantError",

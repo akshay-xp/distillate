@@ -10,6 +10,7 @@ export { ParamError } from "../core/params.js";
 export {
   BadMagicError,
   ChecksumError,
+  ReservedBitsError,
   SerializationError,
   TruncatedError,
   UnknownHashVariantError,

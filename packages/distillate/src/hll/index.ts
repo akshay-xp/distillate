@@ -7,6 +7,7 @@ export type { HllSizing } from "../core/sizing.js";
 export {
   BadMagicError,
   ChecksumError,
+  ReservedBitsError,
   SerializationError,
   TruncatedError,
   UnknownHashVariantError,

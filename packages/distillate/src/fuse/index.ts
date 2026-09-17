@@ -8,6 +8,7 @@ export type { FilterJSON } from "../core/serialize.js";
 export {
   BadMagicError,
   ChecksumError,
+  ReservedBitsError,
   SerializationError,
   TruncatedError,
   UnknownHashVariantError,

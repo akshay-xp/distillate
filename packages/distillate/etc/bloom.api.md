@@ -70,6 +70,11 @@ export class ParamError extends RangeError {
 }
 
 // @public
+export class ReservedBitsError extends SerializationError {
+    override readonly name = "ReservedBitsError";
+}
+
+// @public
 export class SerializationError extends Error {
     override readonly name: string;
 }
