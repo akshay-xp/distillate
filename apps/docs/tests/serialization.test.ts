@@ -246,3 +246,25 @@ test("the hash variant section counts every structure that writes variant 0", ()
   expect(families).toContain("HyperLogLog");
   expect(count).toBe(NUMERALS[families.length]);
 });
+
+test("the layout table marks every reserved header field must be 0", () => {
+  const layout = doc().split("\n");
+  for (const field of ["Flags (u8)", "Reserved (u8", "Reserved (u32"]) {
+    const row = layout.find((l) => l.includes(field));
+    expect(row, field).toContain("must be 0");
+  }
+});
+
+test("the reserved bits section tells a reader to reject every reserved field", () => {
+  const section = sectionFrom(
+    "### Reserved bits",
+    "\n### ",
+    "serialization.md has no Reserved bits section",
+  );
+
+  expect(section).toContain("ReservedBitsError");
+  expect(section).toContain("reject");
+  for (const field of ["bits 4-7", "byte 7", "offset 12"]) {
+    expect(section).toContain(field);
+  }
+});
