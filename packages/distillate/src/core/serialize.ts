@@ -149,8 +149,11 @@ export class BadMagicError extends SerializationError {
 
 /**
  * Thrown when a frame or JSON envelope declares a format version this release
- * does not read. A reader must be at least as new as the producer, so upgrade
- * `distillate` or re-serialize the data with the version you run.
+ * does not read. The remedy depends on which side is older. A frame newer than
+ * this release needs `distillate` upgraded on the reading side. A frame older
+ * than it is readable by no current release, since each reads exactly one
+ * format version; rebuild it from the source keys. Being at least as new as
+ * the producer is necessary, not sufficient.
  */
 export class UnknownVersionError extends SerializationError {
   /** Discriminates this error from other `Error`s. */
