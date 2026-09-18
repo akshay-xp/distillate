@@ -16,6 +16,27 @@ The **public API is exactly what the committed API reports in [`etc/`](https://g
 
 `toBytes` / `fromBytes` use a versioned binary format. A filter serialized by one release must deserialize in later releases of the same major; a format change that breaks this is treated as a breaking change. See [serialization](/reference/serialization/).
 
+### Compatibility model
+
+From 1.0, format version 5 is **frozen until 2.0**. A reader accepts exactly one format version, the one its release writes.
+
+This is a deliberate choice. The alternative is a read window, where a release also reads the previous format version and writes only the newest, as Arrow's `MetadataVersion` and RocksDB's `format_version` do. A window keeps stored data readable across a format change, at the cost of maintaining several reader paths indefinitely. distillate takes the simpler contract and spends its format changes before 1.0 instead.
+
+The consequence for stored data: a format version bump is a major release, and frames written before it cannot be read after it. No structure can be converted from its stored bits, so the only recovery is to rebuild from the source keys. If you persist a filter or sketch across a major upgrade, keep the keys it was built from.
+
+Additive changes, listed below, arrive in minor releases without a format version bump. An older reader rejects a frame that uses one with a typed error rather than misreading it, so a reader must be at least as new as the producer.
+
+### Format stability contract
+
+| Change                               | How it lands                                                                                                                                                               | Format version bump |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| New structure type                   | A new type code. Older readers reject it on type (`SerializationError`).                                                                                                   | No                  |
+| New encoding of an existing type     | HyperLogLog: a new `encoding` value. Bloom, Blocked: a field in the zero-checked params padding. Fuse has no spare byte: a new type code. Older readers reject it cleanly. | No                  |
+| New header field in reserved space   | Sets a reserved bit. Older readers reject it (`ReservedBitsError`).                                                                                                        | No                  |
+| Hash change                          | A new flags variant. Older readers reject it (`UnknownHashVariantError`).                                                                                                  | No                  |
+| Probe scheme or index mapping change | A new flags variant, even when the hash is unchanged. Older readers reject it (`UnknownHashVariantError`).                                                                 | No                  |
+| Payload layout change                | A format version bump, which under the frozen model is a major release.                                                                                                    | Yes                 |
+
 ## Supported runtimes
 
 `distillate` targets **ES2022**, ships zero runtime dependencies, and uses no `eval` or required WASM, so it runs on every modern JavaScript runtime:
