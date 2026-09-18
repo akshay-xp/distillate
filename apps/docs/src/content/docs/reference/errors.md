@@ -218,13 +218,19 @@ is fine; an incorrect one is not.
 **Thrown when** a frame's version byte, or a JSON envelope's `v` field, is not
 the `FORMAT_VERSION` this build reads. That is `5` today.
 
-**What to do:** upgrade `distillate` on the reading side, or re-serialize the
-data with the version you run. A reader must be at least as new as the
-producer: the version check protects a newer reader from an older frame, and
-cannot protect an older reader from a newer one. If you build filters in one
-service and read them in another, upgrade the readers first. See
-[serialization](/reference/serialization/) and
-[versioning](/reference/versioning/).
+**What to do:** compare the frame's version byte (offset 4, or the envelope's
+`v`) with `FORMAT_VERSION`.
+
+- **The frame is newer.** It was written by a later release. Upgrade
+  `distillate` on the reading side. If you build filters in one service and
+  read them in another, upgrade the readers first.
+- **The frame is older.** No current release reads it: each release reads
+  exactly one format version, and a format version bump is a major release.
+  Upgrading cannot help. Rebuild the filter from its source keys with the
+  version you run.
+
+Being at least as new as the producer is necessary, not sufficient. See the
+[compatibility model](/reference/versioning/#compatibility-model).
 
 ### `UnknownHashVariantError`
 
