@@ -300,12 +300,46 @@ export function assertBodyLength(
   }
 }
 
-export function readHeader(frame: Uint8Array): ReadResult {
-  if (frame.length < HEADER_SIZE + TRAILER_SIZE) {
+/** One frame read in place from a larger buffer by {@link readFrameAt}. */
+export interface Frame {
+  /** Binary format version. */
+  version: number;
+  /** Structure type code; one this release does not implement still reads. */
+  type: number;
+  /** Header flags byte; the low nibble is the hash variant. */
+  flags: number;
+  /** The body, a view into the source buffer rather than a copy. */
+  body: Uint8Array;
+  /** Bytes the whole frame occupies, so `offset + byteLength` is the next one. */
+  byteLength: number;
+}
+
+/**
+ * Reads and validates the frame starting at `offset` in `bytes`, which may
+ * hold further frames after it: magic, version, declared length, CRC32 and
+ * reserved bits, without needing to know the structure type. Advance by the
+ * returned `byteLength` to walk a buffer of concatenated frames.
+ *
+ * @throws TruncatedError when the frame runs past the end of `bytes`.
+ * @throws BadMagicError, UnknownVersionError, ChecksumError or
+ *   ReservedBitsError when the frame at `offset` is not one this release reads.
+ */
+export function readFrameAt(bytes: Uint8Array, offset: number): Frame {
+  return readFrame(bytes, offset, false);
+}
+
+/**
+ * `exact` demands the frame fill the rest of `bytes`, checked with the other
+ * length checks ahead of the CRC so a short body reports truncation.
+ */
+function readFrame(bytes: Uint8Array, offset: number, exact: boolean): Frame {
+  const available = bytes.length - offset;
+  if (available < HEADER_SIZE + TRAILER_SIZE) {
     throw new TruncatedError(
-      `frame of ${String(frame.length)} bytes is shorter than the minimum ${String(HEADER_SIZE + TRAILER_SIZE)}`,
+      `${String(available)} bytes remain at offset ${String(offset)}, fewer than the minimum frame of ${String(HEADER_SIZE + TRAILER_SIZE)}`,
     );
   }
+  const frame = bytes.subarray(offset);
   for (let i = 0; i < MAGIC.length; i++) {
     if (frame[i] !== MAGIC[i]) {
       throw new BadMagicError("frame does not start with the DSTL magic");
@@ -323,14 +357,16 @@ export function readHeader(frame: Uint8Array): ReadResult {
   // Before the checksum, so a frame cut short in transit reports the length it
   // is missing rather than the corruption that truncation happens to imply.
   const bodyLength = view.getUint32(BODY_LENGTH_OFFSET, true);
-  if (HEADER_SIZE + bodyLength + TRAILER_SIZE !== frame.length) {
+  const byteLength = HEADER_SIZE + bodyLength + TRAILER_SIZE;
+  if (exact ? byteLength !== available : byteLength > available) {
     throw new TruncatedError(
-      `frame declares a ${String(bodyLength)}-byte body but holds ${String(frame.length - HEADER_SIZE - TRAILER_SIZE)}`,
+      `frame declares a ${String(bodyLength)}-byte body but ${String(available - HEADER_SIZE - TRAILER_SIZE)} remain`,
     );
   }
 
-  const expected = view.getUint32(frame.length - TRAILER_SIZE, true);
-  const actual = crc32(frame.subarray(0, frame.length - TRAILER_SIZE));
+  const trailerAt = byteLength - TRAILER_SIZE;
+  const expected = view.getUint32(trailerAt, true);
+  const actual = crc32(frame.subarray(0, trailerAt));
   if (expected !== actual) {
     throw new ChecksumError("frame CRC32 does not match its contents");
   }
@@ -360,5 +396,12 @@ export function readHeader(frame: Uint8Array): ReadResult {
     type: frame[5] ?? 0,
     flags,
     body: frame.subarray(HEADER_SIZE, HEADER_SIZE + bodyLength),
+    byteLength,
   };
+}
+
+/** Reads a buffer that must hold exactly one frame, as `fromBytes` requires. */
+export function readHeader(frame: Uint8Array): ReadResult {
+  const { version, type, flags, body } = readFrame(frame, 0, true);
+  return { version, type, flags, body };
 }
