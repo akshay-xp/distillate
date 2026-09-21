@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
+	"math"
 	"math/bits"
 	"os"
 	"strings"
@@ -734,5 +735,174 @@ func TestHLL(t *testing.T) {
 		if phases != [4]bool{true, true, true, true} {
 			t.Errorf("%s: set registers cover packing phases %v, want all four", e.Name, phases)
 		}
+	}
+}
+
+type scalableStage struct {
+	bloom
+	capacity, count uint32
+}
+
+type scalable struct {
+	n, seed                     uint32
+	epsilon, growth, tightening float64
+	stages                      []scalableStage
+}
+
+const (
+	scalableParams = 40
+	scalableEntry  = 16
+)
+
+func padded8(n int) int { return (n + 7) / 8 * 8 }
+
+// parseScalable reads type 6 as the reference lays it out: params, a
+// 16-byte entry per stage, then each stage's bits padded to 8.
+func parseScalable(f frame) (scalable, error) {
+	if f.typ != 6 || len(f.body) < scalableParams {
+		return scalable{}, fmt.Errorf("not a Scalable Bloom frame")
+	}
+	p := f.body
+	if le.Uint32(p[36:]) != 0 {
+		return scalable{}, fmt.Errorf("params padding is not zero")
+	}
+	s := scalable{
+		n:          le.Uint32(p),
+		seed:       le.Uint32(p[4:]),
+		epsilon:    math.Float64frombits(le.Uint64(p[8:])),
+		growth:     math.Float64frombits(le.Uint64(p[16:])),
+		tightening: math.Float64frombits(le.Uint64(p[24:])),
+	}
+	count := int(le.Uint32(p[32:]))
+	tableEnd := scalableParams + scalableEntry*count
+	if count == 0 || len(p) < tableEnd {
+		return scalable{}, fmt.Errorf("stage count %d does not fit a %d-byte body", count, len(p))
+	}
+	at := tableEnd
+	for i := 0; i < count; i++ {
+		e := p[scalableParams+scalableEntry*i:]
+		if le.Uint16(e[6:]) != 0 {
+			return scalable{}, fmt.Errorf("stage %d table padding is not zero", i)
+		}
+		st := scalableStage{
+			bloom:    bloom{m: le.Uint32(e), k: le.Uint16(e[4:]), seed: s.seed},
+			capacity: le.Uint32(e[8:]),
+			count:    le.Uint32(e[12:]),
+		}
+		length := int((st.m + 7) / 8)
+		if at+padded8(length) > len(p) {
+			return scalable{}, fmt.Errorf("stage %d runs past the body", i)
+		}
+		st.bits = p[at : at+length]
+		for _, b := range p[at+length : at+padded8(length)] {
+			if b != 0 {
+				return scalable{}, fmt.Errorf("stage %d bit padding is not zero", i)
+			}
+		}
+		at += padded8(length)
+		s.stages = append(s.stages, st)
+	}
+	if at != len(p) {
+		return scalable{}, fmt.Errorf("body is %d bytes, the stage table implies %d", len(p), at)
+	}
+	return s, nil
+}
+
+// has is true if any stage holds the key.
+func (s scalable) has(key string) bool {
+	for _, st := range s.stages {
+		if st.bloom.has(key) {
+			return true
+		}
+	}
+	return false
+}
+
+// buildScalable replays the keys by the reference's add rule into the stage
+// geometry the frame stores, then writes the frame with its own writer.
+func buildScalable(s scalable, keys []string) ([]byte, error) {
+	open := func(i int) scalableStage {
+		st := s.stages[i]
+		st.bits = make([]byte, (st.m+7)/8)
+		st.count = 0
+		return st
+	}
+	chain := scalable{n: s.n, seed: s.seed, epsilon: s.epsilon, growth: s.growth, tightening: s.tightening}
+	chain.stages = []scalableStage{open(0)}
+	for _, key := range keys {
+		if chain.has(key) {
+			continue
+		}
+		newest := &chain.stages[len(chain.stages)-1]
+		if newest.count >= newest.capacity {
+			if len(chain.stages) == len(s.stages) {
+				return nil, fmt.Errorf("replaying the keys needs more than the %d stages the frame stores", len(s.stages))
+			}
+			chain.stages = append(chain.stages, open(len(chain.stages)))
+			newest = &chain.stages[len(chain.stages)-1]
+		}
+		for _, i := range newest.probes(key) {
+			newest.bits[i>>3] |= 1 << (i & 7)
+		}
+		newest.count++
+	}
+
+	params := make([]byte, scalableParams)
+	le.PutUint32(params, chain.n)
+	le.PutUint32(params[4:], chain.seed)
+	le.PutUint64(params[8:], math.Float64bits(chain.epsilon))
+	le.PutUint64(params[16:], math.Float64bits(chain.growth))
+	le.PutUint64(params[24:], math.Float64bits(chain.tightening))
+	le.PutUint32(params[32:], uint32(len(chain.stages)))
+	var payload []byte
+	for _, st := range chain.stages {
+		entry := make([]byte, scalableEntry)
+		le.PutUint32(entry, st.m)
+		le.PutUint16(entry[4:], st.k)
+		le.PutUint32(entry[8:], st.capacity)
+		le.PutUint32(entry[12:], st.count)
+		payload = append(payload, entry...)
+	}
+	for _, st := range chain.stages {
+		payload = append(payload, st.bits...)
+		payload = append(payload, make([]byte, padded8(len(st.bits))-len(st.bits))...)
+	}
+	return writeFrame(6, params, payload), nil
+}
+
+func TestScalable(t *testing.T) {
+	var entries []entry
+	for _, e := range golden(t) {
+		if e.Kind == "scalable" {
+			entries = append(entries, e)
+		}
+	}
+	wide := false
+	for _, e := range entries {
+		golden := frameOf(t, e)
+		f, err := readFrame(golden)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := parseScalable(f)
+		if err != nil {
+			t.Fatalf("%s: %v", e.Name, err)
+		}
+		wide = wide || len(s.stages) >= 3
+		for _, key := range e.Keys {
+			if !s.has(key) {
+				t.Errorf("%s: has(%q) is false", e.Name, key)
+			}
+		}
+		rebuilt, err := buildScalable(s, e.Keys)
+		if err != nil {
+			t.Fatalf("%s: %v", e.Name, err)
+		}
+		if !bytes.Equal(rebuilt, golden) {
+			t.Errorf("%s: rebuilt frame differs:\n got %x\nwant %x", e.Name, rebuilt, golden)
+		}
+	}
+	if !wide {
+		t.Error("no scalable fixture spans three stages")
 	}
 }
