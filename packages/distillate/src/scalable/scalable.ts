@@ -276,7 +276,7 @@ export class ScalableBloomFilter {
     ];
   }
 
-  #assertSameSettings(other: ScalableBloomFilter): void {
+  #assertMergeable(other: ScalableBloomFilter): void {
     for (const [name, a, b] of this.#settingPairs(other)) {
       if (a !== b) {
         throw new ScalableParamMismatchError(
@@ -284,6 +284,19 @@ export class ScalableBloomFilter {
         );
       }
     }
+    // A frame stores stage geometry rather than re-deriving it, and sizing is
+    // floating point, so equal settings alone do not prove equal stages.
+    this.#stages.forEach((s, i) => {
+      const t = other.#stages[i];
+      if (!t) return;
+      for (const field of ["m", "k", "capacity"] as const) {
+        if (s[field] !== t[field]) {
+          throw new ScalableParamMismatchError(
+            `cannot union scalable Bloom filters whose stage ${String(i)} ${field} differs (${String(s[field])} vs ${String(t[field])})`,
+          );
+        }
+      }
+    });
   }
 
   // Replaces the whole chain and returns its newest stage, the last.
@@ -385,10 +398,11 @@ export class ScalableBloomFilter {
    *
    * @param other - A filter built with identical settings.
    * @returns A new filter; neither input is changed.
-   * @throws {@link ScalableParamMismatchError} if any setting differs.
+   * @throws {@link ScalableParamMismatchError} if any setting, or the
+   *   geometry of a stage both filters have, differs.
    */
   union(other: ScalableBloomFilter): ScalableBloomFilter {
-    this.#assertSameSettings(other);
+    this.#assertMergeable(other);
     const result = new ScalableBloomFilter({
       n: this.#n,
       epsilon: this.#epsilon,

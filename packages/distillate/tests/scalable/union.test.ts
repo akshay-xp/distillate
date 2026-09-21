@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 
+import { crc32 } from "../../src/core/crc32.js";
 import { ParamError } from "../../src/core/params.js";
 import {
   ScalableBloomFilter,
@@ -109,4 +110,26 @@ test("the same keys in another order can land in other stages", () => {
   // the filter's state, the same as its serialized bytes, not of its key set.
   const keys = range("e", 25);
   expect(filled(keys).equals(filled([...keys].reverse()))).toBe(false);
+});
+
+test("union refuses stages whose stored geometry differs", () => {
+  // A frame stores its stage geometry rather than re-deriving it, so equal
+  // settings do not by themselves guarantee equal stages.
+  const frame = ScalableBloomFilter.create(10, 0.01).toBytes();
+  const view = new DataView(frame.buffer);
+  const kAt = 16 + 40 + 4;
+  view.setUint16(kAt, view.getUint16(kAt, true) + 1, true);
+  view.setUint32(
+    frame.length - 4,
+    crc32(frame.subarray(0, frame.length - 4)),
+    true,
+  );
+  const restored = ScalableBloomFilter.fromBytes(frame);
+
+  expect(() => restored.union(ScalableBloomFilter.create(10, 0.01))).toThrow(
+    ScalableParamMismatchError,
+  );
+  expect(() => restored.union(ScalableBloomFilter.create(10, 0.01))).toThrow(
+    /stage 0/,
+  );
 });
