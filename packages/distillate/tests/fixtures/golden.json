@@ -161,6 +161,12 @@
     "frame": "RFNUTAUDAABAAAAAAAAAAAAAAAAQAAAAEAAAAAoAAAAAAAAAAAAAAMsAAABrAAAAAAAAAAAAAAAAAJUAAAAGAAAAAAAAAAAACQAZGjoAfXWv6sy9"
   },
   {
+    "name": "fuse8-empty",
+    "kind": "fuse8",
+    "keys": [],
+    "frame": "RFNUTAUDAAAQAAAAAAAAAAAAAAABAAAAAQAAAAAAAAArsJRl"
+  },
+  {
     "name": "fuse16",
     "kind": "fuse16",
     "keys": [
