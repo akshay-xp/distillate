@@ -17,9 +17,9 @@ const STRUCTURES = [
   </style>
   <p class="dstl-hint">
     The calculator runs in your browser and needs JavaScript. With it off, the
-    tables in <a href="/guides/sizing/">Sizing and tuning FPR</a> give bits per key
-    for classic Bloom at every common target, the blocked equivalents, and both fuse
-    widths.
+    tables in <a href="/guides/sizing/">Sizing and tuning FPR</a> give bits per
+    key for classic Bloom at every common target, the blocked equivalents, and
+    both fuse widths.
   </p>
 </noscript>
 
@@ -50,27 +50,33 @@ const STRUCTURES = [
   </div>
 </form>
 
-<div class="dstl-status" data-sizing-warnings role="status" aria-live="polite">
-</div>
+<div
+  class="dstl-status"
+  data-sizing-warnings
+  role="status"
+  aria-live="polite"
+></div>
 
 <table class="dstl-table" data-sizing-results>
   <thead>
-    <tr><th>Structure</th><th>Bits/key</th><th>Total size</th></tr>
+    <tr>
+      <th>Structure</th>
+      <th>Bits/key</th>
+      <th>Total size</th>
+    </tr>
   </thead>
   <tbody>
-    {
-      STRUCTURES.map((s) => (
-        <tr data-row={s.key}>
-          <th scope="row">
-            {s.label}
-            <span class="dstl-subpath">{s.subpath}</span>
-          </th>
-          <td data-cell="bits" colspan="2">
-            Calculating…
-          </td>
-        </tr>
-      ))
-    }
+    {STRUCTURES.map((s) => (
+      <tr data-row={s.key}>
+        <th scope="row">
+          {s.label}
+          <span class="dstl-subpath">{s.subpath}</span>
+        </th>
+        <td data-cell="bits" colspan="2">
+          Calculating…
+        </td>
+      </tr>
+    ))}
   </tbody>
 </table>
 
