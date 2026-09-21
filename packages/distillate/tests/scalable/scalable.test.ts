@@ -1,6 +1,7 @@
 import fc from "fast-check";
 import { expect, test } from "vitest";
 
+import { BloomFilter } from "../../src/bloom/bloom.js";
 import { ParamError } from "../../src/core/params.js";
 import { bloomSizing } from "../../src/core/sizing.js";
 import {
@@ -162,4 +163,20 @@ test("a stage too large to address stops growth with a RangeError", () => {
   expect(f.has("a")).toBe(true);
   expect(f.stages).toBe(1);
   expect(f.count).toBe(1);
+});
+
+test("rate is zero when empty and matches a Bloom filter's estimate for one stage", () => {
+  const f = ScalableBloomFilter.create(100, 0.01);
+  expect(f.rate()).toBe(0);
+
+  // Same geometry and seed through variant 0's mapping: identical bits.
+  const { m, k } = bloomSizing(100, 0.01 * 0.15);
+  const bloom = new BloomFilter({ m, k, seed: 0 });
+  for (const key of range("r", 30)) {
+    f.add(key);
+    bloom.add(key);
+  }
+  expect(f.stages).toBe(1);
+  // Relative, not exact: the chain computes 1 - (1 - r), which rounds.
+  expect(Math.abs(f.rate() / bloom.rate() - 1)).toBeLessThan(1e-9);
 });

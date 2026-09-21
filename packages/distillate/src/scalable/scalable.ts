@@ -204,6 +204,20 @@ export class ScalableBloomFilter {
     return this.#anyHolds();
   }
 
+  /**
+   * Estimates the chain's current false-positive rate from each stage's actual
+   * fill: a key is a false positive if any stage wrongly holds it, so this is
+   * `1 - prod(1 - (setBits / m) ** k)`. It rises as keys are added and stays
+   * under `epsilon` while every stage is within its capacity.
+   *
+   * @returns The estimated false-positive rate, in `[0, 1]`.
+   */
+  rate(): number {
+    let miss = 1;
+    for (const s of this.#stages) miss *= 1 - (s.bits.count() / s.m) ** s.k;
+    return 1 - miss;
+  }
+
   /** Keys added that the filter did not already hold. */
   get count(): number {
     return this.#stages.reduce((sum, s) => sum + s.count, 0);
