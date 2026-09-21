@@ -1,11 +1,12 @@
 import { BlockedBloomFilter, ParamError } from "distillate/blocked";
 import { BloomFilter } from "distillate/bloom";
 import { BinaryFuse8, BinaryFuseBuildError } from "distillate/fuse";
+import { ScalableBloomFilter } from "distillate/scalable";
 
 import { RATE_MESSAGE, toNumber } from "../../lib/form.js";
 
-/** The three shipped structures, side by side over one key set. */
-export type StructureKey = "bloom" | "blocked" | "fuse8";
+/** The four shipped filters, side by side over one key set. */
+export type StructureKey = "bloom" | "blocked" | "fuse8" | "scalable";
 
 /** What one structure did with the key set it was given. */
 export interface StructureReport {
@@ -15,6 +16,8 @@ export interface StructureReport {
   missing: number;
   bitsPerKey: number;
   totalBytes: number;
+  /** Tables the structure holds. Only Scalable Bloom ever has more than one. */
+  stages: number;
   /** Miss-set keys `has()` claims are members. */
   falsePositives: number;
   measuredFpr: number;
@@ -24,7 +27,7 @@ export interface StructureReport {
 export type Verdict =
   "member" | "false positive" | "absent" | "added after build";
 
-/** One query, answered by all three structures at once. */
+/** One query, answered by all four structures at once. */
 export interface Lookup {
   key: string;
   inserted: boolean;
@@ -77,13 +80,15 @@ interface Filters {
   bloom: BloomFilter;
   blocked: BlockedBloomFilter;
   fuse8: BinaryFuse8;
+  scalable: ScalableBloomFilter;
 }
 
 function describe(
   filter: { has: (key: string) => boolean; bitsPerKey: number },
   held: readonly string[],
   probes: readonly string[],
-  buildCount: number,
+  bits: number,
+  stages = 1,
 ): StructureReport {
   let missing = 0;
   for (const key of held) if (!filter.has(key)) missing += 1;
@@ -93,8 +98,8 @@ function describe(
     heldKeys: held.length,
     missing,
     bitsPerKey: filter.bitsPerKey,
-    // Neither filter reallocates on add, so space stays priced at the build.
-    totalBytes: Math.ceil((filter.bitsPerKey * buildCount) / 8),
+    totalBytes: Math.ceil(bits / 8),
+    stages,
     falsePositives,
     measuredFpr: falsePositives / probes.length,
   };
@@ -120,7 +125,7 @@ export function toMessage(error: unknown): string {
 export class Playground {
   /** Keys the fuse filter was built from. Fixed: it cannot take any more. */
   readonly #built: string[];
-  /** Everything the two bloom filters hold, the build set plus late arrivals. */
+  /** Everything the Bloom filters hold, the build set plus late arrivals. */
   readonly #keys: string[];
   /** The same keys as a set, to answer one query without walking anything. */
   readonly #inserted: Set<string>;
@@ -139,7 +144,7 @@ export class Playground {
     this.#filters = filters;
   }
 
-  /** Builds all three structures from `keyCount` generated keys. */
+  /** Builds all four structures from `keyCount` generated keys. */
   static build(keyCount: unknown, target: unknown): BuildResult {
     const n = toNumber(keyCount);
     if (!Number.isInteger(n) || n < 1 || n > MAX_KEYS) {
@@ -157,6 +162,7 @@ export class Playground {
         bloom: BloomFilter.from(keys, epsilon),
         blocked: BlockedBloomFilter.from(keys, epsilon),
         fuse8: BinaryFuse8.from(keys),
+        scalable: ScalableBloomFilter.from(keys, epsilon),
       };
     } catch (error) {
       return { ok: false, message: toMessage(error) };
@@ -165,13 +171,14 @@ export class Playground {
   }
 
   /**
-   * Adds one key. The bloom filters take it; Binary Fuse is static and cannot,
+   * Adds one key. The Bloom filters take it; Binary Fuse is static and cannot,
    * so the reason comes back rather than being thrown.
    */
   insert(key: string): InsertReport {
     if (!this.#inserted.has(key)) {
       this.#filters.bloom.add(key);
       this.#filters.blocked.add(key);
+      this.#filters.scalable.add(key);
       this.#keys.push(key);
       this.#inserted.add(key);
       this.#late.add(key);
@@ -179,11 +186,11 @@ export class Playground {
     return {
       key,
       keyCount: this.#keys.length,
-      fuseRefusal: `Binary Fuse is static: it was built from ${this.#built.length.toLocaleString("en-US")} keys in one pass and has no add. To include this key you rebuild the whole filter. Classic and Blocked Bloom took it.`,
+      fuseRefusal: `Binary Fuse is static: it was built from ${this.#built.length.toLocaleString("en-US")} keys in one pass and has no add. To include this key you rebuild the whole filter. Classic, Blocked and Scalable Bloom took it.`,
     };
   }
 
-  /** Answers one query across all three structures. */
+  /** Answers one query across all four structures. */
   lookup(key: string): Lookup {
     const inserted = this.#inserted.has(key);
     const late = this.#late.has(key);
@@ -191,7 +198,7 @@ export class Playground {
       if (!filter.has(key)) return "absent";
       return inserted ? "member" : "false positive";
     };
-    const { bloom, blocked, fuse8 } = this.#filters;
+    const { bloom, blocked, fuse8, scalable } = this.#filters;
     return {
       key,
       inserted,
@@ -201,27 +208,36 @@ export class Playground {
         // A key the fuse filter never saw is outside its build, not a false
         // negative. Saying so is the whole point of showing it.
         fuse8: late ? "added after build" : verdict(fuse8),
+        scalable: verdict(scalable),
       },
     };
   }
 
   report(): PlaygroundReport {
-    const { bloom, blocked, fuse8 } = this.#filters;
+    const { bloom, blocked, fuse8, scalable } = this.#filters;
     // A probe the reader has since inserted is a member, so it leaves the miss
     // set rather than being counted as a false positive.
     const probes =
       this.#late.size === 0
         ? this.#probes
         : this.#probes.filter((p) => !this.#late.has(p));
+    // Only Scalable Bloom allocates on add; the rest stay priced at the build.
     const n = this.#built.length;
     return {
       keyCount: this.#keys.length,
       target: this.#target,
       probeCount: probes.length,
       structures: {
-        bloom: describe(bloom, this.#keys, probes, n),
-        blocked: describe(blocked, this.#keys, probes, n),
-        fuse8: describe(fuse8, this.#built, probes, n),
+        bloom: describe(bloom, this.#keys, probes, bloom.bitsPerKey * n),
+        blocked: describe(blocked, this.#keys, probes, blocked.bitsPerKey * n),
+        fuse8: describe(fuse8, this.#built, probes, fuse8.bitsPerKey * n),
+        scalable: describe(
+          scalable,
+          this.#keys,
+          probes,
+          scalable.m,
+          scalable.stages,
+        ),
       },
     };
   }

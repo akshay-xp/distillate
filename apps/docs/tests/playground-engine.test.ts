@@ -1,6 +1,7 @@
 import { BlockedBloomFilter } from "distillate/blocked";
 import { bloomSizing } from "distillate/bloom";
 import { BinaryFuse8, BinaryFuseBuildError } from "distillate/fuse";
+import { ScalableBloomFilter } from "distillate/scalable";
 import { expect, test } from "vitest";
 
 import {
@@ -21,11 +22,11 @@ function built(keyCount: number = KEYS, target: number = TARGET) {
   return result.playground;
 }
 
-test("all three structures are built from the same key set", () => {
+test("all four structures are built from the same key set", () => {
   const report = built().report();
 
   expect(report.keyCount).toBe(KEYS);
-  for (const key of ["bloom", "blocked", "fuse8"] as const) {
+  for (const key of ["bloom", "blocked", "fuse8", "scalable"] as const) {
     expect(report.structures[key].heldKeys).toBe(KEYS);
   }
 });
@@ -33,7 +34,7 @@ test("all three structures are built from the same key set", () => {
 test("every inserted key is found, in every structure", () => {
   const report = built().report();
 
-  for (const key of ["bloom", "blocked", "fuse8"] as const) {
+  for (const key of ["bloom", "blocked", "fuse8", "scalable"] as const) {
     expect(report.structures[key].missing).toBe(0);
   }
 });
@@ -53,10 +54,23 @@ test("reported space matches what the library allocated", () => {
   expect(structures.fuse8.bitsPerKey).toBe(
     BinaryFuse8.from(SAME_KEYS).bitsPerKey,
   );
+  // It is the one structure that allocates on add, so its size is read from
+  // the bits it holds rather than priced from the build.
+  const scalable = ScalableBloomFilter.from(SAME_KEYS, TARGET);
+  expect(structures.scalable.bitsPerKey).toBe(scalable.bitsPerKey);
+  expect(structures.scalable.totalBytes).toBe(Math.ceil(scalable.m / 8));
 
-  for (const key of ["bloom", "blocked", "fuse8"] as const) {
+  for (const key of ["bloom", "blocked", "fuse8", "scalable"] as const) {
     const { bitsPerKey, totalBytes } = structures[key];
     expect(totalBytes).toBe(Math.ceil((bitsPerKey * KEYS) / 8));
+  }
+});
+
+test("every structure starts as a single table", () => {
+  const { structures } = built().report();
+
+  for (const key of ["bloom", "blocked", "fuse8", "scalable"] as const) {
+    expect(structures[key].stages).toBe(1);
   }
 });
 
@@ -64,7 +78,7 @@ test("the miss set is 20,000 keys and the rate is measured against it", () => {
   const { probeCount, structures } = built().report();
 
   expect(probeCount).toBe(20_000);
-  for (const key of ["bloom", "blocked", "fuse8"] as const) {
+  for (const key of ["bloom", "blocked", "fuse8", "scalable"] as const) {
     const { falsePositives, measuredFpr } = structures[key];
     expect(measuredFpr).toBe(falsePositives / probeCount);
   }
@@ -175,7 +189,12 @@ test("a key that was inserted reads as a member everywhere", () => {
   expect(result).toEqual({
     key: "key-5",
     inserted: true,
-    verdicts: { bloom: "member", blocked: "member", fuse8: "member" },
+    verdicts: {
+      bloom: "member",
+      blocked: "member",
+      fuse8: "member",
+      scalable: "member",
+    },
   });
 });
 
@@ -192,11 +211,16 @@ test("a miss on a never-inserted key is simply absent", () => {
   expect(result).toEqual({
     key: "miss-0",
     inserted: false,
-    verdicts: { bloom: "absent", blocked: "absent", fuse8: "absent" },
+    verdicts: {
+      bloom: "absent",
+      blocked: "absent",
+      fuse8: "absent",
+      scalable: "absent",
+    },
   });
 });
 
-test("a late key is taken by both bloom filters and refused by fuse", () => {
+test("a late key is taken by every bloom filter and refused by fuse", () => {
   const playground = built();
 
   const insert = playground.insert("late-key");
@@ -205,6 +229,7 @@ test("a late key is taken by both bloom filters and refused by fuse", () => {
   expect(insert.keyCount).toBe(KEYS + 1);
   expect(insert.fuseRefusal).toContain("Binary Fuse");
   expect(insert.fuseRefusal).toContain("static");
+  expect(insert.fuseRefusal).toContain("Scalable Bloom");
 });
 
 test("a late key leaves neither structure with a false negative", () => {
@@ -215,8 +240,9 @@ test("a late key leaves neither structure with a false negative", () => {
 
   expect(structures.bloom.heldKeys).toBe(KEYS + 1);
   expect(structures.blocked.heldKeys).toBe(KEYS + 1);
+  expect(structures.scalable.heldKeys).toBe(KEYS + 1);
   expect(structures.fuse8.heldKeys).toBe(KEYS);
-  for (const key of ["bloom", "blocked", "fuse8"] as const) {
+  for (const key of ["bloom", "blocked", "fuse8", "scalable"] as const) {
     expect(structures[key].missing).toBe(0);
   }
 });
@@ -232,6 +258,7 @@ test("a late key is outside the fuse build, not missing from it", () => {
       bloom: "member",
       blocked: "member",
       fuse8: "added after build",
+      scalable: "member",
     },
   });
 });
