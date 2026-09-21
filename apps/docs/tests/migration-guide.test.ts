@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { HyperLogLog } from "distillate/hll";
+import { ScalableBloomFilter } from "distillate/scalable";
 import { expect, test } from "vitest";
 
 import { parseTable } from "../src/tables.js";
@@ -96,4 +97,49 @@ test("the measured gains section carries the sketch, not just the filters", () =
 
 test("a reader holding a register count is pointed at picking a precision", () => {
   expect(GUIDE).toContain("/guides/hll/#choose-a-precision");
+});
+
+test("the scalable mapping covers every call a migrating reader makes", () => {
+  const rows = parseTable(GUIDE, "The scalable filter");
+
+  const incumbent = rows.map(([from]) => from);
+  for (const call of [
+    "new ScalableBloomFilter(initialSize, errorRate, ratio)",
+    "ScalableBloomFilter.create(size, errorRate, ratio)",
+    "add",
+    "has",
+    "capacity()",
+    "rate()",
+    "equals",
+    "saveAsJSON",
+    "fromJSON",
+    "seed",
+  ]) {
+    expect(
+      incumbent.some((cell) => cell.includes(call)),
+      `no row maps ${call}`,
+    ).toBe(true);
+  }
+  for (const [from, to] of rows) {
+    expect(to.trim(), `${from} maps to nothing`).not.toBe("");
+  }
+});
+
+test("the scalable section states the incumbent's behaviour differences", () => {
+  const at = GUIDE.indexOf("### The scalable filter");
+  const section = GUIDE.slice(at, GUIDE.indexOf("\n### ", at + 1));
+
+  expect(section).toContain("errorRate / (1 - ratio)");
+  expect(section).toContain("newest stage");
+  expect(section).toMatch(/fixed at 2/);
+});
+
+// The guide's claim for distillate's side of the comparison: tightening 0.5
+// mirrors the incumbent's default ratio, and the chain still holds epsilon.
+test("at the incumbent's default ratio the chain still holds its target", () => {
+  const f = ScalableBloomFilter.create(1000, 0.01, { tightening: 0.5 });
+  for (let i = 0; i < 100_000; i++) f.add(`in:${String(i)}`);
+  let hits = 0;
+  for (let i = 0; i < 10_000; i++) if (f.has(`out:${String(i)}`)) hits++;
+  expect(hits / 10_000).toBeLessThanOrEqual(0.0125);
 });
