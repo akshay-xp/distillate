@@ -119,7 +119,7 @@ Reported as ops/sec (`1e9 / avg_ns`).
 
 `bloomfilter` hashes strings via `charCodeAt`: fast, but ASCII-lossy (it ignores
 the high bytes of non-ASCII characters) and not reproducible in another language.
-distillate hashes the UTF-8 bytes with MurmurHash3_x64_128, so its filters
+distillate hashes the UTF-8 bytes with murmur3_x86_128, so its filters
 serialize and re-read across languages. The throughput gap is that tradeoff.
 
 ## Scope
