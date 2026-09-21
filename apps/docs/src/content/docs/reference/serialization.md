@@ -98,7 +98,7 @@ Offset  Size  Field
 
 Bit `i` of the array is bit `i & 7` of byte `i >>> 3`, counting from the least significant bit: it is set when `bytes[i >>> 3] & (1 << (i & 7))` is nonzero.
 
-Blocked (type 2): `numBlocks (u32) | seed (u32) | n (u32) | 4 bytes padding`, then the lane words (`numBlocks * 32` bytes) at body offset 16. Fuse (types 3 and 4): `seed (u32) | seg (u32) | segCountLen (u32) | size (u32)`, which fills 16 exactly, then the fingerprint array.
+Blocked (type 2): `numBlocks (u32) | seed (u32) | n (u32) | 4 bytes padding`, then the lane words (`numBlocks * 32` bytes) at body offset 16: `numBlocks * 8` `u32` little-endian, block `b` being lanes `8b` to `8b + 7`, and bit `j` of a lane being `1 << j`. Fuse (types 3 and 4): `seed (u32) | seg (u32) | segCountLen (u32) | size (u32)`, which fills 16 exactly, then the fingerprint array.
 
 HyperLogLog (type 5), little-endian:
 
@@ -125,7 +125,7 @@ Variant `0` covers:
 
 - **Shared:** a string key is hashed as its UTF-8 bytes; murmur3_x86_128 runs with the frame's seed (Fuse hashes with seed 0) and yields four `u32` output words `w0` to `w3`.
 - **Bloom:** `a = w0`, `b = w1`; probe `g_i = (a + i*b + i*i) mod 2^32` for `i = 0..k-1`; each reduced into `[0, m)` by Lemire multiply-shift, the high 32 bits of `g_i * m`.
-- **Blocked:** block `= (w0 * numBlocks) >>> 32`; lane `i` of that block sets bit `(w1 * SALT[i] mod 2^32) >>> 27`, over the eight Parquet/Impala split-block salts.
+- **Blocked:** block `= (w0 * numBlocks) >>> 32`; lane `i` of that block sets bit `(w1 * SALT[i] mod 2^32) >>> 27`, over the eight Parquet/Impala split-block salts `0x47b6137b`, `0x44974d91`, `0x8824ad5b`, `0xa2b7289d`, `0x705495c7`, `0x2df1424b`, `0x9efc4947`, `0x5c6bfb31`.
 - **Fuse:** the 64-bit key hash `w1:w0`, plus the attempt seed with carry, finalised by `fmix64` into `mix`; `h0 = (mix * segCountLen) >>> 64`, `h1 = (h0 + seg) ^ ((mix >>> 18) & segMask)`, `h2 = (h0 + 2*seg) ^ (mix_lo & segMask)`; fingerprint `(mix_lo ^ mix_hi) & mask`.
 - **HyperLogLog:** register `=` the top `p` bits of `w0`; rho `=` leading zeros + 1 over the remaining `64 - p` bits of `w0:w1`; a sparse entry's index is the top 25 bits of `w0`.
 
