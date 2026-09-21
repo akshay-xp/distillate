@@ -76,6 +76,20 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter distillate test
 
+  # A second reader, written from the serialization reference in Go, so the
+  # format is proved readable outside JS rather than asserted. Runs against the
+  # committed golden frames, so it needs no Node.
+  interop-go:
+    name: interop (go)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache: false
+      - run: go -C packages/distillate/interop test -v golden_test.go
+
   coverage-diff:
     name: coverage (new code)
     needs: check
