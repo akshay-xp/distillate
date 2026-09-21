@@ -332,3 +332,131 @@ func TestBloom(t *testing.T) {
 		t.Errorf("rebuilt frame differs:\n got %x\nwant %x", rebuilt, golden)
 	}
 }
+
+type blocked struct {
+	numBlocks, seed, n uint32
+	lanes              []uint32
+}
+
+const blockedParams = 16
+
+// salts are the eight Parquet/Impala split-block salts, one per lane.
+var salts = [8]uint32{
+	0x47b6137b, 0x44974d91, 0x8824ad5b, 0xa2b7289d,
+	0x705495c7, 0x2df1424b, 0x9efc4947, 0x5c6bfb31,
+}
+
+func parseBlocked(f frame) (blocked, error) {
+	if f.typ != 2 || len(f.body) < blockedParams {
+		return blocked{}, fmt.Errorf("not a Blocked frame")
+	}
+	p := f.body
+	if le.Uint32(p[12:]) != 0 {
+		return blocked{}, fmt.Errorf("Blocked params padding is not zero")
+	}
+	b := blocked{numBlocks: le.Uint32(p), seed: le.Uint32(p[4:]), n: le.Uint32(p[8:])}
+	payload := p[blockedParams:]
+	if len(payload) != int(b.numBlocks)*32 {
+		return blocked{}, fmt.Errorf("Blocked payload of %d bytes, numBlocks=%d needs %d", len(payload), b.numBlocks, b.numBlocks*32)
+	}
+	b.lanes = make([]uint32, b.numBlocks*8)
+	for i := range b.lanes {
+		b.lanes[i] = le.Uint32(payload[4*i:])
+	}
+	return b, nil
+}
+
+// masks is variant 0's Blocked mapping: the block's first lane index, and the
+// one bit each of its eight lanes must hold.
+func (b blocked) masks(key string) (int, [8]uint32) {
+	w := murmur3x86_128([]byte(key), b.seed)
+	var m [8]uint32
+	for i, salt := range salts {
+		m[i] = 1 << ((w[1] * salt) >> 27)
+	}
+	return int(reduce(w[0], b.numBlocks)) * 8, m
+}
+
+func (b blocked) has(key string) bool {
+	at, m := b.masks(key)
+	for i, bit := range m {
+		if b.lanes[at+i]&bit == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func buildBlocked(numBlocks, seed, n uint32, keys []string) []byte {
+	b := blocked{numBlocks: numBlocks, seed: seed, n: n, lanes: make([]uint32, numBlocks*8)}
+	for _, key := range keys {
+		at, m := b.masks(key)
+		for i, bit := range m {
+			b.lanes[at+i] |= bit
+		}
+	}
+	params := make([]byte, blockedParams)
+	le.PutUint32(params, numBlocks)
+	le.PutUint32(params[4:], seed)
+	le.PutUint32(params[8:], n)
+	payload := make([]byte, 0, len(b.lanes)*4)
+	for _, w := range b.lanes {
+		payload = le.AppendUint32(payload, w)
+	}
+	return writeFrame(2, params, payload)
+}
+
+func TestBlocked(t *testing.T) {
+	var entries []entry
+	wide := false
+	for _, e := range golden(t) {
+		if e.Kind != "blocked" {
+			continue
+		}
+		entries = append(entries, e)
+		f, err := readFrame(frameOf(t, e))
+		if err != nil {
+			t.Fatal(err)
+		}
+		wide = wide || le.Uint32(f.body) >= 4
+	}
+	if !wide {
+		t.Fatal("no blocked fixture spans several blocks")
+	}
+
+	for _, e := range entries {
+		golden := frameOf(t, e)
+		f, _ := readFrame(golden)
+		b, err := parseBlocked(f)
+		if err != nil {
+			t.Fatalf("%s: %v", e.Name, err)
+		}
+		for _, key := range e.Keys {
+			if !b.has(key) {
+				t.Errorf("%s: has(%q) is false", e.Name, key)
+			}
+		}
+		if rebuilt := buildBlocked(b.numBlocks, b.seed, b.n, e.Keys); !bytes.Equal(rebuilt, golden) {
+			t.Errorf("%s: rebuilt frame differs:\n got %x\nwant %x", e.Name, rebuilt, golden)
+		}
+
+		// A host-order reader on a little-endian runner passes everything
+		// above, so the lanes must also be wrong when read the other way.
+		swapped := blocked{numBlocks: b.numBlocks, seed: b.seed, lanes: make([]uint32, len(b.lanes))}
+		for i, w := range b.lanes {
+			swapped.lanes[i] = bits.ReverseBytes32(w)
+		}
+		if allHave(swapped.has, e.Keys) {
+			t.Errorf("%s: byte-swapped lanes still answer every key", e.Name)
+		}
+	}
+}
+
+func allHave(has func(string) bool, keys []string) bool {
+	for _, key := range keys {
+		if !has(key) {
+			return false
+		}
+	}
+	return true
+}
