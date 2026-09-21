@@ -289,3 +289,13 @@ test("the hash variant covers the index mapping of every structure", () => {
     ).toBe(true);
   }
 });
+
+test("the reference shows walking a stream of frames with readFrameAt", () => {
+  const walk = sectionFrom(
+    "### Reading a stream of frames",
+    "\n### ",
+    "serialization.md has no stream-reading section",
+  );
+  expect(walk).toContain("readFrameAt");
+  expect(walk).toMatch(/```ts[\s\S]*from "distillate\/frame"[\s\S]*```/);
+});

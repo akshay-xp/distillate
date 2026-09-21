@@ -23,7 +23,7 @@ cannot support, and a frame that will not decode.
 | [`ReservedBitsError`](/api/bloom/classes/reservedbitserror/)                             | `fromBytes`                               | A newer frame sets reserved header bits   |
 | [`ChecksumError`](/api/bloom/classes/checksumerror/)                                     | `fromBytes`                               | CRC32 does not match                      |
 
-The seven serialization errors are exported from all four subpaths. The rest
+The seven serialization errors are exported from all four structure subpaths; `distillate/frame` exports the six a frame read can throw (all but `UnknownHashVariantError`). The rest
 are exported from the subpath of the structure that throws them, except
 `ParamError`, which is exported from `distillate/bloom` and
 `distillate/blocked`.
