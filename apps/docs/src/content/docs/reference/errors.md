@@ -3,7 +3,7 @@ title: Errors
 description: Every error class distillate exports, when it is thrown, and what to do about it.
 ---
 
-distillate exports eleven error classes. Each has a `name` that discriminates it
+distillate exports twelve error classes. Each has a `name` that discriminates it
 from a plain `Error`, so you can narrow with `instanceof` or switch on `name`.
 
 They fall into three groups by cause: bad parameters, an operation two filters
@@ -14,6 +14,7 @@ cannot support, and a frame that will not decode.
 | [`ParamError`](/api/bloom/classes/paramerror/)                                           | constructors, `create`, sizing            | A parameter is out of range               |
 | [`BloomParamMismatchError`](/api/bloom/classes/bloomparammismatcherror/)                 | `BloomFilter.union`                       | Filters disagree on geometry              |
 | [`BlockedBloomParamMismatchError`](/api/blocked/classes/blockedbloomparammismatcherror/) | `BlockedBloomFilter.union`                | Filters disagree on geometry              |
+| [`ScalableParamMismatchError`](/api/scalable/classes/scalableparammismatcherror/)        | `ScalableBloomFilter.union`               | Filters disagree on settings or stages    |
 | [`BinaryFuseBuildError`](/api/fuse/classes/binaryfusebuilderror/)                        | `BinaryFuse8.from`, `BinaryFuse16.from`   | The peel stalled on every seed            |
 | [`SerializationError`](/api/bloom/classes/serializationerror/)                           | `fromJSON`, and the base of the six below | The envelope is malformed                 |
 | [`TruncatedError`](/api/bloom/classes/truncatederror/)                                   | `fromBytes`                               | The frame is short                        |
@@ -23,10 +24,13 @@ cannot support, and a frame that will not decode.
 | [`ReservedBitsError`](/api/bloom/classes/reservedbitserror/)                             | `fromBytes`                               | A newer frame sets reserved header bits   |
 | [`ChecksumError`](/api/bloom/classes/checksumerror/)                                     | `fromBytes`                               | CRC32 does not match                      |
 
-The seven serialization errors are exported from all four structure subpaths; `distillate/frame` exports the six a frame read can throw (all but `UnknownHashVariantError`). The rest
-are exported from the subpath of the structure that throws them, except
-`ParamError`, which is exported from `distillate/bloom` and
-`distillate/blocked`.
+The seven serialization errors are exported from all five structure subpaths
+(`distillate/bloom`, `distillate/blocked`, `distillate/fuse`, `distillate/hll`
+and `distillate/scalable`); `distillate/frame` exports the six a frame read can
+throw (all but `UnknownHashVariantError`). The rest are exported from the
+subpath of the structure that throws them, except `ParamError`, which is
+exported from `distillate/bloom`, `distillate/blocked`, `distillate/hll` and
+`distillate/scalable`.
 
 ## Parameter errors
 
@@ -123,6 +127,37 @@ try {
 ```
 
 ## Build errors
+
+### `ScalableParamMismatchError`
+
+[API reference](/api/scalable/classes/scalableparammismatcherror/).
+
+**Thrown when** `ScalableBloomFilter.union` is given a filter whose `n`,
+`epsilon`, `growth`, `tightening` or `seed` differs from the receiver's, or
+whose stored stage geometry differs for a stage both filters have. The message
+names the setting or stage.
+
+**What to do:** build both sides with the same settings. A filter restored with
+`fromBytes` keeps the stage geometry it was written with, so merge filters
+built by the same release where you can, or rebuild one side from its keys.
+
+```ts
+import {
+  ScalableBloomFilter,
+  ScalableParamMismatchError,
+} from "distillate/scalable";
+
+const a = ScalableBloomFilter.create(1000, 0.01);
+const b = ScalableBloomFilter.create(1000, 0.01, { growth: 4 });
+
+let error: unknown;
+try {
+  a.union(b);
+} catch (e) {
+  error = e;
+}
+error instanceof ScalableParamMismatchError; // true
+```
 
 ### `BinaryFuseBuildError`
 

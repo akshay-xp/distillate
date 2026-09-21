@@ -70,3 +70,33 @@ test("the chooser lists Scalable Bloom as shipped, not as planned", () => {
   expect(shipped).toContain("### [Scalable Bloom](/guides/scalable/)");
   expect(planned).not.toContain("Scalable Bloom");
 });
+
+const errors = (): string => read("../src/content/docs/reference/errors.md");
+
+const NUMBERS = ["ten", "eleven", "twelve", "thirteen", "fourteen"];
+
+test("the errors reference documents ScalableParamMismatchError", () => {
+  const page = errors();
+  expect(page).toContain(
+    "[`ScalableParamMismatchError`](/api/scalable/classes/scalableparammismatcherror/)",
+  );
+  expect(page).toContain("### `ScalableParamMismatchError`");
+});
+
+test("the errors reference's class count matches its table", () => {
+  const page = errors();
+  const rows = page.split("\n").filter((line) => line.startsWith("| [`"));
+  const said = /exports (\w+) error classes/.exec(page)?.[1];
+  expect(said).toBe(NUMBERS[rows.length - 10]);
+});
+
+test("the errors reference says which subpaths export what", () => {
+  const page = errors();
+  const at = page.indexOf("serialization errors are exported");
+  const paragraph = page.slice(at, page.indexOf("\n\n", at));
+  expect(paragraph).toContain("five structure subpaths");
+  expect(paragraph).toContain("distillate/scalable");
+  for (const subpath of ["bloom", "blocked", "hll", "scalable"]) {
+    expect(paragraph, subpath).toContain(`\`distillate/${subpath}\``);
+  }
+});
