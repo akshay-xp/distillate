@@ -276,3 +276,21 @@ test("inserting a probe key drops it from the measurement", () => {
     before.structures.bloom.falsePositives - 1,
   );
 });
+
+// The contrast the playground exists to show: past its build the fixed-size
+// filter drifts over target while the scalable one opens stages to stay under.
+test("growing past the build opens stages and holds the target", () => {
+  const playground = built();
+
+  const result = playground.grow(30_000);
+  const { structures } = playground.report();
+
+  expect(result).toEqual({ ok: true, keyCount: 40_000 });
+  expect(structures.scalable.stages).toBeGreaterThanOrEqual(3);
+  expect(structures.scalable.measuredFpr).toBeLessThanOrEqual(TARGET);
+  expect(structures.bloom.measuredFpr).toBeGreaterThan(TARGET);
+  expect(structures.fuse8.heldKeys).toBe(KEYS);
+  for (const key of ["bloom", "blocked", "fuse8", "scalable"] as const) {
+    expect(structures[key].missing).toBe(0);
+  }
+});

@@ -54,6 +54,9 @@ export interface PlaygroundReport {
 export type BuildResult =
   { ok: true; playground: Playground } | { ok: false; message: string };
 
+export type GrowResult =
+  { ok: true; keyCount: number } | { ok: false; message: string };
+
 /** How many never-inserted keys the measured rate is averaged over. */
 export const PROBE_COUNT = 20_000;
 
@@ -134,9 +137,12 @@ export class Playground {
   readonly #probes: string[];
   readonly #target: number;
   readonly #filters: Filters;
+  /** Keys generated so far, so growth continues the `key-<i>` sequence. */
+  #generated: number;
 
   private constructor(keys: string[], target: number, filters: Filters) {
     this.#built = keys;
+    this.#generated = keys.length;
     this.#keys = [...keys];
     this.#inserted = new Set(keys);
     this.#probes = probeKeys();
@@ -175,19 +181,31 @@ export class Playground {
    * so the reason comes back rather than being thrown.
    */
   insert(key: string): InsertReport {
-    if (!this.#inserted.has(key)) {
-      this.#filters.bloom.add(key);
-      this.#filters.blocked.add(key);
-      this.#filters.scalable.add(key);
-      this.#keys.push(key);
-      this.#inserted.add(key);
-      this.#late.add(key);
-    }
+    this.#add(key);
     return {
       key,
       keyCount: this.#keys.length,
       fuseRefusal: `Binary Fuse is static: it was built from ${this.#built.length.toLocaleString("en-US")} keys in one pass and has no add. To include this key you rebuild the whole filter. Classic, Blocked and Scalable Bloom took it.`,
     };
+  }
+
+  /** Adds `count` more generated keys, enough to carry the filters past their build. */
+  grow(count: unknown): GrowResult {
+    const end = this.#generated + toNumber(count);
+    for (; this.#generated < end; this.#generated += 1) {
+      this.#add(`key-${String(this.#generated)}`);
+    }
+    return { ok: true, keyCount: this.#keys.length };
+  }
+
+  #add(key: string): void {
+    if (this.#inserted.has(key)) return;
+    this.#filters.bloom.add(key);
+    this.#filters.blocked.add(key);
+    this.#filters.scalable.add(key);
+    this.#keys.push(key);
+    this.#inserted.add(key);
+    this.#late.add(key);
   }
 
   /** Answers one query across all four structures. */
