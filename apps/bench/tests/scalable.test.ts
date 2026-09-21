@@ -3,11 +3,13 @@ import { expect, test } from "vitest";
 import { TARGET_FPR } from "../src/adapters.js";
 import {
   distillateScalableAdapter,
+  incumbentScalableAdapter,
   SCALABLE_INITIAL,
   SCALABLE_KEY_COUNTS,
   scalableAdapters,
   scalableRows,
 } from "../src/scalable.js";
+import type { MeasuredScalableRow, ScalableRow } from "../src/scalable.js";
 
 test("scalable adapters build at the incumbent's default settings", () => {
   expect(scalableAdapters.map((a) => a.name)).toEqual([
@@ -32,8 +34,12 @@ test("scalable adapters build at the incumbent's default settings", () => {
   }
 });
 
+// Rows under every cap are measured; this narrows them for the assertions.
+const measured = (rows: ScalableRow[]): MeasuredScalableRow[] =>
+  rows.filter((r): r is MeasuredScalableRow => !("notRun" in r));
+
 test("scalable rows measure throughput, space, stages and FPR per key count", () => {
-  const rows = scalableRows(SCALABLE_INITIAL, [1_000, 10_000]);
+  const rows = measured(scalableRows(SCALABLE_INITIAL, [1_000, 10_000]));
   expect(rows).toHaveLength(4);
   for (const r of rows) {
     expect(r.bitsPerKey, r.name).toBeGreaterThan(0);
@@ -49,18 +55,43 @@ test("scalable rows measure throughput, space, stages and FPR per key count", ()
   }
 });
 
-test("the sweep runs from one to a hundred times the initial size", () => {
-  expect(SCALABLE_KEY_COUNTS).toEqual([1_000, 10_000, 100_000]);
+test("the sweep runs from one to ten thousand times the initial size", () => {
+  expect(SCALABLE_KEY_COUNTS).toEqual([
+    1_000, 10_000, 100_000, 1_000_000, 10_000_000,
+  ]);
 });
 
 // The headline claim for distillate's side; the incumbent's row is what is
 // being measured, so it carries no assertion.
 test("distillate holds its target at a hundred times its initial size", () => {
-  const [row] = scalableRows(
-    SCALABLE_INITIAL,
-    [100_000],
-    [distillateScalableAdapter],
+  const [row] = measured(
+    scalableRows(SCALABLE_INITIAL, [100_000], [distillateScalableAdapter]),
   );
   expect(row?.name).toBe("distillate/scalable");
   expect(row?.measuredFpr).toBeLessThanOrEqual(0.0125);
+});
+
+// Its build is quadratic in the key count (every add recounts the newest
+// stage), so past its cap a row projects the build time instead of measuring.
+test("the incumbent is capped, and a row past its cap projects its build", () => {
+  expect(incumbentScalableAdapter.maxKeys).toBe(100_000);
+
+  const capped = { ...incumbentScalableAdapter, maxKeys: 1_000 };
+  const [measured, skipped] = scalableRows(
+    SCALABLE_INITIAL,
+    [1_000, 4_000],
+    [capped],
+  );
+  if (!measured || !("addOpsPerSec" in measured)) {
+    throw new Error("the first row should be measured");
+  }
+  expect(skipped).toMatchObject({
+    name: "bloom-filters",
+    keys: 4_000,
+    notRun: true,
+  });
+  const buildMs = (1_000 / measured.addOpsPerSec) * 1000;
+  expect(
+    skipped && "projectedBuildMs" in skipped && skipped.projectedBuildMs,
+  ).toBeCloseTo(buildMs * 16, 6);
 });

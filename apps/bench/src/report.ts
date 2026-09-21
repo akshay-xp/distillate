@@ -60,13 +60,20 @@ export function cardinalityTable(rows: CardinalityRow[]): string {
   return [header, ...body].join("\n");
 }
 
+function projected(ms: number): string {
+  if (ms >= 3_600_000) return `~${(ms / 3_600_000).toFixed(1)} h`;
+  if (ms >= 60_000) return `~${(ms / 60_000).toFixed(0)} min`;
+  return `~${(ms / 1000).toFixed(0)} s`;
+}
+
 export function scalableTable(rows: ScalableRow[]): string {
   const header =
     "| Filter | keys | stages | bits/key | measured FPR | add | has |\n" +
     "| --- | --- | --- | --- | --- | --- | --- |";
-  const body = rows.map(
-    (r) =>
-      `| ${r.name} | ${capacityLabel(r.keys)} | ${String(r.stages)} | ${r.bitsPerKey.toFixed(2)} | ${(r.measuredFpr * 100).toFixed(2)}% | ${ops(r.addOpsPerSec)} | ${ops(r.hasOpsPerSec)} |`,
+  const body = rows.map((r) =>
+    "notRun" in r
+      ? `| ${r.name} | ${capacityLabel(r.keys)} | not run | - | - | ${projected(r.projectedBuildMs)} projected build | - |`
+      : `| ${r.name} | ${capacityLabel(r.keys)} | ${String(r.stages)} | ${r.bitsPerKey.toFixed(2)} | ${(r.measuredFpr * 100).toFixed(2)}% | ${ops(r.addOpsPerSec)} | ${ops(r.hasOpsPerSec)} |`,
   );
   return [header, ...body].join("\n");
 }
@@ -113,6 +120,9 @@ export function scalableSection(table: string): string[] {
     "Its first stage targets the full rate and later ones `errorRate * ratio ** i`, so its targets sum to `errorRate / (1 - ratio)`, twice the requested rate at `ratio` 0.5.",
     "distillate starts at `epsilon * (1 - tightening)`, so its whole chain targets `epsilon`.",
     "Bits per key is allocated bits over keys added; FPR is measured over 100,000 keys neither filter saw.",
+    "",
+    "distillate is measured from 1k to 10M keys, the same reach as every other structure. The incumbent stops at 100k: every `add` recounts the newest stage's set bits (`_currentload`), so its build time grows with the square of the key count.",
+    "Past 100k its rows project the build time from its own 100k run rather than running for hours at 1M and days at 10M.",
     "",
     table,
     "",
