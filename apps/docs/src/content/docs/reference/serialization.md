@@ -11,8 +11,8 @@ Versioned, self-describing, little-endian binary format. Spec'd here so Rust/Go 
 Offset  Size  Field
 0       4     Magic "DSTL" (0x44 53 54 4C)
 4       1     Format version (u8)         # bump on incompatible layout change
-5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog
-                                          # (6+ reserved: CountingBloom, Cuckoo, ...)
+5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog 6=ScalableBloom
+                                          # (7+ reserved: CountingBloom, Cuckoo, ...)
 6       1     Flags (u8)                  # bit0-3 hash variant, bit4-7 reserved (must be 0)
 7       1     Reserved (u8)               # must be 0
 8       4     Body length (u32)           # bytes of body, excluding header and CRC
@@ -115,11 +115,42 @@ Dense payload: the register array. `2 ** p` registers of 6 bits each, packed LSB
 
 Sparse payload: `n` entries of 4 bytes each, `u32` little-endian, one per distinct index, sorted ascending. An entry is 31 bits wide, `index << 6 | rho`: the index in the top 25 bits, rho in the low 6 bits, and bit 31 always clear. The index is taken at a fixed sparse precision of 25 whatever `p` is, so a small sketch counts distinct indices rather than estimating; the rho beside it is the _dense_ rho for this frame's `p`, not one measured at 25. A reader materialises the registers with `register = index >>> (25 - p)`, keeping the largest rho that lands on each. Either encoding can appear for any `p`: a sketch starts sparse and rewrites itself dense once the entries stop being cheaper than the register array.
 
+Scalable Bloom (type 6), little-endian. A chain of Bloom stages sharing one hash, for a key count not known up front:
+
+```
+Offset  Size             Field
+0       4                n: the first stage's capacity (u32)
+4       4                seed (u32)
+8       8                epsilon: false-positive target for the whole chain (f64)
+16      8                growth: capacity multiplier from one stage to the next (f64)
+24      8                tightening: target multiplier from one stage to the next (f64)
+32      4                stageCount (u32), at least 1
+36      4                padding (0)
+40      16 * stageCount  stage table, one 16-byte entry per stage:
+                           +0   4  m: bits in the stage (u32)
+                           +4   2  k: probes per key (u16)
+                           +6   2  padding (0)
+                           +8   4  capacity: keys the stage holds before the next opens (u32)
+                           +12  4  count: keys counted into the stage (u32), at most capacity
+...                      each stage's bits, in table order: ceil(m / 8) bytes in the Bloom
+                         bit order, then zero padding up to a multiple of 8
+```
+
+The params end at 40 and each entry is 16 bytes, so the table starts at frame offset 56 and every stage's bits start at a multiple of 8. The body is exactly `40 + 16 * stageCount` plus each stage's padded bit length; a reader rejects any other length, a `stageCount` of 0, an `m`, `k` or `capacity` of 0, a `count` above its `capacity`, and nonzero padding.
+
+A key is present if any stage holds it, that is, if all `k` of that stage's probes are set. A writer adds a key in three steps, and a reader that rebuilds a frame from its keys must follow them in order:
+
+1. If any stage already holds the key, nothing changes. Only a key not already held is counted, so duplicates never use up a stage's capacity.
+2. Otherwise, if the newest stage's `count` has reached its `capacity`, the next stage opens.
+3. The key's probes are set in the newest stage, and that stage's `count` goes up by one.
+
+Stage geometry is stored rather than re-derived, so a reader needs no floating-point sizing and takes each stage's `m`, `k` and `capacity` from the table. For writers, informatively: stage `i` has capacity `ceil(n * growth ** i)` and false-positive target `epsilon * (1 - tightening) * tightening ** i`, sized as Bloom is, `m = ceil(-capacity * ln(target) / ln(2) ** 2)` and `k = max(1, round(m / capacity * ln 2))`. The targets form a geometric series summing to at most `epsilon`, which is the chain's bound. A writer refuses to open a stage whose `m` would exceed `2^32 - 1`.
+
 ### Hash variant (flags nibble)
 
 Bits 0-3 of the flags byte name the complete scheme that turns a key into stored bits: the hash **and the index mapping** from its output to positions, not the hash alone. A change to any component takes a new variant, even when the hash itself is unchanged, because a reader that recognises the old variant would otherwise read every stored frame at the wrong positions with no error. Version 5 uses one scheme for every structure:
 
-- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog) with the index mapping below
+- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog, Scalable) with the index mapping below
 
 Variant `0` covers:
 
@@ -128,10 +159,11 @@ Variant `0` covers:
 - **Blocked:** block `= (w0 * numBlocks) >>> 32`; lane `i` of that block sets bit `(w1 * SALT[i] mod 2^32) >>> 27`, over the eight Parquet/Impala split-block salts `0x47b6137b`, `0x44974d91`, `0x8824ad5b`, `0xa2b7289d`, `0x705495c7`, `0x2df1424b`, `0x9efc4947`, `0x5c6bfb31`.
 - **Fuse:** the 64-bit key hash `w1:w0` (`w1` high), plus the params `seed` (the attempt seed the build settled on) mod `2^64`, finalised by MurmurHash3's `fmix64` into `mix`; `h0 = (mix * segCountLen) >>> 64`, `h1 = (h0 + seg) ^ ((mix >>> 18) & segMask)`, `h2 = (h0 + 2*seg) ^ (mix_lo & segMask)`, where `segMask = seg - 1`; fingerprint `(mix_lo ^ mix_hi) & mask`, with `mask` `0xff` for Fuse8 and `0xffff` for Fuse16. A key is present when `fp[h0] ^ fp[h1] ^ fp[h2]` equals its fingerprint. Fuse16 fingerprints are `u16` little-endian.
 - **HyperLogLog:** register `=` the top `p` bits of `w0`; rho `=` leading zeros + 1 over the remaining `64 - p` bits of `w0:w1`; a sparse entry's index is the top 25 bits of `w0`.
+- **Scalable:** a key is hashed once with the frame's seed, and every stage applies the Bloom mapping above to that one hash with its own `m` and `k`.
 
 This is the case Guava hit: `MURMUR128_MITZ_32` and `MURMUR128_MITZ_64` use the same hash and differ only in how its 128 bits map to indices, yet the change still needed a new `Strategy` ordinal because the stored bits differ. Guava's ordinal covers the whole strategy, and this nibble does too.
 
-All four structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header and version 5 only the params padding; neither touched the hash.
+All five structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header and version 5 only the params padding; neither touched the hash.
 
 That version 3 bump (rather than a flags-only change) was deliberate: the version-2 Fuse reader had no variant check and would silently misread a version-3 frame, so bumping the version made it reject on the version byte instead.
 

@@ -299,3 +299,45 @@ test("the reference shows walking a stream of frames with readFrameAt", () => {
   expect(walk).toContain("readFrameAt");
   expect(walk).toMatch(/```ts[\s\S]*from "distillate\/frame"[\s\S]*```/);
 });
+
+test("the layout table names type 6 as ScalableBloom", () => {
+  const { types, reserved } = typeRows();
+  const named = new Map(
+    [...types.matchAll(/(\d+)=([A-Za-z0-9]+)/g)].map(([, n, name]) => [
+      Number(n),
+      name,
+    ]),
+  );
+
+  expect(named.get(6)).toBe("ScalableBloom");
+  expect(reserved).not.toMatch(/\b6\+/);
+});
+
+test("the hash variant section lists Scalable among the variant 0 writers", () => {
+  expect(hashVariant().families).toContain("Scalable");
+});
+
+test("the scalable section documents every field and the growth rules", () => {
+  const section = sectionFrom(
+    "Scalable Bloom (type 6)",
+    "\n### ",
+    "serialization.md has no Scalable Bloom section",
+  );
+
+  for (const field of [
+    "n",
+    "seed",
+    "epsilon",
+    "growth",
+    "tightening",
+    "stageCount",
+    "m",
+    "k",
+    "capacity",
+    "count",
+  ]) {
+    expect(section, field).toMatch(new RegExp(`\\b${field}\\b`));
+  }
+  expect(section).toContain("multiple of 8");
+  expect(section).toContain("not already");
+});
