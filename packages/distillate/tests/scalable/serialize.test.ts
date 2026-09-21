@@ -12,6 +12,7 @@ import {
   SerializationError,
   TruncatedError,
   UnknownHashVariantError,
+  writeHeader,
 } from "../../src/core/serialize.js";
 import {
   ScalableBloomFilter,
@@ -256,4 +257,85 @@ test("fromBytes rejects nonzero padding after a stage's bits", () => {
   expect(() => ScalableBloomFilter.fromBytes(resealed(frame))).toThrow(
     SerializationError,
   );
+});
+
+test("every truncated prefix of a frame is rejected with a typed error", () => {
+  const frame = threeStages();
+  for (let length = 0; length < frame.length; length++) {
+    expect(() =>
+      ScalableBloomFilter.fromBytes(frame.subarray(0, length)),
+    ).toThrow(SerializationError);
+  }
+});
+
+// Valid settings and a sealed CRC, so each run reaches the table checks with
+// sizes at their edges: zero, tiny, a stage's own capacity, and the maxima.
+const edge = fc.constantFrom(0, 1, 7, 10, 0xffff, 0xffffffff);
+const forged = fc
+  .tuple(
+    fc.integer({ min: 0, max: 4 }),
+    fc.array(fc.tuple(edge, edge, edge, edge), { minLength: 4, maxLength: 4 }),
+    fc.uint8Array({ maxLength: 2048 }),
+    fc.boolean(),
+  )
+  .map(([stageCount, fields, noise, exact]) => {
+    const table = fields.slice(0, stageCount);
+    // Half the runs get a tail of exactly the declared stage sizes, so they
+    // pass the length check and reach stage reading, when that size is small.
+    const declared = table.reduce(
+      (sum, [m]) => sum + Math.ceil(Math.ceil(m / 8) / 8) * 8,
+      0,
+    );
+    const tail = exact && declared <= 4096 ? noise.slice(0, declared) : noise;
+    const padded = new Uint8Array(
+      exact && declared <= 4096 ? declared : tail.length,
+    );
+    padded.set(tail);
+    const body = new Uint8Array(40 + 16 * stageCount + padded.length);
+    const view = new DataView(body.buffer);
+    view.setUint32(0, 10, true);
+    view.setFloat64(8, 0.01, true);
+    view.setFloat64(16, 2, true);
+    view.setFloat64(24, 0.85, true);
+    view.setUint32(32, stageCount, true);
+    table.forEach(([m, k, capacity, count], i) => {
+      const at = 40 + 16 * i;
+      view.setUint32(at, m, true);
+      view.setUint16(at + 4, k & 0xffff, true);
+      view.setUint32(at + 8, capacity, true);
+      view.setUint32(at + 12, count, true);
+    });
+    body.set(padded, 40 + 16 * stageCount);
+    return writeHeader({ version: FORMAT_VERSION, type: 6, flags: 0 }, body);
+  });
+
+test("a forged frame yields a working filter or a typed error (fuzz)", () => {
+  fc.assert(
+    fc.property(forged, (frame) => {
+      try {
+        const f = ScalableBloomFilter.fromBytes(frame);
+        expect(typeof f.has("probe")).toBe("boolean");
+      } catch (err) {
+        expect(err).toBeInstanceOf(SerializationError);
+      }
+    }),
+    { numRuns: 500 },
+  );
+});
+
+test("the forged generator reaches both a working filter and each rejection", () => {
+  const outcomes = new Set<string>();
+  for (const frame of fc.sample(forged, { numRuns: 2000, seed: 42 })) {
+    try {
+      ScalableBloomFilter.fromBytes(frame);
+      outcomes.add("ok");
+    } catch (err) {
+      outcomes.add((err as Error).name);
+    }
+  }
+  expect([...outcomes].sort()).toEqual([
+    "SerializationError",
+    "TruncatedError",
+    "ok",
+  ]);
 });
