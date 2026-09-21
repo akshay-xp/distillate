@@ -81,18 +81,18 @@ Bits per key is allocated bits over keys added; FPR is measured over 100,000 key
 distillate is measured from 1k to 10M keys, the same reach as every other structure. The incumbent stops at 100k: every `add` recounts the newest stage's set bits (`_currentload`), so its build time grows with the square of the key count.
 Past 100k its rows project the build time from its own 100k run rather than running for hours at 1M and days at 10M.
 
-| Filter              | keys | stages  | bits/key | measured FPR | add                     | has          |
-| ------------------- | ---- | ------- | -------- | ------------ | ----------------------- | ------------ |
-| distillate/scalable | 1k   | 1       | 11.03    | 0.50%        | 813 k ops/s             | 3.28 M ops/s |
-| bloom-filters       | 1k   | 2       | 40.17    | 0.81%        | 76 k ops/s              | 231 k ops/s  |
-| distillate/scalable | 10k  | 4       | 21.45    | 0.89%        | 2.55 M ops/s            | 7.66 M ops/s |
-| bloom-filters       | 10k  | 4       | 26.36    | 1.43%        | 56 k ops/s              | 109 k ops/s  |
-| distillate/scalable | 100k | 7       | 23.27    | 0.99%        | 4.91 M ops/s            | 9.16 M ops/s |
-| bloom-filters       | 100k | 7       | 29.68    | 1.60%        | 4 k ops/s               | 51 k ops/s   |
-| distillate/scalable | 1M   | 10      | 23.10    | 1.00%        | 3.25 M ops/s            | 8.11 M ops/s |
-| bloom-filters       | 1M   | not run | -        | -            | ~47 min projected build | -            |
-| distillate/scalable | 10M  | 14      | 46.43    | 1.01%        | 1.92 M ops/s            | 4.43 M ops/s |
-| bloom-filters       | 10M  | not run | -        | -            | ~78.1 h projected build | -            |
+| Filter              | keys | stages  | bits/key | measured FPR | add                     | has           |
+| ------------------- | ---- | ------- | -------- | ------------ | ----------------------- | ------------- |
+| distillate/scalable | 1k   | 1       | 11.03    | 0.50%        | 854 k ops/s             | 2.66 M ops/s  |
+| bloom-filters       | 1k   | 2       | 40.17    | 0.81%        | 72 k ops/s              | 223 k ops/s   |
+| distillate/scalable | 10k  | 4       | 21.45    | 0.89%        | 3.36 M ops/s            | 6.35 M ops/s  |
+| bloom-filters       | 10k  | 4       | 26.36    | 1.43%        | 55 k ops/s              | 108 k ops/s   |
+| distillate/scalable | 100k | 7       | 23.27    | 0.99%        | 5.76 M ops/s            | 10.16 M ops/s |
+| bloom-filters       | 100k | 7       | 29.68    | 1.60%        | 4 k ops/s               | 51 k ops/s    |
+| distillate/scalable | 1M   | 10      | 23.10    | 1.00%        | 4.01 M ops/s            | 8.99 M ops/s  |
+| bloom-filters       | 1M   | not run | -        | -            | ~47 min projected build | -             |
+| distillate/scalable | 10M  | 14      | 46.43    | 1.01%        | 2.56 M ops/s            | 5.62 M ops/s  |
+| bloom-filters       | 10M  | not run | -        | -            | ~78.0 h projected build | -             |
 
 From one to a thousand times its initial size distillate measures 0.50% to
 1.00%, and 1.01% at 10M. That last figure is within sampling noise of the 1%
@@ -107,12 +107,18 @@ opened at about 8.19M keys and at 10M is a fifth full (1.71M of 8.19M) while
 holding just over half of all the allocated bits. It falls back as that stage
 fills.
 
-The incumbent's add rate falls from 76k to under 4k ops/s by 100k. Every `add`
+The incumbent's add rate falls from 72k to under 4k ops/s by 100k. Every `add`
 calls `_currentload()`, which counts every set bit in the newest stage, so each
 insert costs time proportional to that stage's size, and its 1M and 10M rows are
 projected from its 100k build rather than run. distillate's add rate peaks
-around 100k and eases to 1.92 M ops/s at 10M, where each new key is checked
-against all fourteen stages before it is added.
+around 100k and eases to 2.56 M ops/s at 10M: each new key is checked against
+every stage before it is added, fourteen by then, and at 58 MB the stages no
+longer fit the CPU caches. A stage that lacks the key is usually ruled out
+within two probes, which is where the check stops.
+
+The 1k and 10k rows time a single pass of a few thousand operations, well under
+a millisecond at 1k, so their throughput includes warm-up and moves from run to
+run. Read the 100k and larger rows for rates.
 
 ## Throughput (n = 100k)
 
