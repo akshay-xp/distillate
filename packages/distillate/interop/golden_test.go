@@ -460,3 +460,96 @@ func allHave(has func(string) bool, keys []string) bool {
 	}
 	return true
 }
+
+type fuse struct {
+	seed, seg, segCountLen, size uint32
+	fp                           []uint16
+	mask                         uint16
+}
+
+const fuseParams = 16
+
+func parseFuse(f frame) (fuse, error) {
+	width := map[byte]int{3: 1, 4: 2}[f.typ]
+	if width == 0 || len(f.body) < fuseParams {
+		return fuse{}, fmt.Errorf("not a Fuse frame")
+	}
+	p := f.body
+	r := fuse{seed: le.Uint32(p), seg: le.Uint32(p[4:]), segCountLen: le.Uint32(p[8:]), size: le.Uint32(p[12:])}
+	payload := p[fuseParams:]
+	if n := int(r.segCountLen + 2*r.seg); len(payload) != n*width {
+		return fuse{}, fmt.Errorf("Fuse payload of %d bytes, want %d fingerprints of %d bytes", len(payload), n, width)
+	}
+	r.fp = make([]uint16, len(payload)/width)
+	for i := range r.fp {
+		if width == 1 {
+			r.fp[i] = uint16(payload[i])
+		} else {
+			r.fp[i] = le.Uint16(payload[2*i:])
+		}
+	}
+	r.mask = uint16(1<<(8*width) - 1)
+	return r, nil
+}
+
+func fmix64(k uint64) uint64 {
+	k ^= k >> 33
+	k *= 0xff51afd7ed558ccd
+	k ^= k >> 33
+	k *= 0xc4ceb9fe1a85ec53
+	k ^= k >> 33
+	return k
+}
+
+// has is variant 0's Fuse mapping: three positions and a fingerprint from one
+// 64-bit mix of the key hash and the attempt seed.
+func (f fuse) has(key string) bool {
+	w := murmur3x86_128([]byte(key), 0)
+	mix := fmix64(uint64(w[1])<<32 | uint64(w[0]) + uint64(f.seed))
+	h0, _ := bits.Mul64(mix, uint64(f.segCountLen))
+	segMask := uint64(f.seg - 1)
+	h1 := (h0 + uint64(f.seg)) ^ (mix >> 18 & segMask)
+	h2 := (h0 + 2*uint64(f.seg)) ^ (mix & segMask)
+	fingerprint := uint16(mix^mix>>32) & f.mask
+	return f.fp[h0]^f.fp[h1]^f.fp[h2] == fingerprint
+}
+
+func TestFuse(t *testing.T) {
+	for _, name := range []string{"fuse8", "fuse16"} {
+		e := find(t, name)
+		fr, err := readFrame(frameOf(t, e))
+		if err != nil {
+			t.Fatal(err)
+		}
+		f, err := parseFuse(fr)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		for _, key := range e.Keys {
+			if !f.has(key) {
+				t.Errorf("%s: has(%q) is false", name, key)
+			}
+		}
+		// A reader answering true to everything passes the loop above.
+		absent := 0
+		for i := 0; i < 100; i++ {
+			if !f.has(fmt.Sprintf("absent-%d", i)) {
+				absent++
+			}
+		}
+		if absent < 90 {
+			t.Errorf("%s: only %d of 100 absent keys answer false", name, absent)
+		}
+
+		if name == "fuse16" {
+			swapped := f
+			swapped.fp = make([]uint16, len(f.fp))
+			for i, v := range f.fp {
+				swapped.fp[i] = bits.ReverseBytes16(v)
+			}
+			if allHave(swapped.has, e.Keys) {
+				t.Errorf("%s: byte-swapped fingerprints still answer every key", name)
+			}
+		}
+	}
+}
