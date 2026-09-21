@@ -16,10 +16,10 @@
   },
   "devDependencies": {
     "@types/bloomfilter": "^0.0.2",
-    "@types/node": "^22.0.0",
+    "@types/node": "^22.20.3",
     "mitata": "^1.0.34",
-    "tsx": "^4.23.12",
+    "tsx": "^4.23.13",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.1"
   }
 }
