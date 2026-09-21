@@ -302,17 +302,64 @@ func buildBloom(m uint32, k uint16, seed, n uint32, keys []string) []byte {
 	return writeFrame(1, params, b.bits)
 }
 
-func TestBloom(t *testing.T) {
-	if got := murmur3x86_128(nil, 0); got != [4]uint32{} {
-		t.Errorf("murmur3 of empty input: %08x, want all zero", got)
-	}
-	// Taken once from the JS hash128Key("hello"), so a disagreement with JS
-	// reports as the hash rather than as a Bloom frame that differs.
-	want := [4]uint32{0x2b2444a0, 0xdb91def7, 0x9adb31b6, 0x9adb31b6}
-	if got := murmur3x86_128([]byte("hello"), 0); got != want {
-		t.Fatalf("murmur3(hello): %08x, want %08x", got, want)
-	}
+// hashVectors were taken once from the JS hash128Key, so a disagreement with
+// JS reports as the hash rather than as a frame that differs. The golden keys
+// are all under 8 bytes, so without the prefixes up to 33 bytes the block loop
+// and the 9-15 byte tails would never be compared across languages.
+var hashVectors = []struct {
+	key  string
+	want [4]uint32
+}{
+	{"", [4]uint32{0x00000000, 0x00000000, 0x00000000, 0x00000000}},
+	{"T", [4]uint32{0x312658d4, 0xd32cba11, 0xd32cba11, 0xd32cba11}},
+	{"Th", [4]uint32{0xee15ba68, 0x5ea9dec0, 0x5ea9dec0, 0x5ea9dec0}},
+	{"The", [4]uint32{0x41d0bf79, 0xd27be85e, 0xd27be85e, 0xd27be85e}},
+	{"The ", [4]uint32{0x00251e65, 0xaa6e1ea2, 0xaa6e1ea2, 0xaa6e1ea2}},
+	{"The q", [4]uint32{0x392b67e0, 0xb9c452b8, 0xbfcc773c, 0xbfcc773c}},
+	{"The qu", [4]uint32{0x02910834, 0xfa14aab4, 0x2b714bbf, 0x2b714bbf}},
+	{"The qui", [4]uint32{0xa09f763b, 0x35527f9c, 0xddf6976e, 0xddf6976e}},
+	{"The quic", [4]uint32{0x66b6c80a, 0xc96f1f6d, 0x6d8a0980, 0x6d8a0980}},
+	{"The quick", [4]uint32{0xbac5d673, 0xcbc4cff3, 0xdeb68d09, 0x69c8528f}},
+	{"The quick ", [4]uint32{0x9bf1477a, 0x73c5b1aa, 0x852e56f2, 0xdff305b6}},
+	{"The quick b", [4]uint32{0x0c71da9e, 0xab63cd6f, 0x41612928, 0xa3768855}},
+	{"The quick br", [4]uint32{0xc628765f, 0x4e4398a8, 0xebb5df5e, 0x5b59e222}},
+	{"The quick bro", [4]uint32{0xe3c36e46, 0x2fda1565, 0xcea4d957, 0x7990934f}},
+	{"The quick brow", [4]uint32{0x08bcd16f, 0x0f9b125b, 0x364ee897, 0x4772cb63}},
+	{"The quick brown", [4]uint32{0xcad356cf, 0xebdbe493, 0x5f9fcb22, 0x2cc8a286}},
+	{"The quick brown ", [4]uint32{0x05af2e98, 0x85dc9f00, 0x7a560e93, 0x1005cf2a}},
+	{"The quick brown f", [4]uint32{0x315057c3, 0x66c13ca3, 0x828c6941, 0xb7707639}},
+	{"The quick brown fo", [4]uint32{0xa01994e4, 0xd6fefc25, 0xd4b9e591, 0x3bc95ca5}},
+	{"The quick brown fox", [4]uint32{0x22b291f7, 0xa35dd0df, 0x051704ea, 0xcff851ea}},
+	{"The quick brown fox ", [4]uint32{0xfe38a094, 0x01810b9f, 0x6bb24530, 0x38b2aba5}},
+	{"The quick brown fox j", [4]uint32{0xcd216e62, 0x3dcefd24, 0x2bf5f67e, 0x3c6f8be5}},
+	{"The quick brown fox ju", [4]uint32{0xf5795533, 0x49f2eba2, 0x726b8b42, 0xf02b3a46}},
+	{"The quick brown fox jum", [4]uint32{0x9de4178d, 0xc4165c1d, 0x65dba141, 0x72f17359}},
+	{"The quick brown fox jump", [4]uint32{0x7908c90b, 0x6dc21ace, 0x43488a19, 0xf1a97237}},
+	{"The quick brown fox jumps", [4]uint32{0x62a1b11b, 0x4e46f749, 0xe9f9a2c9, 0x2f667a74}},
+	{"The quick brown fox jumps ", [4]uint32{0xfe36981e, 0xbacec997, 0x2500b9b9, 0xd68d3153}},
+	{"The quick brown fox jumps o", [4]uint32{0x3e3939d6, 0xce1f0e3b, 0x2f9e725b, 0xaa508b3f}},
+	{"The quick brown fox jumps ov", [4]uint32{0x4bd72ebc, 0x373823ed, 0x8f43575e, 0xcb9fffc0}},
+	{"The quick brown fox jumps ove", [4]uint32{0xf9507c4d, 0x90f40c1d, 0xd5da107a, 0x0730447a}},
+	{"The quick brown fox jumps over", [4]uint32{0x9c283a41, 0x6af26d4b, 0x5406eaab, 0xc5a336bf}},
+	{"The quick brown fox jumps over ", [4]uint32{0x9756d6dd, 0x03ee8189, 0xb6d1f56e, 0x23a827f6}},
+	{"The quick brown fox jumps over t", [4]uint32{0x7fc78aad, 0x2d537202, 0x102e762c, 0x393ef0c1}},
+	{"The quick brown fox jumps over th", [4]uint32{0xad6ec1ae, 0xd6ad260a, 0x9d041c4a, 0xebac7c8b}},
+	{"héllo wörld", [4]uint32{0x31b759f2, 0x489f6d8b, 0x7061676c, 0x62dbfc53}},
+	{"日本語のキー", [4]uint32{0x1bcbaf04, 0x2b70136b, 0x6674f453, 0x2ea104d6}},
+	{"🦀 crab", [4]uint32{0x70f21388, 0xa850520b, 0x511c6374, 0xd6330503}},   // a surrogate pair in JS
+	{"\uFFFD", [4]uint32{0x15861a96, 0x39dfc326, 0x39dfc326, 0x39dfc326}},   // JS "\ud800", a lone high surrogate
+	{"a\uFFFDb", [4]uint32{0x2ff91286, 0x0eafa77a, 0x62c3ec7c, 0x62c3ec7c}}, // JS "a\udc00b", a lone low surrogate
+}
 
+func TestHashVectors(t *testing.T) {
+	for _, v := range hashVectors {
+		if got := murmur3x86_128([]byte(v.key), 0); got != v.want {
+			t.Errorf("murmur3(%q), %d bytes: %08x, want %08x", v.key, len(v.key), got, v.want)
+		}
+	}
+}
+
+func TestBloom(t *testing.T) {
 	e := find(t, "bloom")
 	golden := frameOf(t, e)
 	f, err := readFrame(golden)
