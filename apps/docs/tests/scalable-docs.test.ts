@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test } from "vitest";
 
+import { parseTable } from "../src/tables.js";
+
 const read = (path: string): string =>
   readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
 
@@ -45,4 +47,26 @@ test("the Scalable Bloom guide covers what a reader needs to choose and use it",
 
 test("the sidebar links the Scalable Bloom guide", () => {
   expect(read("../astro.config.mjs")).toContain('"/guides/scalable/"');
+});
+
+const chooser = (): string =>
+  read("../src/content/docs/guides/choosing-a-structure.md");
+
+test("the chooser routes an unknown key count to Scalable Bloom", () => {
+  const rows = parseTable(chooser(), "Decision matrix");
+  const row = rows.find(([workload]) =>
+    workload.startsWith("Unbounded growth"),
+  );
+  const use = row?.[1] ?? "";
+  expect(use).toContain("[Scalable Bloom](/guides/scalable/)");
+  // Only the expandable filters after it are still unshipped.
+  expect(use.split("InfiniFilter")[0]).not.toContain("not yet available");
+});
+
+test("the chooser lists Scalable Bloom as shipped, not as planned", () => {
+  const page = chooser();
+  const shipped = section(page, "What ships today");
+  const planned = section(page, "What is not shipped yet");
+  expect(shipped).toContain("### [Scalable Bloom](/guides/scalable/)");
+  expect(planned).not.toContain("Scalable Bloom");
 });
