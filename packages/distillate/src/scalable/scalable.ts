@@ -11,10 +11,34 @@ import {
   assertUint32,
   ParamError,
 } from "../core/params.js";
-import { bytesEqual } from "../core/serialize.js";
+import {
+  bytesEqual,
+  FORMAT_VERSION,
+  HASH_MURMUR128,
+  readHeader,
+  SerializationError,
+  writeFrame,
+} from "../core/serialize.js";
 import { bloomSizing } from "../core/sizing.js";
 
 const MAX_BITS = 0xffffffff;
+const TYPE = 6;
+
+/**
+ * Body layout (little-endian): n (u32) | seed (u32) | epsilon (f64) | growth
+ * (f64) | tightening (f64) | stageCount (u32) | 4 bytes padding, then one
+ * 16-byte table entry per stage: m (u32) | k (u16) | 2 bytes padding |
+ * capacity (u32) | count (u32). Each stage's bits follow, padded to a
+ * multiple of 8 so every stage starts 8-byte aligned in the frame.
+ */
+const PARAMS_SIZE = 40;
+const ENTRY_SIZE = 16;
+
+const padded8 = (bytes: number): number => Math.ceil(bytes / 8) * 8;
+
+// Stages fromBytes hands the constructor to adopt in place of a fresh stage 0,
+// so a frame cannot make it allocate a first stage it does not store.
+let restoring: Stage[] | undefined;
 
 /**
  * Thrown by {@link ScalableBloomFilter.union} when the two filters were built
@@ -151,6 +175,10 @@ export class ScalableBloomFilter {
     this.#tightening = tightening;
     this.#seed = seed;
 
+    if (restoring) {
+      this.#newest = this.#adopt(restoring);
+      return;
+    }
     const first = this.#geometry(0);
     if (first.m > MAX_BITS) {
       throw new ParamError(
@@ -197,13 +225,13 @@ export class ScalableBloomFilter {
     }
   }
 
-  // Replaces the whole chain, as union builds it; the newest stage is the last.
-  #adopt(stages: Stage[]): void {
+  // Replaces the whole chain and returns its newest stage, the last.
+  #adopt(stages: Stage[]): Stage {
     this.#stages.length = 0;
     this.#stages.push(...stages);
-    this.#newest = stages[stages.length - 1] ?? this.#newest;
     const k = Math.max(...stages.map((s) => s.k));
     if (k > this.#probes.length) this.#probes = new Uint32Array(k);
+    return stages.reduce((_, s) => s);
   }
 
   // Fills #probes for one stage from the key hashed into #hash, which every
@@ -330,7 +358,7 @@ export class ScalableBloomFilter {
         count: Math.min(stage.capacity, stage.count + (twin?.count ?? 0)),
       };
     });
-    result.#adopt(stages);
+    result.#newest = result.#adopt(stages);
     return result;
   }
 
@@ -357,6 +385,87 @@ export class ScalableBloomFilter {
         bytesEqual(s.bits.bytes, t.bits.bytes)
       );
     });
+  }
+
+  /**
+   * Restores a filter from its {@link ScalableBloomFilter.toBytes} serialization.
+   *
+   * @param bytes - A frame produced by `toBytes`.
+   * @returns The reconstructed filter.
+   * @throws {@link SerializationError} (or a subclass) if the frame is malformed.
+   */
+  static fromBytes(bytes: Uint8Array): ScalableBloomFilter {
+    const { type, body } = readHeader(bytes);
+    if (type !== TYPE) {
+      throw new SerializationError(
+        `expected DSTL type ${String(TYPE)}, got ${String(type)}`,
+      );
+    }
+    const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
+    const stageCount = view.getUint32(32, true);
+    const stages: Stage[] = [];
+    let at = PARAMS_SIZE + ENTRY_SIZE * stageCount;
+    for (let i = 0; i < stageCount; i++) {
+      const entry = PARAMS_SIZE + ENTRY_SIZE * i;
+      const m = view.getUint32(entry, true);
+      const bits = new BitSet(m);
+      bits.bytes.set(body.subarray(at, at + bits.bytes.length));
+      stages.push({
+        bits,
+        m,
+        k: view.getUint16(entry + 4, true),
+        capacity: view.getUint32(entry + 8, true),
+        count: view.getUint32(entry + 12, true),
+      });
+      at += padded8(bits.bytes.length);
+    }
+    restoring = stages;
+    try {
+      return new ScalableBloomFilter({
+        n: view.getUint32(0, true),
+        seed: view.getUint32(4, true),
+        epsilon: view.getFloat64(8, true),
+        growth: view.getFloat64(16, true),
+        tightening: view.getFloat64(24, true),
+      });
+    } finally {
+      restoring = undefined;
+    }
+  }
+
+  /**
+   * Serializes the filter to a portable little-endian frame, DSTL type 6.
+   *
+   * @returns The serialized filter, readable by {@link ScalableBloomFilter.fromBytes}.
+   */
+  toBytes(): Uint8Array {
+    const payload = this.#stages.reduce(
+      (sum, s) => sum + ENTRY_SIZE + padded8(s.bits.bytes.length),
+      0,
+    );
+    return writeFrame(
+      { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
+      PARAMS_SIZE,
+      payload,
+      (body, view) => {
+        view.setUint32(0, this.#n, true);
+        view.setUint32(4, this.#seed, true);
+        view.setFloat64(8, this.#epsilon, true);
+        view.setFloat64(16, this.#growth, true);
+        view.setFloat64(24, this.#tightening, true);
+        view.setUint32(32, this.#stages.length, true);
+        let at = PARAMS_SIZE + ENTRY_SIZE * this.#stages.length;
+        this.#stages.forEach((s, i) => {
+          const entry = PARAMS_SIZE + ENTRY_SIZE * i;
+          view.setUint32(entry, s.m, true);
+          view.setUint16(entry + 4, s.k, true);
+          view.setUint32(entry + 8, s.capacity, true);
+          view.setUint32(entry + 12, s.count, true);
+          body.set(s.bits.bytes, at);
+          at += padded8(s.bits.bytes.length);
+        });
+      },
+    );
   }
 
   /** Keys added that the filter did not already hold. */
