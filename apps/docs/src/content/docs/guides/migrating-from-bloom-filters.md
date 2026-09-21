@@ -189,6 +189,59 @@ count and throws otherwise. `union` accepts any two precisions and folds the
 result down to the coarser precision of the pair, because a finer sketch reduces
 cleanly while the reverse would invent detail it never recorded.
 
+### The scalable filter
+
+`bloom-filters` also ships a `ScalableBloomFilter`, and it maps across. The
+calls line up one for one; the behaviour behind them does not, in three ways
+worth knowing before you switch.
+
+| `bloom-filters`                                          | distillate                                               |
+| -------------------------------------------------------- | -------------------------------------------------------- |
+| `require("bloom-filters")`                               | `import ... from "distillate/scalable"`                  |
+| `new ScalableBloomFilter(initialSize, errorRate, ratio)` | `new ScalableBloomFilter({ n, epsilon, tightening })`    |
+| `ScalableBloomFilter.create(size, errorRate, ratio)`     | `ScalableBloomFilter.create(n, epsilon, { tightening })` |
+| `filter.add(item)`                                       | `filter.add(key)`                                        |
+| `filter.has(item)`                                       | `filter.has(key)`                                        |
+| `filter.capacity()`                                      | `filter.capacity` (a getter)                             |
+| `filter.rate()`                                          | `filter.rate()`, covering every stage                    |
+| `a.equals(b)`                                            | `a.equals(b)`                                            |
+| `filter.saveAsJSON()` / `ScalableBloomFilter.fromJSON()` | `filter.toJSON()` / `ScalableBloomFilter.fromJSON()`     |
+| `filter.seed = s`                                        | `{ seed: s }` at construction                            |
+
+Before:
+
+```js
+const { ScalableBloomFilter } = require("bloom-filters");
+
+const filter = ScalableBloomFilter.create(1000, 0.01, 0.5);
+filter.add("alice");
+filter.has("alice");
+```
+
+After:
+
+```ts
+import { ScalableBloomFilter } from "distillate/scalable";
+
+const filter = ScalableBloomFilter.create(1000, 0.01, { tightening: 0.5 });
+filter.add("alice");
+filter.has("alice"); // true
+```
+
+The differences, as its source (`scalable-bloom-filter.js`) shows them:
+
+- **Its bound is not the rate you asked for.** Its first stage targets the full
+  `errorRate` and each later one `errorRate * ratio ** i`, so the stages sum to
+  `errorRate / (1 - ratio)`: twice the requested rate at its default `ratio` of
+  0.5. distillate starts at `epsilon * (1 - tightening)`, so the whole chain
+  holds `epsilon`. `tightening` is the counterpart of `ratio`.
+- **Its `rate()` reports only the newest stage**, not the chain a lookup
+  actually checks. distillate's `rate()` combines every stage.
+- **Its growth is fixed at 2.** distillate takes a `growth` option.
+
+It also has no `union`; distillate merges two chains built with the same
+settings.
+
 ### Serialized filters do not carry over
 
 The two formats are unrelated. distillate cannot read a `bloom-filters`
@@ -222,6 +275,10 @@ code anyway:
   0.39%, against 11.5 for classic at the same rate, and faster to query.
 - **Lookups dominate and the filter is large?**
   [Blocked Bloom](/guides/blocked/) touches one cache line instead of `k`.
+- **Migrating a `ScalableBloomFilter`?** If you can bound your key count,
+  a [Classic Bloom](/guides/bloom/) sized for it is smaller and faster. If you
+  cannot, [Scalable Bloom](/guides/scalable/) is the direct replacement, and
+  it holds the rate you ask for.
 - **Migrating a HyperLogLog?** You gave the old one a register count. Pick the
   precision that produces it, or the error you actually want, in
   [choose a precision](/guides/hll/#choose-a-precision).
