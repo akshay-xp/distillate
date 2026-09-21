@@ -15,6 +15,16 @@ import { bloomSizing } from "../core/sizing.js";
 
 const MAX_BITS = 0xffffffff;
 
+/**
+ * Thrown by {@link ScalableBloomFilter.union} when the two filters were built
+ * with different settings. Stage `i` has the same geometry in both only when
+ * every setting matches, so no stage-by-stage merge exists otherwise.
+ */
+export class ScalableParamMismatchError extends Error {
+  /** Discriminates this error from other `Error`s. */
+  override readonly name = "ScalableParamMismatchError";
+}
+
 /** Settings for a {@link ScalableBloomFilter}. */
 export interface ScalableBloomParams {
   /** Keys the first stage holds before the next one opens. */
@@ -165,6 +175,23 @@ export class ScalableBloomFilter {
     return stage;
   }
 
+  #assertSameSettings(other: ScalableBloomFilter): void {
+    const pairs: [string, number, number][] = [
+      ["n", this.#n, other.#n],
+      ["epsilon", this.#epsilon, other.#epsilon],
+      ["growth", this.#growth, other.#growth],
+      ["tightening", this.#tightening, other.#tightening],
+      ["seed", this.#seed, other.#seed],
+    ];
+    for (const [name, a, b] of pairs) {
+      if (a !== b) {
+        throw new ScalableParamMismatchError(
+          `cannot union scalable Bloom filters whose ${name} differs (${String(a)} vs ${String(b)})`,
+        );
+      }
+    }
+  }
+
   // Replaces the whole chain, as union builds it; the newest stage is the last.
   #adopt(stages: Stage[]): void {
     this.#stages.length = 0;
@@ -264,8 +291,10 @@ export class ScalableBloomFilter {
    *
    * @param other - A filter built with identical settings.
    * @returns A new filter; neither input is changed.
+   * @throws {@link ScalableParamMismatchError} if any setting differs.
    */
   union(other: ScalableBloomFilter): ScalableBloomFilter {
+    this.#assertSameSettings(other);
     const result = new ScalableBloomFilter({
       n: this.#n,
       epsilon: this.#epsilon,

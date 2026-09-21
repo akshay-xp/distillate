@@ -1,6 +1,11 @@
 import { expect, test } from "vitest";
 
-import { ScalableBloomFilter } from "../../src/scalable/scalable.js";
+import { ParamError } from "../../src/core/params.js";
+import {
+  ScalableBloomFilter,
+  type ScalableBloomParams,
+  ScalableParamMismatchError,
+} from "../../src/scalable/scalable.js";
 
 const range = (prefix: string, count: number): string[] =>
   Array.from({ length: count }, (_, i) => `${prefix}${String(i)}`);
@@ -48,4 +53,32 @@ test("union leaves both inputs unchanged", () => {
   b.union(a);
 
   expect([snapshot(a), snapshot(b)]).toEqual(before);
+});
+
+test.each<[keyof ScalableBloomParams, Partial<ScalableBloomParams>]>([
+  ["n", { n: 11 }],
+  ["epsilon", { epsilon: 0.02 }],
+  ["growth", { growth: 3 }],
+  ["tightening", { tightening: 0.5 }],
+  ["seed", { seed: 1 }],
+])("union refuses filters whose %s differs", (name, change) => {
+  const settings = {
+    n: 10,
+    epsilon: 0.01,
+    growth: 2,
+    tightening: 0.85,
+    seed: 0,
+  };
+  const base = new ScalableBloomFilter(settings);
+  const other = new ScalableBloomFilter({ ...settings, ...change });
+
+  let thrown: unknown;
+  try {
+    base.union(other);
+  } catch (err) {
+    thrown = err;
+  }
+  expect(thrown).toBeInstanceOf(ScalableParamMismatchError);
+  expect(thrown).not.toBeInstanceOf(ParamError);
+  expect((thrown as Error).message).toContain(name);
 });
