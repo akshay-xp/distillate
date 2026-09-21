@@ -180,3 +180,26 @@ test("rate is zero when empty and matches a Bloom filter's estimate for one stag
   // Relative, not exact: the chain computes 1 - (1 - r), which rounds.
   expect(Math.abs(f.rate() / bloom.rate() - 1)).toBeLessThan(1e-9);
 });
+
+test("from sizes the first stage to the key count and adds every key", () => {
+  const f = ScalableBloomFilter.from(["a", "b", "c"], 0.01);
+  expect(f.capacity).toBe(3);
+  expect(f.count).toBe(3);
+  expect(f.stages).toBe(1);
+  for (const key of ["a", "b", "c"]) expect(f.has(key)).toBe(true);
+
+  for (const key of range("more", 10)) f.add(key);
+  expect(f.stages).toBeGreaterThan(1);
+});
+
+test("from sizes to the key count, duplicates included, and counts distinct keys", () => {
+  const empty = ScalableBloomFilter.from([], 0.01);
+  expect(empty.capacity).toBe(1);
+  expect(empty.count).toBe(0);
+
+  const dup = ScalableBloomFilter.from(["a", "a"], 0.01);
+  expect(dup.capacity).toBe(2);
+  expect(dup.count).toBe(1);
+
+  expect(ScalableBloomFilter.from(["x"], 0.01, { growth: 4 }).growth).toBe(4);
+});

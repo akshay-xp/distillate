@@ -33,6 +33,9 @@ export interface ScalableBloomParams {
   seed?: number;
 }
 
+/** The optional {@link ScalableBloomParams}, as `create` and `from` take them. */
+export type ScalableBloomOptions = Omit<ScalableBloomParams, "n" | "epsilon">;
+
 interface Stage {
   readonly bits: BitSet;
   readonly m: number;
@@ -79,9 +82,34 @@ export class ScalableBloomFilter {
   static create(
     n: number,
     epsilon: number,
-    options: Omit<ScalableBloomParams, "n" | "epsilon"> = {},
+    options: ScalableBloomOptions = {},
   ): ScalableBloomFilter {
     return new ScalableBloomFilter({ ...options, n, epsilon });
+  }
+
+  /**
+   * Builds a filter from `keys`, with the first stage sized for their count;
+   * it keeps growing as more keys arrive. Duplicates only oversize the first
+   * stage, since a key already held is not counted again.
+   *
+   * @param keys - The keys to insert.
+   * @param epsilon - Target false-positive rate for the whole chain.
+   * @param options - Optional growth, tightening and seed.
+   * @returns A new filter containing every key.
+   */
+  static from(
+    keys: Iterable<BytesLike>,
+    epsilon: number,
+    options: ScalableBloomOptions = {},
+  ): ScalableBloomFilter {
+    const arr = [...keys];
+    const f = ScalableBloomFilter.create(
+      Math.max(1, arr.length),
+      epsilon,
+      options,
+    );
+    for (const key of arr) f.add(key);
+    return f;
   }
 
   /**
