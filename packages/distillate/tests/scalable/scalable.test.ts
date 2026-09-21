@@ -141,3 +141,25 @@ test("every added key stays present however far the chain grows (property)", () 
     { numRuns: 50 },
   );
 });
+
+test("a stage too large to address stops growth with a RangeError", () => {
+  const f = ScalableBloomFilter.create(1, 0.5, { growth: 1e10 });
+  f.add("a");
+
+  let thrown: unknown;
+  try {
+    f.add("b");
+  } catch (err) {
+    thrown = err;
+  }
+  expect(thrown).toBeInstanceOf(RangeError);
+  expect(thrown).not.toBeInstanceOf(ParamError);
+  // A plain RangeError about the stage, not the internal BitSet's own error:
+  // the frame stores m as a u32, one bit short of what BitSet would allow.
+  expect((thrown as Error).name).toBe("RangeError");
+  expect((thrown as Error).message).toMatch(/stage 1 .* bits/);
+
+  expect(f.has("a")).toBe(true);
+  expect(f.stages).toBe(1);
+  expect(f.count).toBe(1);
+});
