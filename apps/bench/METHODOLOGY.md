@@ -65,6 +65,22 @@ The sketch throughput benches build at 20,000 keys rather than the 100k the filt
 benches use. The incumbent adds at roughly 8k ops/s, so a 100k-key sketch costs it
 about 12.5 seconds to build.
 
+## Configuration for Scalable Bloom
+
+Scalable Bloom is compared at the **incumbent's default configuration**. Both
+filters get the same arguments: an initial size of 1,000 keys, a 1% target,
+growth 2, and a tightening `ratio` of 0.5. `bloom-filters` fixes growth at 2 and
+defaults `ratio` to 0.5, so distillate is set to match (`growth: 2, tightening:
+0.5`) rather than run at its own defaults.
+
+The match is on arguments, not on stage capacities, because the two do not grow
+the same way. `bloom-filters` passes `ratio` to each stage twice, as the
+tightening factor and as the stage's load factor, and opens a new stage when a
+stage's fill passes that load factor. distillate opens one after a count of keys.
+Its first stage also targets the full rate, so its stage targets sum to
+`errorRate / (1 - ratio)`; distillate's sum to the target. Each filter is
+measured at 1k, 10k and 100k keys, one to a hundred times the initial size.
+
 ## Keys
 
 `hitMissPools(n)` builds two disjoint sets: inserted "hit" keys `0:0 … 0:(n-1)`
@@ -111,4 +127,4 @@ serialize and re-read across languages. The throughput gap is that tradeoff.
 Node only, single machine (disclosed in the banner). No Bun/Deno, no CI runs, no
 charts. Capacities: 100k and 1M for space/accuracy, 100k for throughput. Cardinality is
 swept at 1k/10k/100k/1M/10M against `p = 14`, with the sketch throughput built at
-20k.
+20k. Scalable Bloom is swept at 1k/10k/100k keys from an initial size of 1k.

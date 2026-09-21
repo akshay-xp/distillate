@@ -11,6 +11,12 @@ import {
 } from "./cardinality.js";
 import type { CardinalityRow } from "./cardinality.js";
 import { comparisonRows } from "./compare.js";
+import {
+  SCALABLE_INITIAL,
+  SCALABLE_KEY_COUNTS,
+  scalableRows,
+} from "./scalable.js";
+import type { ScalableRow } from "./scalable.js";
 import type { ComparisonRow } from "./compare.js";
 import { TARGET_FPR } from "./adapters.js";
 import { envBanner } from "./harness.js";
@@ -54,6 +60,17 @@ export function cardinalityTable(rows: CardinalityRow[]): string {
   return [header, ...body].join("\n");
 }
 
+export function scalableTable(rows: ScalableRow[]): string {
+  const header =
+    "| Filter | keys | stages | bits/key | measured FPR | add | has |\n" +
+    "| --- | --- | --- | --- | --- | --- | --- |";
+  const body = rows.map(
+    (r) =>
+      `| ${r.name} | ${capacityLabel(r.keys)} | ${String(r.stages)} | ${r.bitsPerKey.toFixed(2)} | ${(r.measuredFpr * 100).toFixed(2)}% | ${ops(r.addOpsPerSec)} | ${ops(r.hasOpsPerSec)} |`,
+  );
+  return [header, ...body].join("\n");
+}
+
 export interface ResultsOptions {
   banner: string;
   version: string;
@@ -63,6 +80,7 @@ export interface ResultsOptions {
   spaceTable: string;
   throughputTable: string;
   cardinalityTable?: string;
+  scalableTable?: string;
 }
 
 function cardinalitySection(table: string): string[] {
@@ -76,6 +94,25 @@ function cardinalitySection(table: string): string[] {
     "",
     "distillate is exact at small cardinalities because it is still holding sparse entries there, not because its estimator is better.",
     "Once it promotes to dense registers it carries the same theoretical error as any HyperLogLog at that precision.",
+    "",
+    table,
+    "",
+  ];
+}
+
+export function scalableSection(table: string): string[] {
+  return [
+    "## Scalable Bloom",
+    "",
+    "Both filters are built from the same arguments: an initial size of 1,000 keys, a 1% target, growth 2, and `ratio` 0.5.",
+    "That is the incumbent's own default configuration, since `bloom-filters` fixes growth at 2 and defaults `ratio` to 0.5, so distillate is set to match it (`growth: 2, tightening: 0.5`).",
+    "",
+    "The two do not grow on the same trigger. `bloom-filters` passes `ratio` to each stage twice: as the tightening factor and as the stage's load factor, and it opens a new stage when a stage's fill passes that load factor rather than after a count of keys.",
+    "So an equal initial size is the same argument, not identical stage capacities, and the stage counts can differ.",
+    "",
+    "Its first stage targets the full rate and later ones `errorRate * ratio ** i`, so its targets sum to `errorRate / (1 - ratio)`, twice the requested rate at `ratio` 0.5.",
+    "distillate starts at `epsilon * (1 - tightening)`, so its whole chain targets `epsilon`.",
+    "Bits per key is allocated bits over keys added; FPR is measured over 100,000 keys neither filter saw.",
     "",
     table,
     "",
@@ -98,6 +135,7 @@ export function renderResults(opts: ResultsOptions): string {
     opts.spaceTable,
     "",
     ...(opts.cardinalityTable ? cardinalitySection(opts.cardinalityTable) : []),
+    ...(opts.scalableTable ? scalableSection(opts.scalableTable) : []),
     `## Throughput (n = ${capacityLabel(opts.throughputCapacity)})`,
     "",
     "Absolute throughput is machine-relative: it depends on the CPU, the runtime, and the load on the box at measurement time.",
@@ -147,11 +185,15 @@ async function main(): Promise<void> {
   const cardTable = cardinalityTable(
     cardinalityRows(HLL_PRECISION, HLL_CARDINALITIES),
   );
+  const scalTable = scalableTable(
+    scalableRows(SCALABLE_INITIAL, SCALABLE_KEY_COUNTS),
+  );
   const tput = throughputTable(await collectThroughput(THROUGHPUT_CAPACITY));
 
   console.log(banner);
   console.log("\n" + spaceTable);
   console.log("\n" + cardTable);
+  console.log("\n" + scalTable);
   console.log("\n" + tput);
 
   const md = renderResults({
@@ -162,6 +204,7 @@ async function main(): Promise<void> {
     throughputCapacity: THROUGHPUT_CAPACITY,
     spaceTable,
     cardinalityTable: cardTable,
+    scalableTable: scalTable,
     throughputTable: tput,
   });
   writeFileSync(new URL("../RESULTS.md", import.meta.url), md);
