@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { expect, test } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
@@ -88,4 +89,55 @@ test("a byte key and the string with the same UTF-8 bytes are one key", () => {
   const f = ScalableBloomFilter.create(100, 0.01);
   f.add(Uint8Array.of(97));
   expect(f.has("a")).toBe(true);
+});
+
+test("a full stage opens the next with grown capacity and a tightened target", () => {
+  const f = ScalableBloomFilter.create(10, 0.01);
+  const keys = range("g", 70);
+  for (const key of keys) f.add(key);
+
+  // Capacities 10, 20 and 40: the third stage opens at the 31st new key.
+  expect(f.stages).toBe(3);
+  expect(f.count).toBeLessThanOrEqual(70);
+  const stages = [0, 1, 2];
+  expect(f.capacity).toBe(
+    stages.reduce((sum, i) => sum + Math.ceil(10 * 2 ** i), 0),
+  );
+  expect(f.m).toBe(
+    stages.reduce(
+      (sum, i) =>
+        sum + bloomSizing(Math.ceil(10 * 2 ** i), 0.01 * 0.15 * 0.85 ** i).m,
+      0,
+    ),
+  );
+  for (const key of keys) expect(f.has(key)).toBe(true);
+});
+
+test("a fractional growth rounds each stage's capacity up", () => {
+  const f = new ScalableBloomFilter({ n: 3, epsilon: 0.01, growth: 1.5 });
+  for (const key of range("h", 4)) f.add(key);
+  expect(f.stages).toBe(2);
+  expect(f.capacity).toBe(3 + 5);
+});
+
+test("every added key stays present however far the chain grows (property)", () => {
+  fc.assert(
+    fc.property(
+      fc.uniqueArray(fc.string(), { maxLength: 3000 }),
+      fc.integer({ min: 1, max: 20 }),
+      fc.constantFrom(2, 4),
+      fc.constantFrom(0.5, 0.85),
+      (keys, n, growth, tightening) => {
+        const f = new ScalableBloomFilter({
+          n,
+          epsilon: 0.01,
+          growth,
+          tightening,
+        });
+        for (const key of keys) f.add(key);
+        for (const key of keys) expect(f.has(key)).toBe(true);
+      },
+    ),
+    { numRuns: 50 },
+  );
 });
