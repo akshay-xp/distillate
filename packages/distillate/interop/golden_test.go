@@ -4,11 +4,13 @@
 package interop
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
+	"math/bits"
 	"os"
 	"strings"
 	"testing"
@@ -124,5 +126,209 @@ func TestFrames(t *testing.T) {
 	whole := frameOf(t, find(t, "bloom"))
 	if _, err := readFrame(whole[:len(whole)-1]); err == nil || !strings.Contains(err.Error(), "body length") {
 		t.Errorf("short frame: want a body length error, got %v", err)
+	}
+}
+
+// murmur3x86_128 is Austin Appleby's MurmurHash3_x86_128, the hash variant 0
+// names. Little-endian block reads, four 32-bit lanes.
+func murmur3x86_128(b []byte, seed uint32) [4]uint32 {
+	const c1, c2, c3, c4 = 0x239b961b, 0xab0e9789, 0x38b34ae5, 0xa1e38b93
+	h1, h2, h3, h4 := seed, seed, seed, seed
+	n := len(b) / 16
+	for i := 0; i < n; i++ {
+		blk := b[i*16:]
+		k1, k2, k3, k4 := le.Uint32(blk), le.Uint32(blk[4:]), le.Uint32(blk[8:]), le.Uint32(blk[12:])
+
+		k1 *= c1
+		k1 = bits.RotateLeft32(k1, 15)
+		k1 *= c2
+		h1 ^= k1
+		h1 = bits.RotateLeft32(h1, 19)
+		h1 += h2
+		h1 = h1*5 + 0x561ccd1b
+
+		k2 *= c2
+		k2 = bits.RotateLeft32(k2, 16)
+		k2 *= c3
+		h2 ^= k2
+		h2 = bits.RotateLeft32(h2, 17)
+		h2 += h3
+		h2 = h2*5 + 0x0bcaa747
+
+		k3 *= c3
+		k3 = bits.RotateLeft32(k3, 17)
+		k3 *= c4
+		h3 ^= k3
+		h3 = bits.RotateLeft32(h3, 15)
+		h3 += h4
+		h3 = h3*5 + 0x96cd1c35
+
+		k4 *= c4
+		k4 = bits.RotateLeft32(k4, 18)
+		k4 *= c1
+		h4 ^= k4
+		h4 = bits.RotateLeft32(h4, 13)
+		h4 += h1
+		h4 = h4*5 + 0x32ac3b17
+	}
+
+	tail := b[n*16:]
+	var k [4]uint32
+	for i := len(tail) - 1; i >= 0; i-- {
+		k[i/4] ^= uint32(tail[i]) << (8 * (i % 4))
+	}
+	if len(tail) > 12 {
+		k[3] *= c4
+		k[3] = bits.RotateLeft32(k[3], 18)
+		k[3] *= c1
+		h4 ^= k[3]
+	}
+	if len(tail) > 8 {
+		k[2] *= c3
+		k[2] = bits.RotateLeft32(k[2], 17)
+		k[2] *= c4
+		h3 ^= k[2]
+	}
+	if len(tail) > 4 {
+		k[1] *= c2
+		k[1] = bits.RotateLeft32(k[1], 16)
+		k[1] *= c3
+		h2 ^= k[1]
+	}
+	if len(tail) > 0 {
+		k[0] *= c1
+		k[0] = bits.RotateLeft32(k[0], 15)
+		k[0] *= c2
+		h1 ^= k[0]
+	}
+
+	l := uint32(len(b))
+	h1, h2, h3, h4 = h1^l, h2^l, h3^l, h4^l
+	h1 += h2 + h3 + h4
+	h2 += h1
+	h3 += h1
+	h4 += h1
+	h1, h2, h3, h4 = fmix32(h1), fmix32(h2), fmix32(h3), fmix32(h4)
+	h1 += h2 + h3 + h4
+	h2 += h1
+	h3 += h1
+	h4 += h1
+	return [4]uint32{h1, h2, h3, h4}
+}
+
+func fmix32(h uint32) uint32 {
+	h ^= h >> 16
+	h *= 0x85ebca6b
+	h ^= h >> 13
+	h *= 0xc2b2ae35
+	h ^= h >> 16
+	return h
+}
+
+// reduce is Lemire's multiply-shift: the high 32 bits of x * n, in [0, n).
+func reduce(x, n uint32) uint32 {
+	return uint32(uint64(x) * uint64(n) >> 32)
+}
+
+// writeFrame is an independent writer: header, params, payload, CRC.
+func writeFrame(typ byte, params, payload []byte) []byte {
+	bodyLen := len(params) + len(payload)
+	b := make([]byte, headerSize, headerSize+bodyLen+trailerSize)
+	copy(b, "DSTL")
+	b[4], b[5] = version, typ
+	le.PutUint32(b[8:], uint32(bodyLen))
+	b = append(append(b, params...), payload...)
+	return le.AppendUint32(b, crc32.ChecksumIEEE(b))
+}
+
+type bloom struct {
+	m    uint32
+	k    uint16
+	seed uint32
+	n    uint32
+	bits []byte
+}
+
+const bloomParams = 16
+
+func parseBloom(f frame) (bloom, error) {
+	if f.typ != 1 || len(f.body) < bloomParams {
+		return bloom{}, fmt.Errorf("not a Bloom frame")
+	}
+	p := f.body
+	if p[14] != 0 || p[15] != 0 {
+		return bloom{}, fmt.Errorf("Bloom params padding is not zero")
+	}
+	b := bloom{m: le.Uint32(p), k: le.Uint16(p[4:]), seed: le.Uint32(p[6:]), n: le.Uint32(p[10:]), bits: p[bloomParams:]}
+	if len(b.bits) != int((b.m+7)/8) {
+		return bloom{}, fmt.Errorf("Bloom payload of %d bytes, m=%d needs %d", len(b.bits), b.m, (b.m+7)/8)
+	}
+	return b, nil
+}
+
+// probes is variant 0's Bloom mapping: g_i = a + i*b + i*i mod 2^32, reduced
+// into [0, m).
+func (b bloom) probes(key string) []uint32 {
+	w := murmur3x86_128([]byte(key), b.seed)
+	out := make([]uint32, b.k)
+	for i := range out {
+		u := uint32(i)
+		out[i] = reduce(w[0]+u*w[1]+u*u, b.m)
+	}
+	return out
+}
+
+func (b bloom) has(key string) bool {
+	for _, i := range b.probes(key) {
+		if b.bits[i>>3]&(1<<(i&7)) == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func buildBloom(m uint32, k uint16, seed, n uint32, keys []string) []byte {
+	b := bloom{m: m, k: k, seed: seed, n: n, bits: make([]byte, (m+7)/8)}
+	for _, key := range keys {
+		for _, i := range b.probes(key) {
+			b.bits[i>>3] |= 1 << (i & 7)
+		}
+	}
+	params := make([]byte, bloomParams)
+	le.PutUint32(params, m)
+	le.PutUint16(params[4:], k)
+	le.PutUint32(params[6:], seed)
+	le.PutUint32(params[10:], n)
+	return writeFrame(1, params, b.bits)
+}
+
+func TestBloom(t *testing.T) {
+	if got := murmur3x86_128(nil, 0); got != [4]uint32{} {
+		t.Errorf("murmur3 of empty input: %08x, want all zero", got)
+	}
+	// Taken once from the JS hash128Key("hello"), so a disagreement with JS
+	// reports as the hash rather than as a Bloom frame that differs.
+	want := [4]uint32{0x2b2444a0, 0xdb91def7, 0x9adb31b6, 0x9adb31b6}
+	if got := murmur3x86_128([]byte("hello"), 0); got != want {
+		t.Fatalf("murmur3(hello): %08x, want %08x", got, want)
+	}
+
+	e := find(t, "bloom")
+	golden := frameOf(t, e)
+	f, err := readFrame(golden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := parseBloom(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range e.Keys {
+		if !b.has(key) {
+			t.Errorf("has(%q) is false", key)
+		}
+	}
+	if rebuilt := buildBloom(b.m, b.k, b.seed, b.n, e.Keys); !bytes.Equal(rebuilt, golden) {
+		t.Errorf("rebuilt frame differs:\n got %x\nwant %x", rebuilt, golden)
 	}
 }
