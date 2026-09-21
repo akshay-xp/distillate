@@ -24,7 +24,7 @@ end     4     CRC32 of all preceding bytes
 
 Current `FORMAT_VERSION` is `5`. Readers reject any other version (`UnknownVersionError`).
 
-The body length makes a frame self-describing: the layout permits a reader to validate, skip, or stream a frame of a structure type it does not implement, using the header alone. The shipped `fromBytes` does not do this: it accepts exactly one whole frame of its own type. It is checked against the bytes actually present _before_ the CRC, so a frame cut short in transit reports `TruncatedError` rather than the checksum failure truncation also implies. Readers additionally validate the body length against the declared params before allocating, which catches a frame whose header is internally consistent but whose params disagree with the payload size.
+The body length makes a frame self-describing: the layout permits a reader to validate, skip, or stream a frame of a structure type it does not implement, using the header alone. `fromBytes` accepts exactly one whole frame of its own type; to walk a buffer of several, use `readFrameAt` ([below](#reading-a-stream-of-frames)). It is checked against the bytes actually present _before_ the CRC, so a frame cut short in transit reports `TruncatedError` rather than the checksum failure truncation also implies. Readers additionally validate the body length against the declared params before allocating, which catches a frame whose header is internally consistent but whose params disagree with the payload size.
 
 ### Payload alignment
 
@@ -33,6 +33,40 @@ Every type's params block is padded to a multiple of 8, so **the payload always 
 The guarantee is **per frame, not across a stream**. A frame occupies `16 + bodyLength + 4` bytes, which is not itself a multiple of 8, so frames concatenated in a log do not each start aligned. A reader walking such a log gets the alignment guarantee only for frames it has positioned itself.
 
 Padding is what makes the guarantee a rule rather than an accident. Through version 4 the payload offsets were 30, 28, 32, 32 and 22, and only held because of the lane widths that happened to sit there; HyperLogLog's sparse entries are `u32` at offset 22, which no language permits a typed view over. `writeFrame` now refuses a params block that would put a payload off an 8-byte boundary, so a new structure type cannot reintroduce it.
+
+### Reading a stream of frames
+
+`readFrameAt(bytes, offset)` from `distillate/frame` validates the one frame at `offset` in place (magic, version, length, CRC, reserved bits) without knowing its structure type, and returns its `type` and `byteLength`. Advance by `byteLength` to reach the next frame.
+
+```ts
+import { BloomFilter } from "distillate/bloom";
+import { readFrameAt } from "distillate/frame";
+import { HyperLogLog } from "distillate/hll";
+
+const filter = BloomFilter.create(1000, 0.01);
+filter.add("alice");
+const sketch = new HyperLogLog({ p: 10 });
+sketch.add("alice");
+
+const a = filter.toBytes();
+const b = sketch.toBytes();
+const bytes = new Uint8Array(a.length + b.length);
+bytes.set(a, 0);
+bytes.set(b, a.length);
+
+const types: number[] = [];
+for (let offset = 0; offset < bytes.length;) {
+  const frame = readFrameAt(bytes, offset);
+  types.push(frame.type);
+  offset += frame.byteLength;
+}
+types.join(", "); // "1, 5"
+
+const first = readFrameAt(bytes, 0);
+BloomFilter.fromBytes(bytes.subarray(0, first.byteLength)).has("alice"); // true
+```
+
+A frame cut short mid-stream throws `TruncatedError`. A frame of a type the reader does not implement still validates, and is skipped by its `byteLength`.
 
 ### Reserved bits
 
