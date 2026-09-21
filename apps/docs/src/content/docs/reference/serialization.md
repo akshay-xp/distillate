@@ -96,6 +96,8 @@ Offset  Size  Field
 16      ...   payload: bit array, ceil(m / 8) bytes
 ```
 
+Bit `i` of the array is bit `i & 7` of byte `i >>> 3`, counting from the least significant bit: it is set when `bytes[i >>> 3] & (1 << (i & 7))` is nonzero.
+
 Blocked (type 2): `numBlocks (u32) | seed (u32) | n (u32) | 4 bytes padding`, then the lane words (`numBlocks * 32` bytes) at body offset 16. Fuse (types 3 and 4): `seed (u32) | seg (u32) | segCountLen (u32) | size (u32)`, which fills 16 exactly, then the fingerprint array.
 
 HyperLogLog (type 5), little-endian:
