@@ -165,6 +165,15 @@ export class ScalableBloomFilter {
     return stage;
   }
 
+  // Replaces the whole chain, as union builds it; the newest stage is the last.
+  #adopt(stages: Stage[]): void {
+    this.#stages.length = 0;
+    this.#stages.push(...stages);
+    this.#newest = stages[stages.length - 1] ?? this.#newest;
+    const k = Math.max(...stages.map((s) => s.k));
+    if (k > this.#probes.length) this.#probes = new Uint32Array(k);
+  }
+
   // Fills #probes for one stage from the key hashed into #hash, which every
   // stage shares.
   #probe(stage: Stage): void {
@@ -244,6 +253,51 @@ export class ScalableBloomFilter {
     let miss = 1;
     for (const s of this.#stages) miss *= 1 - (s.bits.count() / s.m) ** s.k;
     return 1 - miss;
+  }
+
+  /**
+   * Returns a new filter holding every key of this filter and `other`. Stage
+   * `i` of the result is the OR of both inputs' stage `i`, and the result has
+   * the longer of the two chains. Each stage's count becomes the smaller of
+   * its capacity and the two counts summed: an upper bound, so the merged
+   * chain opens its next stage early rather than late.
+   *
+   * @param other - A filter built with identical settings.
+   * @returns A new filter; neither input is changed.
+   */
+  union(other: ScalableBloomFilter): ScalableBloomFilter {
+    const result = new ScalableBloomFilter({
+      n: this.#n,
+      epsilon: this.#epsilon,
+      growth: this.#growth,
+      tightening: this.#tightening,
+      seed: this.#seed,
+    });
+    const [longer, shorter] =
+      this.#stages.length >= other.#stages.length
+        ? [this.#stages, other.#stages]
+        : [other.#stages, this.#stages];
+    const stages = longer.map((stage, i): Stage => {
+      const bits = new BitSet(stage.m);
+      bits.bytes.set(stage.bits.bytes);
+      const twin = shorter[i];
+      if (twin) {
+        const out = bits.bytes;
+        const bytes = twin.bits.bytes;
+        for (let j = 0; j < out.length; j++) {
+          out[j] = (out[j] ?? 0) | (bytes[j] ?? 0);
+        }
+      }
+      return {
+        bits,
+        m: stage.m,
+        k: stage.k,
+        capacity: stage.capacity,
+        count: Math.min(stage.capacity, stage.count + (twin?.count ?? 0)),
+      };
+    });
+    result.#adopt(stages);
+    return result;
   }
 
   /** Keys added that the filter did not already hold. */
