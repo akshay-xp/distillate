@@ -339,3 +339,35 @@ test("the forged generator reaches both a working filter and each rejection", ()
     "ok",
   ]);
 });
+
+test("equals is exactly byte equality of the frame (property)", () => {
+  // Three kinds of pair: independent filters (mostly unequal, sometimes
+  // equal under the small alphabet), a filter and its own restored copy
+  // (equal), and a filter and its self-union, which keeps its bits but raises
+  // its stage counts: the one way two filters differ in count alone.
+  const keys = fc.array(fc.constantFrom("a", "b", "c", "d"), { maxLength: 80 });
+  const seen = new Set<boolean>();
+  fc.assert(
+    fc.property(
+      keys,
+      keys,
+      fc.nat({ max: 1 }),
+      fc.nat({ max: 1 }),
+      fc.constantFrom("independent", "restored", "self-union"),
+      (ka, kb, sa, sb, pair) => {
+        const a = filled(ka, 2, { seed: sa });
+        const b =
+          pair === "restored"
+            ? ScalableBloomFilter.fromBytes(a.toBytes())
+            : pair === "self-union"
+              ? a.union(a)
+              : filled(kb, 2, { seed: sb });
+        const same = bytesEqual(a.toBytes(), b.toBytes());
+        seen.add(same);
+        expect(a.equals(b)).toBe(same);
+      },
+    ),
+    { numRuns: 300 },
+  );
+  expect([...seen].sort()).toEqual([false, true]);
+});
