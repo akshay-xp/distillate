@@ -8,6 +8,7 @@ import { BloomFilter } from "../src/bloom/index.js";
 import { toBase64 } from "../src/core/base64.js";
 import { BinaryFuse8, BinaryFuse16 } from "../src/fuse/index.js";
 import { HyperLogLog } from "../src/hll/hll.js";
+import { ScalableBloomFilter } from "../src/scalable/scalable.js";
 
 interface Entry {
   name: string;
@@ -15,18 +16,18 @@ interface Entry {
   keys: string[];
   epsilon?: number;
   p?: number;
+  n?: number;
+  growth?: number;
+  tightening?: number;
+  seed?: number;
   frame?: string;
 }
 
 const path = new URL("../tests/fixtures/golden.json", import.meta.url);
 const golden = JSON.parse(readFileSync(path, "utf8")) as Entry[];
 
-const bytes = (
-  kind: string,
-  keys: string[],
-  epsilon: number,
-  p: number,
-): Uint8Array => {
+const bytes = (entry: Entry): Uint8Array => {
+  const { kind, keys, epsilon = 0, p = 14 } = entry;
   switch (kind) {
     case "bloom":
       return BloomFilter.from(keys, epsilon).toBytes();
@@ -42,6 +43,16 @@ const bytes = (
       const sketch = new HyperLogLog({ p });
       for (const key of keys) sketch.add(key);
       return sketch.toBytes();
+    }
+    case "scalable": {
+      const { n = 1, growth, tightening, seed } = entry;
+      const filter = ScalableBloomFilter.create(n, epsilon, {
+        growth,
+        tightening,
+        seed,
+      });
+      for (const key of keys) filter.add(key);
+      return filter.toBytes();
     }
     case "v2": {
       // A well-formed current-version Bloom frame with the version byte forced
@@ -60,9 +71,7 @@ const bytes = (
 };
 
 for (const entry of golden) {
-  entry.frame = toBase64(
-    bytes(entry.kind, entry.keys, entry.epsilon ?? 0, entry.p ?? 14),
-  );
+  entry.frame = toBase64(bytes(entry));
 }
 
 writeFileSync(path, JSON.stringify(golden, null, 2) + "\n");
