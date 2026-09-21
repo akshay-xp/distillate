@@ -1,12 +1,17 @@
 import fc from "fast-check";
 import { expect, test } from "vitest";
 
+import { BloomFilter } from "../../src/bloom/bloom.js";
+import { crc32 } from "../../src/core/crc32.js";
 import { probes } from "../../src/core/hasher.js";
+import { ParamError } from "../../src/core/params.js";
 import {
   bytesEqual,
   FORMAT_VERSION,
   readHeader,
   SerializationError,
+  TruncatedError,
+  UnknownHashVariantError,
 } from "../../src/core/serialize.js";
 import {
   ScalableBloomFilter,
@@ -125,4 +130,130 @@ test("the JSON envelope round-trips", () => {
   );
   expect(restored.equals(f)).toBe(true);
   expect(() => ScalableBloomFilter.fromJSON({})).toThrow(SerializationError);
+});
+
+// Recomputes the trailer so a mutation reaches the check under test instead of
+// stopping at ChecksumError.
+const resealed = (frame: Uint8Array): Uint8Array => {
+  const view = new DataView(frame.buffer, frame.byteOffset, frame.byteLength);
+  view.setUint32(
+    frame.length - 4,
+    crc32(frame.subarray(0, frame.length - 4)),
+    true,
+  );
+  return frame;
+};
+
+// Frame offsets: the body starts at 16, the table at 16 + 40.
+const BODY = 16;
+const TABLE = BODY + 40;
+
+type Mutation = (frame: Uint8Array, view: DataView) => Uint8Array;
+
+const threeStages = (): Uint8Array => filled(range("t", 60)).toBytes();
+
+const cases: [string, Mutation, new (...args: never[]) => Error][] = [
+  [
+    "a Bloom frame",
+    () => BloomFilter.create(10, 0.01).toBytes(),
+    SerializationError,
+  ],
+  ["hash variant 1", (f) => ((f[6] = 1), resealed(f)), UnknownHashVariantError],
+  [
+    "a body too short for the params",
+    (f) => {
+      const cut = f.slice(0, BODY + 20 + 4);
+      new DataView(cut.buffer).setUint32(8, 20, true);
+      return resealed(cut);
+    },
+    TruncatedError,
+  ],
+  [
+    "a params padding byte set",
+    (f) => ((f[BODY + 37] = 1), resealed(f)),
+    SerializationError,
+  ],
+  [
+    "a stage count of 0",
+    (f, v) => (v.setUint32(BODY + 32, 0, true), resealed(f)),
+    SerializationError,
+  ],
+  [
+    "a stage count one too high",
+    (f, v) => (
+      v.setUint32(BODY + 32, v.getUint32(BODY + 32, true) + 1, true),
+      resealed(f)
+    ),
+    // The extra entry is read from the first stage's bits, so the entry
+    // checks reject it before the total length is compared.
+    SerializationError,
+  ],
+  [
+    "a stage m claiming more bytes than the body holds",
+    (f, v) => (
+      v.setUint32(TABLE, v.getUint32(TABLE, true) + 64, true),
+      resealed(f)
+    ),
+    TruncatedError,
+  ],
+  [
+    "a table padding byte set",
+    (f) => ((f[TABLE + 6] = 1), resealed(f)),
+    SerializationError,
+  ],
+  [
+    "stage 0 m of 0",
+    (f, v) => (v.setUint32(TABLE, 0, true), resealed(f)),
+    SerializationError,
+  ],
+  [
+    "stage 0 k of 0",
+    (f, v) => (v.setUint16(TABLE + 4, 0, true), resealed(f)),
+    SerializationError,
+  ],
+  [
+    "stage 0 capacity of 0",
+    (f, v) => (v.setUint32(TABLE + 8, 0, true), resealed(f)),
+    SerializationError,
+  ],
+  [
+    "stage 1 count above its capacity",
+    (f, v) => (
+      v.setUint32(TABLE + 16 + 12, v.getUint32(TABLE + 16 + 8, true) + 1, true),
+      resealed(f)
+    ),
+    SerializationError,
+  ],
+  [
+    "growth of 0.5",
+    (f, v) => (v.setFloat64(BODY + 16, 0.5, true), resealed(f)),
+    SerializationError,
+  ],
+  [
+    "epsilon of 2",
+    (f, v) => (v.setFloat64(BODY + 8, 2, true), resealed(f)),
+    SerializationError,
+  ],
+];
+
+test.each(cases)("fromBytes rejects %s", (_, mutate, expected) => {
+  const frame = threeStages();
+  const bad = mutate(frame, new DataView(frame.buffer));
+  expect(() => ScalableBloomFilter.fromBytes(bad)).toThrow(expected);
+  expect(() => ScalableBloomFilter.fromBytes(bad)).toThrow(SerializationError);
+  expect(() => ScalableBloomFilter.fromBytes(bad)).not.toThrow(ParamError);
+});
+
+test("fromBytes rejects nonzero padding after a stage's bits", () => {
+  const frame = threeStages();
+  const view = new DataView(frame.buffer);
+  const count = view.getUint32(BODY + 32, true);
+  const m = view.getUint32(TABLE, true);
+  const length = Math.ceil(m / 8);
+  // Needs a stage 0 whose bits leave padding, or the test proves nothing.
+  expect(length % 8).not.toBe(0);
+  frame[TABLE + 16 * count + length] = 1;
+  expect(() => ScalableBloomFilter.fromBytes(resealed(frame))).toThrow(
+    SerializationError,
+  );
 });

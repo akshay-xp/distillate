@@ -12,6 +12,9 @@ import {
   ParamError,
 } from "../core/params.js";
 import {
+  assertBodyLength,
+  assertMinBodyLength,
+  assertParamsPadding,
   bytesEqual,
   type FilterJSON,
   FORMAT_VERSION,
@@ -20,6 +23,7 @@ import {
   readHeader,
   SerializationError,
   toJSONEnvelope,
+  UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
 import { bloomSizing } from "../core/sizing.js";
@@ -80,6 +84,60 @@ interface Stage {
   readonly k: number;
   readonly capacity: number;
   count: number;
+}
+
+type StageEntry = Omit<Stage, "bits">;
+
+function readTable(view: DataView, stageCount: number): StageEntry[] {
+  const entries: StageEntry[] = [];
+  for (let i = 0; i < stageCount; i++) {
+    const at = PARAMS_SIZE + ENTRY_SIZE * i;
+    const entry = {
+      m: view.getUint32(at, true),
+      k: view.getUint16(at + 4, true),
+      capacity: view.getUint32(at + 8, true),
+      count: view.getUint32(at + 12, true),
+    };
+    if (view.getUint16(at + 6, true) !== 0) {
+      throw new SerializationError(
+        `scalable: stage ${String(i)} table padding is not zero`,
+      );
+    }
+    if (entry.m === 0 || entry.k === 0 || entry.capacity === 0) {
+      throw new SerializationError(
+        `scalable: stage ${String(i)} declares m=${String(entry.m)}, k=${String(entry.k)}, capacity=${String(entry.capacity)}; all must be positive`,
+      );
+    }
+    if (entry.count > entry.capacity) {
+      throw new SerializationError(
+        `scalable: stage ${String(i)} holds ${String(entry.count)} keys, above its capacity of ${String(entry.capacity)}`,
+      );
+    }
+    entries.push(entry);
+  }
+  return entries;
+}
+
+function readStages(
+  body: Uint8Array,
+  entries: StageEntry[],
+  start: number,
+): Stage[] {
+  let at = start;
+  return entries.map((entry, i): Stage => {
+    const length = Math.ceil(entry.m / 8);
+    const bits = new BitSet(entry.m);
+    bits.bytes.set(body.subarray(at, at + length));
+    for (let j = at + length; j < at + padded8(length); j++) {
+      if (body[j] !== 0) {
+        throw new SerializationError(
+          `scalable: stage ${String(i)} bit padding is not zero`,
+        );
+      }
+    }
+    at += padded8(length);
+    return { ...entry, bits };
+  });
 }
 
 /**
@@ -398,30 +456,37 @@ export class ScalableBloomFilter {
    * @throws {@link SerializationError} (or a subclass) if the frame is malformed.
    */
   static fromBytes(bytes: Uint8Array): ScalableBloomFilter {
-    const { type, body } = readHeader(bytes);
+    const { type, flags, body } = readHeader(bytes);
     if (type !== TYPE) {
       throw new SerializationError(
         `expected DSTL type ${String(TYPE)}, got ${String(type)}`,
       );
     }
+    if ((flags & 0x0f) !== HASH_MURMUR128) {
+      throw new UnknownHashVariantError(
+        `unsupported hash variant ${String(flags & 0x0f)}`,
+      );
+    }
+    assertMinBodyLength(body.length, PARAMS_SIZE, "scalable");
+    assertParamsPadding(body, 36, PARAMS_SIZE, "scalable");
     const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
     const stageCount = view.getUint32(32, true);
-    const stages: Stage[] = [];
-    let at = PARAMS_SIZE + ENTRY_SIZE * stageCount;
-    for (let i = 0; i < stageCount; i++) {
-      const entry = PARAMS_SIZE + ENTRY_SIZE * i;
-      const m = view.getUint32(entry, true);
-      const bits = new BitSet(m);
-      bits.bytes.set(body.subarray(at, at + bits.bytes.length));
-      stages.push({
-        bits,
-        m,
-        k: view.getUint16(entry + 4, true),
-        capacity: view.getUint32(entry + 8, true),
-        count: view.getUint32(entry + 12, true),
-      });
-      at += padded8(bits.bytes.length);
+    if (stageCount === 0) {
+      throw new SerializationError("scalable: frame declares no stages");
     }
+    const tableEnd = PARAMS_SIZE + ENTRY_SIZE * stageCount;
+    assertMinBodyLength(body.length, tableEnd, "scalable");
+
+    // Every entry is checked, and the total length matched, before any stage
+    // is allocated, so a forged m cannot request memory the body lacks.
+    const entries = readTable(view, stageCount);
+    const expected = entries.reduce(
+      (sum, e) => sum + padded8(Math.ceil(e.m / 8)),
+      tableEnd,
+    );
+    assertBodyLength(body.length, expected, "scalable");
+    const stages = readStages(body, entries, tableEnd);
+
     restoring = stages;
     try {
       return new ScalableBloomFilter({
@@ -431,6 +496,11 @@ export class ScalableBloomFilter {
         growth: view.getFloat64(16, true),
         tightening: view.getFloat64(24, true),
       });
+    } catch (err) {
+      if (err instanceof ParamError) {
+        throw new SerializationError(`scalable: ${err.message}`);
+      }
+      throw err;
     } finally {
       restoring = undefined;
     }
