@@ -65,6 +65,8 @@ export const MAX_KEYS = 100_000;
 
 const KEY_COUNT_MESSAGE = `Key count must be a whole number between 1 and ${MAX_KEYS.toLocaleString("en-US")}. The playground builds real filters in your browser, so it stops there.`;
 
+const GROW_MESSAGE = `Keys to add must be a whole number of at least 1, and the total held must stay at or under ${MAX_KEYS.toLocaleString("en-US")}. The playground builds real filters in your browser, so it stops there.`;
+
 // Members and probes are told apart by prefix, so the miss set is disjoint
 // from the key set by construction rather than by a filtering pass.
 function memberKeys(count: number): string[] {
@@ -191,7 +193,11 @@ export class Playground {
 
   /** Adds `count` more generated keys, enough to carry the filters past their build. */
   grow(count: unknown): GrowResult {
-    const end = this.#generated + toNumber(count);
+    const n = toNumber(count);
+    if (!Number.isInteger(n) || n < 1 || this.#keys.length + n > MAX_KEYS) {
+      return { ok: false, message: GROW_MESSAGE };
+    }
+    const end = this.#generated + n;
     for (; this.#generated < end; this.#generated += 1) {
       this.#add(`key-${String(this.#generated)}`);
     }

@@ -294,3 +294,24 @@ test("growing past the build opens stages and holds the target", () => {
     expect(structures[key].missing).toBe(0);
   }
 });
+
+test.each([0, -1, 1.5, "abc", "", null, 90_001])(
+  "growing by %o is refused, naming the bound, and changes nothing",
+  (count) => {
+    const playground = built();
+
+    const result = playground.grow(count);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.message).toContain("100,000");
+    expect(playground.report().keyCount).toBe(KEYS);
+  },
+);
+
+test("growing to the bound itself is allowed", () => {
+  expect(built().grow(MAX_KEYS - KEYS)).toEqual({
+    ok: true,
+    keyCount: MAX_KEYS,
+  });
+});
