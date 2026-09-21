@@ -9,7 +9,8 @@
     "src/blocked/index.ts",
     "src/fuse/index.ts",
     "src/hll/index.ts",
-    "src/frame/index.ts"
+    "src/frame/index.ts",
+    "src/scalable/index.ts"
   ],
   "tsconfig": "./tsconfig.json",
   "readme": "none",

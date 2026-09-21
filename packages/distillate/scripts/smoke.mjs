@@ -15,6 +15,7 @@ import {
 } from "../dist/fuse/index.js";
 import { readFrameAt } from "../dist/frame/index.js";
 import { HyperLogLog, hllSizing } from "../dist/hll/index.js";
+import { ScalableBloomFilter } from "../dist/scalable/index.js";
 
 if (typeof VERSION !== "string") {
   console.error(
@@ -141,6 +142,17 @@ for (const { name, kind, keys, epsilon, p, frame } of golden) {
   }
 }
 
+// A scalable filter must grow past its first stage and keep every key.
+const grown = ScalableBloomFilter.create(10, 0.01);
+const grownKeys = Array.from({ length: 30 }, (_, i) => `grow:${i}`);
+for (const key of grownKeys) grown.add(key);
+if (grown.stages < 2 || !grownKeys.every((key) => grown.has(key))) {
+  console.error(
+    `smoke: ScalableBloomFilter kept ${grown.stages} stage(s) or lost a key`,
+  );
+  process.exit(1);
+}
+
 // A log of concatenated frames must walk by declared length alone.
 const log = [
   golden.find((g) => g.name === "bloom"),
@@ -164,5 +176,5 @@ if (walked.join() !== "1,5" || at !== stream.length) {
 }
 
 console.log(
-  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame work (filters, sketch, sizing helpers, frame walk), toBytes byte-identical to golden`,
+  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable work (filters, sketch, sizing helpers, frame walk, growth), toBytes byte-identical to golden`,
 );
