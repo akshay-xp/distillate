@@ -5,9 +5,11 @@ import { expect, test } from "vitest";
 
 import type { CardinalityRow } from "../src/cardinality.js";
 import type { ComparisonRow } from "../src/compare.js";
+import type { ScalableRow } from "../src/scalable.js";
 import {
   cardinalityTable,
   renderResults,
+  scalableTable,
   spaceAccuracyTable,
   throughputTable,
 } from "../src/report.js";
@@ -171,4 +173,76 @@ test("METHODOLOGY states the cardinality matching basis and why", () => {
   expect(md).toContain("m = 2 ** p");
   // The reason equal memory was rejected as the basis.
   expect(md).toContain("representation");
+});
+
+const scalableRowsFixture: ScalableRow[] = [
+  {
+    name: "distillate/scalable",
+    keys: 100_000,
+    stages: 7,
+    bitsPerKey: 11.234,
+    measuredFpr: 0.00631,
+    addOpsPerSec: 4_200_000,
+    hasOpsPerSec: 6_100_000,
+  },
+  {
+    name: "bloom-filters",
+    keys: 1_000,
+    stages: 1,
+    bitsPerKey: 14.5,
+    measuredFpr: 0.0182,
+    addOpsPerSec: 310_000,
+    hasOpsPerSec: 420_000,
+  },
+];
+
+test("scalableTable renders stages, space, FPR and both throughputs", () => {
+  const table = scalableTable(scalableRowsFixture);
+  expect(table).toContain(
+    "| Filter | keys | stages | bits/key | measured FPR | add | has |",
+  );
+  expect(table).toContain(
+    "| distillate/scalable | 100k | 7 | 11.23 | 0.63% | 4.20 M ops/s | 6.10 M ops/s |",
+  );
+  expect(table).toContain(
+    "| bloom-filters | 1k | 1 | 14.50 | 1.82% | 310 k ops/s | 420 k ops/s |",
+  );
+});
+
+test("renderResults places the scalable section after cardinality and states its basis", () => {
+  const md = renderResults({
+    banner: "distillate-bench | node v24 | arm64 | Apple M1 | 8 cores",
+    version: "0.1.1",
+    date: "2026-07-31",
+    targetFpr: 0.01,
+    throughputCapacity: 100000,
+    spaceTable: "SPACE_TBL",
+    throughputTable: "TPUT_TBL",
+    cardinalityTable: "CARD_TBL",
+    scalableTable: "SCALABLE_TBL",
+  });
+  expect(md).toContain("SCALABLE_TBL");
+  const at = md.indexOf("## Scalable Bloom");
+  expect(at).toBeGreaterThan(md.indexOf("## Cardinality"));
+  expect(at).toBeLessThan(md.indexOf("## Throughput"));
+  const section = md.slice(at, md.indexOf("## Throughput"));
+  for (const phrase of [
+    "ratio",
+    "load factor",
+    "growth 2",
+    "errorRate / (1 - ratio)",
+  ]) {
+    expect(section, phrase).toContain(phrase);
+  }
+});
+
+test("METHODOLOGY states the scalable matching basis and the load-factor quirk", () => {
+  const md = readFileSync(
+    fileURLToPath(new URL("../METHODOLOGY.md", import.meta.url)),
+    "utf8",
+  );
+  expect(md).toContain("Scalable Bloom");
+  expect(md).toContain("initial size");
+  expect(md).toContain("ratio");
+  expect(md).toContain("load factor");
 });
