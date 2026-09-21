@@ -246,3 +246,29 @@ test("METHODOLOGY states the scalable matching basis and the load-factor quirk",
   expect(md).toContain("ratio");
   expect(md).toContain("load factor");
 });
+
+test("RESULTS carries the measured scalable section for both filters", () => {
+  const md = readFileSync(
+    fileURLToPath(new URL("../RESULTS.md", import.meta.url)),
+    "utf8",
+  );
+  expect(md).toContain("## Scalable Bloom");
+  const section = md.slice(
+    md.indexOf("## Scalable Bloom"),
+    md.indexOf("## Throughput"),
+  );
+  const rows = section
+    .split("\n")
+    .filter((l) => /^\| (distillate\/scalable|bloom-filters) /.test(l));
+  expect(rows).toHaveLength(6);
+  for (const name of ["distillate/scalable", "bloom-filters"]) {
+    for (const keys of ["1k", "10k", "100k"]) {
+      expect(
+        rows.some((r) => r.startsWith(`| ${name} `) && r.includes(` ${keys} `)),
+        `${name} at ${keys}`,
+      ).toBe(true);
+    }
+  }
+  // The header note says which build the section was measured on.
+  expect(md.slice(0, md.indexOf("## Space"))).toContain("Scalable Bloom");
+});
