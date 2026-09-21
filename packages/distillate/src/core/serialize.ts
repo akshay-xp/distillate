@@ -323,8 +323,14 @@ export interface Frame {
  * @throws TruncatedError when the frame runs past the end of `bytes`.
  * @throws BadMagicError, UnknownVersionError, ChecksumError or
  *   ReservedBitsError when the frame at `offset` is not one this release reads.
+ * @throws RangeError when `offset` is not a non-negative integer.
  */
 export function readFrameAt(bytes: Uint8Array, offset: number): Frame {
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw new RangeError(
+      `frame offset must be a non-negative integer, got ${String(offset)}`,
+    );
+  }
   return readFrame(bytes, offset, false);
 }
 
