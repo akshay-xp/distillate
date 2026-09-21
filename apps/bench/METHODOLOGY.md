@@ -79,7 +79,11 @@ tightening factor and as the stage's load factor, and opens a new stage when a
 stage's fill passes that load factor. distillate opens one after a count of keys.
 Its first stage also targets the full rate, so its stage targets sum to
 `errorRate / (1 - ratio)`; distillate's sum to the target. Each filter is
-measured at 1k, 10k and 100k keys, one to a hundred times the initial size.
+measured from 1k to 10M keys, one to ten thousand times the initial size.
+`bloom-filters` stops at 100k: every `add` recounts the newest stage's set bits
+(`_currentload`), so its build is quadratic in the key count. Its 1M and 10M rows
+are marked not run, with the build time projected quadratically from its own 100k
+run.
 
 ## Keys
 
@@ -127,4 +131,5 @@ serialize and re-read across languages. The throughput gap is that tradeoff.
 Node only, single machine (disclosed in the banner). No Bun/Deno, no CI runs, no
 charts. Capacities: 100k and 1M for space/accuracy, 100k for throughput. Cardinality is
 swept at 1k/10k/100k/1M/10M against `p = 14`, with the sketch throughput built at
-20k. Scalable Bloom is swept at 1k/10k/100k keys from an initial size of 1k.
+20k. Scalable Bloom is swept at 1k/10k/100k/1M/10M keys from an initial size of 1k,
+with `bloom-filters` capped at 100k.

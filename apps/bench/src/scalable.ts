@@ -23,6 +23,8 @@ export interface GrowingFilter {
 
 export interface ScalableAdapter {
   name: string;
+  /** Largest key count worth measuring; past it a row projects instead. */
+  maxKeys?: number;
   create(initial: number, errorRate: number): GrowingFilter;
 }
 
@@ -63,6 +65,9 @@ export const distillateScalableAdapter: ScalableAdapter = {
 
 export const incumbentScalableAdapter: ScalableAdapter = {
   name: "bloom-filters",
+  // Every add recounts the newest stage's set bits (_currentload), so its
+  // build is quadratic: 28 s at 100k projects to hours at 1M and days at 10M.
+  maxKeys: 100_000,
   create(initial, errorRate) {
     const f = IncumbentScalable.create(initial, errorRate, SCALABLE_RATIO);
     return {
@@ -88,14 +93,16 @@ export const scalableAdapters: ScalableAdapter[] = [
   incumbentScalableAdapter,
 ];
 
-/** One to a hundred times the initial size, so growth is measured, not assumed. */
-export const SCALABLE_KEY_COUNTS = [1_000, 10_000, 100_000];
+/** One to ten thousand times the initial size, the same 10M reach as every structure. */
+export const SCALABLE_KEY_COUNTS = [
+  1_000, 10_000, 100_000, 1_000_000, 10_000_000,
+];
 
 // Absent keys, disjoint from hitKeys ("0:i"), shared by every row so the FPR
 // columns are measured against the same probes.
 const ABSENT = Array.from({ length: 100_000 }, (_, i) => `1:${String(i)}`);
 
-export interface ScalableRow {
+export interface MeasuredScalableRow {
   name: string;
   keys: number;
   stages: number;
@@ -105,30 +112,54 @@ export interface ScalableRow {
   hasOpsPerSec: number;
 }
 
+/** A key count past the adapter's cap, with its build time projected. */
+export interface NotRunScalableRow {
+  name: string;
+  keys: number;
+  notRun: true;
+  projectedBuildMs: number;
+}
+
+export type ScalableRow = MeasuredScalableRow | NotRunScalableRow;
+
 export function scalableRows(
   initial: number,
   keyCounts: number[],
   adapters: ScalableAdapter[] = scalableAdapters,
 ): ScalableRow[] {
   const rows: ScalableRow[] = [];
+  // Each adapter's largest measured build, the base a projection scales from.
+  const largest = new Map<string, { keys: number; buildMs: number }>();
   for (const n of keyCounts) {
-    const keys = [...hitKeys(n)];
     for (const adapter of adapters) {
+      if (adapter.maxKeys !== undefined && n > adapter.maxKeys) {
+        const base = largest.get(adapter.name);
+        rows.push({
+          name: adapter.name,
+          keys: n,
+          notRun: true,
+          projectedBuildMs: base
+            ? base.buildMs * (n / base.keys) ** 2
+            : Number.NaN,
+        });
+        continue;
+      }
       const f = adapter.create(initial, SCALABLE_ERROR_RATE);
 
       let started = performance.now();
-      for (const key of keys) f.add(key);
+      for (const key of hitKeys(n)) f.add(key);
       const addMs = performance.now() - started;
 
       started = performance.now();
       let found = 0;
-      for (const key of keys) if (f.has(key)) found++;
+      for (const key of hitKeys(n)) if (f.has(key)) found++;
       const hasMs = performance.now() - started;
       if (found !== n) throw new Error(`${adapter.name} lost a key`);
 
       let falsePositives = 0;
       for (const key of ABSENT) if (f.has(key)) falsePositives++;
 
+      largest.set(adapter.name, { keys: n, buildMs: addMs });
       rows.push({
         name: adapter.name,
         keys: n,

@@ -260,15 +260,33 @@ test("RESULTS carries the measured scalable section for both filters", () => {
   const rows = section
     .split("\n")
     .filter((l) => /^\| (distillate\/scalable|bloom-filters) /.test(l));
-  expect(rows).toHaveLength(6);
-  for (const name of ["distillate/scalable", "bloom-filters"]) {
-    for (const keys of ["1k", "10k", "100k"]) {
-      expect(
-        rows.some((r) => r.startsWith(`| ${name} `) && r.includes(` ${keys} `)),
-        `${name} at ${keys}`,
-      ).toBe(true);
-    }
+  expect(rows).toHaveLength(10);
+  const cells = (r: string): string[] => r.split("|").map((c) => c.trim());
+  const row = (name: string, keys: string): string | undefined =>
+    rows.find((r) => cells(r)[1] === name && cells(r)[2] === keys);
+  for (const keys of ["1k", "10k", "100k", "1M", "10M"]) {
+    expect(row("distillate/scalable", keys), keys).toBeDefined();
+    expect(row("distillate/scalable", keys), keys).not.toContain("not run");
+  }
+  for (const keys of ["1k", "10k", "100k"]) {
+    expect(row("bloom-filters", keys), keys).not.toContain("not run");
+  }
+  for (const keys of ["1M", "10M"]) {
+    expect(row("bloom-filters", keys), keys).toContain("not run");
   }
   // The header note says which build the section was measured on.
   expect(md.slice(0, md.indexOf("## Space"))).toContain("Scalable Bloom");
+});
+
+test("scalableTable marks a row that was not run with its projected build", () => {
+  const table = scalableTable([
+    {
+      name: "bloom-filters",
+      keys: 10_000_000,
+      notRun: true,
+      projectedBuildMs: 2.736e8,
+    },
+  ]);
+  expect(table).toContain("| bloom-filters | 10M | not run |");
+  expect(table).toContain("~76.0 h projected build");
 });

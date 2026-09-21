@@ -78,26 +78,41 @@ Its first stage targets the full rate and later ones `errorRate * ratio ** i`, s
 distillate starts at `epsilon * (1 - tightening)`, so its whole chain targets `epsilon`.
 Bits per key is allocated bits over keys added; FPR is measured over 100,000 keys neither filter saw.
 
-| Filter              | keys | stages | bits/key | measured FPR | add          | has           |
-| ------------------- | ---- | ------ | -------- | ------------ | ------------ | ------------- |
-| distillate/scalable | 1k   | 1      | 11.03    | 0.50%        | 847 k ops/s  | 3.25 M ops/s  |
-| bloom-filters       | 1k   | 2      | 40.17    | 0.81%        | 73 k ops/s   | 228 k ops/s   |
-| distillate/scalable | 10k  | 4      | 21.45    | 0.89%        | 2.63 M ops/s | 8.59 M ops/s  |
-| bloom-filters       | 10k  | 4      | 26.36    | 1.43%        | 57 k ops/s   | 110 k ops/s   |
-| distillate/scalable | 100k | 7      | 23.27    | 0.99%        | 5.65 M ops/s | 11.75 M ops/s |
-| bloom-filters       | 100k | 7      | 29.68    | 1.60%        | 4 k ops/s    | 51 k ops/s    |
+distillate is measured from 1k to 10M keys, the same reach as every other structure. The incumbent stops at 100k: every `add` recounts the newest stage's set bits (`_currentload`), so its build time grows with the square of the key count.
+Past 100k its rows project the build time from its own 100k run rather than running for hours at 1M and days at 10M.
 
-At a hundred times its initial size distillate measures 0.99%, under the 1% it
-was given. `bloom-filters` measures 1.60%: past its requested rate, and inside the
-2% its own stage targets add up to. distillate also allocates fewer bits per key
-at every size, and at 1k the incumbent has already opened a second stage because
-it grows on fill rather than count.
+| Filter              | keys | stages  | bits/key | measured FPR | add                     | has          |
+| ------------------- | ---- | ------- | -------- | ------------ | ----------------------- | ------------ |
+| distillate/scalable | 1k   | 1       | 11.03    | 0.50%        | 813 k ops/s             | 3.28 M ops/s |
+| bloom-filters       | 1k   | 2       | 40.17    | 0.81%        | 76 k ops/s              | 231 k ops/s  |
+| distillate/scalable | 10k  | 4       | 21.45    | 0.89%        | 2.55 M ops/s            | 7.66 M ops/s |
+| bloom-filters       | 10k  | 4       | 26.36    | 1.43%        | 56 k ops/s              | 109 k ops/s  |
+| distillate/scalable | 100k | 7       | 23.27    | 0.99%        | 4.91 M ops/s            | 9.16 M ops/s |
+| bloom-filters       | 100k | 7       | 29.68    | 1.60%        | 4 k ops/s               | 51 k ops/s   |
+| distillate/scalable | 1M   | 10      | 23.10    | 1.00%        | 3.25 M ops/s            | 8.11 M ops/s |
+| bloom-filters       | 1M   | not run | -        | -            | ~47 min projected build | -            |
+| distillate/scalable | 10M  | 14      | 46.43    | 1.01%        | 1.92 M ops/s            | 4.43 M ops/s |
+| bloom-filters       | 10M  | not run | -        | -            | ~78.1 h projected build | -            |
 
-The incumbent's add rate falls from 73k to under 4k ops/s as it grows. Every
-`add` calls `_currentload()`, which counts every set bit in the newest stage, so
-each insert costs time proportional to that stage's size and the build slows as
-the stages get larger. distillate's add rate rises with `n` instead, from 0.85 to
-5.65 M ops/s, as fixed per-run cost is spread over more keys.
+From one to a thousand times its initial size distillate measures 0.50% to
+1.00%, and 1.01% at 10M. That last figure is within sampling noise of the 1%
+target: over 100,000 probes one standard deviation is about 0.03%.
+`bloom-filters` measures 1.60% at 100k, past its requested rate and inside the 2%
+its own stage targets add up to.
+
+Bits per key counts every allocated stage in full, including the newest, which
+opens at twice the capacity of the one before and starts empty. So the figure
+holds near 23 from 100k to 1M and jumps to 46 at 10M: the fourteenth stage
+opened at about 8.19M keys and at 10M is a fifth full (1.71M of 8.19M) while
+holding just over half of all the allocated bits. It falls back as that stage
+fills.
+
+The incumbent's add rate falls from 76k to under 4k ops/s by 100k. Every `add`
+calls `_currentload()`, which counts every set bit in the newest stage, so each
+insert costs time proportional to that stage's size, and its 1M and 10M rows are
+projected from its 100k build rather than run. distillate's add rate peaks
+around 100k and eases to 1.92 M ops/s at 10M, where each new key is checked
+against all fourteen stages before it is added.
 
 ## Throughput (n = 100k)
 
