@@ -553,3 +553,123 @@ func TestFuse(t *testing.T) {
 		}
 	}
 }
+
+type hll struct {
+	p, encoding byte
+	seed        uint32
+	payload     []byte
+}
+
+const (
+	hllParams = 8
+	sparseP   = 25
+)
+
+func parseHLL(f frame) (hll, error) {
+	if f.typ != 5 || len(f.body) < hllParams {
+		return hll{}, fmt.Errorf("not an HLL frame")
+	}
+	p := f.body
+	if p[6] != 0 || p[7] != 0 {
+		return hll{}, fmt.Errorf("HLL params padding is not zero")
+	}
+	return hll{p: p[0], encoding: p[1], seed: le.Uint32(p[2:]), payload: p[hllParams:]}, nil
+}
+
+// registers materialises the register array from either encoding.
+func (h hll) registers() ([]byte, error) {
+	r := make([]byte, 1<<h.p)
+	switch h.encoding {
+	case 0:
+		if len(h.payload) != len(r)*6/8 {
+			return nil, fmt.Errorf("dense payload of %d bytes, p=%d needs %d", len(h.payload), h.p, len(r)*6/8)
+		}
+		// Six bits LSB-first; the high byte is absent for the last register,
+		// whose six bits end exactly on the payload's last byte.
+		for i := range r {
+			bit := 6 * i
+			v := uint16(h.payload[bit>>3])
+			if at := bit>>3 + 1; at < len(h.payload) {
+				v |= uint16(h.payload[at]) << 8
+			}
+			r[i] = byte(v>>(bit&7)) & 0x3f
+		}
+	case 1:
+		if len(h.payload)%4 != 0 {
+			return nil, fmt.Errorf("sparse payload of %d bytes is not whole entries", len(h.payload))
+		}
+		for i := 0; i < len(h.payload); i += 4 {
+			e := le.Uint32(h.payload[i:])
+			reg, rho := (e>>6)>>(sparseP-h.p), byte(e&0x3f)
+			r[reg] = max(r[reg], rho)
+		}
+	default:
+		return nil, fmt.Errorf("unknown HLL encoding %d", h.encoding)
+	}
+	return r, nil
+}
+
+// registersFromKeys is variant 0's HLL mapping: the top p bits of w0 pick the
+// register, and rho is the 1-based first set bit of the 64 - p bits after them.
+func registersFromKeys(p byte, seed uint32, keys []string) []byte {
+	r := make([]byte, 1<<p)
+	for _, key := range keys {
+		w := murmur3x86_128([]byte(key), seed)
+		reg := w[0] >> (32 - p)
+		rho := byte(64 - p + 1)
+		if rest := (uint64(w[0])<<32 | uint64(w[1])) << p; rest != 0 {
+			rho = byte(bits.LeadingZeros64(rest) + 1)
+		}
+		r[reg] = max(r[reg], rho)
+	}
+	return r
+}
+
+func TestHLL(t *testing.T) {
+	var denseWide *entry
+	var entries []entry
+	for _, e := range golden(t) {
+		if e.Kind != "hll" {
+			continue
+		}
+		entries = append(entries, e)
+		f, err := readFrame(frameOf(t, e))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f.body[0] >= 10 && f.body[1] == 0 {
+			denseWide = &e
+		}
+	}
+	if denseWide == nil {
+		t.Fatal("no dense HLL fixture above p=4")
+	}
+
+	for _, e := range entries {
+		f, _ := readFrame(frameOf(t, e))
+		h, err := parseHLL(f)
+		if err != nil {
+			t.Fatalf("%s: %v", e.Name, err)
+		}
+		got, err := h.registers()
+		if err != nil {
+			t.Fatalf("%s: %v", e.Name, err)
+		}
+		want := registersFromKeys(h.p, h.seed, e.Keys)
+		if !bytes.Equal(got, want) {
+			t.Errorf("%s: decoded registers differ from the keys'\n got %v\nwant %v", e.Name, got, want)
+		}
+		if e.Name != denseWide.Name {
+			continue
+		}
+		// Register i starts at bit 6i & 7, which cycles 0, 6, 4, 2, so every
+		// phase of the packing, including the byte-straddling ones, is read.
+		var phases [4]bool
+		for i, r := range got {
+			phases[i%4] = phases[i%4] || r != 0
+		}
+		if phases != [4]bool{true, true, true, true} {
+			t.Errorf("%s: set registers cover packing phases %v, want all four", e.Name, phases)
+		}
+	}
+}
