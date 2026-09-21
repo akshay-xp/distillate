@@ -8,6 +8,7 @@ import {
   hash128Key,
   hash128KeyInto,
   probeInto,
+  probeLanesInto,
   probes,
 } from "../../src/core/hasher.js";
 
@@ -121,6 +122,21 @@ test("probeInto fills a caller array identically to probes (property)", () => {
 
 const patternBytes = (n: number): Uint8Array =>
   Uint8Array.from({ length: n }, (_, i) => (i * 37 + 11) & 0xff);
+
+test("probeLanesInto derives the same probes from precomputed hash words", () => {
+  const keys: BytesLike[] = ["alice", "", Uint8Array.of(1, 2, 3)];
+  for (const key of keys) {
+    const { w0, w1 } = hash128Key(key, 5);
+    for (const [count, range] of [
+      [7, 1024],
+      [3, 2 ** 31],
+    ] as const) {
+      const out = new Uint32Array(count);
+      probeLanesInto(w0, w1, count, range, out);
+      expect(out).toEqual(probes(key, count, range, 5));
+    }
+  }
+});
 
 test("hash128 matches the reference across all tail lengths and multi-block", () => {
   const REF = [

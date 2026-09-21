@@ -315,10 +315,26 @@ export function hash32x2Into(
 /**
  * Part of hash variant 0: changing this mapping needs a new variant (see HASH_MURMUR128).
  *
- * Derive `count` bucket indices in `[0, range)` from a key using
- * Kirsch-Mitzenmacher enhanced double hashing `g_i = h1 + i*h2 + i^2`
+ * Derive `count` bucket indices in `[0, range)` from the first two hash words
+ * using Kirsch-Mitzenmacher enhanced double hashing `g_i = h1 + i*h2 + i^2`
  * (the RocksDB `+i^2` fix), reduced into range with Lemire multiply-shift.
+ * Taking the words rather than the key lets a caller hash once and probe
+ * several differently sized arrays.
  */
+export function probeLanesInto(
+  a: number,
+  b: number,
+  count: number,
+  range: number,
+  out: Uint32Array,
+): void {
+  for (let i = 0; i < count; i++) {
+    const x = (a + Math.imul(i, b) + i * i) >>> 0;
+    out[i] = reduce(x, range);
+  }
+}
+
+/** {@link probeLanesInto} for a key, hashed with `seed`. */
 export function probeInto(
   key: BytesLike,
   count: number,
@@ -327,12 +343,7 @@ export function probeInto(
   out: Uint32Array,
 ): void {
   keyToLanes(key, seed);
-  const a = LANES.w0;
-  const b = LANES.w1;
-  for (let i = 0; i < count; i++) {
-    const x = (a + Math.imul(i, b) + i * i) >>> 0;
-    out[i] = reduce(x, range);
-  }
+  probeLanesInto(LANES.w0, LANES.w1, count, range, out);
 }
 
 export function probes(
