@@ -71,6 +71,14 @@
       "import": "./dist/frame/index.js",
       "require": "./dist/frame/index.cjs"
     },
+    "./scalable": {
+      "types": {
+        "import": "./dist/scalable/index.d.ts",
+        "require": "./dist/scalable/index.d.cts"
+      },
+      "import": "./dist/scalable/index.js",
+      "require": "./dist/scalable/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",

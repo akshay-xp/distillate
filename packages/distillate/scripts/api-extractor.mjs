@@ -20,6 +20,7 @@ const entries = [
   { name: "fuse", dts: "dist/fuse/index.d.ts" },
   { name: "hll", dts: "dist/hll/index.d.ts" },
   { name: "frame", dts: "dist/frame/index.d.ts" },
+  { name: "scalable", dts: "dist/scalable/index.d.ts" },
 ];
 
 let failed = false;

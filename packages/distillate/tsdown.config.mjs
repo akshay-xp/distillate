@@ -8,6 +8,7 @@ export default defineConfig({
     "src/fuse/index.ts",
     "src/hll/index.ts",
     "src/frame/index.ts",
+    "src/scalable/index.ts",
   ],
   format: ["esm", "cjs"],
   fixedExtension: false,
