@@ -3,6 +3,7 @@ import type { BytesLike } from "../core/bytes.js";
 import {
   type Hash128,
   hash128KeyInto,
+  probeAt,
   probeLanesInto,
 } from "../core/hasher.js";
 import {
@@ -320,10 +321,13 @@ export class ScalableBloomFilter {
     );
   }
 
+  // One probe at a time: a stage that does not hold the key usually shows an
+  // unset bit within the first two, and every new key is tested against every
+  // stage, so deriving all k first would waste most of the work.
   #holds(stage: Stage): boolean {
-    this.#probe(stage);
+    const { w0, w1 } = this.#hash;
     for (let i = 0; i < stage.k; i++) {
-      if (!stage.bits.get(this.#probes[i] ?? 0)) return false;
+      if (!stage.bits.get(probeAt(w0, w1, i, stage.m))) return false;
     }
     return true;
   }
