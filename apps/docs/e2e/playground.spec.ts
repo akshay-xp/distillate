@@ -14,16 +14,17 @@ function rate(text: string | null): number {
   return Number(/[\d.]+/.exec(text ?? "")?.[0]);
 }
 
-test("the page builds all three structures at the defaults", async ({
+test("the page builds all four structures at the defaults", async ({
   page,
 }) => {
   const errors = watchConsole(page);
   await page.goto("/start/playground/");
 
-  for (const structure of ["bloom", "blocked", "fuse8"]) {
+  for (const structure of ["bloom", "blocked", "fuse8", "scalable"]) {
     const row = page.locator(`[data-row='${structure}']`);
     await expect(row.locator("[data-cell='bits']")).not.toBeEmpty();
     await expect(row.locator("[data-cell='fpr']")).not.toBeEmpty();
+    await expect(row.locator("[data-cell='stages']")).toHaveText("1");
   }
 
   // The cell renders the measured rate as a percentage, so the parsed
@@ -77,7 +78,7 @@ test("an inserted key reads as a member in every structure", async ({
 
   await query(page, "key-5");
 
-  for (const structure of ["bloom", "blocked", "fuse8"]) {
+  for (const structure of ["bloom", "blocked", "fuse8", "scalable"]) {
     await expect(verdict(page, structure)).toHaveText("member");
   }
   expect(errors).toEqual([]);
@@ -99,7 +100,7 @@ test("a miss on a never-inserted key is simply absent", async ({ page }) => {
 
   await query(page, "miss-0");
 
-  for (const structure of ["bloom", "blocked", "fuse8"]) {
+  for (const structure of ["bloom", "blocked", "fuse8", "scalable"]) {
     await expect(verdict(page, structure)).toHaveText("absent");
   }
 });
@@ -139,6 +140,7 @@ test("a late key reads as outside the fuse build, not as a miss", async ({
 
   await expect(verdict(page, "bloom")).toHaveText("member");
   await expect(verdict(page, "blocked")).toHaveText("member");
+  await expect(verdict(page, "scalable")).toHaveText("member");
   await expect(verdict(page, "fuse8")).toHaveText("added after build");
 });
 
@@ -149,7 +151,7 @@ test("no structure gains a false negative from a late key", async ({
 
   await add(page, "late-key");
 
-  for (const structure of ["bloom", "blocked", "fuse8"]) {
+  for (const structure of ["bloom", "blocked", "fuse8", "scalable"]) {
     await expect(
       page.locator(`[data-row='${structure}'] [data-cell='missing']`),
     ).toHaveText("0");
@@ -167,6 +169,50 @@ test("adding a key clears a verdict it has just invalidated", async ({
   await add(page, "late-key");
 
   await expect(verdict(page, "bloom")).toBeEmpty();
+});
+
+async function grow(page: Page, count: string): Promise<void> {
+  await page.fill("#pg-grow", count);
+  await page.getByRole("button", { name: "Grow" }).click();
+}
+
+function cellText(page: Page, structure: string, name: string) {
+  return page
+    .locator(`[data-row='${structure}'] [data-cell='${name}']`)
+    .textContent();
+}
+
+test("growing past the build opens stages and holds the target", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  await grow(page, "30000");
+
+  await expect(
+    page.locator("[data-row='bloom'] [data-cell='held']"),
+  ).toHaveText("40,000");
+  expect(
+    rate(await cellText(page, "scalable", "stages")),
+  ).toBeGreaterThanOrEqual(3);
+  // Rates render as percentages, so the 1% default target is compared as 1.
+  expect(rate(await cellText(page, "scalable", "fpr"))).toBeLessThanOrEqual(1);
+  expect(rate(await cellText(page, "bloom", "fpr"))).toBeGreaterThan(1);
+  expect(errors).toEqual([]);
+});
+
+test("growing past the bound is refused in the page", async ({ page }) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+  const held = page.locator("[data-row='bloom'] [data-cell='held']");
+  await expect(held).toHaveText("10,000");
+
+  await grow(page, "95000");
+
+  await expect(page.locator("[data-pg-status]")).toContainText("100,000");
+  await expect(held).toHaveText("10,000");
+  expect(errors).toEqual([]);
 });
 
 test("a key count past the bound is refused in the page", async ({ page }) => {

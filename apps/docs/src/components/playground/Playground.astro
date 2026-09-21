@@ -5,6 +5,7 @@ const STRUCTURES = [
   { key: "bloom", label: "Classic Bloom", subpath: "distillate/bloom" },
   { key: "blocked", label: "Blocked Bloom", subpath: "distillate/blocked" },
   { key: "fuse8", label: "Binary Fuse 8", subpath: "distillate/fuse" },
+  { key: "scalable", label: "Scalable Bloom", subpath: "distillate/scalable" },
 ] as const;
 
 const bound = MAX_KEYS.toLocaleString("en-US");
@@ -15,6 +16,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   <style>
     [data-pg],
     [data-pg-add],
+    [data-pg-grow],
     [data-pg-query],
     [data-pg-status],
     [data-pg-results],
@@ -82,12 +84,33 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     <label for="pg-add">Add a key after the build</label>
     <input id="pg-add" name="key" type="text" value="late-key" />
     <p class="dstl-hint">
-      Both Bloom filters take it. Binary Fuse is static and cannot, which is the
+      The Bloom filters take it. Binary Fuse is static and cannot, which is the
       trade it makes for its size.
     </p>
   </div>
   <button class="dstl-btn" type="submit">
     Add
+  </button>
+</form>
+
+<form class="dstl-form-stack" data-pg-grow novalidate>
+  <div class="dstl-field">
+    <label for="pg-grow">Grow past the build</label>
+    <input
+      id="pg-grow"
+      name="count"
+      type="text"
+      inputmode="numeric"
+      value="30000"
+    />
+    <p class="dstl-hint">
+      Adds that many more generated keys. Classic and Blocked Bloom were sized
+      for the build, so their measured rate climbs past the target. Scalable
+      Bloom opens larger stages instead and stays under it.
+    </p>
+  </div>
+  <button class="dstl-btn" type="submit">
+    Grow
   </button>
 </form>
 
@@ -101,6 +124,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       <th>Not found</th>
       <th>Bits/key</th>
       <th>Size</th>
+      <th>Stages</th>
       <th>Measured rate</th>
       <th>Last query</th>
     </tr>
@@ -116,6 +140,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
         <td data-cell="missing" />
         <td data-cell="bits" />
         <td data-cell="size" />
+        <td data-cell="stages" />
         <td data-cell="fpr" />
         <td data-cell="verdict" />
       </tr>
@@ -147,7 +172,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   import { Playground } from "./engine.js";
   import type { PlaygroundReport, StructureKey } from "./engine.js";
 
-  const KEYS = ["bloom", "blocked", "fuse8"] as const;
+  const KEYS = ["bloom", "blocked", "fuse8", "scalable"] as const;
 
   function formatBytes(bytes: number): string {
     const units = ["bytes", "KiB", "MiB", "GiB"];
@@ -165,6 +190,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   const form = document.querySelector<HTMLFormElement>("[data-pg]");
   const queryForm = document.querySelector<HTMLFormElement>("[data-pg-query]");
   const addForm = document.querySelector<HTMLFormElement>("[data-pg-add]");
+  const growForm = document.querySelector<HTMLFormElement>("[data-pg-grow]");
   const status = document.querySelector<HTMLElement>("[data-pg-status]");
 
   // Held between events. `report()` walks every key it holds, so a query must
@@ -193,6 +219,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       set(key, "missing", String(s.missing));
       set(key, "bits", s.bitsPerKey.toFixed(2));
       set(key, "size", formatBytes(s.totalBytes));
+      set(key, "stages", String(s.stages));
       set(key, "fpr", formatPercent(s.measuredFpr));
       set(key, "verdict", "");
     }
@@ -220,6 +247,13 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     render(current.report());
   }
 
+  function grow(): void {
+    if (!growForm || !current) return;
+    const result = current.grow(new FormData(growForm).get("count"));
+    if (status) status.textContent = result.ok ? "" : result.message;
+    if (result.ok) render(current.report());
+  }
+
   function query(): void {
     if (!queryForm || !current) return;
     const key = String(new FormData(queryForm).get("key") ?? "");
@@ -238,5 +272,6 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   onSubmit(form, build);
   onSubmit(queryForm, query);
   onSubmit(addForm, insert);
+  onSubmit(growForm, grow);
   build();
 </script>
