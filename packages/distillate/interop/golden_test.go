@@ -646,15 +646,16 @@ func (h hll) registers() ([]byte, error) {
 		if len(h.payload) != len(r)*6/8 {
 			return nil, fmt.Errorf("dense payload of %d bytes, p=%d needs %d", len(h.payload), h.p, len(r)*6/8)
 		}
-		// Six bits LSB-first; the high byte is absent for the last register,
-		// whose six bits end exactly on the payload's last byte.
+		// Six bits LSB-first, reading only the bytes a register spans; the
+		// last one always fits inside the final byte.
 		for i := range r {
 			bit := 6 * i
-			v := uint16(h.payload[bit>>3])
-			if at := bit>>3 + 1; at < len(h.payload) {
-				v |= uint16(h.payload[at]) << 8
+			at, shift := bit>>3, bit&7
+			v := h.payload[at] >> shift
+			if shift > 2 {
+				v |= h.payload[at+1] << (8 - shift)
 			}
-			r[i] = byte(v>>(bit&7)) & 0x3f
+			r[i] = v & 0x3f
 		}
 	case 1:
 		if len(h.payload)%4 != 0 {
