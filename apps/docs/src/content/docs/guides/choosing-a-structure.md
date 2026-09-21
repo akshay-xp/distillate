@@ -22,16 +22,16 @@ questions and the choice is usually forced:
 
 ## Decision matrix
 
-| Workload                                  | Use                                                             |
-| ----------------------------------------- | --------------------------------------------------------------- |
-| Static set, built once, queried a lot     | [Binary Fuse 8](/guides/fuse/) (Fuse 16 for a lower FPR)        |
-| Squeeze every bit, static, RAM-bound      | Ribbon/BuRR **(not yet available)**                             |
-| Streaming inserts, speed-first, no delete | [Blocked Bloom](/guides/blocked/)                               |
-| Inserts and deletes                       | Cuckoo **(not yet available)**                                  |
-| Unbounded growth, `n` unknown             | Scalable Bloom, then InfiniFilter/Aleph **(not yet available)** |
-| Very low FPR (1e-4 or below)              | [Binary Fuse 16](/guides/fuse/)                                 |
-| Migrating from `bloom-filters`            | [Classic Bloom](/guides/bloom/)                                 |
-| Counting distinct keys, not membership    | [HyperLogLog](/guides/hll/)                                     |
+| Workload                                  | Use                                                                             |
+| ----------------------------------------- | ------------------------------------------------------------------------------- |
+| Static set, built once, queried a lot     | [Binary Fuse 8](/guides/fuse/) (Fuse 16 for a lower FPR)                        |
+| Squeeze every bit, static, RAM-bound      | Ribbon/BuRR **(not yet available)**                                             |
+| Streaming inserts, speed-first, no delete | [Blocked Bloom](/guides/blocked/)                                               |
+| Inserts and deletes                       | Cuckoo **(not yet available)**                                                  |
+| Unbounded growth, `n` unknown             | [Scalable Bloom](/guides/scalable/); InfiniFilter/Aleph **(not yet available)** |
+| Very low FPR (1e-4 or below)              | [Binary Fuse 16](/guides/fuse/)                                                 |
+| Migrating from `bloom-filters`            | [Classic Bloom](/guides/bloom/)                                                 |
+| Counting distinct keys, not membership    | [HyperLogLog](/guides/hll/)                                                     |
 
 For the filters, space below is stated as overhead over the
 information-theoretic floor of `log2(1/epsilon)` bits per key: 6.64 bits/key at
@@ -83,6 +83,18 @@ tighter than lookup latency, or when you want the FPR curve everyone already
 knows. Below about 1e-5 it also beats blocked outright, on both space and
 rate. See [sizing and tuning](/guides/sizing/).
 
+### [Scalable Bloom](/guides/scalable/) (`distillate/scalable`)
+
+Mutable, insert-only. A chain of Bloom stages that opens a larger, tighter one
+each time the newest fills, so it holds `epsilon` for a key count nobody knew
+up front. It pays for that in space, about 13.5 bits/key for its first stage
+at a 1% FPR against 9.6 for a Classic Bloom sized for the same `n`, and in
+lookups that check every stage.
+
+Reach for it when `n` is a guess: a stream, a crawler's seen-URL set, a dedup
+set that keeps growing. If you can size the filter, Classic Bloom is smaller
+and faster.
+
 ## What is not shipped yet
 
 These are on the roadmap. None of them exist in the package today, and none
@@ -92,8 +104,6 @@ have a guide, so do not plan around them.
   four, partial-key hashing. The only planned structure that supports delete.
   Roughly `log2(1/epsilon) + 3` bits/key and two bucket probes. Inserts can
   fail near the load cap, so it must signal rather than corrupt.
-- **Scalable Bloom** _(not yet available)_. A chain of Bloom filters for
-  unbounded growth when `n` is unknown at build time.
 - **Counting Bloom** _(not yet available)_. Four-bit counters buy delete at
   about four times the space. Mainly for parity with incumbent packages.
 - **Ribbon / Homogeneous / BuRR** _(not yet available)_. A banded linear
