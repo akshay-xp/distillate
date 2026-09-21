@@ -13,10 +13,13 @@ import {
 } from "../core/params.js";
 import {
   bytesEqual,
+  type FilterJSON,
   FORMAT_VERSION,
+  fromJSONEnvelope,
   HASH_MURMUR128,
   readHeader,
   SerializationError,
+  toJSONEnvelope,
   writeFrame,
 } from "../core/serialize.js";
 import { bloomSizing } from "../core/sizing.js";
@@ -466,6 +469,26 @@ export class ScalableBloomFilter {
         });
       },
     );
+  }
+
+  /**
+   * Serializes the filter to a JSON-friendly envelope wrapping the base64 of
+   * {@link ScalableBloomFilter.toBytes}.
+   *
+   * @returns The JSON envelope.
+   */
+  toJSON(): FilterJSON {
+    return toJSONEnvelope(this.toBytes());
+  }
+
+  /**
+   * Restores a filter from its {@link ScalableBloomFilter.toJSON} envelope.
+   *
+   * @param value - The JSON envelope.
+   * @returns The reconstructed filter.
+   */
+  static fromJSON(value: unknown): ScalableBloomFilter {
+    return ScalableBloomFilter.fromBytes(fromJSONEnvelope(value));
   }
 
   /** Keys added that the filter did not already hold. */
