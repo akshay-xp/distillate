@@ -12,6 +12,7 @@ import {
 import { HLL_MAX_P, HLL_MIN_P } from "../../src/core/sizing.js";
 import { BinaryFuse8, BinaryFuse16 } from "../../src/fuse/index.js";
 import { HyperLogLog } from "../../src/hll/hll.js";
+import { ScalableBloomFilter } from "../../src/scalable/scalable.js";
 
 interface Structure {
   parse: (bytes: Uint8Array) => unknown;
@@ -40,6 +41,7 @@ const entries: [string, Structure][] = [
   ["blocked", structure((b) => BlockedBloomFilter.fromBytes(b), answersHas)],
   ["fuse8", structure((b) => BinaryFuse8.fromBytes(b), answersHas)],
   ["fuse16", structure((b) => BinaryFuse16.fromBytes(b), answersHas)],
+  ["scalable", structure((b) => ScalableBloomFilter.fromBytes(b), answersHas)],
   ["hll", hll],
 ];
 
