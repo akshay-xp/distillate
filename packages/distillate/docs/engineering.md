@@ -45,6 +45,7 @@ The "small" claim is enforced, not asserted. `pnpm size:check` (`scripts/size-ch
   - Malformed-input rejection (see serialization.md).
   - Cuckoo delete correctness; insert-when-full signals failure, never corrupts.
 - Statistical FPR suite (seeded, m >= 1e6): empirical FPR within a binomial-derived tolerance of theory (e.g. <= 1.25x theoretical), and not suspiciously low (guards a broken query path). Deterministic in CI; unseeded nightly across many seeds.
+- Cross-language (`interop/golden_test.go`, CI job `interop (go)`): a stdlib-only Go reader written from `apps/docs/src/content/docs/reference/serialization.md`, not from the TS, checks every `tests/fixtures/golden.json` frame. Bloom and Blocked rebuild byte-for-byte from their keys; Fuse answers present and absent keys; HLL registers decoded from each encoding match registers computed from the keys; byte-swapped Blocked and Fuse16 lanes must fail, which is the only check that can see a host-byte-order defect on little-endian runners. A new structure type or golden kind needs its Go reader in the same change. Run: `go -C packages/distillate/interop test -v golden_test.go`.
 
 ## Benchmarking
 

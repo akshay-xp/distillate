@@ -3,7 +3,7 @@ title: Serialization format
 description: The versioned, self-describing DSTL binary format, covering byte layout, per-type params blocks, hash variant, and the rules a reader in any language must follow.
 ---
 
-Versioned, self-describing, little-endian binary format. Spec'd here so Rust/Go readers can parse it. Not decorator/reflect-metadata magic (that is what breaks incumbents on edge).
+Versioned, self-describing, little-endian binary format. Spec'd here so Rust/Go readers can parse it, and checked: a Go reader written from this page alone (`packages/distillate/interop/golden_test.go`, CI job `interop (go)`) verifies every golden frame, including lane byte order and HLL register packing, without the JS code. Not decorator/reflect-metadata magic (that is what breaks incumbents on edge).
 
 ## Layout
 
@@ -159,7 +159,7 @@ for transport and debugging, not as a second persistence format.
 
 - Header and params multi-byte integers are written little-endian via `DataView`, `littleEndian: true` explicit, so they parse identically on any host regardless of platform endianness.
 - 64-bit fields via `getBigUint64`/`setBigUint64`.
-- Payload is the raw backing typed array copied verbatim, so its multi-byte lanes (blocked's `Uint32Array` lane words, fuse16's `Uint16Array` fingerprints) land in host byte order, not a forced little-endian. Every supported JS runtime is little-endian, so on-disk frames are interoperable in practice; a hypothetical big-endian host would need a read-time byte-swap, which is not currently implemented. Bloom bit arrays and fuse8 fingerprints are `Uint8Array`, so they are endian-neutral. A same-params Rust/Go reader reconstructs by pointing at these bytes (how FastFilter serializes).
+- Payload is the raw backing typed array copied verbatim, so its multi-byte lanes (blocked's `Uint32Array` lane words, fuse16's `Uint16Array` fingerprints) land in host byte order, not a forced little-endian. Every supported JS runtime is little-endian, so on-disk frames are interoperable in practice, and the Go interop check fails if they are ever not; a hypothetical big-endian host would need a read-time byte-swap, which is not currently implemented. Bloom bit arrays and fuse8 fingerprints are `Uint8Array`, so they are endian-neutral. A same-params Rust/Go reader reconstructs by pointing at these bytes (how FastFilter serializes).
 - Serialize mathematical params, not JS object internals. That is what makes cross-language real.
 - Pin the hash variant in flags (see [hashing](/internals/hashing/)).
 - Magic byte rejects foreign/corrupt input early; version byte lets readers refuse unknown formats instead of misparsing; CRC32 detects corruption.
