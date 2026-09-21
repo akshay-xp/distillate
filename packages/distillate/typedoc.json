@@ -8,7 +8,8 @@
     "src/bloom/index.ts",
     "src/blocked/index.ts",
     "src/fuse/index.ts",
-    "src/hll/index.ts"
+    "src/hll/index.ts",
+    "src/frame/index.ts"
   ],
   "tsconfig": "./tsconfig.json",
   "readme": "none",

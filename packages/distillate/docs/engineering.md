@@ -14,7 +14,7 @@ pnpm workspace (`pnpm-workspace.yaml`: `packages/*`, `apps/*`).
 
 - Bundler: tsdown (Rolldown/Oxc) with `isolatedDeclarations: true`. tsup as fallback.
 - Dual ESM/CJS, ESM-first. `"type": "module"`, `"sideEffects": false`, zero runtime deps.
-- `exports` map: `types` condition first per entry; separate `.d.ts` (ESM) and `.d.cts` (CJS); one subpath per structure plus a barrel root; export `./package.json`.
+- `exports` map: `types` condition first per entry; separate `.d.ts` (ESM) and `.d.cts` (CJS); one subpath per structure, `./frame` (structure-agnostic frame walking), plus a barrel root; export `./package.json`.
 
 ```jsonc
 "exports": {

@@ -7,6 +7,7 @@ export default defineConfig({
     "src/blocked/index.ts",
     "src/fuse/index.ts",
     "src/hll/index.ts",
+    "src/frame/index.ts",
   ],
   format: ["esm", "cjs"],
   fixedExtension: false,

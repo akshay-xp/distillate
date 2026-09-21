@@ -13,6 +13,7 @@ import {
   BinaryFuse16,
   fuseBitsPerKey,
 } from "../dist/fuse/index.js";
+import { readFrameAt } from "../dist/frame/index.js";
 import { HyperLogLog, hllSizing } from "../dist/hll/index.js";
 
 if (typeof VERSION !== "string") {
@@ -140,6 +141,28 @@ for (const { name, kind, keys, epsilon, p, frame } of golden) {
   }
 }
 
+// A log of concatenated frames must walk by declared length alone.
+const log = [
+  golden.find((g) => g.name === "bloom"),
+  golden.find((g) => g.name === "hll-dense"),
+].map((g) => decode(g.frame));
+const stream = new Uint8Array(log[0].length + log[1].length);
+stream.set(log[0], 0);
+stream.set(log[1], log[0].length);
+const walked = [];
+let at = 0;
+while (at < stream.length) {
+  const frame = readFrameAt(stream, at);
+  walked.push(frame.type);
+  at += frame.byteLength;
+}
+if (walked.join() !== "1,5" || at !== stream.length) {
+  console.error(
+    `smoke: walking bloom + hll gave types [${walked}] ending at ${at} of ${stream.length}`,
+  );
+  process.exit(1);
+}
+
 console.log(
-  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll work (filters, sketch, sizing helpers), toBytes byte-identical to golden`,
+  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame work (filters, sketch, sizing helpers, frame walk), toBytes byte-identical to golden`,
 );
