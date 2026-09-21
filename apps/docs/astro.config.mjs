@@ -123,6 +123,7 @@ export default defineConfig({
               link: "/guides/choosing-a-structure/",
             },
             { label: "Classic Bloom", link: "/guides/bloom/" },
+            { label: "Scalable Bloom", link: "/guides/scalable/" },
             { label: "Blocked Bloom", link: "/guides/blocked/" },
             { label: "Binary Fuse", link: "/guides/fuse/" },
             { label: "HyperLogLog", link: "/guides/hll/" },
