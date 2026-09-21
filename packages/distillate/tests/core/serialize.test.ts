@@ -7,6 +7,7 @@ import {
   ChecksumError,
   FORMAT_VERSION,
   fromJSONEnvelope,
+  readFrameAt,
   readHeader,
   ReservedBitsError,
   SerializationError,
@@ -260,6 +261,69 @@ test("readHeader handles every truncated prefix of a valid frame (fuzz)", () => 
       expect(err).toBeInstanceOf(SerializationError);
     }
   }
+});
+
+const concat = (...parts: Uint8Array[]): Uint8Array => {
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let at = 0;
+  for (const p of parts) {
+    out.set(p, at);
+    at += p.length;
+  }
+  return out;
+};
+
+const stream = () => {
+  const bloom = new BloomFilter({ m: 64, k: 3 });
+  bloom.add("a");
+  const hll = new HyperLogLog({ p: 10 });
+  hll.add("a");
+  const frames = [
+    bloom.toBytes(),
+    writeHeader(
+      { version: FORMAT_VERSION, type: 99, flags: 0 },
+      Uint8Array.of(1, 2, 3, 4, 5, 6, 7, 8),
+    ),
+    hll.toBytes(),
+  ];
+  return { frames, buf: concat(...frames) };
+};
+
+test("readFrameAt walks a stream of frames, including a type it does not know", () => {
+  const { frames, buf } = stream();
+
+  const read = [];
+  let offset = 0;
+  while (offset < buf.length) {
+    const frame = readFrameAt(buf, offset);
+    read.push(frame);
+    offset += frame.byteLength;
+  }
+
+  expect(read.map((f) => f.type)).toEqual([1, 99, 5]);
+  expect(offset).toBe(buf.length);
+  expect(read.map((f) => f.byteLength)).toEqual(frames.map((f) => f.length));
+  expect(Array.from(read[1]?.body ?? [])).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  const first = buf.subarray(0, read[0]?.byteLength);
+  expect(BloomFilter.fromBytes(first).has("a")).toBe(true);
+});
+
+test("readFrameAt reports a frame cut short inside a stream as truncation", () => {
+  const { frames, buf } = stream();
+  const hllAt = buf.length - (frames[2]?.length ?? 0);
+  expect(() => readFrameAt(buf.subarray(0, buf.length - 1), hllAt)).toThrow(
+    TruncatedError,
+  );
+  expect(() => readFrameAt(buf, buf.length)).toThrow(TruncatedError);
+  expect(() => readFrameAt(buf, buf.length - 10)).toThrow(TruncatedError);
+});
+
+test("readFrameAt checks the CRC of the frame at the offset", () => {
+  const { frames, buf } = stream();
+  const hllAt = buf.length - (frames[2]?.length ?? 0);
+  buf[buf.length - 1] ^= 0x01;
+  expect(readFrameAt(buf, 0).type).toBe(1);
+  expect(() => readFrameAt(buf, hllAt)).toThrow(ChecksumError);
 });
 
 test("fromJSONEnvelope surfaces invalid base64 data as SerializationError", () => {
