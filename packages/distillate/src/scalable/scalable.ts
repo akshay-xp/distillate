@@ -175,6 +175,9 @@ export class ScalableBloomFilter {
   add(key: BytesLike): void {
     hash128KeyInto(key, this.#seed, this.#hash);
     if (this.#anyHolds()) return;
+    if (this.#newest.count >= this.#newest.capacity) {
+      this.#newest = this.#open(this.#geometry(this.#stages.length));
+    }
     const stage = this.#newest;
     this.#probe(stage);
     for (let i = 0; i < stage.k; i++) stage.bits.set(this.#probes[i] ?? 0);
