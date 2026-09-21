@@ -326,6 +326,17 @@ test("readFrameAt checks the CRC of the frame at the offset", () => {
   expect(() => readFrameAt(buf, hllAt)).toThrow(ChecksumError);
 });
 
+test.each([-1, 1.5, Number.NaN])(
+  "readFrameAt rejects offset %d as a RangeError, not a frame defect",
+  (offset) => {
+    // subarray counts a negative offset from the end, so without this the
+    // read would land on the wrong bytes and could even succeed.
+    const f = validFrame();
+    expect(() => readFrameAt(f, offset)).toThrow(RangeError);
+    expect(() => readFrameAt(f, offset)).not.toThrow(SerializationError);
+  },
+);
+
 test("fromJSONEnvelope surfaces invalid base64 data as SerializationError", () => {
   const env = {
     $: "distillate",
