@@ -82,3 +82,31 @@ test.each<[keyof ScalableBloomParams, Partial<ScalableBloomParams>]>([
   expect(thrown).not.toBeInstanceOf(ParamError);
   expect((thrown as Error).message).toContain(name);
 });
+
+test("equals holds for identical filters and breaks on any difference", () => {
+  const keys = range("e", 25);
+  expect(filled(keys).equals(filled(keys))).toBe(true);
+
+  const plusOne = filled(keys);
+  plusOne.add("extra");
+  expect(filled(keys).equals(plusOne)).toBe(false);
+
+  const seeded = ScalableBloomFilter.create(10, 0.01, { seed: 1 });
+  for (const key of keys) seeded.add(key);
+  expect(filled(keys).equals(seeded)).toBe(false);
+
+  expect(filled([]).equals(filled([]))).toBe(true);
+});
+
+test("union is symmetric under equals", () => {
+  const a = filled(aKeys);
+  const b = filled(bKeys);
+  expect(a.union(b).equals(b.union(a))).toBe(true);
+});
+
+test("the same keys in another order can land in other stages", () => {
+  // Which stage a key lands in depends on when it arrived, so equality is of
+  // the filter's state, the same as its serialized bytes, not of its key set.
+  const keys = range("e", 25);
+  expect(filled(keys).equals(filled([...keys].reverse()))).toBe(false);
+});

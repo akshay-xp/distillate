@@ -11,6 +11,7 @@ import {
   assertUint32,
   ParamError,
 } from "../core/params.js";
+import { bytesEqual } from "../core/serialize.js";
 import { bloomSizing } from "../core/sizing.js";
 
 const MAX_BITS = 0xffffffff;
@@ -175,15 +176,19 @@ export class ScalableBloomFilter {
     return stage;
   }
 
-  #assertSameSettings(other: ScalableBloomFilter): void {
-    const pairs: [string, number, number][] = [
+  // Each setting paired with other's, in the order a mismatch is reported.
+  #settingPairs(other: ScalableBloomFilter): [string, number, number][] {
+    return [
       ["n", this.#n, other.#n],
       ["epsilon", this.#epsilon, other.#epsilon],
       ["growth", this.#growth, other.#growth],
       ["tightening", this.#tightening, other.#tightening],
       ["seed", this.#seed, other.#seed],
     ];
-    for (const [name, a, b] of pairs) {
+  }
+
+  #assertSameSettings(other: ScalableBloomFilter): void {
+    for (const [name, a, b] of this.#settingPairs(other)) {
       if (a !== b) {
         throw new ScalableParamMismatchError(
           `cannot union scalable Bloom filters whose ${name} differs (${String(a)} vs ${String(b)})`,
@@ -327,6 +332,31 @@ export class ScalableBloomFilter {
     });
     result.#adopt(stages);
     return result;
+  }
+
+  /**
+   * Tests structural equality: identical settings, the same stages with the
+   * same counts, and identical bits, which is exactly when the two serialize
+   * to the same bytes. Which stage a key lands in depends on when it arrived,
+   * so two filters given the same keys in a different order can be unequal.
+   *
+   * @param other - The filter to compare against.
+   * @returns `true` if the two filters are identical.
+   */
+  equals(other: ScalableBloomFilter): boolean {
+    if (this.#settingPairs(other).some(([, a, b]) => a !== b)) return false;
+    if (this.#stages.length !== other.#stages.length) return false;
+    return this.#stages.every((s, i) => {
+      const t = other.#stages[i];
+      if (!t) return false;
+      return (
+        s.m === t.m &&
+        s.k === t.k &&
+        s.capacity === t.capacity &&
+        s.count === t.count &&
+        bytesEqual(s.bits.bytes, t.bits.bytes)
+      );
+    });
   }
 
   /** Keys added that the filter did not already hold. */
