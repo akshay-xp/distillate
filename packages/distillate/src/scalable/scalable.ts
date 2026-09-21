@@ -1,4 +1,10 @@
 import { BitSet } from "../core/bitset.js";
+import type { BytesLike } from "../core/bytes.js";
+import {
+  type Hash128,
+  hash128KeyInto,
+  probeLanesInto,
+} from "../core/hasher.js";
 import {
   assertPositiveInt,
   assertProbability,
@@ -57,6 +63,9 @@ export class ScalableBloomFilter {
   readonly #tightening: number;
   readonly #seed: number;
   readonly #stages: Stage[] = [];
+  readonly #hash: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
+  #probes = new Uint32Array(0);
+  #newest: Stage;
 
   /**
    * Creates a filter whose first stage holds `n` keys, for a chain-wide
@@ -109,7 +118,7 @@ export class ScalableBloomFilter {
         `the first stage needs ${String(first.m)} bits, more than ${String(MAX_BITS)}`,
       );
     }
-    this.#open(first);
+    this.#newest = this.#open(first);
   }
 
   // Stage i's capacity and Bloom geometry. The false-positive targets form a
@@ -121,8 +130,66 @@ export class ScalableBloomFilter {
     return { capacity, ...bloomSizing(capacity, target) };
   }
 
-  #open({ capacity, m, k }: { capacity: number; m: number; k: number }): void {
-    this.#stages.push({ bits: new BitSet(m), m, k, capacity, count: 0 });
+  #open({ capacity, m, k }: { capacity: number; m: number; k: number }): Stage {
+    const stage = { bits: new BitSet(m), m, k, capacity, count: 0 };
+    this.#stages.push(stage);
+    if (k > this.#probes.length) this.#probes = new Uint32Array(k);
+    return stage;
+  }
+
+  // Fills #probes for one stage from the key hashed into #hash, which every
+  // stage shares.
+  #probe(stage: Stage): void {
+    probeLanesInto(
+      this.#hash.w0,
+      this.#hash.w1,
+      stage.k,
+      stage.m,
+      this.#probes,
+    );
+  }
+
+  #holds(stage: Stage): boolean {
+    this.#probe(stage);
+    for (let i = 0; i < stage.k; i++) {
+      if (!stage.bits.get(this.#probes[i] ?? 0)) return false;
+    }
+    return true;
+  }
+
+  // Newest first: it holds the most keys, so a present key usually stops there.
+  #anyHolds(): boolean {
+    for (let i = this.#stages.length - 1; i >= 0; i--) {
+      const stage = this.#stages[i];
+      if (stage && this.#holds(stage)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Adds a key. A key the filter already holds is not counted again, so
+   * duplicates never use up a stage's capacity.
+   *
+   * @param key - The key to insert, as a string or bytes.
+   */
+  add(key: BytesLike): void {
+    hash128KeyInto(key, this.#seed, this.#hash);
+    if (this.#anyHolds()) return;
+    const stage = this.#newest;
+    this.#probe(stage);
+    for (let i = 0; i < stage.k; i++) stage.bits.set(this.#probes[i] ?? 0);
+    stage.count++;
+  }
+
+  /**
+   * Tests whether a key is in the set.
+   *
+   * @param key - The key to test.
+   * @returns `true` if present (possibly a false positive); `false` guarantees absence.
+   */
+  has(key: BytesLike): boolean {
+    hash128KeyInto(key, this.#seed, this.#hash);
+    return this.#anyHolds();
   }
 
   /** Keys added that the filter did not already hold. */
