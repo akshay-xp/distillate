@@ -6,6 +6,7 @@ import { fromBase64 } from "../../src/core/base64.js";
 import { bytesEqual, UnknownVersionError } from "../../src/core/serialize.js";
 import { BinaryFuse8, BinaryFuse16 } from "../../src/fuse/index.js";
 import { HyperLogLog } from "../../src/hll/hll.js";
+import { ScalableBloomFilter } from "../../src/scalable/scalable.js";
 import goldenJson from "../fixtures/golden.json" with { type: "json" };
 
 interface GoldenEntry {
@@ -14,6 +15,10 @@ interface GoldenEntry {
   keys: string[];
   epsilon?: number;
   p?: number;
+  n?: number;
+  growth?: number;
+  tightening?: number;
+  seed?: number;
   frame?: string;
 }
 
@@ -44,6 +49,16 @@ const build = (entry: GoldenEntry): Serializable => {
       for (const key of keys) sketch.add(key);
       return sketch;
     }
+    case "scalable": {
+      const { n = 1, growth, tightening, seed } = entry;
+      const filter = ScalableBloomFilter.create(n, epsilon, {
+        growth,
+        tightening,
+        seed,
+      });
+      for (const key of keys) filter.add(key);
+      return filter;
+    }
     default:
       throw new Error(`unknown kind ${kind}`);
   }
@@ -61,6 +76,8 @@ const parse = (kind: string, bytes: Uint8Array): Serializable => {
       return BinaryFuse16.fromBytes(bytes);
     case "hll":
       return HyperLogLog.fromBytes(bytes);
+    case "scalable":
+      return ScalableBloomFilter.fromBytes(bytes);
     default:
       throw new Error(`unknown kind ${kind}`);
   }
@@ -101,4 +118,13 @@ test("v2 frame is rejected on version", () => {
   if (!v2) throw new Error("v2 fixture missing from golden.json");
   const bytes = frameBytes(v2);
   expect(() => BloomFilter.fromBytes(bytes)).toThrow(UnknownVersionError);
+});
+
+test("the scalable fixtures pin chains of at least three stages", () => {
+  const chains = golden.filter((g) => g.kind === "scalable");
+  expect(chains.length).toBeGreaterThan(0);
+  for (const entry of chains) {
+    const parsed = ScalableBloomFilter.fromBytes(frameBytes(entry));
+    expect(parsed.stages, entry.name).toBeGreaterThanOrEqual(3);
+  }
 });

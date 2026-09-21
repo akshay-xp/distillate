@@ -103,7 +103,7 @@ const golden = JSON.parse(
 
 const decode = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 
-const rebuild = (kind, keys, epsilon, p) => {
+const rebuild = ({ kind, keys, epsilon, p, n, growth, tightening, seed }) => {
   switch (kind) {
     case "bloom":
       return BloomFilter.from(keys, epsilon);
@@ -118,15 +118,25 @@ const rebuild = (kind, keys, epsilon, p) => {
       for (const key of keys) sketch.add(key);
       return sketch;
     }
+    case "scalable": {
+      const filter = ScalableBloomFilter.create(n, epsilon, {
+        growth,
+        tightening,
+        seed,
+      });
+      for (const key of keys) filter.add(key);
+      return filter;
+    }
     default:
       console.error(`smoke: unknown golden kind ${kind}`);
       process.exit(1);
   }
 };
 
-for (const { name, kind, keys, epsilon, p, frame } of golden) {
+for (const entry of golden) {
+  const { name, kind, frame } = entry;
   if (kind === "v2") continue;
-  const actual = rebuild(kind, keys, epsilon, p).toBytes();
+  const actual = rebuild(entry).toBytes();
   const expected = decode(frame);
   if (actual.length !== expected.length) {
     console.error(
