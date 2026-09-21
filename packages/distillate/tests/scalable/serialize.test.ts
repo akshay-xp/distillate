@@ -2,7 +2,12 @@ import fc from "fast-check";
 import { expect, test } from "vitest";
 
 import { probes } from "../../src/core/hasher.js";
-import { bytesEqual, readHeader } from "../../src/core/serialize.js";
+import {
+  bytesEqual,
+  FORMAT_VERSION,
+  readHeader,
+  SerializationError,
+} from "../../src/core/serialize.js";
 import {
   ScalableBloomFilter,
   type ScalableBloomOptions,
@@ -107,4 +112,17 @@ test("the frame follows the documented layout, with every stage 8-aligned", () =
     );
     expect(held, key).toBe(true);
   }
+});
+
+test("the JSON envelope round-trips", () => {
+  const f = filled(range("j", 60));
+  const json = f.toJSON();
+  expect(json.$).toBe("distillate");
+  expect(json.v).toBe(FORMAT_VERSION);
+
+  const restored = ScalableBloomFilter.fromJSON(
+    JSON.parse(JSON.stringify(json)),
+  );
+  expect(restored.equals(f)).toBe(true);
+  expect(() => ScalableBloomFilter.fromJSON({})).toThrow(SerializationError);
 });
