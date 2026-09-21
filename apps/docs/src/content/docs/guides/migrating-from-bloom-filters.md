@@ -234,7 +234,10 @@ The differences, as its source (`scalable-bloom-filter.js`) shows them:
   `errorRate` and each later one `errorRate * ratio ** i`, so the stages sum to
   `errorRate / (1 - ratio)`: twice the requested rate at its default `ratio` of
   0.5. distillate starts at `epsilon * (1 - tightening)`, so the whole chain
-  holds `epsilon`. `tightening` is the counterpart of `ratio`.
+  holds `epsilon`. `tightening` is the counterpart of `ratio`. Measured at a
+  hundred times its initial size, it reaches 1.60% where distillate stays at
+  0.99%, both asked for 1% (see the
+  [benchmark results](/bench/results/)).
 - **Its `rate()` reports only the newest stage**, not the chain a lookup
   actually checks. distillate's `rate()` combines every stage.
 - **Its growth is fixed at 2.** distillate takes a `growth` option.

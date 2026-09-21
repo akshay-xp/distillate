@@ -143,3 +143,23 @@ test("at the incumbent's default ratio the chain still holds its target", () => 
   for (let i = 0; i < 10_000; i++) if (f.has(`out:${String(i)}`)) hits++;
   expect(hits / 10_000).toBeLessThanOrEqual(0.0125);
 });
+
+// The doubled bound is stated from the incumbent's source; these are the
+// measurements that show it, and they have to be the ones RESULTS.md carries.
+test("the scalable section quotes the measured FPR from the bench results", () => {
+  const results = readFileSync(
+    fileURLToPath(new URL("../../bench/RESULTS.md", import.meta.url)),
+    "utf8",
+  );
+  const bench = results.slice(
+    results.indexOf("## Scalable Bloom"),
+    results.indexOf("## Throughput"),
+  );
+  const at = GUIDE.indexOf("### The scalable filter");
+  const section = GUIDE.slice(at, GUIDE.indexOf("\n### ", at + 1));
+
+  for (const figure of ["1.60%", "0.99%"]) {
+    expect(section, figure).toContain(figure);
+    expect(bench, figure).toContain(figure);
+  }
+});
