@@ -72,22 +72,29 @@ Introspection accessors sit alongside the narrow interface, not in it: Bloom exp
 
 No top-level side effects. No decorators, no `reflect-metadata`, no dynamic `eval`. This is what keeps it edge-safe and tree-shakeable.
 
-## Planned file layout
+## File layout
 
 ```
 src/
   core/
     bytes.ts        # BytesLike normalization, UTF-8 encode
-    hasher.ts       # Hasher interface, default murmur3-x64-128, KM double hashing
-    bitset.ts       # typed-array bit storage + large-filter variant
-    serialize.ts    # header read/write, CRC32, version dispatch
-    sizing.ts       # bloomSizing(n, epsilon)
-  bloom/            # classic + blocked
-  counting/         # counting + scalable
-  cuckoo/
-  binary-fuse/      # fuse8 / fuse16 (+ xor optional)
-  index.ts          # barrel
+    hasher.ts       # murmur3_x86_128, KM double hashing, Lemire reduce
+    bitset.ts       # typed-array bit storage
+    serialize.ts    # DSTL frame read/write, CRC32, shared errors
+    crc32.ts        # slice-by-8 CRC32
+    base64.ts       # JSON envelope encoding
+    params.ts       # ParamError and argument checks
+    sizing.ts       # bloomSizing, hllSizing
+  bloom/            # classic Bloom
+  blocked/          # split-block (Parquet layout) Bloom
+  fuse/             # Binary Fuse 8 / 16
+  hll/              # HyperLogLog: dense registers, sparse store, estimator, fold
+  scalable/         # scalable Bloom: a chain of Bloom stages sharing one hash
+  frame/            # distillate/frame: readFrameAt for walking a stream of frames
+  index.ts          # root barrel (VERSION only)
 ```
+
+Planned, not yet present: `counting/` (Counting Bloom) and `cuckoo/`.
 
 Subpath exports mirror these directories (see [engineering.md](engineering.md)).
 
