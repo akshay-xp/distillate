@@ -171,12 +171,21 @@ export class ScalableBloomFilter {
    * duplicates never use up a stage's capacity.
    *
    * @param key - The key to insert, as a string or bytes.
+   * @throws RangeError if the next stage would need more than `2^32 - 1`
+   *   bits; the filter is left unchanged and still answers queries.
    */
   add(key: BytesLike): void {
     hash128KeyInto(key, this.#seed, this.#hash);
     if (this.#anyHolds()) return;
     if (this.#newest.count >= this.#newest.capacity) {
-      this.#newest = this.#open(this.#geometry(this.#stages.length));
+      const i = this.#stages.length;
+      const next = this.#geometry(i);
+      if (next.m > MAX_BITS) {
+        throw new RangeError(
+          `stage ${String(i)} needs ${String(next.m)} bits, more than ${String(MAX_BITS)}; the filter cannot grow further`,
+        );
+      }
+      this.#newest = this.#open(next);
     }
     const stage = this.#newest;
     this.#probe(stage);
