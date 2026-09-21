@@ -11,6 +11,8 @@ The filter numbers are carried forward from the distillate@0.7.0 run dated
 2026-08-20. Nothing in those structures has changed since, so rerunning them only
 moves the figures by run-to-run variance. The cardinality section was measured on
 0.9.0, which is the release that first ships the sketch.
+The Scalable Bloom section was measured on 2026-09-21, on the same machine, from
+the unreleased build that adds `distillate/scalable` on top of 0.10.0.
 
 ## Space and accuracy
 
@@ -63,6 +65,39 @@ milliseconds against 19 minutes.
 | bloom-filters  | 1M   | 16384     | 994642   | 0.54%      | 33831 B json   | 109.32 s (9 k ops/s)   |
 | distillate/hll | 10M  | 16384     | 10015492 | 0.15%      | 12314 B binary | 626 ms (15.96 M ops/s) |
 | bloom-filters  | 10M  | 16384     | 9959055  | 0.41%      | 40247 B json   | 1164.62 s (9 k ops/s)  |
+
+## Scalable Bloom
+
+Both filters are built from the same arguments: an initial size of 1,000 keys, a 1% target, growth 2, and `ratio` 0.5.
+That is the incumbent's own default configuration, since `bloom-filters` fixes growth at 2 and defaults `ratio` to 0.5, so distillate is set to match it (`growth: 2, tightening: 0.5`).
+
+The two do not grow on the same trigger. `bloom-filters` passes `ratio` to each stage twice: as the tightening factor and as the stage's load factor, and it opens a new stage when a stage's fill passes that load factor rather than after a count of keys.
+So an equal initial size is the same argument, not identical stage capacities, and the stage counts can differ.
+
+Its first stage targets the full rate and later ones `errorRate * ratio ** i`, so its targets sum to `errorRate / (1 - ratio)`, twice the requested rate at `ratio` 0.5.
+distillate starts at `epsilon * (1 - tightening)`, so its whole chain targets `epsilon`.
+Bits per key is allocated bits over keys added; FPR is measured over 100,000 keys neither filter saw.
+
+| Filter              | keys | stages | bits/key | measured FPR | add          | has           |
+| ------------------- | ---- | ------ | -------- | ------------ | ------------ | ------------- |
+| distillate/scalable | 1k   | 1      | 11.03    | 0.50%        | 847 k ops/s  | 3.25 M ops/s  |
+| bloom-filters       | 1k   | 2      | 40.17    | 0.81%        | 73 k ops/s   | 228 k ops/s   |
+| distillate/scalable | 10k  | 4      | 21.45    | 0.89%        | 2.63 M ops/s | 8.59 M ops/s  |
+| bloom-filters       | 10k  | 4      | 26.36    | 1.43%        | 57 k ops/s   | 110 k ops/s   |
+| distillate/scalable | 100k | 7      | 23.27    | 0.99%        | 5.65 M ops/s | 11.75 M ops/s |
+| bloom-filters       | 100k | 7      | 29.68    | 1.60%        | 4 k ops/s    | 51 k ops/s    |
+
+At a hundred times its initial size distillate measures 0.99%, under the 1% it
+was given. `bloom-filters` measures 1.60%: past its requested rate, and inside the
+2% its own stage targets add up to. distillate also allocates fewer bits per key
+at every size, and at 1k the incumbent has already opened a second stage because
+it grows on fill rather than count.
+
+The incumbent's add rate falls from 73k to under 4k ops/s as it grows. Every
+`add` calls `_currentload()`, which counts every set bit in the newest stage, so
+each insert costs time proportional to that stage's size and the build slows as
+the stages get larger. distillate's add rate rises with `n` instead, from 0.85 to
+5.65 M ops/s, as fixed per-run cost is spread over more keys.
 
 ## Throughput (n = 100k)
 
