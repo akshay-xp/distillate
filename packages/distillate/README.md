@@ -42,12 +42,13 @@ Every push runs a CI smoke matrix that imports the built package on Node 22/24, 
 
 Each structure ships as its own subpath, so you only bundle what you import.
 
-| Import               | Structure     | Answers            | Use for                                                  |
-| -------------------- | ------------- | ------------------ | -------------------------------------------------------- |
-| `distillate/bloom`   | Classic Bloom | seen this key?     | Familiar default, migration from `bloom-filters`         |
-| `distillate/blocked` | Blocked Bloom | seen this key?     | Faster lookups and a lower FPR for a small space premium |
-| `distillate/fuse`    | Binary Fuse   | seen this key?     | Static set built once and queried a lot; least space     |
-| `distillate/hll`     | HyperLogLog   | how many distinct? | Counting distinct users, IPs, or keys in fixed space     |
+| Import                | Structure      | Answers            | Use for                                                  |
+| --------------------- | -------------- | ------------------ | -------------------------------------------------------- |
+| `distillate/bloom`    | Classic Bloom  | seen this key?     | Familiar default, migration from `bloom-filters`         |
+| `distillate/scalable` | Scalable Bloom | seen this key?     | Key count unknown or growing; keeps its FPR bound        |
+| `distillate/blocked`  | Blocked Bloom  | seen this key?     | Faster lookups and a lower FPR for a small space premium |
+| `distillate/fuse`     | Binary Fuse    | seen this key?     | Static set built once and queried a lot; least space     |
+| `distillate/hll`      | HyperLogLog    | how many distinct? | Counting distinct users, IPs, or keys in fixed space     |
 
 The filters are mutable except Binary Fuse, which is built once from the whole
 key set. HyperLogLog is not a filter: it counts distinct keys and cannot report
@@ -68,6 +69,24 @@ const restored = BloomFilter.fromBytes(bytes);
 ```
 
 Also: `union(other)` (merge equal-parameter filters), `bitsPerKey`, and a low-level `new BloomFilter({ m, k, seed })`.
+
+### Scalable Bloom (`distillate/scalable`)
+
+For when you cannot say how many keys are coming. It grows by opening larger, tighter Bloom stages as keys arrive, and keeps its false-positive rate under the target however many open. Full API and trade-offs: [Scalable Bloom guide](https://distillate.akxp.net/guides/scalable/).
+
+```ts
+import { ScalableBloomFilter } from "distillate/scalable";
+
+const seen = ScalableBloomFilter.create(10, 0.01); // first stage, target FPR
+for (let i = 0; i < 30; i++) seen.add(`key-${String(i)}`);
+
+seen.stages; // 2
+seen.has("key-29"); // true
+```
+
+A key already held is not counted again, so duplicates never use up capacity. It costs more bits per key than a Classic Bloom sized for a known `n`; if you know `n`, use that.
+
+Also: `from(keys, epsilon)`, `union`, `equals`, `rate`, `toBytes` / `fromBytes`, `toJSON` / `fromJSON`, and `growth` / `tightening` / `seed` options.
 
 ### Blocked Bloom (`distillate/blocked`)
 

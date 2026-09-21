@@ -46,3 +46,37 @@ test("the README Performance section does not leave the sketch unmentioned", () 
   const section = md.slice(start, md.indexOf("\n## ", start + 1));
   expect(section).toMatch(/cardinality|HyperLogLog/i);
 });
+
+// Driven by the package's own exports, so the next structure cannot ship
+// without a row either.
+test("the README structures table lists every structure subpath", () => {
+  const exports = Object.keys(
+    (
+      JSON.parse(
+        readFileSync(
+          fileURLToPath(
+            new URL(
+              "../../../packages/distillate/package.json",
+              import.meta.url,
+            ),
+          ),
+          "utf8",
+        ),
+      ) as { exports: Record<string, unknown> }
+    ).exports,
+  );
+  const structures = exports
+    .filter((key) => ![".", "./frame", "./package.json"].includes(key))
+    .map((key) => `distillate/${key.slice(2)}`);
+
+  const readme = readFileSync(README, "utf8");
+  const table = readme.slice(
+    readme.indexOf("## Structures"),
+    readme.indexOf("\n### ", readme.indexOf("## Structures")),
+  );
+  const listed = [...table.matchAll(/^\| `(distillate\/[a-z]+)`/gm)].map(
+    (m) => m[1],
+  );
+  for (const subpath of structures) expect(listed).toContain(subpath);
+  expect(readme).toContain("### Scalable Bloom (`distillate/scalable`)");
+});
