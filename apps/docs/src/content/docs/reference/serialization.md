@@ -98,7 +98,7 @@ Offset  Size  Field
 
 Bit `i` of the array is bit `i & 7` of byte `i >>> 3`, counting from the least significant bit: it is set when `bytes[i >>> 3] & (1 << (i & 7))` is nonzero.
 
-Blocked (type 2): `numBlocks (u32) | seed (u32) | n (u32) | 4 bytes padding`, then the lane words (`numBlocks * 32` bytes) at body offset 16: `numBlocks * 8` `u32` little-endian, block `b` being lanes `8b` to `8b + 7`, and bit `j` of a lane being `1 << j`. Fuse (types 3 and 4): `seed (u32) | seg (u32) | segCountLen (u32) | size (u32)`, which fills 16 exactly, then the fingerprint array.
+Blocked (type 2): `numBlocks (u32) | seed (u32) | n (u32) | 4 bytes padding`, then the lane words (`numBlocks * 32` bytes) at body offset 16: `numBlocks * 8` `u32` little-endian, block `b` being lanes `8b` to `8b + 7`, and bit `j` of a lane being `1 << j`. Fuse (types 3 and 4): `seed (u32) | seg (u32) | segCountLen (u32) | size (u32)`, which fills 16 exactly, then the fingerprint array: `segCountLen + 2 * seg` fingerprints, `u8` for Fuse8 and `u16` little-endian for Fuse16. `size` is the number of distinct keys. An empty filter (`size` 0) has **no** fingerprints, whatever the geometry says; it still carries a valid geometry (the build writes `seg` 1, `segCountLen` 1) and answers false for every key without computing positions.
 
 HyperLogLog (type 5), little-endian:
 

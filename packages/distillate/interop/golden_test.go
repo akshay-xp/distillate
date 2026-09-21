@@ -524,7 +524,11 @@ func parseFuse(f frame) (fuse, error) {
 	p := f.body
 	r := fuse{seed: le.Uint32(p), seg: le.Uint32(p[4:]), segCountLen: le.Uint32(p[8:]), size: le.Uint32(p[12:])}
 	payload := p[fuseParams:]
-	if n := int(r.segCountLen + 2*r.seg); len(payload) != n*width {
+	n := int(r.segCountLen + 2*r.seg)
+	if r.size == 0 {
+		n = 0
+	}
+	if len(payload) != n*width {
 		return fuse{}, fmt.Errorf("Fuse payload of %d bytes, want %d fingerprints of %d bytes", len(payload), n, width)
 	}
 	r.fp = make([]uint16, len(payload)/width)
@@ -551,6 +555,9 @@ func fmix64(k uint64) uint64 {
 // has is variant 0's Fuse mapping: three positions and a fingerprint from one
 // 64-bit mix of the key hash and the attempt seed.
 func (f fuse) has(key string) bool {
+	if len(f.fp) == 0 {
+		return false
+	}
 	w := murmur3x86_128([]byte(key), 0)
 	mix := fmix64(uint64(w[1])<<32 | uint64(w[0]) + uint64(f.seed))
 	h0, _ := bits.Mul64(mix, uint64(f.segCountLen))
@@ -562,8 +569,13 @@ func (f fuse) has(key string) bool {
 }
 
 func TestFuse(t *testing.T) {
-	for _, name := range []string{"fuse8", "fuse16"} {
-		e := find(t, name)
+	empty := false
+	for _, e := range golden(t) {
+		if e.Kind != "fuse8" && e.Kind != "fuse16" {
+			continue
+		}
+		name := e.Name
+		empty = empty || len(e.Keys) == 0
 		fr, err := readFrame(frameOf(t, e))
 		if err != nil {
 			t.Fatal(err)
@@ -588,7 +600,7 @@ func TestFuse(t *testing.T) {
 			t.Errorf("%s: only %d of 100 absent keys answer false", name, absent)
 		}
 
-		if name == "fuse16" {
+		if e.Kind == "fuse16" {
 			swapped := f
 			swapped.fp = make([]uint16, len(f.fp))
 			for i, v := range f.fp {
@@ -598,6 +610,9 @@ func TestFuse(t *testing.T) {
 				t.Errorf("%s: byte-swapped fingerprints still answer every key", name)
 			}
 		}
+	}
+	if !empty {
+		t.Error("no empty Fuse fixture")
 	}
 }
 
