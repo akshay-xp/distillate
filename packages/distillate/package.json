@@ -63,6 +63,14 @@
       "import": "./dist/hll/index.js",
       "require": "./dist/hll/index.cjs"
     },
+    "./frame": {
+      "types": {
+        "import": "./dist/frame/index.d.ts",
+        "require": "./dist/frame/index.d.cts"
+      },
+      "import": "./dist/frame/index.js",
+      "require": "./dist/frame/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",

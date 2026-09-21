@@ -19,6 +19,7 @@ const entries = [
   { name: "blocked", dts: "dist/blocked/index.d.ts" },
   { name: "fuse", dts: "dist/fuse/index.d.ts" },
   { name: "hll", dts: "dist/hll/index.d.ts" },
+  { name: "frame", dts: "dist/frame/index.d.ts" },
 ];
 
 let failed = false;
