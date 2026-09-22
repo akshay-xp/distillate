@@ -5,7 +5,26 @@ import {
   assertProbability,
   assertUint32,
 } from "../core/params.js";
+import {
+  type FilterJSON,
+  FORMAT_VERSION,
+  fromJSONEnvelope,
+  HASH_MURMUR128,
+  readHeader,
+  toJSONEnvelope,
+  writeFrame,
+} from "../core/serialize.js";
 import { cuckooSizing } from "../core/sizing.js";
+
+const TYPE = 7;
+
+/**
+ * n, seed, epsilon, f, buckets and count occupy 28 bytes, padded to 32 so the
+ * slot words start 8-aligned at frame offset 48.
+ */
+const PARAMS_SIZE = 32;
+
+const padded8 = (length: number): number => Math.ceil(length / 8) * 8;
 
 /** Slots per bucket. */
 const SLOTS = 4;
@@ -94,6 +113,37 @@ export class CuckooFilter {
     const f = CuckooFilter.create(Math.max(1, arr.length), epsilon, options);
     for (const k of arr) f.add(k);
     return f;
+  }
+
+  /**
+   * Restores a filter from its {@link CuckooFilter.toBytes} serialization.
+   *
+   * @param bytes - The serialized filter.
+   * @returns The reconstructed filter.
+   */
+  static fromBytes(bytes: Uint8Array): CuckooFilter {
+    const { body } = readHeader(bytes);
+    const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
+    const f = new CuckooFilter({
+      n: view.getUint32(0, true),
+      seed: view.getUint32(4, true),
+      epsilon: view.getFloat64(8, true),
+    });
+    for (let w = 0; w < f.#words.length; w++) {
+      f.#words[w] = view.getUint32(PARAMS_SIZE + 4 * w, true);
+    }
+    f.#count = view.getUint32(24, true);
+    return f;
+  }
+
+  /**
+   * Restores a filter from its {@link CuckooFilter.toJSON} envelope.
+   *
+   * @param value - The parsed JSON envelope.
+   * @returns The reconstructed filter.
+   */
+  static fromJSON(value: unknown): CuckooFilter {
+    return CuckooFilter.fromBytes(fromJSONEnvelope(value));
   }
 
   /**
@@ -212,6 +262,41 @@ export class CuckooFilter {
   rate(): number {
     const occupied = (2 * SLOTS * this.#count) / this.capacity;
     return 1 - (1 - 1 / this.#mask) ** occupied;
+  }
+
+  /**
+   * Serializes the filter to a DSTL type 7 frame, readable by
+   * {@link CuckooFilter.fromBytes} and by any reader of the documented format.
+   *
+   * @returns The frame bytes.
+   */
+  toBytes(): Uint8Array {
+    const words = this.#words;
+    return writeFrame(
+      { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
+      PARAMS_SIZE,
+      padded8(4 * words.length),
+      (_, view) => {
+        view.setUint32(0, this.#n, true);
+        view.setUint32(4, this.#seed, true);
+        view.setFloat64(8, this.#epsilon, true);
+        view.setUint32(16, this.#f, true);
+        view.setUint32(20, this.#buckets, true);
+        view.setUint32(24, this.#count, true);
+        words.forEach((word, w) => {
+          view.setUint32(PARAMS_SIZE + 4 * w, word, true);
+        });
+      },
+    );
+  }
+
+  /**
+   * Serializes the filter as a JSON envelope around its {@link CuckooFilter.toBytes} frame.
+   *
+   * @returns The JSON-safe envelope.
+   */
+  toJSON(): FilterJSON {
+    return toJSONEnvelope(this.toBytes());
   }
 
   #hash(key: BytesLike): void {
