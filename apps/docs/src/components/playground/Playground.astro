@@ -6,6 +6,7 @@ const STRUCTURES = [
   { key: "blocked", label: "Blocked Bloom", subpath: "distillate/blocked" },
   { key: "fuse8", label: "Binary Fuse 8", subpath: "distillate/fuse" },
   { key: "scalable", label: "Scalable Bloom", subpath: "distillate/scalable" },
+  { key: "cuckoo", label: "Cuckoo", subpath: "distillate/cuckoo" },
 ] as const;
 
 const bound = MAX_KEYS.toLocaleString("en-US");
@@ -17,6 +18,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     [data-pg],
     [data-pg-add],
     [data-pg-grow],
+    [data-pg-delete],
     [data-pg-query],
     [data-pg-status],
     [data-pg-results],
@@ -84,8 +86,8 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     <label for="pg-add">Add a key after the build</label>
     <input id="pg-add" name="key" type="text" value="late-key" />
     <p class="dstl-hint">
-      The Bloom filters take it. Binary Fuse is static and cannot, which is the
-      trade it makes for its size.
+      The Bloom filters and Cuckoo take it. Binary Fuse is static and cannot,
+      which is the trade it makes for its size.
     </p>
   </div>
   <button class="dstl-btn" type="submit">
@@ -106,11 +108,26 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     <p class="dstl-hint">
       Adds that many more generated keys. Classic and Blocked Bloom were sized
       for the build, so their measured rate climbs past the target. Scalable
-      Bloom opens larger stages instead and stays under it.
+      Bloom opens larger stages instead and stays under it. Cuckoo was sized for
+      the build too; once full it refuses keys rather than drop one it holds.
     </p>
   </div>
   <button class="dstl-btn" type="submit">
     Grow
+  </button>
+</form>
+
+<form class="dstl-form-stack" data-pg-delete novalidate>
+  <div class="dstl-field">
+    <label for="pg-delete">Delete a key</label>
+    <input id="pg-delete" name="key" type="text" value="key-5" />
+    <p class="dstl-hint">
+      Only Cuckoo can delete, and only a key it holds. The other filters keep
+      it, and say why.
+    </p>
+  </div>
+  <button class="dstl-btn" type="submit">
+    Delete
   </button>
 </form>
 
@@ -172,7 +189,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   import { Playground } from "./engine.js";
   import type { PlaygroundReport, StructureKey } from "./engine.js";
 
-  const KEYS = ["bloom", "blocked", "fuse8", "scalable"] as const;
+  const KEYS = ["bloom", "blocked", "fuse8", "scalable", "cuckoo"] as const;
 
   function formatBytes(bytes: number): string {
     const units = ["bytes", "KiB", "MiB", "GiB"];
@@ -191,6 +208,8 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   const queryForm = document.querySelector<HTMLFormElement>("[data-pg-query]");
   const addForm = document.querySelector<HTMLFormElement>("[data-pg-add]");
   const growForm = document.querySelector<HTMLFormElement>("[data-pg-grow]");
+  const deleteForm =
+    document.querySelector<HTMLFormElement>("[data-pg-delete]");
   const status = document.querySelector<HTMLElement>("[data-pg-status]");
 
   // Held between events. `report()` walks every key it holds, so a query must
@@ -250,7 +269,25 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   function grow(): void {
     if (!growForm || !current) return;
     const result = current.grow(new FormData(growForm).get("count"));
-    if (status) status.textContent = result.ok ? "" : result.message;
+    if (!result.ok) {
+      if (status) status.textContent = result.message;
+      return;
+    }
+    if (status) {
+      status.textContent =
+        result.cuckooRefused === 0
+          ? ""
+          : `Cuckoo filled up and refused ${result.cuckooRefused.toLocaleString("en-US")} of the added keys rather than drop any it held. It was sized for the build; delete keys to make room.`;
+    }
+    render(current.report());
+  }
+
+  function remove(): void {
+    if (!deleteForm || !current) return;
+    const key = String(new FormData(deleteForm).get("key") ?? "");
+    const result = current.remove(key);
+    if (status)
+      status.textContent = result.ok ? result.refusal : result.message;
     if (result.ok) render(current.report());
   }
 
@@ -273,5 +310,6 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   onSubmit(queryForm, query);
   onSubmit(addForm, insert);
   onSubmit(growForm, grow);
+  onSubmit(deleteForm, remove);
   build();
 </script>

@@ -14,13 +14,13 @@ function rate(text: string | null): number {
   return Number(/[\d.]+/.exec(text ?? "")?.[0]);
 }
 
-test("the page builds all four structures at the defaults", async ({
+test("the page builds all five structures at the defaults", async ({
   page,
 }) => {
   const errors = watchConsole(page);
   await page.goto("/start/playground/");
 
-  for (const structure of ["bloom", "blocked", "fuse8", "scalable"]) {
+  for (const structure of ["bloom", "blocked", "fuse8", "scalable", "cuckoo"]) {
     const row = page.locator(`[data-row='${structure}']`);
     await expect(row.locator("[data-cell='bits']")).not.toBeEmpty();
     await expect(row.locator("[data-cell='fpr']")).not.toBeEmpty();
@@ -78,7 +78,7 @@ test("an inserted key reads as a member in every structure", async ({
 
   await query(page, "key-5");
 
-  for (const structure of ["bloom", "blocked", "fuse8", "scalable"]) {
+  for (const structure of ["bloom", "blocked", "fuse8", "scalable", "cuckoo"]) {
     await expect(verdict(page, structure)).toHaveText("member");
   }
   expect(errors).toEqual([]);
@@ -100,7 +100,7 @@ test("a miss on a never-inserted key is simply absent", async ({ page }) => {
 
   await query(page, "miss-0");
 
-  for (const structure of ["bloom", "blocked", "fuse8", "scalable"]) {
+  for (const structure of ["bloom", "blocked", "fuse8", "scalable", "cuckoo"]) {
     await expect(verdict(page, structure)).toHaveText("absent");
   }
 });
@@ -151,7 +151,7 @@ test("no structure gains a false negative from a late key", async ({
 
   await add(page, "late-key");
 
-  for (const structure of ["bloom", "blocked", "fuse8", "scalable"]) {
+  for (const structure of ["bloom", "blocked", "fuse8", "scalable", "cuckoo"]) {
     await expect(
       page.locator(`[data-row='${structure}'] [data-cell='missing']`),
     ).toHaveText("0");
@@ -213,6 +213,56 @@ test("growing past the bound is refused in the page", async ({ page }) => {
   await expect(page.locator("[data-pg-status]")).toContainText("100,000");
   await expect(held).toHaveText("10,000");
   expect(errors).toEqual([]);
+});
+
+async function remove(page: Page, key: string): Promise<void> {
+  await page.fill("#pg-delete", key);
+  await page.getByRole("button", { name: "Delete" }).click();
+}
+
+test("deleting a key takes it out of Cuckoo and the others say why they keep it", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  await remove(page, "key-5");
+
+  await expect(page.locator("[data-pg-status]")).toContainText(
+    "cannot take one back",
+  );
+  const cuckoo = page.locator("[data-row='cuckoo']");
+  await expect(cuckoo.locator("[data-cell='held']")).toHaveText("9,999");
+  await expect(cuckoo.locator("[data-cell='missing']")).toHaveText("0");
+
+  await query(page, "key-5");
+  await expect(verdict(page, "cuckoo")).not.toHaveText("member");
+  await expect(verdict(page, "bloom")).toHaveText("member");
+  expect(errors).toEqual([]);
+});
+
+test("deleting a key that was never added is refused in the page", async ({
+  page,
+}) => {
+  await page.goto("/start/playground/");
+
+  await remove(page, "never-added");
+
+  await expect(page.locator("[data-pg-status]")).toContainText(
+    "only delete keys",
+  );
+});
+
+test("growing past Cuckoo's room says how many keys it refused", async ({
+  page,
+}) => {
+  await page.goto("/start/playground/");
+
+  await grow(page, "30000");
+
+  const status = page.locator("[data-pg-status]");
+  await expect(status).toContainText("Cuckoo");
+  await expect(status).toContainText("refused");
 });
 
 test("a key count past the bound is refused in the page", async ({ page }) => {
