@@ -10,6 +10,9 @@ import { cuckooSizing } from "../core/sizing.js";
 /** Slots per bucket. */
 const SLOTS = 4;
 
+/** Displacements an add tries before it reports the filter full. */
+const MAX_KICKS = 500;
+
 // Reused hash output; safe because add and has are synchronous.
 const HASH: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
 
@@ -97,12 +100,35 @@ export class CuckooFilter {
    */
   add(key: BytesLike): void {
     this.#hash(key);
-    if (!this.#put(this.#i1, this.#fp) && !this.#put(this.#i2, this.#fp)) {
-      throw new CuckooFullError(
-        `cuckoo filter is full at ${String(this.#count)} of ${String(this.capacity)} slots`,
-      );
+    if (this.#put(this.#i1, this.#fp) || this.#put(this.#i2, this.#fp)) {
+      this.#count++;
+      return;
     }
-    this.#count++;
+    // Both buckets full: displace a resident to its other bucket, and so on
+    // down the chain. The start bucket and every victim slot come from the
+    // key's own hash, so the same keys in the same order give the same table.
+    let i = (HASH.w2 & 1) === 0 ? this.#i1 : this.#i2;
+    let x = (HASH.w3 | 1) >>> 0;
+    let fp = this.#fp;
+    for (let kick = 0; kick < MAX_KICKS; kick++) {
+      x ^= x << 13;
+      x >>>= 0;
+      x ^= x >>> 17;
+      x ^= x << 5;
+      x >>>= 0;
+      const j = i * SLOTS + (x & 3);
+      const victim = this.#slot(j);
+      this.#setSlot(j, fp);
+      fp = victim;
+      i = this.#alt(i, fp);
+      if (this.#put(i, fp)) {
+        this.#count++;
+        return;
+      }
+    }
+    throw new CuckooFullError(
+      `cuckoo filter is full at ${String(this.#count)} of ${String(this.capacity)} slots`,
+    );
   }
 
   /**
