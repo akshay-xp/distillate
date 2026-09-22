@@ -412,13 +412,6 @@ export class ScalableBloomFilter {
    */
   union(other: ScalableBloomFilter): ScalableBloomFilter {
     this.#assertMergeable(other);
-    const result = new ScalableBloomFilter({
-      n: this.#n,
-      epsilon: this.#epsilon,
-      growth: this.#growth,
-      tightening: this.#tightening,
-      seed: this.#seed,
-    });
     const [longer, shorter] =
       this.#stages.length >= other.#stages.length
         ? [this.#stages, other.#stages]
@@ -442,8 +435,16 @@ export class ScalableBloomFilter {
         count: Math.min(stage.capacity, stage.count + (twin?.count ?? 0)),
       };
     });
-    result.#newest = result.#adopt(stages);
-    return result;
+    return ScalableBloomFilter.#withStages(
+      {
+        n: this.#n,
+        epsilon: this.#epsilon,
+        growth: this.#growth,
+        tightening: this.#tightening,
+        seed: this.#seed,
+      },
+      stages,
+    );
   }
 
   /**
@@ -510,20 +511,33 @@ export class ScalableBloomFilter {
     assertBodyLength(body.length, expected, "scalable");
     const stages = readStages(body, entries, tableEnd);
 
-    restoring = stages;
     try {
-      return new ScalableBloomFilter({
-        n: view.getUint32(0, true),
-        seed: view.getUint32(4, true),
-        epsilon: view.getFloat64(8, true),
-        growth: view.getFloat64(16, true),
-        tightening: view.getFloat64(24, true),
-      });
+      return ScalableBloomFilter.#withStages(
+        {
+          n: view.getUint32(0, true),
+          seed: view.getUint32(4, true),
+          epsilon: view.getFloat64(8, true),
+          growth: view.getFloat64(16, true),
+          tightening: view.getFloat64(24, true),
+        },
+        stages,
+      );
     } catch (err) {
       if (err instanceof ParamError) {
         throw new SerializationError(`scalable: ${err.message}`);
       }
       throw err;
+    }
+  }
+
+  // Constructs a filter that adopts `stages` in place of a fresh stage 0.
+  static #withStages(
+    params: ScalableBloomParams,
+    stages: Stage[],
+  ): ScalableBloomFilter {
+    restoring = stages;
+    try {
+      return new ScalableBloomFilter(params);
     } finally {
       restoring = undefined;
     }
