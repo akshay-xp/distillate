@@ -77,6 +77,26 @@ export class CuckooFilter {
   }
 
   /**
+   * Builds a filter from `keys`, sized for their count at the target
+   * false-positive rate.
+   *
+   * @param keys - The keys to insert.
+   * @param epsilon - Target false-positive rate, e.g. `0.01` for 1%.
+   * @param options - Optional seed.
+   * @returns A new filter containing every key.
+   */
+  static from(
+    keys: Iterable<BytesLike>,
+    epsilon: number,
+    options: CuckooOptions = {},
+  ): CuckooFilter {
+    const arr = [...keys];
+    const f = CuckooFilter.create(Math.max(1, arr.length), epsilon, options);
+    for (const k of arr) f.add(k);
+    return f;
+  }
+
+  /**
    * Constructs a filter from {@link CuckooParams}.
    *
    * @throws {@link ParamError} if a setting is invalid.

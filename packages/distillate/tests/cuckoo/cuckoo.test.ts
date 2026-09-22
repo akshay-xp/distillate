@@ -2,6 +2,7 @@ import fc from "fast-check";
 import { expect, test } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
+import { cuckooSizing } from "../../src/core/sizing.js";
 import {
   CuckooFilter,
   CuckooFullError,
@@ -115,6 +116,23 @@ test("an add into a full filter throws and changes nothing", () => {
   expect(f.count).toBe(added);
   expect(keys.slice(0, added).every((k) => f.has(k))).toBe(true);
   expect(probes.map((p) => f.has(p))).toEqual(snapshot);
+});
+
+test("from sizes for the keys in hand and holds them all", () => {
+  const keys = sampleStrings(27, 5000);
+  const f = CuckooFilter.from(keys, 0.01, { seed: 3 });
+
+  expect(f.count).toBe(5000);
+  expect(f.buckets).toBe(cuckooSizing(5000, 0.01).buckets);
+  expect(f.seed).toBe(3);
+  expect(keys.every((k) => f.has(k))).toBe(true);
+});
+
+test("from with no keys sizes for one", () => {
+  const f = CuckooFilter.from([], 0.01);
+
+  expect(f.count).toBe(0);
+  expect(f.buckets).toBe(2);
 });
 
 test.each<[string, Partial<CuckooParams>]>([
