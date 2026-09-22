@@ -126,6 +126,7 @@ export default defineConfig({
             { label: "Scalable Bloom", link: "/guides/scalable/" },
             { label: "Blocked Bloom", link: "/guides/blocked/" },
             { label: "Binary Fuse", link: "/guides/fuse/" },
+            { label: "Cuckoo", link: "/guides/cuckoo/" },
             { label: "HyperLogLog", link: "/guides/hll/" },
             { label: "Sizing and tuning FPR", link: "/guides/sizing/" },
             {
