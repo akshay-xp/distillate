@@ -84,17 +84,20 @@ src/
     crc32.ts        # slice-by-8 CRC32
     base64.ts       # JSON envelope encoding
     params.ts       # ParamError and argument checks
-    sizing.ts       # bloomSizing, hllSizing
+    sizing.ts       # bloomSizing, hllSizing (shared by several subpaths)
   bloom/            # classic Bloom
   blocked/          # split-block (Parquet layout) Bloom
   fuse/             # Binary Fuse 8 / 16
   hll/              # HyperLogLog: dense registers, sparse store, estimator, fold
   scalable/         # scalable Bloom: a chain of Bloom stages sharing one hash
+  cuckoo/           # cuckoo filter with delete: cuckoo.ts, and sizing.ts for
+                    # cuckooSizing, kept here rather than in core/sizing.ts because
+                    # that module is one chunk every sizing subpath downloads
   frame/            # distillate/frame: readFrameAt for walking a stream of frames
   index.ts          # root barrel (VERSION only)
 ```
 
-Planned, not yet present: `counting/` (Counting Bloom) and `cuckoo/`.
+Planned, not yet present: `counting/` (Counting Bloom).
 
 Subpath exports mirror these directories (see [engineering.md](engineering.md)).
 

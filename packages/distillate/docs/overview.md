@@ -8,7 +8,7 @@ Probabilistic structures trade a bounded, tunable error for a fraction of the sp
 
 Two questions so far, each with its own family:
 
-- **Have I seen this key?** Approximate-membership filters: a tunable false-positive rate and zero false negatives. Bloom, Blocked Bloom, Binary Fuse.
+- **Have I seen this key?** Approximate-membership filters: a tunable false-positive rate and zero false negatives. Bloom, Blocked Bloom, Scalable Bloom, Binary Fuse, Cuckoo.
 - **How many distinct keys have I seen?** Cardinality sketches: a count in space fixed by precision rather than by the answer. HyperLogLog, in 12 KiB at about 0.8% relative error whether the true count is a thousand or a billion.
 
 Frequency, quantiles, and similarity are the same shape of question and are not shipped yet. See [architecture.md](architecture.md) for why a sketch cannot satisfy the filter interface.
