@@ -17,6 +17,8 @@ import {
   scalableRows,
 } from "./scalable.js";
 import type { ScalableRow } from "./scalable.js";
+import { CUCKOO_KEY_COUNTS, cuckooRows } from "./cuckoo.js";
+import type { CuckooRow } from "./cuckoo.js";
 import type { ComparisonRow } from "./compare.js";
 import { TARGET_FPR } from "./adapters.js";
 import { envBanner } from "./harness.js";
@@ -78,6 +80,21 @@ export function scalableTable(rows: ScalableRow[]): string {
   return [header, ...body].join("\n");
 }
 
+function lost(count: number, of: number): string {
+  return `${String(count)} (${((count / of) * 100).toFixed(2)}%)`;
+}
+
+export function cuckooTable(rows: CuckooRow[]): string {
+  const header =
+    "| Filter | keys | bits/key | measured FPR | lost after build | lost after delete | refused | add | has | delete |\n" +
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |";
+  const body = rows.map((r) => {
+    const kept = r.keys - Math.floor(r.keys / 2);
+    return `| ${r.name} | ${capacityLabel(r.keys)} | ${r.bitsPerKey.toFixed(2)} | ${(r.measuredFpr * 100).toFixed(2)}% | ${lost(r.lostAfterBuild, r.keys)} | ${lost(r.lostAfterDelete, kept)} | ${String(r.refused)} | ${ops(r.addOpsPerSec)} | ${ops(r.hasOpsPerSec)} | ${ops(r.deleteOpsPerSec)} |`;
+  });
+  return [header, ...body].join("\n");
+}
+
 export interface ResultsOptions {
   banner: string;
   version: string;
@@ -88,6 +105,7 @@ export interface ResultsOptions {
   throughputTable: string;
   cardinalityTable?: string;
   scalableTable?: string;
+  cuckooTable?: string;
 }
 
 function cardinalitySection(table: string): string[] {
@@ -129,6 +147,22 @@ export function scalableSection(table: string): string[] {
   ];
 }
 
+export function cuckooSection(table: string): string[] {
+  return [
+    "## Cuckoo",
+    "",
+    "Both filters are built by `create(n, 0.01)`, which gives both buckets of 4 and a limit of 500 kicks per add.",
+    "The fingerprint does not match: `bloom-filters` stores `ceil(f / 8)` hex characters of a 32-bit hash, 2 characters and so 8 bits at 1%, where distillate stores the 10 bits the target calls for.",
+    "Bits per key is nominal slot bits over keys; the incumbent keeps each fingerprint as a JS string, so its heap is far larger than its row shows.",
+    "",
+    "Each row runs a delete-half workload: add `n` keys, count the ones `has` then denies, measure FPR over 100,000 keys neither filter saw, delete the first half, and count kept keys that `has` denies.",
+    "A key that was added and not deleted but reads absent is a false negative, the one answer a filter must never give. Refused counts adds that reported the filter full.",
+    "",
+    table,
+    "",
+  ];
+}
+
 export function renderResults(opts: ResultsOptions): string {
   return [
     "# distillate-bench results",
@@ -146,6 +180,7 @@ export function renderResults(opts: ResultsOptions): string {
     "",
     ...(opts.cardinalityTable ? cardinalitySection(opts.cardinalityTable) : []),
     ...(opts.scalableTable ? scalableSection(opts.scalableTable) : []),
+    ...(opts.cuckooTable ? cuckooSection(opts.cuckooTable) : []),
     `## Throughput (n = ${capacityLabel(opts.throughputCapacity)})`,
     "",
     "Absolute throughput is machine-relative: it depends on the CPU, the runtime, and the load on the box at measurement time.",
@@ -198,12 +233,14 @@ async function main(): Promise<void> {
   const scalTable = scalableTable(
     scalableRows(SCALABLE_INITIAL, SCALABLE_KEY_COUNTS),
   );
+  const cuckTable = cuckooTable(cuckooRows(CUCKOO_KEY_COUNTS));
   const tput = throughputTable(await collectThroughput(THROUGHPUT_CAPACITY));
 
   console.log(banner);
   console.log("\n" + spaceTable);
   console.log("\n" + cardTable);
   console.log("\n" + scalTable);
+  console.log("\n" + cuckTable);
   console.log("\n" + tput);
 
   const md = renderResults({
@@ -215,6 +252,7 @@ async function main(): Promise<void> {
     spaceTable,
     cardinalityTable: cardTable,
     scalableTable: scalTable,
+    cuckooTable: cuckTable,
     throughputTable: tput,
   });
   writeFileSync(new URL("../RESULTS.md", import.meta.url), md);
