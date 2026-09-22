@@ -302,9 +302,14 @@ export class ScalableBloomFilter {
 
   // Replaces the whole chain and returns its newest stage, the last.
   #adopt(stages: Stage[]): Stage {
+    // Loops, not spreads: a frame sets the stage count, and a spread of a few
+    // hundred thousand overflows the call stack.
     this.#stages.length = 0;
-    this.#stages.push(...stages);
-    const k = Math.max(...stages.map((s) => s.k));
+    let k = 0;
+    for (const s of stages) {
+      this.#stages.push(s);
+      if (s.k > k) k = s.k;
+    }
     if (k > this.#probes.length) this.#probes = new Uint32Array(k);
     return stages.reduce((_, s) => s);
   }
