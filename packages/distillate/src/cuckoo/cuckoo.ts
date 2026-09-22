@@ -21,7 +21,7 @@ import {
   UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
-import { cuckooSizing } from "../core/sizing.js";
+import { cuckooSizing } from "./sizing.js";
 
 const TYPE = 7;
 
