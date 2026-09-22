@@ -10,6 +10,7 @@ import {
   writeHeader,
 } from "../../src/core/serialize.js";
 import { HLL_MAX_P, HLL_MIN_P } from "../../src/core/sizing.js";
+import { CuckooFilter } from "../../src/cuckoo/cuckoo.js";
 import { BinaryFuse8, BinaryFuse16 } from "../../src/fuse/index.js";
 import { HyperLogLog } from "../../src/hll/hll.js";
 import { ScalableBloomFilter } from "../../src/scalable/scalable.js";
@@ -42,6 +43,7 @@ const entries: [string, Structure][] = [
   ["fuse8", structure((b) => BinaryFuse8.fromBytes(b), answersHas)],
   ["fuse16", structure((b) => BinaryFuse16.fromBytes(b), answersHas)],
   ["scalable", structure((b) => ScalableBloomFilter.fromBytes(b), answersHas)],
+  ["cuckoo", structure((b) => CuckooFilter.fromBytes(b), answersHas)],
   ["hll", hll],
 ];
 

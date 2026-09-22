@@ -6,6 +6,7 @@ import {
   bytesEqual,
   FORMAT_VERSION,
   readHeader,
+  SerializationError,
 } from "../../src/core/serialize.js";
 import { CuckooFilter } from "../../src/cuckoo/cuckoo.js";
 import { sampleStrings } from "../helpers/fpr.js";
@@ -144,6 +145,15 @@ test("equals is exactly byte equality of the frame (property)", () => {
     { numRuns: 300 },
   );
   expect([...seen].sort()).toEqual([false, true]);
+});
+
+test("every truncated prefix of a frame is rejected with a typed error", () => {
+  const frame = halfDeleted().toBytes();
+  for (let length = 0; length < frame.length; length++) {
+    expect(() => CuckooFilter.fromBytes(frame.subarray(0, length))).toThrow(
+      SerializationError,
+    );
+  }
 });
 
 test("the JSON envelope round-trips", () => {

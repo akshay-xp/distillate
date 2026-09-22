@@ -4,14 +4,18 @@ import {
   assertPositiveInt,
   assertProbability,
   assertUint32,
+  ParamError,
 } from "../core/params.js";
 import {
+  assertBodyLength,
+  assertMinBodyLength,
   bytesEqual,
   type FilterJSON,
   FORMAT_VERSION,
   fromJSONEnvelope,
   HASH_MURMUR128,
   readHeader,
+  SerializationError,
   toJSONEnvelope,
   writeFrame,
 } from "../core/serialize.js";
@@ -127,17 +131,39 @@ export class CuckooFilter {
    */
   static fromBytes(bytes: Uint8Array): CuckooFilter {
     const { body } = readHeader(bytes);
+    assertMinBodyLength(body.length, PARAMS_SIZE, "cuckoo");
     const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
-    const f = new CuckooFilter({
+    const params = {
       n: view.getUint32(0, true),
       seed: view.getUint32(4, true),
       epsilon: view.getFloat64(8, true),
-    });
-    for (let w = 0; w < f.#words.length; w++) {
-      f.#words[w] = view.getUint32(PARAMS_SIZE + 4 * w, true);
+    };
+    let filter: CuckooFilter;
+    try {
+      // Geometry and length are checked before the constructor allocates, so
+      // a forged n cannot request memory the body does not hold.
+      const sizing = cuckooSizing(params.n, params.epsilon);
+      const f = view.getUint32(16, true);
+      const buckets = view.getUint32(20, true);
+      if (f !== sizing.f || buckets !== sizing.buckets) {
+        throw new SerializationError(
+          `cuckoo: stored geometry f=${String(f)}, buckets=${String(buckets)} does not match n and epsilon (f=${String(sizing.f)}, buckets=${String(sizing.buckets)})`,
+        );
+      }
+      const words = Math.ceil((f * SLOTS * buckets) / 32);
+      assertBodyLength(body.length, PARAMS_SIZE + padded8(4 * words), "cuckoo");
+      filter = new CuckooFilter(params);
+    } catch (err) {
+      if (err instanceof ParamError) {
+        throw new SerializationError(`cuckoo: ${err.message}`);
+      }
+      throw err;
     }
-    f.#count = view.getUint32(24, true);
-    return f;
+    for (let w = 0; w < filter.#words.length; w++) {
+      filter.#words[w] = view.getUint32(PARAMS_SIZE + 4 * w, true);
+    }
+    filter.#count = view.getUint32(24, true);
+    return filter;
   }
 
   /**
