@@ -11,8 +11,8 @@ Versioned, self-describing, little-endian binary format. Spec'd here so Rust/Go 
 Offset  Size  Field
 0       4     Magic "DSTL" (0x44 53 54 4C)
 4       1     Format version (u8)         # bump on incompatible layout change
-5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog 6=ScalableBloom
-                                          # (7+ reserved: CountingBloom, Cuckoo, ...)
+5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog 6=ScalableBloom 7=Cuckoo
+                                          # (8+ reserved: CountingBloom, ...)
 6       1     Flags (u8)                  # bit0-3 hash variant, bit4-7 reserved (must be 0)
 7       1     Reserved (u8)               # must be 0
 8       4     Body length (u32)           # bytes of body, excluding header and CRC
@@ -146,11 +146,44 @@ A key is present if any stage holds it, that is, if all `k` of that stage's prob
 
 Stage geometry is stored rather than re-derived, so a reader needs no floating-point sizing and takes each stage's `m`, `k` and `capacity` from the table. For writers, informatively: stage `i` has capacity `ceil(n * growth ** i)` and false-positive target `epsilon * (1 - tightening) * tightening ** i`, sized as Bloom is, `m = ceil(-capacity * ln(target) / ln(2) ** 2)` and `k = max(1, round(m / capacity * ln 2))`. The targets form a geometric series summing to at most `epsilon`, which is the chain's bound. A writer refuses to open a stage whose `m` would exceed `2^32 - 1`.
 
+Cuckoo (type 7), little-endian. Fingerprints in buckets of four slots, each key in one of two candidate buckets, with delete:
+
+```
+Offset  Size  Field
+0       4     n: expected key count (u32)
+4       4     seed (u32)
+8       8     epsilon: false-positive target at n keys (f64)
+16      4     f: fingerprint width in bits, 4..32 (u32)
+20      4     buckets: number of 4-slot buckets (u32)
+24      4     count: fingerprints stored (u32)
+28      4     padding (0)
+32      ...   slot words: ceil(4 * f * buckets / 32) u32 little-endian, then zero
+              padding up to a multiple of 8
+```
+
+The params end at 32, so the slot words start at frame offset 48, a multiple of 8. The table has `4 * buckets` slots of `f` bits each, `m = 4 * f * buckets` bits in all. Slot `j = bucket * 4 + s` (slot `s` of its bucket) occupies stream bits `j * f` to `j * f + f - 1`, low bit first, and stream bit `x` is bit `x & 31` of word `x >>> 5`, so a slot can straddle two words. A slot value of 0 means empty. The body is exactly `32` plus the padded word length; a reader rejects any other length, nonzero padding (in the params, in the bits of the last word past `m`, and in the trailing bytes), and a `count` that differs from the number of nonzero slots.
+
+A key's fingerprint and buckets come from its hash words (see [hash variant](#hash-variant-flags-nibble)):
+
+- `fp = w1 >>> (32 - f)`, and 1 if that is 0, so a stored fingerprint is never the empty marker.
+- `i1 = reduce(w0, buckets)`, Lemire multiply-shift as for Bloom.
+- `i2 = alt(i1, fp)`, where `alt(i, fp) = ((mix(fp) mod buckets) + buckets - i) mod buckets` and `mix(fp) = fp * 0x5bd1e995 mod 2^32`. Applying `alt` twice returns `i`, so a stored fingerprint can move between its two buckets without its key.
+
+A key is present if either bucket holds a slot equal to `fp`. A writer adds a key as follows, and a reader that rebuilds a frame from its keys must follow the same steps:
+
+1. Put `fp` in the first empty slot (slot 0 to 3) of `i1`, else of `i2`.
+2. Otherwise both buckets are full, so evict. Start at `i1` if `w2 & 1` is 0, else at `i2`. Seed a xorshift32 state `x = w3 | 1`. Each kick advances `x ^= x << 13; x ^= x >>> 17; x ^= x << 5` (all mod `2^32`), swaps the carried fingerprint with slot `x & 3` of the current bucket, moves to `alt(bucket, victim)` for the fingerprint it now carries, and stops if that bucket has an empty slot, which takes it.
+3. After 500 kicks without finding room, the writer undoes every swap in reverse and refuses the key. A frame never records a failed add.
+
+Every add stores a fingerprint, including for a key already present, and `count` goes up by one. Delete removes one copy: the first slot equal to `fp` among slots 0 to 3 of `i1`, then of `i2` (skipped when `i2` equals `i1`), is set to 0, and `count` goes down by one. A delete for a key that was never added can clear another key's matching fingerprint; the format cannot tell the two apart.
+
+Geometry is stored rather than re-derived, so a reader needs no floating-point sizing and takes `f` and `buckets` from the params. For writers, informatively: `f = max(4, ceil(log2(8 / epsilon)))`, refused above 32, and `buckets = ceil(n / 3.8) + ceil(sqrt(n))`, 95% load plus slack that lets small tables take `n` keys. A writer refuses a table whose `m` would exceed `2^32 - 1`.
+
 ### Hash variant (flags nibble)
 
 Bits 0-3 of the flags byte name the complete scheme that turns a key into stored bits: the hash **and the index mapping** from its output to positions, not the hash alone. A change to any component takes a new variant, even when the hash itself is unchanged, because a reader that recognises the old variant would otherwise read every stored frame at the wrong positions with no error. Version 5 uses one scheme for every structure:
 
-- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog, Scalable) with the index mapping below
+- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog, Scalable, Cuckoo) with the index mapping below
 
 Variant `0` covers:
 
@@ -160,10 +193,11 @@ Variant `0` covers:
 - **Fuse:** the 64-bit key hash `w1:w0` (`w1` high), plus the params `seed` (the attempt seed the build settled on) mod `2^64`, finalised by MurmurHash3's `fmix64` into `mix`; `h0 = (mix * segCountLen) >>> 64`, `h1 = (h0 + seg) ^ ((mix >>> 18) & segMask)`, `h2 = (h0 + 2*seg) ^ (mix_lo & segMask)`, where `segMask = seg - 1`; fingerprint `(mix_lo ^ mix_hi) & mask`, with `mask` `0xff` for Fuse8 and `0xffff` for Fuse16. A key is present when `fp[h0] ^ fp[h1] ^ fp[h2]` equals its fingerprint. Fuse16 fingerprints are `u16` little-endian.
 - **HyperLogLog:** register `=` the top `p` bits of `w0`; rho `=` leading zeros + 1 over the remaining `64 - p` bits of `w0:w1`; a sparse entry's index is the top 25 bits of `w0`.
 - **Scalable:** a key is hashed once with the frame's seed, and every stage applies the Bloom mapping above to that one hash with its own `m` and `k`.
+- **Cuckoo:** fingerprint `fp = (w1 >>> (32 - f))`, or 1 when that is 0; bucket `i1 = reduce(w0, buckets)`; the other bucket `(fp * 0x5bd1e995 mod 2^32 mod buckets + buckets - i1) mod buckets`; an eviction walk starts from bit 0 of `w2` and draws its victim slots from a xorshift32 seeded with `w3 | 1`. The full rules are in the type 7 section above.
 
 This is the case Guava hit: `MURMUR128_MITZ_32` and `MURMUR128_MITZ_64` use the same hash and differ only in how its 128 bits map to indices, yet the change still needed a new `Strategy` ordinal because the stored bits differ. Guava's ordinal covers the whole strategy, and this nibble does too.
 
-All five structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header and version 5 only the params padding; neither touched the hash.
+All six structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header and version 5 only the params padding; neither touched the hash.
 
 That version 3 bump (rather than a flags-only change) was deliberate: the version-2 Fuse reader had no variant check and would silently misread a version-3 frame, so bumping the version made it reject on the version byte instead.
 
