@@ -13,6 +13,11 @@ const SLOTS = 4;
 /** Displacements an add tries before it reports the filter full. */
 const MAX_KICKS = 500;
 
+// Each displacement's slot and the fingerprint it held, so a chain that runs
+// out of kicks can be undone. Slot indexes can pass 2^32, hence Float64.
+const UNDO_SLOT = new Float64Array(MAX_KICKS);
+const UNDO_FP = new Uint32Array(MAX_KICKS);
+
 // Reused hash output; safe because add and has are synchronous.
 const HASH: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
 
@@ -82,6 +87,8 @@ export class CuckooFilter {
     assertProbability(epsilon, "epsilon");
     assertUint32(seed, "seed");
     const { f, buckets } = cuckooSizing(n, epsilon);
+    // Slots are addressed by 32-bit bit offsets (`bit >>> 5`).
+    assertUint32(f * SLOTS * buckets, "m");
     this.#n = n;
     this.#epsilon = epsilon;
     this.#seed = seed;
@@ -118,6 +125,8 @@ export class CuckooFilter {
       x >>>= 0;
       const j = i * SLOTS + (x & 3);
       const victim = this.#slot(j);
+      UNDO_SLOT[kick] = j;
+      UNDO_FP[kick] = victim;
       this.#setSlot(j, fp);
       fp = victim;
       i = this.#alt(i, fp);
@@ -125,6 +134,11 @@ export class CuckooFilter {
         this.#count++;
         return;
       }
+    }
+    // Out of kicks, still carrying a resident. Dropping it would be a false
+    // negative, so replay the chain backwards and refuse the new key instead.
+    for (let kick = MAX_KICKS - 1; kick >= 0; kick--) {
+      this.#setSlot(UNDO_SLOT[kick] ?? 0, UNDO_FP[kick] ?? 0);
     }
     throw new CuckooFullError(
       `cuckoo filter is full at ${String(this.#count)} of ${String(this.capacity)} slots`,
