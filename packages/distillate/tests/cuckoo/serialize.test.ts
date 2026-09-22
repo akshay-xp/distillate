@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { expect, test } from "vitest";
 
 import { hash128Key, reduce } from "../../src/core/hasher.js";
@@ -106,6 +107,43 @@ test("the same keys in the same order give the same bytes", () => {
       filled(500, 0.01, keys, 3).toBytes(),
     ),
   ).toBe(true);
+});
+
+test("equals is exactly byte equality of the frame (property)", () => {
+  // Small alphabet so independent builds sometimes match; the other kinds
+  // each differ from the base in one way (a key, the seed, a delete) or not
+  // at all (a restored copy).
+  const keys = fc.array(fc.constantFrom("a", "b", "c", "d"), { maxLength: 40 });
+  const seen = new Set<boolean>();
+  fc.assert(
+    fc.property(
+      keys,
+      keys,
+      fc.constantFrom(
+        "independent",
+        "extra key",
+        "seed",
+        "deleted",
+        "restored",
+      ),
+      (ka, kb, pair) => {
+        const a = filled(50, 0.01, ka);
+        let b: CuckooFilter;
+        if (pair === "restored") b = CuckooFilter.fromBytes(a.toBytes());
+        else if (pair === "seed") b = filled(50, 0.01, ka, 1);
+        else if (pair === "extra key") b = filled(50, 0.01, [...ka, "e"]);
+        else if (pair === "deleted") {
+          b = filled(50, 0.01, ka);
+          b.delete(ka[0] ?? "a");
+        } else b = filled(50, 0.01, kb);
+        const same = bytesEqual(a.toBytes(), b.toBytes());
+        seen.add(same);
+        expect(a.equals(b)).toBe(same);
+      },
+    ),
+    { numRuns: 300 },
+  );
+  expect([...seen].sort()).toEqual([false, true]);
 });
 
 test("the JSON envelope round-trips", () => {

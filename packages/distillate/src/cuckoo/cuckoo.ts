@@ -6,6 +6,7 @@ import {
   assertUint32,
 } from "../core/params.js";
 import {
+  bytesEqual,
   type FilterJSON,
   FORMAT_VERSION,
   fromJSONEnvelope,
@@ -25,6 +26,9 @@ const TYPE = 7;
 const PARAMS_SIZE = 32;
 
 const padded8 = (length: number): number => Math.ceil(length / 8) * 8;
+
+const wordBytes = (words: Uint32Array): Uint8Array =>
+  new Uint8Array(words.buffer, words.byteOffset, words.byteLength);
 
 /** Slots per bucket. */
 const SLOTS = 4;
@@ -287,6 +291,24 @@ export class CuckooFilter {
           view.setUint32(PARAMS_SIZE + 4 * w, word, true);
         });
       },
+    );
+  }
+
+  /**
+   * Whether `other` holds the same settings and slots, so the two serialize to
+   * identical bytes. Which slot a key lands in depends on insertion order, so
+   * filters holding the same keys can still differ.
+   *
+   * @param other - The filter to compare against.
+   * @returns `true` if the two are indistinguishable.
+   */
+  equals(other: CuckooFilter): boolean {
+    return (
+      this.#n === other.#n &&
+      this.#epsilon === other.#epsilon &&
+      this.#seed === other.#seed &&
+      this.#count === other.#count &&
+      bytesEqual(wordBytes(this.#words), wordBytes(other.#words))
     );
   }
 
