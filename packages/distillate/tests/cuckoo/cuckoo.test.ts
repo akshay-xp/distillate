@@ -2,7 +2,7 @@ import fc from "fast-check";
 import { expect, test } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
-import { cuckooSizing } from "../../src/core/sizing.js";
+import { cuckooSizing } from "../../src/cuckoo/sizing.js";
 import {
   CuckooFilter,
   CuckooFullError,
