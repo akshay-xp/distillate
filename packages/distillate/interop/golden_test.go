@@ -23,6 +23,7 @@ type entry struct {
 	Keys    []string
 	Epsilon float64
 	P       int
+	Deletes []string
 	Frame   string
 }
 
@@ -904,5 +905,236 @@ func TestScalable(t *testing.T) {
 	}
 	if !wide {
 		t.Error("no scalable fixture spans three stages")
+	}
+}
+
+type cuckoo struct {
+	n, seed    uint32
+	epsilon    float64
+	f, buckets uint32
+	count      uint32
+	words      []uint32
+}
+
+const cuckooParams = 32
+
+func (c cuckoo) m() uint32 { return 4 * c.f * c.buckets }
+
+// parseCuckoo reads type 7 as the reference lays it out and applies its
+// checks: params padding, exact length, zero bits past m and zero pad bytes,
+// and a count equal to the occupied slots.
+func parseCuckoo(f frame) (cuckoo, error) {
+	if f.typ != 7 || len(f.body) < cuckooParams {
+		return cuckoo{}, fmt.Errorf("not a Cuckoo frame")
+	}
+	p := f.body
+	if le.Uint32(p[28:]) != 0 {
+		return cuckoo{}, fmt.Errorf("params padding is not zero")
+	}
+	c := cuckoo{
+		n:       le.Uint32(p),
+		seed:    le.Uint32(p[4:]),
+		epsilon: math.Float64frombits(le.Uint64(p[8:])),
+		f:       le.Uint32(p[16:]),
+		buckets: le.Uint32(p[20:]),
+		count:   le.Uint32(p[24:]),
+	}
+	if c.f < 4 || c.f > 32 || c.buckets == 0 {
+		return cuckoo{}, fmt.Errorf("f %d or buckets %d out of range", c.f, c.buckets)
+	}
+	words := int((c.m() + 31) / 32)
+	if len(p) != cuckooParams+padded8(4*words) {
+		return cuckoo{}, fmt.Errorf("body is %d bytes, the geometry implies %d", len(p), cuckooParams+padded8(4*words))
+	}
+	c.words = make([]uint32, words)
+	for w := range c.words {
+		c.words[w] = le.Uint32(p[cuckooParams+4*w:])
+	}
+	if tail := c.m() % 32; tail != 0 && c.words[words-1]>>tail != 0 {
+		return cuckoo{}, fmt.Errorf("bits set past the last slot")
+	}
+	for _, b := range p[cuckooParams+4*words:] {
+		if b != 0 {
+			return cuckoo{}, fmt.Errorf("slot padding is not zero")
+		}
+	}
+	occupied := uint32(0)
+	for j := uint32(0); j < 4*c.buckets; j++ {
+		if c.slot(j) != 0 {
+			occupied++
+		}
+	}
+	if occupied != c.count {
+		return cuckoo{}, fmt.Errorf("count %d, %d slots occupied", c.count, occupied)
+	}
+	return c, nil
+}
+
+// slot j is f bits from stream bit j*f, low bit first; stream bit x is bit
+// x&31 of word x>>5.
+func (c cuckoo) slot(j uint32) uint32 {
+	v := uint32(0)
+	for b := uint32(0); b < c.f; b++ {
+		x := j*c.f + b
+		v |= (c.words[x>>5] >> (x & 31) & 1) << b
+	}
+	return v
+}
+
+func (c cuckoo) setSlot(j, v uint32) {
+	for b := uint32(0); b < c.f; b++ {
+		x := j*c.f + b
+		c.words[x>>5] = c.words[x>>5]&^(1<<(x&31)) | (v>>b&1)<<(x&31)
+	}
+}
+
+func (c cuckoo) alt(i, fp uint32) uint32 {
+	return (fp*0x5bd1e995%c.buckets + c.buckets - i) % c.buckets
+}
+
+// hash gives a key's fingerprint, both buckets, and the words that seed the
+// eviction walk.
+func (c cuckoo) hash(key string) (fp, i1, i2 uint32, w [4]uint32) {
+	w = murmur3x86_128([]byte(key), c.seed)
+	fp = w[1] >> (32 - c.f)
+	if fp == 0 {
+		fp = 1
+	}
+	i1 = reduce(w[0], c.buckets)
+	return fp, i1, c.alt(i1, fp), w
+}
+
+// find is the first slot of bucket i holding v, or -1.
+func (c cuckoo) find(i, v uint32) int64 {
+	for s := uint32(0); s < 4; s++ {
+		if c.slot(4*i+s) == v {
+			return int64(4*i + s)
+		}
+	}
+	return -1
+}
+
+func (c cuckoo) has(key string) bool {
+	fp, i1, i2, _ := c.hash(key)
+	return c.find(i1, fp) >= 0 || c.find(i2, fp) >= 0
+}
+
+func (c *cuckoo) put(i, fp uint32) bool {
+	j := c.find(i, 0)
+	if j < 0 {
+		return false
+	}
+	c.setSlot(uint32(j), fp)
+	return true
+}
+
+// add follows the reference: first empty slot of i1 then i2, else the
+// eviction walk of at most 500 kicks.
+func (c *cuckoo) add(key string) error {
+	fp, i1, i2, w := c.hash(key)
+	if c.put(i1, fp) || c.put(i2, fp) {
+		c.count++
+		return nil
+	}
+	i := i1
+	if w[2]&1 != 0 {
+		i = i2
+	}
+	x := w[3] | 1
+	for kick := 0; kick < 500; kick++ {
+		x ^= x << 13
+		x ^= x >> 17
+		x ^= x << 5
+		j := 4*i + x&3
+		victim := c.slot(j)
+		c.setSlot(j, fp)
+		fp = victim
+		i = c.alt(i, fp)
+		if c.put(i, fp) {
+			c.count++
+			return nil
+		}
+	}
+	return fmt.Errorf("add of %q ran out of kicks", key)
+}
+
+// remove clears the first slot equal to the key's fingerprint in i1, then
+// i2 unless it is the same bucket.
+func (c *cuckoo) remove(key string) {
+	fp, i1, i2, _ := c.hash(key)
+	scan := []uint32{i1}
+	if i2 != i1 {
+		scan = append(scan, i2)
+	}
+	for _, i := range scan {
+		if j := c.find(i, fp); j >= 0 {
+			c.setSlot(uint32(j), 0)
+			c.count--
+			return
+		}
+	}
+}
+
+// buildCuckoo replays the adds, then the deletes, into the stored geometry
+// and writes the frame with its own writer.
+func buildCuckoo(c cuckoo, keys, deletes []string) ([]byte, error) {
+	fresh := cuckoo{n: c.n, seed: c.seed, epsilon: c.epsilon, f: c.f, buckets: c.buckets, words: make([]uint32, len(c.words))}
+	for _, key := range keys {
+		if err := fresh.add(key); err != nil {
+			return nil, err
+		}
+	}
+	for _, key := range deletes {
+		fresh.remove(key)
+	}
+	params := make([]byte, cuckooParams)
+	le.PutUint32(params, fresh.n)
+	le.PutUint32(params[4:], fresh.seed)
+	le.PutUint64(params[8:], math.Float64bits(fresh.epsilon))
+	le.PutUint32(params[16:], fresh.f)
+	le.PutUint32(params[20:], fresh.buckets)
+	le.PutUint32(params[24:], fresh.count)
+	payload := make([]byte, padded8(4*len(fresh.words)))
+	for w, word := range fresh.words {
+		le.PutUint32(payload[4*w:], word)
+	}
+	return writeFrame(7, params, payload), nil
+}
+
+func TestCuckoo(t *testing.T) {
+	deleted := false
+	for _, e := range golden(t) {
+		if e.Kind != "cuckoo" {
+			continue
+		}
+		deleted = deleted || len(e.Deletes) > 0
+		golden := frameOf(t, e)
+		f, err := readFrame(golden)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c, err := parseCuckoo(f)
+		if err != nil {
+			t.Fatalf("%s: %v", e.Name, err)
+		}
+		gone := map[string]bool{}
+		for _, key := range e.Deletes {
+			gone[key] = true
+		}
+		for _, key := range e.Keys {
+			if !gone[key] && !c.has(key) {
+				t.Errorf("%s: has(%q) is false", e.Name, key)
+			}
+		}
+		rebuilt, err := buildCuckoo(c, e.Keys, e.Deletes)
+		if err != nil {
+			t.Fatalf("%s: %v", e.Name, err)
+		}
+		if !bytes.Equal(rebuilt, golden) {
+			t.Errorf("%s: rebuilt frame differs:\n got %x\nwant %x", e.Name, rebuilt, golden)
+		}
+	}
+	if !deleted {
+		t.Error("no cuckoo fixture exercises delete")
 	}
 }
