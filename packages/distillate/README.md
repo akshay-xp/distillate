@@ -48,6 +48,7 @@ Each structure ships as its own subpath, so you only bundle what you import.
 | `distillate/scalable` | Scalable Bloom | seen this key?     | Key count unknown or growing; keeps its FPR bound        |
 | `distillate/blocked`  | Blocked Bloom  | seen this key?     | Faster lookups and a lower FPR for a small space premium |
 | `distillate/fuse`     | Binary Fuse    | seen this key?     | Static set built once and queried a lot; least space     |
+| `distillate/cuckoo`   | Cuckoo         | seen this key?     | Keys come and go; the one filter with delete             |
 | `distillate/hll`      | HyperLogLog    | how many distinct? | Counting distinct users, IPs, or keys in fixed space     |
 
 The filters are mutable except Binary Fuse, which is built once from the whole
