@@ -249,16 +249,20 @@ test("METHODOLOGY states the scalable matching basis and the load-factor quirk",
   expect(md).toContain("load factor");
 });
 
+/** `## heading` up to the next `## `, so one section never reads another's rows. */
+function resultsSection(md: string, heading: string): string {
+  const at = md.indexOf(`## ${heading}`);
+  const end = md.indexOf("\n## ", at + 1);
+  return end === -1 ? md.slice(at) : md.slice(at, end);
+}
+
 test("RESULTS carries the measured scalable section for both filters", () => {
   const md = readFileSync(
     fileURLToPath(new URL("../RESULTS.md", import.meta.url)),
     "utf8",
   );
   expect(md).toContain("## Scalable Bloom");
-  const section = md.slice(
-    md.indexOf("## Scalable Bloom"),
-    md.indexOf("## Throughput"),
-  );
+  const section = resultsSection(md, "Scalable Bloom");
   const rows = section
     .split("\n")
     .filter((l) => /^\| (distillate\/scalable|bloom-filters) /.test(l));
@@ -373,4 +377,31 @@ test("scalableTable marks a row that was not run with its projected build", () =
   ]);
   expect(table).toContain("| bloom-filters | 10M | not run |");
   expect(table).toContain("~76.0 h projected build");
+});
+
+test("RESULTS carries the measured cuckoo section for both filters", () => {
+  const md = readFileSync(
+    fileURLToPath(new URL("../RESULTS.md", import.meta.url)),
+    "utf8",
+  );
+  expect(md).toContain("## Cuckoo");
+  const rows = resultsSection(md, "Cuckoo")
+    .split("\n")
+    .filter((l) => /^\| (distillate\/cuckoo|bloom-filters) /.test(l));
+  expect(rows).toHaveLength(10);
+  const cells = (r: string): string[] => r.split("|").map((c) => c.trim());
+  for (const keys of ["1k", "10k", "100k", "1M", "10M"]) {
+    for (const name of ["distillate/cuckoo", "bloom-filters"]) {
+      const row = rows.find(
+        (r) => cells(r)[1] === name && cells(r)[2] === keys,
+      );
+      expect(row, `${name} ${keys}`).toBeDefined();
+    }
+  }
+  // Lost after build, lost after delete and refused are columns 5 to 7.
+  for (const r of rows.filter((r) => cells(r)[1] === "distillate/cuckoo")) {
+    expect(cells(r).slice(5, 8)).toEqual(["0 (0.00%)", "0 (0.00%)", "0"]);
+  }
+  // The header note says which build the section was measured on.
+  expect(md.slice(0, md.indexOf("## Space"))).toContain("Cuckoo");
 });

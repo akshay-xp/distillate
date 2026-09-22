@@ -13,6 +13,8 @@ moves the figures by run-to-run variance. The cardinality section was measured o
 0.9.0, which is the release that first ships the sketch.
 The Scalable Bloom section was measured on 2026-09-21, on the same machine, from
 the unreleased build that adds `distillate/scalable` on top of 0.10.0.
+The Cuckoo section was measured on 2026-09-22, on the same machine, from the
+unreleased build that adds `distillate/cuckoo` on top of 0.11.0.
 
 ## Space and accuracy
 
@@ -119,6 +121,38 @@ within two probes, which is where the check stops.
 The 1k and 10k rows time a single pass of a few thousand operations, well under
 a millisecond at 1k, so their throughput includes warm-up and moves from run to
 run. Read the 100k and larger rows for rates.
+
+## Cuckoo
+
+Both filters are built by `create(n, 0.01)`, which gives both buckets of 4 and a limit of 500 kicks per add.
+The fingerprint does not match: `bloom-filters` stores `ceil(f / 8)` hex characters of a 32-bit hash, 2 characters and so 8 bits at 1%, where distillate stores the 10 bits the target calls for.
+Bits per key is nominal slot bits over keys; the incumbent keeps each fingerprint as a JS string, so its heap is far larger than its row shows.
+
+Each row runs a delete-half workload: add `n` keys, count the ones `has` then denies, measure FPR over 100,000 keys neither filter saw, delete the first half, and count kept keys that `has` denies.
+A key that was added and not deleted but reads absent is a false negative, the one answer a filter must never give. Refused counts adds that reported the filter full.
+
+| Filter            | keys | bits/key | measured FPR | lost after build | lost after delete | refused | add          | has          | delete       |
+| ----------------- | ---- | -------- | ------------ | ---------------- | ----------------- | ------- | ------------ | ------------ | ------------ |
+| distillate/cuckoo | 1k   | 11.84    | 0.68%        | 0 (0.00%)        | 0 (0.00%)         | 0       | 958 k ops/s  | 3.00 M ops/s | 3.78 M ops/s |
+| bloom-filters     | 1k   | 8.38     | 2.90%        | 370 (37.00%)     | 160 (32.00%)      | 0       | 137 k ops/s  | 265 k ops/s  | 285 k ops/s  |
+| distillate/cuckoo | 10k  | 10.93    | 0.76%        | 0 (0.00%)        | 0 (0.00%)         | 0       | 4.93 M ops/s | 6.89 M ops/s | 6.63 M ops/s |
+| bloom-filters     | 10k  | 8.38     | 2.96%        | 3109 (31.09%)    | 1421 (28.42%)     | 0       | 247 k ops/s  | 301 k ops/s  | 303 k ops/s  |
+| distillate/cuckoo | 100k | 10.65    | 0.72%        | 0 (0.00%)        | 0 (0.00%)         | 0       | 5.49 M ops/s | 8.02 M ops/s | 7.76 M ops/s |
+| bloom-filters     | 100k | 8.38     | 2.95%        | 32659 (32.66%)   | 14779 (29.56%)    | 0       | 239 k ops/s  | 296 k ops/s  | 294 k ops/s  |
+| distillate/cuckoo | 1M   | 10.57    | 0.72%        | 0 (0.00%)        | 0 (0.00%)         | 0       | 5.58 M ops/s | 8.44 M ops/s | 8.28 M ops/s |
+| bloom-filters     | 1M   | 8.38     | 2.97%        | 333618 (33.36%)  | 150780 (30.16%)   | 0       | 224 k ops/s  | 274 k ops/s  | 272 k ops/s  |
+| distillate/cuckoo | 10M  | 10.54    | 0.79%        | 0 (0.00%)        | 0 (0.00%)         | 0       | 5.51 M ops/s | 8.67 M ops/s | 8.57 M ops/s |
+| bloom-filters     | 10M  | 8.38     | 2.86%        | 3346399 (33.46%) | 1511025 (30.22%)  | 0       | 209 k ops/s  | 262 k ops/s  | 257 k ops/s  |
+
+The incumbent loses about a third of the keys it accepted, from 31% to 37%
+across every size, with every `add` reporting success: an eviction moves a
+fingerprint to a bucket its key's lookup never checks. Deleting half the keys
+does not repair it: 28% to 32% of the kept half still reads absent. distillate
+loses none, before or after the deletes. The incumbent's 8-bit fingerprint puts
+its false-positive rate near 2.9% against the 1% it was asked for, where
+distillate's 10 bits land at 0.7% to 0.8%, for 2.2 to 2.6 more bits per key from
+10k up. From 10k up distillate adds 20 to 26 times faster and answers `has` and
+`delete` 22 to 33 times faster; the 1k row is a single short pass and closer.
 
 ## Throughput (n = 100k)
 
