@@ -8,7 +8,9 @@ import {
   FORMAT_VERSION,
   readHeader,
   SerializationError,
+  TruncatedError,
   UnknownHashVariantError,
+  writeHeader,
 } from "../../src/core/serialize.js";
 import { CuckooFilter } from "../../src/cuckoo/cuckoo.js";
 import { cuckooSizing } from "../../src/cuckoo/sizing.js";
@@ -259,6 +261,35 @@ test("a frame whose stored geometry differs from current sizing loads", () => {
   expect(f.buckets).toBe(37);
   expect(keys.every((k) => f.has(k))).toBe(true);
   expect(bytesEqual(f.toBytes(), moved)).toBe(true);
+});
+
+// An empty type-7 frame with the given geometry and a body of exactly the
+// length that geometry needs, so only the range checks can refuse it.
+const emptyFrame = (f: number, buckets: number, words?: number): Uint8Array => {
+  const length = words ?? Math.ceil((4 * f * buckets) / 32);
+  const body = new Uint8Array(32 + Math.ceil((4 * length) / 8) * 8);
+  const view = new DataView(body.buffer);
+  view.setUint32(0, 100, true);
+  view.setFloat64(8, 0.01, true);
+  view.setUint32(16, f, true);
+  view.setUint32(20, buckets, true);
+  return writeHeader({ version: FORMAT_VERSION, type: 7, flags: 0 }, body);
+};
+
+test("stored geometry inside its range loads", () => {
+  expect(CuckooFilter.fromBytes(emptyFrame(4, 37)).has("a")).toBe(false);
+});
+
+test.each<[string, Uint8Array, RegExp]>([
+  ["f of 3", emptyFrame(3, 37), /\bf\b/],
+  ["f of 33", emptyFrame(33, 37), /\bf\b/],
+  ["buckets of 0", emptyFrame(10, 0), /buckets/],
+  // A short body: the range check must refuse it before the length check.
+  ["m of 2^32 bits", emptyFrame(32, 2 ** 25, 1), /\bm\b/],
+])("fromBytes rejects stored %s", (_, frame, field) => {
+  expect(() => CuckooFilter.fromBytes(frame)).toThrow(SerializationError);
+  expect(() => CuckooFilter.fromBytes(frame)).toThrow(field);
+  expect(() => CuckooFilter.fromBytes(frame)).not.toThrow(TruncatedError);
 });
 
 test("the JSON envelope round-trips", () => {
