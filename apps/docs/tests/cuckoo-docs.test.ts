@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test } from "vitest";
 
+import { parseTable } from "../src/tables.js";
+
 const read = (path: string): string =>
   readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
 
@@ -50,4 +52,23 @@ test("the Cuckoo guide covers what a reader needs to choose and use it", () => {
 
 test("the sidebar links the Cuckoo guide", () => {
   expect(read("../astro.config.mjs")).toContain('"/guides/cuckoo/"');
+});
+
+const chooser = (): string =>
+  read("../src/content/docs/guides/choosing-a-structure.md");
+
+test("the chooser routes inserts and deletes to Cuckoo", () => {
+  const rows = parseTable(chooser(), "Decision matrix");
+  const use = rows.find(([w]) => w.startsWith("Inserts and deletes"))?.[1];
+  expect(use).toContain("[Cuckoo](/guides/cuckoo/)");
+  expect(use).not.toContain("not yet available");
+});
+
+test("the chooser lists Cuckoo as shipped and no longer says there is no delete", () => {
+  const page = chooser();
+  expect(section(page, "What ships today")).toContain(
+    "### [Cuckoo](/guides/cuckoo/) (`distillate/cuckoo`)",
+  );
+  expect(section(page, "What is not shipped yet")).not.toContain("**Cuckoo**");
+  expect(page).not.toContain("no delete anywhere");
 });
