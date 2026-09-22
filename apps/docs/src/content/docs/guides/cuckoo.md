@@ -68,6 +68,16 @@ This is how every mainstream cuckoo filter behaves. Removing all copies at once
 would be wrong, because two different keys can share a fingerprint and bucket:
 one delete would then take out a key that is still meant to be there.
 
+`from` is the exception. It builds from the set of keys it is given, so a key
+listed twice is stored once and needs one delete:
+
+```ts
+import { CuckooFilter } from "distillate/cuckoo";
+
+const g = CuckooFilter.from(["bob", "bob"], 0.01);
+g.count; // 1
+```
+
 ## Only delete what you added
 
 The filter stores fingerprints, not keys, so it cannot tell a key it holds
@@ -103,8 +113,8 @@ error instanceof CuckooFullError; // true
 f.has("key-0"); // true
 ```
 
-A filter sized for `n` takes `n` keys, so a full filter means more keys than
-planned. Size for more, or delete keys you no longer need before adding.
+A filter sized for `n` takes `n` keys, and `from` sizes for the distinct keys it
+is given, so a full filter means more keys than planned. Size for more, or delete keys you no longer need before adding.
 
 ## Space
 
