@@ -18,7 +18,7 @@ const MAX_KICKS = 500;
 const UNDO_SLOT = new Float64Array(MAX_KICKS);
 const UNDO_FP = new Uint32Array(MAX_KICKS);
 
-// Reused hash output; safe because add and has are synchronous.
+// Reused hash output; safe because every method that hashes is synchronous.
 const HASH: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
 
 /** Thrown when an add cannot find room; the filter is left exactly as it was. */
@@ -127,7 +127,10 @@ export class CuckooFilter {
    */
   add(key: BytesLike): void {
     this.#hash(key);
-    if (this.#put(this.#i1, this.#fp) || this.#put(this.#i2, this.#fp)) {
+    if (
+      this.#replace(this.#i1, 0, this.#fp) ||
+      this.#replace(this.#i2, 0, this.#fp)
+    ) {
       this.#count++;
       return;
     }
@@ -150,7 +153,7 @@ export class CuckooFilter {
       this.#setSlot(j, fp);
       fp = victim;
       i = this.#alt(i, fp);
-      if (this.#put(i, fp)) {
+      if (this.#replace(i, 0, fp)) {
         this.#count++;
         return;
       }
@@ -166,6 +169,27 @@ export class CuckooFilter {
   }
 
   /**
+   * Removes one copy of `key`: the first slot holding its fingerprint in
+   * either candidate bucket.
+   *
+   * Only delete keys you added. A key never added can share a fingerprint and
+   * bucket with one that was, and deleting it removes that key's fingerprint
+   * instead, a false negative the filter cannot detect: it stores fingerprints,
+   * not keys, so it cannot tell the two apart.
+   *
+   * @returns `true` if a matching fingerprint was removed; `false`, with the
+   * filter unchanged, if there was none.
+   */
+  delete(key: BytesLike): boolean {
+    this.#hash(key);
+    const removed =
+      this.#replace(this.#i1, this.#fp, 0) ||
+      (this.#i2 !== this.#i1 && this.#replace(this.#i2, this.#fp, 0));
+    if (removed) this.#count--;
+    return removed;
+  }
+
+  /**
    * Tests whether `key` may be in the filter.
    *
    * @returns `false` if `key` is definitely absent; `true` if it was added
@@ -173,7 +197,9 @@ export class CuckooFilter {
    */
   has(key: BytesLike): boolean {
     this.#hash(key);
-    return this.#holds(this.#i1, this.#fp) || this.#holds(this.#i2, this.#fp);
+    return (
+      this.#find(this.#i1, this.#fp) >= 0 || this.#find(this.#i2, this.#fp) >= 0
+    );
   }
 
   /**
@@ -206,21 +232,20 @@ export class CuckooFilter {
     return (((Math.imul(fp, 0x5bd1e995) >>> 0) % b) + b - i) % b;
   }
 
-  #put(bucket: number, fp: number): boolean {
+  /** The first slot in `bucket` holding `value`, or -1. 0 finds an empty slot. */
+  #find(bucket: number, value: number): number {
     for (let j = bucket * SLOTS; j < bucket * SLOTS + SLOTS; j++) {
-      if (this.#slot(j) === 0) {
-        this.#setSlot(j, fp);
-        return true;
-      }
+      if (this.#slot(j) === value) return j;
     }
-    return false;
+    return -1;
   }
 
-  #holds(bucket: number, fp: number): boolean {
-    for (let j = bucket * SLOTS; j < bucket * SLOTS + SLOTS; j++) {
-      if (this.#slot(j) === fp) return true;
-    }
-    return false;
+  /** Overwrites the first `from` in `bucket` with `to`; false if there is none. */
+  #replace(bucket: number, from: number, to: number): boolean {
+    const j = this.#find(bucket, from);
+    if (j < 0) return false;
+    this.#setSlot(j, to);
+    return true;
   }
 
   // Slot j is f bits at stream bit j * f, low bit first; stream bit x is bit
