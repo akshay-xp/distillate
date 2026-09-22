@@ -2,7 +2,11 @@ import fc from "fast-check";
 import { expect, test } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
-import { CuckooFilter, type CuckooParams } from "../../src/cuckoo/cuckoo.js";
+import {
+  CuckooFilter,
+  CuckooFullError,
+  type CuckooParams,
+} from "../../src/cuckoo/cuckoo.js";
 import { sampleStrings } from "../helpers/fpr.js";
 
 test("a new filter is empty and carries its sizing geometry", () => {
@@ -85,6 +89,34 @@ test("a filter sized for a million keys takes them all", () => {
   expect(keys.every((k) => f.has(k))).toBe(true);
 });
 
+// The incumbent's bug: a failed displacement chain drops whichever resident it
+// was carrying, and that key reads absent from then on. Here a full add must
+// leave every answer exactly as it was.
+test("an add into a full filter throws and changes nothing", () => {
+  const f = CuckooFilter.create(1, 0.01); // 2 buckets, 8 slots
+  const keys = sampleStrings(23, 20);
+  const probes = sampleStrings(24, 10_000);
+  let added = 0;
+  let snapshot: boolean[] = [];
+  let error: unknown;
+  for (const k of keys) {
+    snapshot = probes.map((p) => f.has(p));
+    try {
+      f.add(k);
+    } catch (e) {
+      error = e;
+      break;
+    }
+    added++;
+  }
+
+  expect(error).toBeInstanceOf(CuckooFullError);
+  expect(added).toBeLessThanOrEqual(8);
+  expect(f.count).toBe(added);
+  expect(keys.slice(0, added).every((k) => f.has(k))).toBe(true);
+  expect(probes.map((p) => f.has(p))).toEqual(snapshot);
+});
+
 test.each<[string, Partial<CuckooParams>]>([
   ["n 0", { n: 0 }],
   ["n 1.5", { n: 1.5 }],
@@ -95,6 +127,8 @@ test.each<[string, Partial<CuckooParams>]>([
   ["epsilon 1e-9", { epsilon: 1e-9 }],
   ["seed -1", { seed: -1 }],
   ["seed 2^32", { seed: 2 ** 32 }],
+  // Slot positions are addressed as 32-bit bit offsets, like BloomFilter's m.
+  ["m past 2^32 - 1 bits", { n: 500_000_000 }],
 ])("%s is rejected with ParamError", (_, bad) => {
   expect(() => new CuckooFilter({ n: 10, epsilon: 0.01, ...bad })).toThrow(
     ParamError,
