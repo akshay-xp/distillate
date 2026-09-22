@@ -268,13 +268,42 @@ test("every truncated prefix of a frame is rejected with a typed error", () => {
   }
 });
 
+test("a frame with more stages than a call stack can spread still loads", () => {
+  const stageCount = 300_000;
+  const body = new Uint8Array(40 + stageCount * (16 + 8));
+  const view = new DataView(body.buffer);
+  view.setUint32(0, 10, true);
+  view.setFloat64(8, 0.01, true);
+  view.setFloat64(16, 2, true);
+  view.setFloat64(24, 0.85, true);
+  view.setUint32(32, stageCount, true);
+  for (let i = 0; i < stageCount; i++) {
+    const at = 40 + 16 * i;
+    view.setUint32(at, 1, true);
+    view.setUint16(at + 4, 1, true);
+    view.setUint32(at + 8, 1, true);
+  }
+  const frame = writeHeader(
+    { version: FORMAT_VERSION, type: 6, flags: 0 },
+    body,
+  );
+
+  const filter = ScalableBloomFilter.fromBytes(frame);
+
+  expect(filter.stages).toBe(stageCount);
+  expect(filter.has("probe")).toBe(false);
+});
+
 // Valid settings and a sealed CRC, so each run reaches the table checks with
 // sizes at their edges: zero, tiny, a stage's own capacity, and the maxima.
 const edge = fc.constantFrom(0, 1, 7, 10, 0xffff, 0xffffffff);
 const forged = fc
   .tuple(
-    fc.integer({ min: 0, max: 4 }),
-    fc.array(fc.tuple(edge, edge, edge, edge), { minLength: 4, maxLength: 4 }),
+    fc.integer({ min: 0, max: 64 }),
+    fc.array(fc.tuple(edge, edge, edge, edge), {
+      minLength: 64,
+      maxLength: 64,
+    }),
     fc.uint8Array({ maxLength: 2048 }),
     fc.boolean(),
   )
