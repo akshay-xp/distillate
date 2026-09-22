@@ -79,6 +79,14 @@
       "import": "./dist/scalable/index.js",
       "require": "./dist/scalable/index.cjs"
     },
+    "./cuckoo": {
+      "types": {
+        "import": "./dist/cuckoo/index.d.ts",
+        "require": "./dist/cuckoo/index.d.cts"
+      },
+      "import": "./dist/cuckoo/index.js",
+      "require": "./dist/cuckoo/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",
