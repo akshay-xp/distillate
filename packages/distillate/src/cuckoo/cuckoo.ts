@@ -21,7 +21,7 @@ import {
   UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
-import { cuckooSizing } from "./sizing.js";
+import { CUCKOO_MAX_F, cuckooSizing } from "./sizing.js";
 
 const TYPE = 7;
 
@@ -180,7 +180,21 @@ export class CuckooFilter {
       // geometry cannot request memory the body does not hold.
       const f = view.getUint32(16, true);
       const buckets = view.getUint32(20, true);
-      const words = Math.ceil((f * SLOTS * buckets) / 32);
+      if (f < 4 || f > CUCKOO_MAX_F) {
+        throw new SerializationError(
+          `cuckoo: stored f ${String(f)} is outside 4..${String(CUCKOO_MAX_F)}`,
+        );
+      }
+      if (buckets < 1) {
+        throw new SerializationError("cuckoo: stored buckets is 0");
+      }
+      const m = f * SLOTS * buckets;
+      if (m > 0xffffffff) {
+        throw new SerializationError(
+          `cuckoo: stored geometry gives m ${String(m)} bits, more than 2^32 - 1`,
+        );
+      }
+      const words = Math.ceil(m / 32);
       assertBodyLength(body.length, PARAMS_SIZE + padded8(4 * words), "cuckoo");
       restoring = { f, buckets };
       try {
