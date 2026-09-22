@@ -51,6 +51,11 @@ const UNDO_FP = new Uint32Array(MAX_KICKS);
 // Reused hash output; safe because every method that hashes is synchronous.
 const HASH: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
 
+// The geometry fromBytes hands the constructor in place of sizing from n and
+// epsilon: a frame's stored geometry is authoritative, so frames written
+// before a sizing change still load.
+let restoring: { f: number; buckets: number } | undefined;
+
 /** Thrown when an add cannot find room; the filter is left exactly as it was. */
 export class CuckooFullError extends Error {
   /** Discriminates this error from other `Error`s. */
@@ -171,19 +176,18 @@ export class CuckooFilter {
     };
     let filter: CuckooFilter;
     try {
-      // Geometry and length are checked before the constructor allocates, so
-      // a forged n cannot request memory the body does not hold.
-      const sizing = cuckooSizing(params.n, params.epsilon);
+      // Length is checked before the constructor allocates, so a forged
+      // geometry cannot request memory the body does not hold.
       const f = view.getUint32(16, true);
       const buckets = view.getUint32(20, true);
-      if (f !== sizing.f || buckets !== sizing.buckets) {
-        throw new SerializationError(
-          `cuckoo: stored geometry f=${String(f)}, buckets=${String(buckets)} does not match n and epsilon (f=${String(sizing.f)}, buckets=${String(sizing.buckets)})`,
-        );
-      }
       const words = Math.ceil((f * SLOTS * buckets) / 32);
       assertBodyLength(body.length, PARAMS_SIZE + padded8(4 * words), "cuckoo");
-      filter = new CuckooFilter(params);
+      restoring = { f, buckets };
+      try {
+        filter = new CuckooFilter(params);
+      } finally {
+        restoring = undefined;
+      }
     } catch (err) {
       if (err instanceof ParamError) {
         throw new SerializationError(`cuckoo: ${err.message}`);
@@ -237,7 +241,7 @@ export class CuckooFilter {
     assertUint32(n, "n");
     assertProbability(epsilon, "epsilon");
     assertUint32(seed, "seed");
-    const { f, buckets } = cuckooSizing(n, epsilon);
+    const { f, buckets } = restoring ?? cuckooSizing(n, epsilon);
     // Slots are addressed by 32-bit bit offsets (`bit >>> 5`).
     assertUint32(f * SLOTS * buckets, "m");
     this.#n = n;

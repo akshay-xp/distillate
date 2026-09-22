@@ -11,6 +11,7 @@ import {
   UnknownHashVariantError,
 } from "../../src/core/serialize.js";
 import { CuckooFilter } from "../../src/cuckoo/cuckoo.js";
+import { cuckooSizing } from "../../src/cuckoo/sizing.js";
 import { sampleStrings } from "../helpers/fpr.js";
 
 const filled = (
@@ -206,14 +207,14 @@ const lies: [string, Mutation, new (...args: never[]) => Error][] = [
     SerializationError,
   ],
   [
-    "f changed",
+    "f changed without the body",
     (_, v) => {
       v.setUint32(BODY + 16, 11, true);
     },
     SerializationError,
   ],
   [
-    "buckets changed",
+    "buckets changed without the body",
     (_, v) => {
       v.setUint32(BODY + 20, 36, true);
     },
@@ -242,6 +243,22 @@ test.each(lies)("fromBytes rejects %s", (_, mutate, expected) => {
 
   expect(() => CuckooFilter.fromBytes(bad)).toThrow(expected);
   expect(() => CuckooFilter.fromBytes(bad)).toThrow(SerializationError);
+});
+
+// Sizing is empirical and may be tuned; a frame written before that must still
+// load, so the geometry it stores is what the reader builds.
+test("a frame whose stored geometry differs from current sizing loads", () => {
+  const keys = sampleStrings(40, 100);
+  const frame = odd().toBytes();
+  new DataView(frame.buffer).setUint32(BODY, 200, true);
+  const moved = resealed(frame);
+  expect(cuckooSizing(200, 0.01).buckets).not.toBe(37);
+
+  const f = CuckooFilter.fromBytes(moved);
+
+  expect(f.buckets).toBe(37);
+  expect(keys.every((k) => f.has(k))).toBe(true);
+  expect(bytesEqual(f.toBytes(), moved)).toBe(true);
 });
 
 test("the JSON envelope round-trips", () => {
