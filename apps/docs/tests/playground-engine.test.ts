@@ -391,3 +391,57 @@ test("growing inside Cuckoo's room refuses nothing", () => {
     cuckooRefused: 0,
   });
 });
+
+test("delete takes a key out of Cuckoo and says why the others keep it", () => {
+  const playground = built();
+
+  const result = playground.remove("key-5");
+
+  if (!result.ok) throw new Error(result.message);
+  expect(result.key).toBe("key-5");
+  for (const phrase of ["Classic", "Binary Fuse", "shared"]) {
+    expect(result.refusal, phrase).toContain(phrase);
+  }
+  const { verdicts } = playground.lookup("key-5");
+  expect(verdicts.cuckoo).not.toBe("member");
+  expect(verdicts.bloom).toBe("member");
+});
+
+// The guarantee delete must keep: the one key goes, every other stays found.
+test("a delete leaves no other held key missing from Cuckoo", () => {
+  const playground = built();
+  playground.remove("key-5");
+
+  const { structures } = playground.report();
+
+  expect(structures.cuckoo.heldKeys).toBe(KEYS - 1);
+  expect(structures.cuckoo.missing).toBe(0);
+  expect(structures.bloom.heldKeys).toBe(KEYS);
+});
+
+// Deleting a key never added can remove another key's fingerprint, so the
+// playground refuses rather than demonstrate the one misuse the guide warns of.
+test("delete refuses a key that was never added, or is already gone", () => {
+  const playground = built();
+  const before = playground.report();
+
+  const never = playground.remove("never-added");
+  expect(never.ok).toBe(false);
+  if (!never.ok) expect(never.message).toContain("only delete keys");
+  expect(playground.report()).toEqual(before);
+
+  playground.remove("key-5");
+  const again = playground.remove("key-5");
+  expect(again.ok).toBe(false);
+  if (!again.ok) expect(again.message).toContain("only delete keys");
+});
+
+test("adding a deleted key back puts it back in Cuckoo", () => {
+  const playground = built();
+  playground.remove("key-5");
+
+  playground.insert("key-5");
+
+  expect(playground.lookup("key-5").verdicts.cuckoo).toBe("member");
+  expect(playground.report().structures.cuckoo.heldKeys).toBe(KEYS);
+});

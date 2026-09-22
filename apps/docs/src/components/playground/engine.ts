@@ -65,6 +65,15 @@ export type GrowResult =
     }
   | { ok: false; message: string };
 
+export type RemoveResult =
+  | {
+      ok: true;
+      key: string;
+      /** Why the other filters kept the key. */
+      refusal: string;
+    }
+  | { ok: false; message: string };
+
 /** How many never-inserted keys the measured rate is averaged over. */
 export const PROBE_COUNT = 20_000;
 
@@ -74,6 +83,9 @@ export const MAX_KEYS = 100_000;
 const KEY_COUNT_MESSAGE = `Key count must be a whole number between 1 and ${MAX_KEYS.toLocaleString("en-US")}. The playground builds real filters in your browser, so it stops there.`;
 
 const GROW_MESSAGE = `Keys to add must be a whole number of at least 1, and the total held must stay at or under ${MAX_KEYS.toLocaleString("en-US")}. The playground builds real filters in your browser, so it stops there.`;
+
+const DELETE_REFUSAL =
+  "Classic, Blocked and Scalable Bloom set bits shared with other keys, so they cannot take one back; Binary Fuse is static. They still hold it.";
 
 // Members and probes are told apart by prefix, so the miss set is disjoint
 // from the key set by construction rather than by a filtering pass.
@@ -148,7 +160,7 @@ export class Playground {
   readonly #probes: string[];
   readonly #target: number;
   readonly #filters: Filters;
-  /** Inserted keys Cuckoo does not hold: refused when full. */
+  /** Inserted keys Cuckoo does not hold: refused when full, or deleted. */
   readonly #notInCuckoo = new Set<string>();
   /** Set by the first refused add; see #addToCuckoo. */
   #cuckooFull = false;
@@ -223,8 +235,31 @@ export class Playground {
     };
   }
 
+  /**
+   * Deletes one key from Cuckoo, the only filter here that can. Only a key
+   * Cuckoo holds is deleted: any other can share a held key's fingerprint and
+   * would remove that one instead, so the refusal comes back as a message.
+   */
+  remove(key: string): RemoveResult {
+    if (!this.#inserted.has(key) || this.#notInCuckoo.has(key)) {
+      return {
+        ok: false,
+        message: `Cuckoo can only delete keys it holds, and "${key}" is not one of them. Only delete keys you added and have not already deleted: any other key can share a held key's fingerprint, and deleting it would remove that key instead.`,
+      };
+    }
+    this.#filters.cuckoo.delete(key);
+    this.#notInCuckoo.add(key);
+    // A freed slot means a later add may fit again.
+    this.#cuckooFull = false;
+    return { ok: true, key, refusal: DELETE_REFUSAL };
+  }
+
   #add(key: string): void {
-    if (this.#inserted.has(key)) return;
+    if (this.#inserted.has(key)) {
+      // Deleted from Cuckoo only: the Bloom filters still hold it.
+      if (this.#notInCuckoo.delete(key)) this.#addToCuckoo(key);
+      return;
+    }
     this.#filters.bloom.add(key);
     this.#filters.blocked.add(key);
     this.#filters.scalable.add(key);
@@ -257,9 +292,12 @@ export class Playground {
   lookup(key: string): Lookup {
     const inserted = this.#inserted.has(key);
     const late = this.#late.has(key);
-    const verdict = (filter: { has: (k: string) => boolean }): Verdict => {
+    const verdict = (
+      filter: { has: (k: string) => boolean },
+      held = inserted,
+    ): Verdict => {
       if (!filter.has(key)) return "absent";
-      return inserted ? "member" : "false positive";
+      return held ? "member" : "false positive";
     };
     const { bloom, blocked, fuse8, scalable, cuckoo } = this.#filters;
     return {
@@ -272,7 +310,8 @@ export class Playground {
         // negative. Saying so is the whole point of showing it.
         fuse8: late ? "added after build" : verdict(fuse8),
         scalable: verdict(scalable),
-        cuckoo: verdict(cuckoo),
+        // A key Cuckoo refused or had deleted is not one it holds.
+        cuckoo: verdict(cuckoo, inserted && !this.#notInCuckoo.has(key)),
       },
     };
   }
