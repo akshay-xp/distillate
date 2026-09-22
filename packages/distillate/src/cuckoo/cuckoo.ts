@@ -156,6 +156,18 @@ export class CuckooFilter {
     return this.#holds(this.#i1, this.#fp) || this.#holds(this.#i2, this.#fp);
   }
 
+  /**
+   * Estimates the current false-positive rate from the load: a query compares
+   * its fingerprint against about `8 * count / capacity` occupied slots across
+   * its two buckets, each matching with probability `1 / (2^f - 1)`.
+   *
+   * @returns The estimated false-positive rate, `0` for an empty filter.
+   */
+  rate(): number {
+    const occupied = (2 * SLOTS * this.#count) / this.capacity;
+    return 1 - (1 - 1 / this.#mask) ** occupied;
+  }
+
   #hash(key: BytesLike): void {
     hash128KeyInto(key, this.#seed, HASH);
     // 0 marks an empty slot, so a zero fingerprint is stored as 1.
