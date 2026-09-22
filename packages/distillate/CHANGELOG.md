@@ -1,5 +1,16 @@
 # distillate
 
+## 0.12.0
+
+### Minor Changes
+
+- 4329008: Add `distillate/cuckoo` with `CuckooFilter`, a filter you can delete from. Each `delete` removes one copy of a key you added, an add into a full filter throws `CuckooFullError` and leaves the filter unchanged (no key is ever silently dropped), and it has the same `create`, `from`, `equals`, `rate()` and binary and JSON serialization (frame type 7) as the other filters. Like `BinaryFuse8.from`, `from` ignores duplicate keys, while `add` stores a copy each time. `cuckooSizing(n, epsilon)` returns its geometry. A saved filter loads with the geometry it was written with, so frames stay readable if the sizing is tuned in a later release.
+
+### Patch Changes
+
+- 10e3c6f: `ScalableBloomFilter.fromBytes` no longer throws a raw `RangeError` on a frame declaring hundreds of thousands of stages; such a frame loads like any other.
+- 20ea7b9: `ScalableBloomFilter.union` no longer allocates a first stage it immediately discards, halving its peak memory for single-stage filters.
+
 ## 0.11.0
 
 ### Minor Changes
