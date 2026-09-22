@@ -80,3 +80,15 @@ test("the README structures table lists every structure subpath", () => {
   for (const subpath of structures) expect(listed).toContain(subpath);
   expect(readme).toContain("### Scalable Bloom (`distillate/scalable`)");
 });
+
+test("the README describes Cuckoo and no longer lists shipped structures as coming", () => {
+  const readme = readFileSync(README, "utf8");
+  expect(readme).toContain("### Cuckoo (`distillate/cuckoo`)");
+
+  const note = readme.slice(
+    readme.indexOf("> **Pre-release"),
+    readme.indexOf("\n\n", readme.indexOf("> **Pre-release")),
+  );
+  expect(note).not.toContain("Cuckoo");
+  expect(note).not.toContain("Scalable Bloom");
+});

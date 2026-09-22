@@ -6,7 +6,7 @@
 
 Probabilistic data structures for JavaScript: space-efficient, approximate answers with tunable error and zero false negatives. TypeScript-first, zero dependencies, and the right structure per workload. It opens with a family of membership filters and is built to grow into other sketches.
 
-> **Pre-release (0.x).** The published structures are correct, tested, and benchmarked, but the public API may still change before `1.0`, and more structures (Cuckoo, Scalable Bloom) are on the way. Pin a version if you depend on it.
+> **Pre-release (0.x).** The published structures are correct, tested, and benchmarked, but the public API may still change before `1.0`. Pin a version if you depend on it.
 
 ## Why
 
@@ -120,6 +120,25 @@ const precise = BinaryFuse16.from(["alice", "bob", "carol"]);
 `bitsPerKey` is the space actually allocated, not the asymptotic figure. Three keys pay 64 bits each because the fingerprint array has a fixed minimum; the ~9 you see quoted is what a filter approaches once `n` is large (about 9.5 at 100k). Size honestly with `fuseBitsPerKey(n, width)`, or the [sizing guide](https://distillate.akxp.net/guides/sizing/).
 
 Also: `toBytes` / `fromBytes`. No `add` / `delete`; rebuild `from` the new set to change membership.
+
+### Cuckoo (`distillate/cuckoo`)
+
+For a set that shrinks as well as grows: the one filter here with `delete`. Full API and trade-offs: [Cuckoo guide](https://distillate.akxp.net/guides/cuckoo/).
+
+```ts
+import { CuckooFilter } from "distillate/cuckoo";
+
+const sessions = CuckooFilter.create(100_000, 0.01);
+sessions.add("alice");
+sessions.has("alice"); // true
+
+sessions.delete("alice"); // true
+sessions.has("alice"); // false
+```
+
+Only delete keys you added: a key never added can share a fingerprint with one that was, and deleting it removes that one instead. An add into a full filter throws `CuckooFullError` and leaves the filter unchanged. It is larger than a Classic Bloom at common targets and smaller only at about 0.2% and below, so pick it for delete, not for space.
+
+Also: `from(keys, epsilon)`, `equals`, `rate`, `count`, `toBytes` / `fromBytes`, `toJSON` / `fromJSON`, `cuckooSizing(n, epsilon)`, and a `seed` option.
 
 ### HyperLogLog (`distillate/hll`)
 
