@@ -70,7 +70,18 @@ distillate has **zero** runtime dependencies.
 
 ### Its Cuckoo filter has a false-negative bug
 
-The Cuckoo implementation can report `false` for a key that was inserted.
+The Cuckoo implementation can report `false` for a key that was inserted, and
+not rarely. Filled to the size it was created for, about a quarter to a third
+of the keys it accepted read as absent: 274 of 1,000, and 3,408 of 10,000.
+Every one of those `add` calls returned `true`.
+
+The cause is in its eviction step (`cuckoo-filter.js`). A lookup derives a
+key's second bucket from the key's full hash. When an eviction moves a
+fingerprint, it derives the destination from the bucket index instead, which
+has already been reduced `% size`, and it takes `Math.abs` of a signed 32-bit
+XOR along the way. The two computations disagree, so a moved fingerprint lands
+in a bucket its key never checks. At low load, where nothing is evicted, no
+key goes missing, which is why small tests do not catch it.
 
 **The consequence:** this is the one failure mode a membership filter must not
 have. Every use of a filter, skipping a lookup, skipping a fetch, skipping a
@@ -79,9 +90,9 @@ work that was needed, and because it is silent you find out from a
 downstream inconsistency rather than from an error.
 
 distillate property-tests the no-false-negative guarantee for every structure
-it ships. Its Cuckoo filter is [not yet
-available](/guides/choosing-a-structure/), and it will ship with that property
-test as its headline.
+it ships. Its [Cuckoo filter](/guides/cuckoo/) derives the alternate bucket
+from the fingerprint alone, a formula that returns to the first bucket when
+applied twice, so a moved fingerprint always stays where its key looks.
 
 ### Its HyperLogLog is wrong for small counts
 
@@ -245,6 +256,58 @@ The differences, as its source (`scalable-bloom-filter.js`) shows them:
 It also has no `union`; distillate merges two chains built with the same
 settings.
 
+### The cuckoo filter
+
+`bloom-filters`' `CuckooFilter` maps across, with two changes in behaviour
+beyond the bug above. Its `add` returns `false` when the filter is full, which
+is easy to ignore; distillate's throws `CuckooFullError` and leaves the filter
+unchanged. And bucket size and kick limit are fixed rather than options.
+
+| `bloom-filters`                                              | distillate                                       |
+| ------------------------------------------------------------ | ------------------------------------------------ |
+| `require("bloom-filters")`                                   | `import ... from "distillate/cuckoo"`            |
+| `new CuckooFilter(size, fLength, bucketSize, maxKicks)`      | `new CuckooFilter({ n, epsilon })`               |
+| `CuckooFilter.create(size, errorRate, bucketSize, maxKicks)` | `CuckooFilter.create(n, epsilon)`                |
+| `CuckooFilter.from(items, errorRate)`                        | `CuckooFilter.from(keys, epsilon)`               |
+| `filter.add(item)`, `false` when full                        | `filter.add(key)`, throws `CuckooFullError`      |
+| `filter.remove(item)`                                        | `filter.delete(key)`                             |
+| `filter.has(item)`                                           | `filter.has(key)`                                |
+| `filter.rate()`                                              | `filter.rate()`                                  |
+| `a.equals(b)`                                                | `a.equals(b)`                                    |
+| `filter.saveAsJSON()` / `CuckooFilter.fromJSON()`            | `filter.toJSON()` / `CuckooFilter.fromJSON()`    |
+| `filter.length`                                              | `filter.count`                                   |
+| `filter.size`                                                | `filter.buckets`                                 |
+| `filter.fullSize`                                            | `filter.capacity`                                |
+| `filter.fingerprintLength`                                   | `filter.fingerprintBits`, derived from `epsilon` |
+| `filter.bucketSize`                                          | fixed at 4                                       |
+| `filter.maxKicks`                                            | fixed at 500                                     |
+| `filter.seed = s`                                            | `{ seed: s }` at construction                    |
+
+Before:
+
+```js
+const { CuckooFilter } = require("bloom-filters");
+
+const filter = CuckooFilter.create(1000, 0.01);
+filter.add("alice");
+filter.remove("alice");
+filter.has("alice");
+```
+
+After:
+
+```ts
+import { CuckooFilter } from "distillate/cuckoo";
+
+const filter = CuckooFilter.create(1000, 0.01);
+filter.add("alice");
+filter.delete("alice"); // true
+filter.has("alice"); // false
+```
+
+Both delete one copy of a key per call, and in both a delete of a key you never
+added can remove another key's fingerprint, so only delete keys you added.
+
 ### Serialized filters do not carry over
 
 The two formats are unrelated. distillate cannot read a `bloom-filters`
@@ -282,6 +345,9 @@ code anyway:
   a [Classic Bloom](/guides/bloom/) sized for it is smaller and faster. If you
   cannot, [Scalable Bloom](/guides/scalable/) is the direct replacement, and
   it holds the rate you ask for.
+- **Migrating a `CuckooFilter` you never delete from?** A
+  [Classic Bloom](/guides/bloom/) is smaller at common targets. If you do
+  delete, [Cuckoo](/guides/cuckoo/) is the direct replacement.
 - **Migrating a HyperLogLog?** You gave the old one a register count. Pick the
   precision that produces it, or the error you actually want, in
   [choose a precision](/guides/hll/#choose-a-precision).

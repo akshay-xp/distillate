@@ -163,3 +163,55 @@ test("the scalable section quotes the measured FPR from the bench results", () =
     expect(bench, figure).toContain(figure);
   }
 });
+
+/** The text under `### heading`, up to the next `### ` or `## `. */
+function subsection(heading: string): string {
+  const at = GUIDE.indexOf(`### ${heading}`);
+  if (at === -1) throw new Error(`no "### ${heading}" section`);
+  const next = GUIDE.slice(at + 1).search(/\n##+ /);
+  return next === -1 ? GUIDE.slice(at) : GUIDE.slice(at, at + 1 + next);
+}
+
+test("the cuckoo mapping covers every call a migrating reader makes", () => {
+  const rows = parseTable(GUIDE, "The cuckoo filter");
+
+  const incumbent = rows.map(([from]) => from);
+  for (const call of [
+    "new CuckooFilter(size, fLength, bucketSize, maxKicks)",
+    "CuckooFilter.create(size, errorRate, bucketSize, maxKicks)",
+    "CuckooFilter.from(items, errorRate)",
+    "add",
+    "remove",
+    "has",
+    "rate()",
+    "equals",
+    "saveAsJSON",
+    "fromJSON",
+    "length",
+    "size",
+    "fullSize",
+    "fingerprintLength",
+    "bucketSize",
+    "maxKicks",
+    "seed",
+  ]) {
+    expect(
+      incumbent.some((cell) => cell.includes(call)),
+      `no row maps ${call}`,
+    ).toBe(true);
+  }
+  for (const [from, to] of rows) {
+    expect(to.trim(), `${from} maps to nothing`).not.toBe("");
+  }
+  expect(subsection("The cuckoo filter")).toMatch(/returns `false`/);
+});
+
+// The bug section was written before distillate had a Cuckoo filter; it now
+// has to explain the defect from the incumbent's source and point at ours.
+test("the cuckoo bug section explains the defect and links the guide", () => {
+  const section = subsection("Its Cuckoo filter has a false-negative bug");
+
+  expect(section).toContain("/guides/cuckoo/");
+  expect(section).not.toContain("not yet available");
+  expect(section).toMatch(/already been reduced|% size/);
+});
