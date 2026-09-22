@@ -5,9 +5,11 @@ import { expect, test } from "vitest";
 
 import type { CardinalityRow } from "../src/cardinality.js";
 import type { ComparisonRow } from "../src/compare.js";
+import type { CuckooRow } from "../src/cuckoo.js";
 import type { ScalableRow } from "../src/scalable.js";
 import {
   cardinalityTable,
+  cuckooTable,
   renderResults,
   scalableTable,
   spaceAccuracyTable,
@@ -276,6 +278,88 @@ test("RESULTS carries the measured scalable section for both filters", () => {
   }
   // The header note says which build the section was measured on.
   expect(md.slice(0, md.indexOf("## Space"))).toContain("Scalable Bloom");
+});
+
+const cuckooRowsFixture: CuckooRow[] = [
+  {
+    name: "distillate/cuckoo",
+    keys: 100_000,
+    bitsPerKey: 10.6532,
+    measuredFpr: 0.0074,
+    addOpsPerSec: 4_800_000,
+    hasOpsPerSec: 9_100_000,
+    deleteOpsPerSec: 8_300_000,
+    lostAfterBuild: 0,
+    lostAfterDelete: 0,
+    refused: 0,
+  },
+  {
+    name: "bloom-filters",
+    keys: 1_000,
+    bitsPerKey: 8.384,
+    measuredFpr: 0.0291,
+    addOpsPerSec: 230_000,
+    hasOpsPerSec: 300_000,
+    deleteOpsPerSec: 280_000,
+    lostAfterBuild: 274,
+    lostAfterDelete: 131,
+    refused: 0,
+  },
+];
+
+test("cuckooTable renders space, FPR, lost keys and three throughputs", () => {
+  const table = cuckooTable(cuckooRowsFixture);
+  expect(table).toContain(
+    "| Filter | keys | bits/key | measured FPR | lost after build | lost after delete | refused | add | has | delete |",
+  );
+  expect(table).toContain(
+    "| distillate/cuckoo | 100k | 10.65 | 0.74% | 0 (0.00%) | 0 (0.00%) | 0 | 4.80 M ops/s | 9.10 M ops/s | 8.30 M ops/s |",
+  );
+  // Lost after delete is a share of the kept half, 500 keys at 1k.
+  expect(table).toContain(
+    "| bloom-filters | 1k | 8.38 | 2.91% | 274 (27.40%) | 131 (26.20%) | 0 | 230 k ops/s | 300 k ops/s | 280 k ops/s |",
+  );
+});
+
+test("renderResults places the cuckoo section after scalable and states its basis", () => {
+  const md = renderResults({
+    banner: "distillate-bench | node v24 | arm64 | Apple M1 | 8 cores",
+    version: "0.1.1",
+    date: "2026-07-31",
+    targetFpr: 0.01,
+    throughputCapacity: 100000,
+    spaceTable: "SPACE_TBL",
+    throughputTable: "TPUT_TBL",
+    cardinalityTable: "CARD_TBL",
+    scalableTable: "SCALABLE_TBL",
+    cuckooTable: "CUCKOO_TBL",
+  });
+  expect(md).toContain("CUCKOO_TBL");
+  const at = md.indexOf("## Cuckoo");
+  expect(at).toBeGreaterThan(md.indexOf("## Scalable Bloom"));
+  expect(at).toBeLessThan(md.indexOf("## Throughput"));
+  const section = md.slice(at, md.indexOf("## Throughput"));
+  for (const phrase of [
+    "hex characters",
+    "nominal",
+    "false negative",
+    "delete-half",
+  ]) {
+    expect(section, phrase).toContain(phrase);
+  }
+});
+
+test("METHODOLOGY states the cuckoo configuration and the delete-half workload", () => {
+  const md = readFileSync(
+    fileURLToPath(new URL("../METHODOLOGY.md", import.meta.url)),
+    "utf8",
+  );
+  const at = md.indexOf("## Configuration for Cuckoo");
+  expect(at).toBeGreaterThan(-1);
+  const section = md.slice(at, md.indexOf("\n## ", at + 1));
+  for (const phrase of ["bucket", "500", "hex characters", "delete-half"]) {
+    expect(section, phrase).toContain(phrase);
+  }
 });
 
 test("scalableTable marks a row that was not run with its projected build", () => {

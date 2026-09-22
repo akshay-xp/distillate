@@ -85,6 +85,24 @@ measured from 1k to 10M keys, one to ten thousand times the initial size.
 are marked not run, with the build time projected quadratically from its own 100k
 run.
 
+## Configuration for Cuckoo
+
+Cuckoo is compared with both filters built by `create(n, 0.01)`, which gives
+both a bucket size of 4 and a limit of 500 kicks per add: the incumbent's
+defaults, and distillate's fixed values. The one setting that does not match is
+the fingerprint. `bloom-filters` takes `ceil(f / 8)` hex characters of a 32-bit
+hash, where `f` is the width the target calls for (10 bits at 1%), so it stores
+2 hex characters, 8 bits, as a JS string. distillate stores 10 bits packed.
+Bits per key is each filter's nominal slot bits over the key count; for the
+incumbent that is hex characters times 4 bits, not the heap its strings occupy.
+
+Each row runs a delete-half workload: add `n` keys, count those `has` then
+denies (lost after build), measure FPR over 100,000 keys neither filter saw,
+delete the first half, and count kept keys that `has` denies (lost after
+delete, a share of the kept half). Adds that report the filter full are counted
+as refused. Both are measured from 1k to 10M keys; the incumbent scales
+linearly, so no row is projected.
+
 ## Keys
 
 `hitMissPools(n)` builds two disjoint sets: inserted "hit" keys `0:0 … 0:(n-1)`
@@ -115,6 +133,10 @@ Reported as ops/sec (`1e9 / avg_ns`).
   `bloomfilter`.
 - **HyperLogLog** is a head-to-head: `distillate/hll` vs the `bloom-filters` sketch,
   at a matched register count (see above).
+- **Scalable Bloom** is a head-to-head: `distillate/scalable` vs the
+  `bloom-filters` scalable filter, at the incumbent's default configuration.
+- **Cuckoo** is a head-to-head: `distillate/cuckoo` vs the `bloom-filters`
+  cuckoo filter, with a delete-half workload that counts lost keys.
 - **blocked**, **fuse8**, **fuse16** are distillate-only and shown standalone; no
   audited incumbent offers an equivalent, so there is nothing fair to compare them
   to. fuse8 targets 2⁻⁸, fuse16 targets 2⁻¹⁶.
@@ -132,4 +154,5 @@ Node only, single machine (disclosed in the banner). No Bun/Deno, no CI runs, no
 charts. Capacities: 100k and 1M for space/accuracy, 100k for throughput. Cardinality is
 swept at 1k/10k/100k/1M/10M against `p = 14`, with the sketch throughput built at
 20k. Scalable Bloom is swept at 1k/10k/100k/1M/10M keys from an initial size of 1k,
-with `bloom-filters` capped at 100k.
+with `bloom-filters` capped at 100k. Cuckoo is swept at 1k/10k/100k/1M/10M keys
+for both filters.
