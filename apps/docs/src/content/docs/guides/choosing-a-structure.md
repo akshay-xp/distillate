@@ -27,7 +27,7 @@ questions and the choice is usually forced:
 | Static set, built once, queried a lot     | [Binary Fuse 8](/guides/fuse/) (Fuse 16 for a lower FPR)                        |
 | Squeeze every bit, static, RAM-bound      | Ribbon/BuRR **(not yet available)**                                             |
 | Streaming inserts, speed-first, no delete | [Blocked Bloom](/guides/blocked/)                                               |
-| Inserts and deletes                       | Cuckoo **(not yet available)**                                                  |
+| Inserts and deletes                       | [Cuckoo](/guides/cuckoo/)                                                       |
 | Unbounded growth, `n` unknown             | [Scalable Bloom](/guides/scalable/); InfiniFilter/Aleph **(not yet available)** |
 | Very low FPR (1e-4 or below)              | [Binary Fuse 16](/guides/fuse/)                                                 |
 | Migrating from `bloom-filters`            | [Classic Bloom](/guides/bloom/)                                                 |
@@ -95,15 +95,24 @@ Reach for it when `n` is a guess: a stream, a crawler's seen-URL set, a dedup
 set that keeps growing. If you can size the filter, Classic Bloom is smaller
 and faster.
 
+### [Cuckoo](/guides/cuckoo/) (`distillate/cuckoo`)
+
+Mutable, with delete. Fingerprints in buckets of four, each key in one of two
+candidate buckets, so a key can be taken back out without disturbing the
+others. About `log2(1/epsilon) + 3` bits/key at 95% load, which makes it larger
+than a Classic Bloom at common targets (10.65 bits/key against 9.59 at 1%) and
+smaller only at about 0.2% and below. An add into a full filter throws and
+leaves the filter unchanged rather than dropping a key.
+
+Reach for it when keys leave the set as well as join it: expiring sessions,
+revoked tokens, evicted cache entries. Delete only keys you added; a delete of a
+key that was never added can remove another key's fingerprint.
+
 ## What is not shipped yet
 
 These are on the roadmap. None of them exist in the package today, and none
 have a guide, so do not plan around them.
 
-- **Cuckoo** _(not yet available)_. Fingerprints in a cuckoo table, buckets of
-  four, partial-key hashing. The only planned structure that supports delete.
-  Roughly `log2(1/epsilon) + 3` bits/key and two bucket probes. Inserts can
-  fail near the load cap, so it must signal rather than corrupt.
 - **Counting Bloom** _(not yet available)_. Four-bit counters buy delete at
   about four times the space. Mainly for parity with incumbent packages.
 - **Ribbon / Homogeneous / BuRR** _(not yet available)_. A banded linear
@@ -112,9 +121,6 @@ have a guide, so do not plan around them.
   that grow in constant time, for unknown-cardinality streams. Post-1.0.
 - **XOR 8/16** _(not yet available)_. Superseded by Binary Fuse, which is both
   smaller and faster. Of interest only for benchmark comparison.
-
-Until Cuckoo lands there is no delete anywhere in the library. If you need to
-remove keys, rebuild the filter from the current set.
 
 ## Next
 
