@@ -71,9 +71,11 @@ distillate has **zero** runtime dependencies.
 ### Its Cuckoo filter has a false-negative bug
 
 The Cuckoo implementation can report `false` for a key that was inserted, and
-not rarely. Filled to the size it was created for, about a quarter to a third
-of the keys it accepted read as absent: 274 of 1,000, and 3,408 of 10,000.
-Every one of those `add` calls returned `true`.
+not rarely. Filled to the size it was created for, about a third of the keys it
+accepted read as absent: 370 of 1,000, 3,109 of 10,000, and 31% to 37% at every
+size up to 10 million. Every one of those `add` calls returned `true`, and
+deleting half the keys leaves about 30% of the rest missing (see the
+[benchmark results](/bench/results/)).
 
 The cause is in its eviction step (`cuckoo-filter.js`). A lookup derives a
 key's second bucket from the key's full hash. When an eviction moves a
