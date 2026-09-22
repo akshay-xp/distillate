@@ -8,6 +8,7 @@ import { BloomFilter } from "../src/bloom/index.js";
 import { toBase64 } from "../src/core/base64.js";
 import { BinaryFuse8, BinaryFuse16 } from "../src/fuse/index.js";
 import { HyperLogLog } from "../src/hll/hll.js";
+import { CuckooFilter } from "../src/cuckoo/cuckoo.js";
 import { ScalableBloomFilter } from "../src/scalable/scalable.js";
 
 interface Entry {
@@ -20,6 +21,7 @@ interface Entry {
   growth?: number;
   tightening?: number;
   seed?: number;
+  deletes?: string[];
   frame?: string;
 }
 
@@ -52,6 +54,13 @@ const bytes = (entry: Entry): Uint8Array => {
         seed,
       });
       for (const key of keys) filter.add(key);
+      return filter.toBytes();
+    }
+    case "cuckoo": {
+      const { n = 1, seed, deletes = [] } = entry;
+      const filter = CuckooFilter.create(n, epsilon, { seed });
+      for (const key of keys) filter.add(key);
+      for (const key of deletes) filter.delete(key);
       return filter.toBytes();
     }
     case "v2": {

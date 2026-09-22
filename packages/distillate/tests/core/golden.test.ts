@@ -3,9 +3,11 @@ import { describe, expect, test } from "vitest";
 import { BlockedBloomFilter } from "../../src/blocked/index.js";
 import { BloomFilter } from "../../src/bloom/index.js";
 import { fromBase64 } from "../../src/core/base64.js";
+import { hash128Key, reduce } from "../../src/core/hasher.js";
 import { bytesEqual, UnknownVersionError } from "../../src/core/serialize.js";
 import { BinaryFuse8, BinaryFuse16 } from "../../src/fuse/index.js";
 import { HyperLogLog } from "../../src/hll/hll.js";
+import { CuckooFilter } from "../../src/cuckoo/cuckoo.js";
 import { ScalableBloomFilter } from "../../src/scalable/scalable.js";
 import goldenJson from "../fixtures/golden.json" with { type: "json" };
 
@@ -19,6 +21,7 @@ interface GoldenEntry {
   growth?: number;
   tightening?: number;
   seed?: number;
+  deletes?: string[];
   frame?: string;
 }
 
@@ -59,6 +62,13 @@ const build = (entry: GoldenEntry): Serializable => {
       for (const key of keys) filter.add(key);
       return filter;
     }
+    case "cuckoo": {
+      const { n = 1, seed, deletes = [] } = entry;
+      const filter = CuckooFilter.create(n, epsilon, { seed });
+      for (const key of keys) filter.add(key);
+      for (const key of deletes) filter.delete(key);
+      return filter;
+    }
     default:
       throw new Error(`unknown kind ${kind}`);
   }
@@ -78,6 +88,8 @@ const parse = (kind: string, bytes: Uint8Array): Serializable => {
       return HyperLogLog.fromBytes(bytes);
     case "scalable":
       return ScalableBloomFilter.fromBytes(bytes);
+    case "cuckoo":
+      return CuckooFilter.fromBytes(bytes);
     default:
       throw new Error(`unknown kind ${kind}`);
   }
@@ -95,7 +107,7 @@ const structures = golden.filter((g) => g.kind !== "v2");
 
 describe.each(structures)("golden fixture $name", (entry) => {
   test("parses to the recipe's exact state", () => {
-    const { kind, keys } = entry;
+    const { kind, keys, deletes = [] } = entry;
     const bytes = frameBytes(entry);
     const parsed = parse(kind, bytes);
 
@@ -105,7 +117,13 @@ describe.each(structures)("golden fixture $name", (entry) => {
     if (parsed instanceof HyperLogLog) {
       expect(parsed.equals(build(entry) as HyperLogLog)).toBe(true);
     } else {
-      for (const key of keys) expect((parsed as Filter).has(key)).toBe(true);
+      // A deleted key may still answer true (a false positive), so only the
+      // keys still held are asserted.
+      for (const key of keys) {
+        if (!deletes.includes(key)) {
+          expect((parsed as Filter).has(key)).toBe(true);
+        }
+      }
     }
 
     expect(bytesEqual(parsed.toBytes(), bytes)).toBe(true);
@@ -127,4 +145,33 @@ test("the scalable fixtures pin chains of at least three stages", () => {
     const parsed = ScalableBloomFilter.fromBytes(frameBytes(entry));
     expect(parsed.stages, entry.name).toBeGreaterThanOrEqual(3);
   }
+});
+
+// A frame that only ever used first-choice slots would pass even with the
+// eviction walk broken, so the pinned one must include adds that found both
+// buckets full. The model below places each key without evicting, using the
+// variant 0 mapping, and counts the adds it could not place.
+test("the cuckoo fixture pins evictions and deletes", () => {
+  const entry = golden.find((g) => g.name === "cuckoo");
+  if (!entry) throw new Error("cuckoo fixture missing from golden.json");
+  const { keys, deletes = [], seed = 0 } = entry;
+  const f = CuckooFilter.fromBytes(frameBytes(entry));
+  const { buckets, fingerprintBits: bits } = f;
+
+  const load = new Array<number>(buckets).fill(0);
+  let bothFull = 0;
+  for (const key of keys) {
+    const { w0, w1 } = hash128Key(key, seed);
+    const fp = w1 >>> (32 - bits) || 1;
+    const i1 = reduce(w0, buckets);
+    const i2 =
+      (((Math.imul(fp, 0x5bd1e995) >>> 0) % buckets) + buckets - i1) % buckets;
+    if ((load[i1] ?? 0) < 4) load[i1] = (load[i1] ?? 0) + 1;
+    else if ((load[i2] ?? 0) < 4) load[i2] = (load[i2] ?? 0) + 1;
+    else bothFull++;
+  }
+
+  expect(bothFull).toBeGreaterThan(0);
+  expect(deletes.length).toBeGreaterThan(0);
+  expect(f.count).toBe(keys.length - deletes.length);
 });

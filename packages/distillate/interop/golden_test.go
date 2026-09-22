@@ -98,7 +98,7 @@ func find(t *testing.T, name string) entry {
 	return entry{}
 }
 
-var typeOf = map[string]byte{"bloom": 1, "blocked": 2, "fuse8": 3, "fuse16": 4, "hll": 5, "scalable": 6}
+var typeOf = map[string]byte{"bloom": 1, "blocked": 2, "fuse8": 3, "fuse16": 4, "hll": 5, "scalable": 6, "cuckoo": 7}
 
 func TestFrames(t *testing.T) {
 	for _, e := range golden(t) {

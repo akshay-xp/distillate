@@ -104,7 +104,17 @@ const golden = JSON.parse(
 
 const decode = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 
-const rebuild = ({ kind, keys, epsilon, p, n, growth, tightening, seed }) => {
+const rebuild = ({
+  kind,
+  keys,
+  epsilon,
+  p,
+  n,
+  growth,
+  tightening,
+  seed,
+  deletes = [],
+}) => {
   switch (kind) {
     case "bloom":
       return BloomFilter.from(keys, epsilon);
@@ -126,6 +136,12 @@ const rebuild = ({ kind, keys, epsilon, p, n, growth, tightening, seed }) => {
         seed,
       });
       for (const key of keys) filter.add(key);
+      return filter;
+    }
+    case "cuckoo": {
+      const filter = CuckooFilter.create(n, epsilon, { seed });
+      for (const key of keys) filter.add(key);
+      for (const key of deletes) filter.delete(key);
       return filter;
     }
     default:
