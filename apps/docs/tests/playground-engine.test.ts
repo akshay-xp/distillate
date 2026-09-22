@@ -1,6 +1,7 @@
 import { BlockedBloomFilter } from "distillate/blocked";
 import { bloomSizing } from "distillate/bloom";
 import { BinaryFuse8, BinaryFuseBuildError } from "distillate/fuse";
+import { CuckooFilter } from "distillate/cuckoo";
 import { ScalableBloomFilter } from "distillate/scalable";
 import { expect, test } from "vitest";
 
@@ -22,11 +23,17 @@ function built(keyCount: number = KEYS, target: number = TARGET) {
   return result.playground;
 }
 
-test("all four structures are built from the same key set", () => {
+test("all five structures are built from the same key set", () => {
   const report = built().report();
 
   expect(report.keyCount).toBe(KEYS);
-  for (const key of ["bloom", "blocked", "fuse8", "scalable"] as const) {
+  for (const key of [
+    "bloom",
+    "blocked",
+    "fuse8",
+    "scalable",
+    "cuckoo",
+  ] as const) {
     expect(report.structures[key].heldKeys).toBe(KEYS);
   }
 });
@@ -34,7 +41,13 @@ test("all four structures are built from the same key set", () => {
 test("every inserted key is found, in every structure", () => {
   const report = built().report();
 
-  for (const key of ["bloom", "blocked", "fuse8", "scalable"] as const) {
+  for (const key of [
+    "bloom",
+    "blocked",
+    "fuse8",
+    "scalable",
+    "cuckoo",
+  ] as const) {
     expect(report.structures[key].missing).toBe(0);
   }
 });
@@ -59,7 +72,12 @@ test("reported space matches what the library allocated", () => {
   const scalable = ScalableBloomFilter.from(SAME_KEYS, TARGET);
   expect(structures.scalable.bitsPerKey).toBe(scalable.bitsPerKey);
   expect(structures.scalable.totalBytes).toBe(Math.ceil(scalable.m / 8));
+  const cuckoo = CuckooFilter.from(SAME_KEYS, TARGET);
+  expect(structures.cuckoo.bitsPerKey).toBe(cuckoo.bitsPerKey);
+  expect(structures.cuckoo.totalBytes).toBe(Math.ceil(cuckoo.m / 8));
 
+  // Cuckoo is checked against its own m above: bitsPerKey is m / n, and
+  // multiplying back lands a hair past m in floating point.
   for (const key of ["bloom", "blocked", "fuse8", "scalable"] as const) {
     const { bitsPerKey, totalBytes } = structures[key];
     expect(totalBytes).toBe(Math.ceil((bitsPerKey * KEYS) / 8));
@@ -69,7 +87,13 @@ test("reported space matches what the library allocated", () => {
 test("every structure starts as a single table", () => {
   const { structures } = built().report();
 
-  for (const key of ["bloom", "blocked", "fuse8", "scalable"] as const) {
+  for (const key of [
+    "bloom",
+    "blocked",
+    "fuse8",
+    "scalable",
+    "cuckoo",
+  ] as const) {
     expect(structures[key].stages).toBe(1);
   }
 });
@@ -78,7 +102,13 @@ test("the miss set is 20,000 keys and the rate is measured against it", () => {
   const { probeCount, structures } = built().report();
 
   expect(probeCount).toBe(20_000);
-  for (const key of ["bloom", "blocked", "fuse8", "scalable"] as const) {
+  for (const key of [
+    "bloom",
+    "blocked",
+    "fuse8",
+    "scalable",
+    "cuckoo",
+  ] as const) {
     const { falsePositives, measuredFpr } = structures[key];
     expect(measuredFpr).toBe(falsePositives / probeCount);
   }
@@ -194,6 +224,7 @@ test("a key that was inserted reads as a member everywhere", () => {
       blocked: "member",
       fuse8: "member",
       scalable: "member",
+      cuckoo: "member",
     },
   });
 });
@@ -216,6 +247,7 @@ test("a miss on a never-inserted key is simply absent", () => {
       blocked: "absent",
       fuse8: "absent",
       scalable: "absent",
+      cuckoo: "absent",
     },
   });
 });
@@ -230,6 +262,7 @@ test("a late key is taken by every bloom filter and refused by fuse", () => {
   expect(insert.fuseRefusal).toContain("Binary Fuse");
   expect(insert.fuseRefusal).toContain("static");
   expect(insert.fuseRefusal).toContain("Scalable Bloom");
+  expect(insert.fuseRefusal).toContain("Cuckoo");
 });
 
 test("a late key leaves neither structure with a false negative", () => {
@@ -241,8 +274,15 @@ test("a late key leaves neither structure with a false negative", () => {
   expect(structures.bloom.heldKeys).toBe(KEYS + 1);
   expect(structures.blocked.heldKeys).toBe(KEYS + 1);
   expect(structures.scalable.heldKeys).toBe(KEYS + 1);
+  expect(structures.cuckoo.heldKeys).toBe(KEYS + 1);
   expect(structures.fuse8.heldKeys).toBe(KEYS);
-  for (const key of ["bloom", "blocked", "fuse8", "scalable"] as const) {
+  for (const key of [
+    "bloom",
+    "blocked",
+    "fuse8",
+    "scalable",
+    "cuckoo",
+  ] as const) {
     expect(structures[key].missing).toBe(0);
   }
 });
@@ -259,6 +299,7 @@ test("a late key is outside the fuse build, not missing from it", () => {
       blocked: "member",
       fuse8: "added after build",
       scalable: "member",
+      cuckoo: "member",
     },
   });
 });
@@ -285,7 +326,7 @@ test("growing past the build opens stages and holds the target", () => {
   const result = playground.grow(30_000);
   const { structures } = playground.report();
 
-  expect(result).toEqual({ ok: true, keyCount: 40_000 });
+  expect(result).toMatchObject({ ok: true, keyCount: 40_000 });
   expect(structures.scalable.stages).toBeGreaterThanOrEqual(3);
   expect(structures.scalable.measuredFpr).toBeLessThanOrEqual(TARGET);
   expect(structures.bloom.measuredFpr).toBeGreaterThan(TARGET);
@@ -310,8 +351,43 @@ test.each([0, -1, 1.5, "abc", "", null, 90_001])(
 );
 
 test("growing to the bound itself is allowed", () => {
-  expect(built().grow(MAX_KEYS - KEYS)).toEqual({
+  expect(built().grow(MAX_KEYS - KEYS)).toMatchObject({
     ok: true,
     keyCount: MAX_KEYS,
+  });
+});
+
+// Cuckoo is sized for the build and cannot grow, so past it the keys it has
+// no room for are refused, and every key it did take is still found.
+test("a full Cuckoo refuses keys without losing any it held", () => {
+  const playground = built();
+
+  const result = playground.grow(30_000);
+  const { structures } = playground.report();
+
+  if (!result.ok) throw new Error(result.message);
+  expect(result.cuckooRefused).toBeGreaterThan(0);
+  expect(structures.cuckoo.heldKeys).toBe(40_000 - result.cuckooRefused);
+  expect(structures.cuckoo.missing).toBe(0);
+  expect(structures.bloom.heldKeys).toBe(40_000);
+});
+
+// A wedge guard like the build's. Each refused add costs 500 kicks and an
+// undo, so offering every key to a full Cuckoo took 3 s at the bound; the
+// playground stops offering keys once one is refused.
+test("growing to the bound stays far inside a responsive budget", () => {
+  const playground = built();
+  const started = performance.now();
+  playground.grow(MAX_KEYS - KEYS);
+
+  expect(performance.now() - started).toBeLessThan(1500);
+});
+
+// 10,000 keys get 2,732 buckets, 10,928 slots, so 100 more still fit.
+test("growing inside Cuckoo's room refuses nothing", () => {
+  expect(built().grow(100)).toEqual({
+    ok: true,
+    keyCount: KEYS + 100,
+    cuckooRefused: 0,
   });
 });

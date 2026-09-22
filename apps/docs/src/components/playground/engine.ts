@@ -1,12 +1,14 @@
 import { BlockedBloomFilter, ParamError } from "distillate/blocked";
 import { BloomFilter } from "distillate/bloom";
+import { CuckooFilter, CuckooFullError } from "distillate/cuckoo";
 import { BinaryFuse8, BinaryFuseBuildError } from "distillate/fuse";
 import { ScalableBloomFilter } from "distillate/scalable";
 
 import { RATE_MESSAGE, toNumber } from "../../lib/form.js";
 
-/** The four shipped filters, side by side over one key set. */
-export type StructureKey = "bloom" | "blocked" | "fuse8" | "scalable";
+/** The five shipped filters, side by side over one key set. */
+export type StructureKey =
+  "bloom" | "blocked" | "fuse8" | "scalable" | "cuckoo";
 
 /** What one structure did with the key set it was given. */
 export interface StructureReport {
@@ -27,7 +29,7 @@ export interface StructureReport {
 export type Verdict =
   "member" | "false positive" | "absent" | "added after build";
 
-/** One query, answered by all four structures at once. */
+/** One query, answered by all five structures at once. */
 export interface Lookup {
   key: string;
   inserted: boolean;
@@ -55,7 +57,13 @@ export type BuildResult =
   { ok: true; playground: Playground } | { ok: false; message: string };
 
 export type GrowResult =
-  { ok: true; keyCount: number } | { ok: false; message: string };
+  | {
+      ok: true;
+      keyCount: number;
+      /** Added keys Cuckoo had no room for. It is sized for the build. */
+      cuckooRefused: number;
+    }
+  | { ok: false; message: string };
 
 /** How many never-inserted keys the measured rate is averaged over. */
 export const PROBE_COUNT = 20_000;
@@ -86,6 +94,7 @@ interface Filters {
   blocked: BlockedBloomFilter;
   fuse8: BinaryFuse8;
   scalable: ScalableBloomFilter;
+  cuckoo: CuckooFilter;
 }
 
 function describe(
@@ -139,6 +148,10 @@ export class Playground {
   readonly #probes: string[];
   readonly #target: number;
   readonly #filters: Filters;
+  /** Inserted keys Cuckoo does not hold: refused when full. */
+  readonly #notInCuckoo = new Set<string>();
+  /** Set by the first refused add; see #addToCuckoo. */
+  #cuckooFull = false;
   /** Keys generated so far, so growth continues the `key-<i>` sequence. */
   #generated: number;
 
@@ -152,7 +165,7 @@ export class Playground {
     this.#filters = filters;
   }
 
-  /** Builds all four structures from `keyCount` generated keys. */
+  /** Builds all five structures from `keyCount` generated keys. */
   static build(keyCount: unknown, target: unknown): BuildResult {
     const n = toNumber(keyCount);
     if (!Number.isInteger(n) || n < 1 || n > MAX_KEYS) {
@@ -171,6 +184,7 @@ export class Playground {
         blocked: BlockedBloomFilter.from(keys, epsilon),
         fuse8: BinaryFuse8.from(keys),
         scalable: ScalableBloomFilter.from(keys, epsilon),
+        cuckoo: CuckooFilter.from(keys, epsilon),
       };
     } catch (error) {
       return { ok: false, message: toMessage(error) };
@@ -187,7 +201,7 @@ export class Playground {
     return {
       key,
       keyCount: this.#keys.length,
-      fuseRefusal: `Binary Fuse is static: it was built from ${this.#built.length.toLocaleString("en-US")} keys in one pass and has no add. To include this key you rebuild the whole filter. Classic, Blocked and Scalable Bloom took it.`,
+      fuseRefusal: `Binary Fuse is static: it was built from ${this.#built.length.toLocaleString("en-US")} keys in one pass and has no add. To include this key you rebuild the whole filter. Classic, Blocked, Scalable Bloom and Cuckoo took it.`,
     };
   }
 
@@ -197,11 +211,16 @@ export class Playground {
     if (!Number.isInteger(n) || n < 1 || this.#keys.length + n > MAX_KEYS) {
       return { ok: false, message: GROW_MESSAGE };
     }
+    const refusedBefore = this.#notInCuckoo.size;
     const end = this.#generated + n;
     for (; this.#generated < end; this.#generated += 1) {
       this.#add(`key-${String(this.#generated)}`);
     }
-    return { ok: true, keyCount: this.#keys.length };
+    return {
+      ok: true,
+      keyCount: this.#keys.length,
+      cuckooRefused: this.#notInCuckoo.size - refusedBefore,
+    };
   }
 
   #add(key: string): void {
@@ -209,12 +228,32 @@ export class Playground {
     this.#filters.bloom.add(key);
     this.#filters.blocked.add(key);
     this.#filters.scalable.add(key);
+    this.#addToCuckoo(key);
     this.#keys.push(key);
     this.#inserted.add(key);
     this.#late.add(key);
   }
 
-  /** Answers one query across all four structures. */
+  // A full Cuckoo refuses rather than drops a key it holds, so the key is
+  // recorded as not held and every earlier one is still found. Once one add
+  // is refused the table is at its load limit and nearly every later add
+  // would fail too, each after 500 kicks and an undo, so the playground stops
+  // offering keys until a delete frees a slot.
+  #addToCuckoo(key: string): void {
+    if (this.#cuckooFull) {
+      this.#notInCuckoo.add(key);
+      return;
+    }
+    try {
+      this.#filters.cuckoo.add(key);
+    } catch (error) {
+      if (!(error instanceof CuckooFullError)) throw error;
+      this.#notInCuckoo.add(key);
+      this.#cuckooFull = true;
+    }
+  }
+
+  /** Answers one query across all five structures. */
   lookup(key: string): Lookup {
     const inserted = this.#inserted.has(key);
     const late = this.#late.has(key);
@@ -222,7 +261,7 @@ export class Playground {
       if (!filter.has(key)) return "absent";
       return inserted ? "member" : "false positive";
     };
-    const { bloom, blocked, fuse8, scalable } = this.#filters;
+    const { bloom, blocked, fuse8, scalable, cuckoo } = this.#filters;
     return {
       key,
       inserted,
@@ -233,12 +272,13 @@ export class Playground {
         // negative. Saying so is the whole point of showing it.
         fuse8: late ? "added after build" : verdict(fuse8),
         scalable: verdict(scalable),
+        cuckoo: verdict(cuckoo),
       },
     };
   }
 
   report(): PlaygroundReport {
-    const { bloom, blocked, fuse8, scalable } = this.#filters;
+    const { bloom, blocked, fuse8, scalable, cuckoo } = this.#filters;
     // A probe the reader has since inserted is a member, so it leaves the miss
     // set rather than being counted as a false positive.
     const probes =
@@ -261,6 +301,12 @@ export class Playground {
           probes,
           scalable.m,
           scalable.stages,
+        ),
+        cuckoo: describe(
+          cuckoo,
+          this.#keys.filter((k) => !this.#notInCuckoo.has(k)),
+          probes,
+          cuckoo.m,
         ),
       },
     };
