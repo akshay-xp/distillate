@@ -107,8 +107,9 @@ export class CuckooFilter {
   }
 
   /**
-   * Builds a filter from `keys`, sized for their count at the target
-   * false-positive rate.
+   * Builds a filter from the given keys; duplicates are ignored. It is sized
+   * for the distinct keys at the target false-positive rate, and holds each
+   * once, so a key listed twice needs one delete.
    *
    * @param keys - The keys to insert.
    * @param epsilon - Target false-positive rate, e.g. `0.01` for 1%.
@@ -120,9 +121,25 @@ export class CuckooFilter {
     epsilon: number,
     options: CuckooOptions = {},
   ): CuckooFilter {
-    const arr = [...keys];
-    const f = CuckooFilter.create(Math.max(1, arr.length), epsilon, options);
-    for (const k of arr) f.add(k);
+    // Copies of a key share its two buckets, so repeats fill those long before
+    // the table. Deduped on all 128 bits: keys sharing only the bits the filter
+    // uses would otherwise collapse into one copy, and deleting either would
+    // drop the other.
+    const seen = new Set<string>();
+    const distinct: BytesLike[] = [];
+    for (const key of keys) {
+      hash128KeyInto(key, options.seed ?? 0, HASH);
+      const id = `${String(HASH.w0)},${String(HASH.w1)},${String(HASH.w2)},${String(HASH.w3)}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      distinct.push(key);
+    }
+    const f = CuckooFilter.create(
+      Math.max(1, distinct.length),
+      epsilon,
+      options,
+    );
+    for (const k of distinct) f.add(k);
     return f;
   }
 

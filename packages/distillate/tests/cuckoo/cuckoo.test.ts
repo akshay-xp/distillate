@@ -128,6 +128,23 @@ test("from sizes for the keys in hand and holds them all", () => {
   expect(keys.every((k) => f.has(k))).toBe(true);
 });
 
+test("from stores each distinct key once and sizes for the distinct count", () => {
+  const keys = sampleStrings(29, 100_000);
+  const f = CuckooFilter.from([...keys, ...keys], 0.01);
+
+  expect(f.count).toBe(100_000);
+  expect(f.buckets).toBe(cuckooSizing(100_000, 0.01).buckets);
+  expect(keys.every((k) => f.has(k))).toBe(true);
+  expect(CuckooFilter.from(Array(9).fill("x"), 0.01).count).toBe(1);
+});
+
+test("a key passed to from twice needs only one delete", () => {
+  const f = CuckooFilter.from(["k", "k"], 0.01);
+
+  expect(f.delete("k")).toBe(true);
+  expect(f.has("k")).toBe(false);
+});
+
 test("from with no keys sizes for one", () => {
   const f = CuckooFilter.from([], 0.01);
 
