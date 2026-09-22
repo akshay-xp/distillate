@@ -215,3 +215,28 @@ test("the cuckoo bug section explains the defect and links the guide", () => {
   expect(section).not.toContain("not yet available");
   expect(section).toMatch(/already been reduced|% size/);
 });
+
+// The lost-key counts are the bench's, so a rerun that moves them fails here
+// until the guide is updated to match.
+test("the cuckoo bug section quotes the lost keys RESULTS.md measured", () => {
+  const results = readFileSync(
+    fileURLToPath(new URL("../../bench/RESULTS.md", import.meta.url)),
+    "utf8",
+  );
+  const at = results.indexOf("## Cuckoo");
+  const bench = results.slice(at, results.indexOf("\n## ", at + 1));
+  const lost = (keys: string): string => {
+    const row = bench
+      .split("\n")
+      .map((line) => line.split("|").map((cell) => cell.trim()))
+      .find((cells) => cells[1] === "bloom-filters" && cells[2] === keys);
+    return /^(\d+)/.exec(row?.[5] ?? "")?.[1] ?? "missing";
+  };
+  const section = subsection("Its Cuckoo filter has a false-negative bug");
+  const plain = section.replaceAll(",", "");
+
+  for (const keys of ["1k", "10k"]) {
+    expect(plain, keys).toContain(`${lost(keys)} of`);
+  }
+  expect(section).toContain("/bench/results/");
+});
