@@ -10,7 +10,8 @@
     "src/fuse/index.ts",
     "src/hll/index.ts",
     "src/frame/index.ts",
-    "src/scalable/index.ts"
+    "src/scalable/index.ts",
+    "src/cuckoo/index.ts"
   ],
   "tsconfig": "./tsconfig.json",
   "readme": "none",

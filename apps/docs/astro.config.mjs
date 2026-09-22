@@ -173,6 +173,7 @@ export default defineConfig({
             "../../packages/distillate/src/hll/index.ts",
             "../../packages/distillate/src/frame/index.ts",
             "../../packages/distillate/src/scalable/index.ts",
+            "../../packages/distillate/src/cuckoo/index.ts",
           ],
           tsconfig: "../../packages/distillate/tsconfig.json",
           sidebar: { label: "API reference" },

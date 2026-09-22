@@ -9,6 +9,7 @@ export default defineConfig({
     "src/hll/index.ts",
     "src/frame/index.ts",
     "src/scalable/index.ts",
+    "src/cuckoo/index.ts",
   ],
   format: ["esm", "cjs"],
   fixedExtension: false,

@@ -16,6 +16,7 @@ import {
 import { readFrameAt } from "../dist/frame/index.js";
 import { HyperLogLog, hllSizing } from "../dist/hll/index.js";
 import { ScalableBloomFilter } from "../dist/scalable/index.js";
+import { CuckooFilter } from "../dist/cuckoo/index.js";
 
 if (typeof VERSION !== "string") {
   console.error(
@@ -163,6 +164,21 @@ if (grown.stages < 2 || !grownKeys.every((key) => grown.has(key))) {
   process.exit(1);
 }
 
+// A cuckoo filter must delete: the deleted keys go, the rest stay.
+const cuckoo = CuckooFilter.create(30, 0.01);
+const cuckooKeys = Array.from({ length: 30 }, (_, i) => `cuckoo:${i}`);
+for (const key of cuckooKeys) cuckoo.add(key);
+for (const key of cuckooKeys.slice(0, 10)) cuckoo.delete(key);
+if (
+  cuckoo.count !== 20 ||
+  !cuckooKeys.slice(10).every((key) => cuckoo.has(key))
+) {
+  console.error(
+    `smoke: CuckooFilter held ${cuckoo.count} after deleting 10 of 30, or lost a kept key`,
+  );
+  process.exit(1);
+}
+
 // A log of concatenated frames must walk by declared length alone.
 const log = [
   golden.find((g) => g.name === "bloom"),
@@ -186,5 +202,5 @@ if (walked.join() !== "1,5" || at !== stream.length) {
 }
 
 console.log(
-  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable work (filters, sketch, sizing helpers, frame walk, growth), toBytes byte-identical to golden`,
+  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo work (filters, sketch, sizing helpers, frame walk, growth, delete), toBytes byte-identical to golden`,
 );
