@@ -341,3 +341,39 @@ test("the scalable section documents every field and the growth rules", () => {
   expect(section).toContain("multiple of 8");
   expect(section).toContain("not already");
 });
+
+test("the layout table names type 7 as Cuckoo", () => {
+  const { types, reserved } = typeRows();
+  const named = new Map(
+    [...types.matchAll(/(\d+)=([A-Za-z0-9]+)/g)].map(([, n, name]) => [
+      Number(n),
+      name,
+    ]),
+  );
+
+  expect(named.get(7)).toBe("Cuckoo");
+  expect(reserved).not.toMatch(/\b7\+/);
+  expect(reserved).not.toContain("Cuckoo");
+});
+
+test("the hash variant section lists Cuckoo among the variant 0 writers", () => {
+  expect(hashVariant().families).toContain("Cuckoo");
+});
+
+test("the cuckoo section documents every field and the add and delete rules", () => {
+  const section = sectionFrom(
+    "Cuckoo (type 7)",
+    "\n### ",
+    "serialization.md has no Cuckoo section",
+  );
+
+  for (const field of ["n", "seed", "epsilon", "f", "buckets", "count"]) {
+    expect(section, field).toMatch(new RegExp(`\\b${field}\\b`));
+  }
+  expect(section).toContain("multiple of 8");
+  expect(section).toContain("j * f");
+  expect(section).toContain("0x5bd1e995");
+  expect(section).toContain("500");
+  expect(section).toContain("xorshift");
+  expect(section).toMatch(/delete/i);
+});
