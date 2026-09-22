@@ -1,12 +1,14 @@
 import fc from "fast-check";
 import { expect, test } from "vitest";
 
+import { crc32 } from "../../src/core/crc32.js";
 import { hash128Key, reduce } from "../../src/core/hasher.js";
 import {
   bytesEqual,
   FORMAT_VERSION,
   readHeader,
   SerializationError,
+  UnknownHashVariantError,
 } from "../../src/core/serialize.js";
 import { CuckooFilter } from "../../src/cuckoo/cuckoo.js";
 import { sampleStrings } from "../helpers/fpr.js";
@@ -154,6 +156,92 @@ test("every truncated prefix of a frame is rejected with a typed error", () => {
       SerializationError,
     );
   }
+});
+
+// Recomputes the trailer so a mutation reaches the check under test instead of
+// stopping at ChecksumError.
+const resealed = (frame: Uint8Array): Uint8Array => {
+  new DataView(frame.buffer).setUint32(
+    frame.length - 4,
+    crc32(frame.subarray(0, frame.length - 4)),
+    true,
+  );
+  return frame;
+};
+
+// Frame offsets: body at 16, slot words at 48. 100 keys at 1% give 37
+// buckets, m = 1480 bits in 47 words: an odd word count leaves 4 pad bytes,
+// and m % 32 = 8 leaves unused bits in the last word, so both are testable.
+const BODY = 16;
+const WORDS = 48;
+const odd = (): CuckooFilter => filled(100, 0.01, sampleStrings(40, 100));
+
+type Mutation = (frame: Uint8Array, view: DataView) => void;
+
+const lies: [string, Mutation, new (...args: never[]) => Error][] = [
+  ["type 1", (f) => (f[5] = 1), SerializationError],
+  ["hash variant 1", (f) => (f[6] = 1), UnknownHashVariantError],
+  ["a params padding byte set", (f) => (f[BODY + 28] = 1), SerializationError],
+  [
+    "a bit set past the last slot",
+    (_, v) => {
+      v.setUint32(
+        WORDS + 4 * 46,
+        v.getUint32(WORDS + 4 * 46, true) | (1 << 31),
+        true,
+      );
+    },
+    SerializationError,
+  ],
+  [
+    "a trailing pad byte set",
+    (f) => (f[WORDS + 4 * 47] = 1),
+    SerializationError,
+  ],
+  [
+    "a count one too high",
+    (_, v) => {
+      v.setUint32(BODY + 24, v.getUint32(BODY + 24, true) + 1, true);
+    },
+    SerializationError,
+  ],
+  [
+    "f changed",
+    (_, v) => {
+      v.setUint32(BODY + 16, 11, true);
+    },
+    SerializationError,
+  ],
+  [
+    "buckets changed",
+    (_, v) => {
+      v.setUint32(BODY + 20, 36, true);
+    },
+    SerializationError,
+  ],
+  [
+    "epsilon 0",
+    (_, v) => {
+      v.setFloat64(BODY + 8, 0, true);
+    },
+    SerializationError,
+  ],
+];
+
+test("the mutation fixture has pad bytes and unused tail bits", () => {
+  const f = odd();
+  expect(f.buckets).toBe(37);
+  expect(f.m % 32).toBe(8);
+  expect(Math.ceil(f.m / 32) % 2).toBe(1);
+});
+
+test.each(lies)("fromBytes rejects %s", (_, mutate, expected) => {
+  const frame = odd().toBytes();
+  mutate(frame, new DataView(frame.buffer));
+  const bad = resealed(frame);
+
+  expect(() => CuckooFilter.fromBytes(bad)).toThrow(expected);
+  expect(() => CuckooFilter.fromBytes(bad)).toThrow(SerializationError);
 });
 
 test("the JSON envelope round-trips", () => {

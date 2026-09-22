@@ -9,6 +9,7 @@ import {
 import {
   assertBodyLength,
   assertMinBodyLength,
+  assertParamsPadding,
   bytesEqual,
   type FilterJSON,
   FORMAT_VERSION,
@@ -17,6 +18,7 @@ import {
   readHeader,
   SerializationError,
   toJSONEnvelope,
+  UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
 import { cuckooSizing } from "../core/sizing.js";
@@ -28,6 +30,7 @@ const TYPE = 7;
  * slot words start 8-aligned at frame offset 48.
  */
 const PARAMS_SIZE = 32;
+const PARAMS_FIELDS_END = 28;
 
 const padded8 = (length: number): number => Math.ceil(length / 8) * 8;
 
@@ -130,8 +133,19 @@ export class CuckooFilter {
    * @returns The reconstructed filter.
    */
   static fromBytes(bytes: Uint8Array): CuckooFilter {
-    const { body } = readHeader(bytes);
+    const { type, flags, body } = readHeader(bytes);
+    if (type !== TYPE) {
+      throw new SerializationError(
+        `expected DSTL type ${String(TYPE)}, got ${String(type)}`,
+      );
+    }
+    if ((flags & 0x0f) !== HASH_MURMUR128) {
+      throw new UnknownHashVariantError(
+        `unsupported hash variant ${String(flags & 0x0f)}`,
+      );
+    }
     assertMinBodyLength(body.length, PARAMS_SIZE, "cuckoo");
+    assertParamsPadding(body, PARAMS_FIELDS_END, PARAMS_SIZE, "cuckoo");
     const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
     const params = {
       n: view.getUint32(0, true),
@@ -159,10 +173,30 @@ export class CuckooFilter {
       }
       throw err;
     }
-    for (let w = 0; w < filter.#words.length; w++) {
-      filter.#words[w] = view.getUint32(PARAMS_SIZE + 4 * w, true);
+    const words = filter.#words;
+    for (let w = 0; w < words.length; w++) {
+      words[w] = view.getUint32(PARAMS_SIZE + 4 * w, true);
     }
-    filter.#count = view.getUint32(24, true);
+    // Unused bits and pad bytes are reserved: a reader that ignored them would
+    // let a later release store something there that this one misreads.
+    const tail = filter.m % 32;
+    if (tail !== 0 && (words[words.length - 1] ?? 0) >>> tail !== 0) {
+      throw new SerializationError("cuckoo: bits set past the last slot");
+    }
+    if (body.subarray(PARAMS_SIZE + 4 * words.length).some((b) => b !== 0)) {
+      throw new SerializationError("cuckoo: slot padding is not zero");
+    }
+    const count = view.getUint32(24, true);
+    let occupied = 0;
+    for (let j = 0; j < filter.capacity; j++) {
+      if (filter.#slot(j) !== 0) occupied++;
+    }
+    if (count !== occupied) {
+      throw new SerializationError(
+        `cuckoo: count ${String(count)} does not match ${String(occupied)} occupied slots`,
+      );
+    }
+    filter.#count = count;
     return filter;
   }
 
