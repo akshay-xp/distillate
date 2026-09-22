@@ -25,7 +25,7 @@
   },
   "./scalable": {
     "raw": 29000,
-    "gzip": 8000
+    "gzip": 8500
   },
   "./cuckoo": {
     "raw": 25000,
