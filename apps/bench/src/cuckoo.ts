@@ -1,6 +1,9 @@
 import { CuckooFilter as IncumbentCuckoo } from "bloom-filters";
 import { CuckooFilter, CuckooFullError } from "distillate/cuckoo";
 
+import { TARGET_FPR } from "./adapters.js";
+import { hitKeys, hitMissPools, measureFpr } from "./harness.js";
+
 /** The settings a filter actually holds, read back from the library. */
 export interface CuckooSettings {
   n: number;
@@ -88,3 +91,80 @@ export const cuckooAdapters: CuckooAdapter[] = [
   distillateCuckooAdapter,
   incumbentCuckooAdapter,
 ];
+
+/** One thousand to ten million keys, the same 10M reach as every structure. */
+export const CUCKOO_KEY_COUNTS = [
+  1_000, 10_000, 100_000, 1_000_000, 10_000_000,
+];
+
+// Absent keys (`1:i`), disjoint from hitKeys (`0:i`), shared by every row so
+// the FPR columns are measured against the same probes.
+const ABSENT = hitMissPools(100_000).miss;
+
+export interface CuckooRow {
+  name: string;
+  keys: number;
+  bitsPerKey: number;
+  measuredFpr: number;
+  addOpsPerSec: number;
+  hasOpsPerSec: number;
+  deleteOpsPerSec: number;
+  /** Added keys that read absent before any delete. */
+  lostAfterBuild: number;
+  /** Kept keys that read absent after the first half was deleted. */
+  lostAfterDelete: number;
+  /** Adds the filter refused as full. */
+  refused: number;
+}
+
+const rate = (n: number, ms: number): number => n / (ms / 1000);
+
+export function cuckooRows(
+  keyCounts: number[],
+  adapters: CuckooAdapter[] = cuckooAdapters,
+): CuckooRow[] {
+  const rows: CuckooRow[] = [];
+  for (const n of keyCounts) {
+    const half = Math.floor(n / 2);
+    for (const adapter of adapters) {
+      const f = adapter.create(n, TARGET_FPR);
+
+      let refused = 0;
+      let started = performance.now();
+      for (const key of hitKeys(n)) if (!f.add(key)) refused++;
+      const addMs = performance.now() - started;
+
+      let lostAfterBuild = 0;
+      started = performance.now();
+      for (const key of hitKeys(n)) if (!f.has(key)) lostAfterBuild++;
+      const hasMs = performance.now() - started;
+
+      const measuredFpr = measureFpr(f, ABSENT);
+
+      started = performance.now();
+      for (const key of hitKeys(half)) f.delete(key);
+      const deleteMs = performance.now() - started;
+
+      // hitKeys yields in order, so the first `half` are the deleted ones.
+      let lostAfterDelete = 0;
+      let i = 0;
+      for (const key of hitKeys(n)) {
+        if (i++ >= half && !f.has(key)) lostAfterDelete++;
+      }
+
+      rows.push({
+        name: adapter.name,
+        keys: n,
+        bitsPerKey: f.bits() / n,
+        measuredFpr,
+        addOpsPerSec: rate(n, addMs),
+        hasOpsPerSec: rate(n, hasMs),
+        deleteOpsPerSec: rate(half, deleteMs),
+        lostAfterBuild,
+        lostAfterDelete,
+        refused,
+      });
+    }
+  }
+  return rows;
+}
