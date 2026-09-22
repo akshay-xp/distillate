@@ -1,3 +1,5 @@
+import type { BytesLike } from "../core/bytes.js";
+import { type Hash128, hash128KeyInto, reduce } from "../core/hasher.js";
 import {
   assertPositiveInt,
   assertProbability,
@@ -7,6 +9,9 @@ import { cuckooSizing } from "../core/sizing.js";
 
 /** Slots per bucket. */
 const SLOTS = 4;
+
+// Reused hash output; safe because add and has are synchronous.
+const HASH: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
 
 /** Thrown when an add cannot find room; the filter is left exactly as it was. */
 export class CuckooFullError extends Error {
@@ -39,7 +44,13 @@ export class CuckooFilter {
   readonly #seed: number;
   readonly #f: number;
   readonly #buckets: number;
-  readonly #count = 0;
+  readonly #mask: number;
+  readonly #words: Uint32Array;
+  #count = 0;
+  // The last key's fingerprint and candidate buckets, set by #hash.
+  #fp = 0;
+  #i1 = 0;
+  #i2 = 0;
 
   /**
    * Creates a filter sized for `n` expected keys at a target false-positive rate.
@@ -73,6 +84,95 @@ export class CuckooFilter {
     this.#seed = seed;
     this.#f = f;
     this.#buckets = buckets;
+    // 2 ** f rather than 1 << f, which wraps to 1 at f = 32.
+    this.#mask = 2 ** f - 1;
+    this.#words = new Uint32Array(Math.ceil((f * SLOTS * buckets) / 32));
+  }
+
+  /**
+   * Adds `key`. Every call stores a fingerprint, including for a key already
+   * present, so each add needs its own delete.
+   *
+   * @throws {@link CuckooFullError} if the filter has no room for it.
+   */
+  add(key: BytesLike): void {
+    this.#hash(key);
+    if (!this.#put(this.#i1, this.#fp) && !this.#put(this.#i2, this.#fp)) {
+      throw new CuckooFullError(
+        `cuckoo filter is full at ${String(this.#count)} of ${String(this.capacity)} slots`,
+      );
+    }
+    this.#count++;
+  }
+
+  /**
+   * Tests whether `key` may be in the filter.
+   *
+   * @returns `false` if `key` is definitely absent; `true` if it was added
+   * (and not deleted) or on a false positive.
+   */
+  has(key: BytesLike): boolean {
+    this.#hash(key);
+    return this.#holds(this.#i1, this.#fp) || this.#holds(this.#i2, this.#fp);
+  }
+
+  #hash(key: BytesLike): void {
+    hash128KeyInto(key, this.#seed, HASH);
+    // 0 marks an empty slot, so a zero fingerprint is stored as 1.
+    this.#fp = HASH.w1 >>> (32 - this.#f) || 1;
+    this.#i1 = reduce(HASH.w0, this.#buckets);
+    this.#i2 = this.#alt(this.#i1, this.#fp);
+  }
+
+  /**
+   * The other bucket for a fingerprint in bucket `i`: `(mix(fp) - i) mod B`.
+   * Applying it twice returns `i` for any bucket count, so the table needs no
+   * power-of-two size, and a stored fingerprint can move without its key.
+   */
+  #alt(i: number, fp: number): number {
+    const b = this.#buckets;
+    return (((Math.imul(fp, 0x5bd1e995) >>> 0) % b) + b - i) % b;
+  }
+
+  #put(bucket: number, fp: number): boolean {
+    for (let j = bucket * SLOTS; j < bucket * SLOTS + SLOTS; j++) {
+      if (this.#slot(j) === 0) {
+        this.#setSlot(j, fp);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  #holds(bucket: number, fp: number): boolean {
+    for (let j = bucket * SLOTS; j < bucket * SLOTS + SLOTS; j++) {
+      if (this.#slot(j) === fp) return true;
+    }
+    return false;
+  }
+
+  // Slot j is f bits at stream bit j * f, low bit first; stream bit x is bit
+  // x & 31 of word x >>> 5, so a slot may straddle two words.
+  #slot(j: number): number {
+    const bit = j * this.#f;
+    const w = bit >>> 5;
+    const off = bit & 31;
+    let v = (this.#words[w] ?? 0) >>> off;
+    if (off + this.#f > 32) v |= (this.#words[w + 1] ?? 0) << (32 - off);
+    return (v & this.#mask) >>> 0;
+  }
+
+  #setSlot(j: number, fp: number): void {
+    const bit = j * this.#f;
+    const w = bit >>> 5;
+    const off = bit & 31;
+    const words = this.#words;
+    words[w] = ((words[w] ?? 0) & ~(this.#mask << off)) | (fp << off);
+    if (off + this.#f > 32) {
+      const shift = 32 - off;
+      words[w + 1] =
+        ((words[w + 1] ?? 0) & ~(this.#mask >>> shift)) | (fp >>> shift);
+    }
   }
 
   /** Fingerprints stored, one per add not undone by a delete. */
