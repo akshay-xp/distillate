@@ -72,3 +72,28 @@ test("the chooser lists Cuckoo as shipped and no longer says there is no delete"
   expect(section(page, "What is not shipped yet")).not.toContain("**Cuckoo**");
   expect(page).not.toContain("no delete anywhere");
 });
+
+const errors = (): string => read("../src/content/docs/reference/errors.md");
+
+test("the errors reference documents CuckooFullError under capacity errors", () => {
+  const page = errors();
+  expect(page).toContain(
+    "[`CuckooFullError`](/api/cuckoo/classes/cuckoofullerror/)",
+  );
+  expect(section(page, "Capacity errors")).toContain("### `CuckooFullError`");
+  // One group per `## ... errors` section, which the intro has to count.
+  const groups = page.match(/^## \w+ errors$/gm) ?? [];
+  expect(groups).toHaveLength(5);
+  expect(page).toMatch(/fall into five groups/);
+});
+
+// It merges, it does not build: it belongs beside the other mismatch errors.
+test("the scalable mismatch error sits with the merge errors", () => {
+  const page = errors();
+  expect(section(page, "Merge errors")).toContain(
+    "### `ScalableParamMismatchError`",
+  );
+  expect(section(page, "Build errors")).not.toContain(
+    "ScalableParamMismatchError",
+  );
+});

@@ -3,11 +3,12 @@ title: Errors
 description: Every error class distillate exports, when it is thrown, and what to do about it.
 ---
 
-distillate exports twelve error classes. Each has a `name` that discriminates it
+distillate exports thirteen error classes. Each has a `name` that discriminates it
 from a plain `Error`, so you can narrow with `instanceof` or switch on `name`.
 
-They fall into three groups by cause: bad parameters, an operation two filters
-cannot support, and a frame that will not decode.
+They fall into five groups by cause: bad parameters, an operation two filters
+cannot support, a build that could not finish, a filter with no room left, and
+a frame that will not decode.
 
 | Error                                                                                    | Thrown by                                 | Cause                                     |
 | ---------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------- |
@@ -16,6 +17,7 @@ cannot support, and a frame that will not decode.
 | [`BlockedBloomParamMismatchError`](/api/blocked/classes/blockedbloomparammismatcherror/) | `BlockedBloomFilter.union`                | Filters disagree on geometry              |
 | [`ScalableParamMismatchError`](/api/scalable/classes/scalableparammismatcherror/)        | `ScalableBloomFilter.union`               | Filters disagree on settings or stages    |
 | [`BinaryFuseBuildError`](/api/fuse/classes/binaryfusebuilderror/)                        | `BinaryFuse8.from`, `BinaryFuse16.from`   | The peel stalled on every seed            |
+| [`CuckooFullError`](/api/cuckoo/classes/cuckoofullerror/)                                | `CuckooFilter.add`                        | No room for the key after 500 moves       |
 | [`SerializationError`](/api/bloom/classes/serializationerror/)                           | `fromJSON`, and the base of the six below | The envelope is malformed                 |
 | [`TruncatedError`](/api/bloom/classes/truncatederror/)                                   | `fromBytes`                               | The frame is short                        |
 | [`BadMagicError`](/api/bloom/classes/badmagicerror/)                                     | `fromBytes`                               | Not a DSTL frame                          |
@@ -24,13 +26,13 @@ cannot support, and a frame that will not decode.
 | [`ReservedBitsError`](/api/bloom/classes/reservedbitserror/)                             | `fromBytes`                               | A newer frame sets reserved header bits   |
 | [`ChecksumError`](/api/bloom/classes/checksumerror/)                                     | `fromBytes`                               | CRC32 does not match                      |
 
-The seven serialization errors are exported from all five structure subpaths
-(`distillate/bloom`, `distillate/blocked`, `distillate/fuse`, `distillate/hll`
-and `distillate/scalable`); `distillate/frame` exports the six a frame read can
-throw (all but `UnknownHashVariantError`). The rest are exported from the
-subpath of the structure that throws them, except `ParamError`, which is
-exported from `distillate/bloom`, `distillate/blocked`, `distillate/hll` and
-`distillate/scalable`.
+The seven serialization errors are exported from all six structure subpaths
+(`distillate/bloom`, `distillate/blocked`, `distillate/fuse`, `distillate/hll`,
+`distillate/scalable` and `distillate/cuckoo`); `distillate/frame` exports the
+six a frame read can throw (all but `UnknownHashVariantError`). The rest are
+exported from the subpath of the structure that throws them, except
+`ParamError`, which is exported from `distillate/bloom`, `distillate/blocked`,
+`distillate/hll`, `distillate/scalable` and `distillate/cuckoo`.
 
 ## Parameter errors
 
@@ -69,8 +71,8 @@ than a different number. See [sizing and tuning](/guides/sizing/).
 
 ## Merge errors
 
-Both `union` implementations require the two filters to be structurally
-identical. They do not silently reshape.
+Each filter's `union` requires the two filters to be built alike. None of them
+silently reshapes.
 
 ### `BloomParamMismatchError`
 
@@ -126,8 +128,6 @@ try {
 }
 ```
 
-## Build errors
-
 ### `ScalableParamMismatchError`
 
 [API reference](/api/scalable/classes/scalableparammismatcherror/).
@@ -159,6 +159,8 @@ try {
 error instanceof ScalableParamMismatchError; // true
 ```
 
+## Build errors
+
 ### `BinaryFuseBuildError`
 
 [API reference](/api/fuse/classes/binaryfusebuilderror/).
@@ -184,6 +186,36 @@ try {
     // Astronomically unlikely, and never a silently wrong filter.
   }
 }
+```
+
+## Capacity errors
+
+### `CuckooFullError`
+
+[API reference](/api/cuckoo/classes/cuckoofullerror/).
+
+**Thrown when** `CuckooFilter.add` finds both of the key's buckets full and 500
+displacements, each moving a stored fingerprint to its other bucket, still find
+no empty slot. Every displacement is undone before the throw, so the filter is
+exactly as it was: no key it held is lost.
+
+**What to do:** the filter holds more keys than it was sized for, since a filter
+created for `n` takes `n` keys. Rebuild it with a larger `n`, or delete keys you
+no longer need before adding more.
+
+```ts
+import { CuckooFilter, CuckooFullError } from "distillate/cuckoo";
+
+const f = CuckooFilter.create(1, 0.01);
+let error: unknown;
+for (let i = 0; i < 20 && error === undefined; i++) {
+  try {
+    f.add(`key-${String(i)}`);
+  } catch (e) {
+    error = e;
+  }
+}
+error instanceof CuckooFullError; // true
 ```
 
 ## Serialization errors

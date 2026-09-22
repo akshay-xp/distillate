@@ -94,9 +94,9 @@ test("the errors reference says which subpaths export what", () => {
   const page = errors();
   const at = page.indexOf("serialization errors are exported");
   const paragraph = page.slice(at, page.indexOf("\n\n", at));
-  expect(paragraph).toContain("five structure subpaths");
+  expect(paragraph).toContain("six structure subpaths");
   expect(paragraph).toContain("distillate/scalable");
-  for (const subpath of ["bloom", "blocked", "hll", "scalable"]) {
+  for (const subpath of ["bloom", "blocked", "hll", "scalable", "cuckoo"]) {
     expect(paragraph, subpath).toContain(`\`distillate/${subpath}\``);
   }
 });
