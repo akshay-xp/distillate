@@ -63,6 +63,28 @@ test("fingerprints as wide as 32 bits are stored and found", () => {
   expect(keys.every((k) => f.has(k))).toBe(true);
 });
 
+// The sizing promise: a filter built for n takes n distinct keys. Every size
+// to 2000 because small tables are where 95% load alone used to fail.
+test("a filter sized for n takes n keys, for every n to 2000", () => {
+  for (let n = 1; n <= 2000; n++) {
+    const f = CuckooFilter.create(n, 0.01);
+    const keys = sampleStrings(21, n);
+    for (const k of keys) f.add(k);
+
+    expect(f.count).toBe(n);
+    expect(keys.every((k) => f.has(k))).toBe(true);
+  }
+});
+
+test("a filter sized for a million keys takes them all", () => {
+  const n = 1_000_000;
+  const f = CuckooFilter.create(n, 0.01);
+  const keys = sampleStrings(22, n);
+  for (const k of keys) f.add(k);
+
+  expect(keys.every((k) => f.has(k))).toBe(true);
+});
+
 test.each<[string, Partial<CuckooParams>]>([
   ["n 0", { n: 0 }],
   ["n 1.5", { n: 1.5 }],
