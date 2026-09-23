@@ -2,8 +2,14 @@ import type { BytesLike } from "../core/bytes.js";
 import { hash32x2Into, probeAt } from "../core/hasher.js";
 import { assertPositiveInt, assertUint32, ParamError } from "../core/params.js";
 import {
+  assertBodyLength,
+  assertMinBodyLength,
+  assertParamsPadding,
   FORMAT_VERSION,
   HASH_MURMUR128,
+  readHeader,
+  SerializationError,
+  UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
 import { countMinSizing } from "../core/sizing.js";
@@ -15,6 +21,7 @@ const TYPE = 8;
  * at frame offset 32 and a foreign reader can map them as `u32`.
  */
 const PARAMS_SIZE = 16;
+const PARAMS_FIELDS_END = 12;
 
 /** Thrown when an add would carry a counter past what a u32 holds. */
 export class CountMinOverflowError extends RangeError {
@@ -103,6 +110,48 @@ export class CountMinSketch {
   ): CountMinSketch {
     const sketch = CountMinSketch.create(epsilon, delta, options);
     for (const key of keys) sketch.add(key);
+    return sketch;
+  }
+
+  /**
+   * Restores a sketch from its {@link CountMinSketch.toBytes} serialization.
+   *
+   * Built from the geometry the frame stores, never from a sizing solve: the
+   * constructor takes `width` and `depth` directly, so there is nothing to
+   * re-derive and nothing to disagree about.
+   *
+   * @param bytes - The serialized sketch.
+   * @returns The reconstructed sketch.
+   */
+  static fromBytes(bytes: Uint8Array): CountMinSketch {
+    const { type, flags, body } = readHeader(bytes);
+    if (type !== TYPE) {
+      throw new SerializationError(
+        `expected DSTL type ${String(TYPE)}, got ${String(type)}`,
+      );
+    }
+    if ((flags & 0x0f) !== HASH_MURMUR128) {
+      throw new UnknownHashVariantError(
+        `unsupported hash variant ${String(flags & 0x0f)}`,
+      );
+    }
+    assertMinBodyLength(body.length, PARAMS_SIZE, "countmin");
+    assertParamsPadding(body, PARAMS_FIELDS_END, PARAMS_SIZE, "countmin");
+    const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
+    const width = view.getUint32(0, true);
+    const depth = view.getUint32(4, true);
+    const seed = view.getUint32(8, true);
+    // Length is checked before the constructor allocates, so a forged geometry
+    // cannot request memory the body does not hold.
+    assertBodyLength(body.length, PARAMS_SIZE + 4 * width * depth, "countmin");
+    const sketch = new CountMinSketch({ width, depth, seed });
+    const counters = sketch.#counters;
+    for (let i = 0; i < counters.length; i++) {
+      counters[i] = view.getUint32(PARAMS_SIZE + 4 * i, true);
+    }
+    let total = 0;
+    for (let c = 0; c < width; c++) total += counters[c] ?? 0;
+    sketch.#total = total;
     return sketch;
   }
 
