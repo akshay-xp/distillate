@@ -108,3 +108,24 @@ test("total tracks the counts whatever keys they land on", () => {
     ),
   );
 });
+
+// The geometry is solved with a ceil, so the sketch implements a slightly
+// tighter contract than the one asked for. It reports what it implements.
+test("a sketch reports the contract its geometry implements", () => {
+  const s = CountMinSketch.create(0.001, 0.001);
+
+  expect(s.epsilon).toBe(Math.E / 2719);
+  expect(s.delta).toBe(Math.exp(-7));
+  expect(s.epsilon).toBeLessThan(0.001);
+  expect(s.delta).toBeLessThan(0.001);
+});
+
+test("error is the additive bound at the current total", () => {
+  const s = CountMinSketch.create(0.001, 0.001);
+
+  expect(s.error()).toBe(0);
+
+  s.add("a", 1000);
+
+  expect(s.error()).toBe(s.epsilon * 1000);
+});
