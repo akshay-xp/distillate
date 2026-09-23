@@ -103,6 +103,33 @@ delete, a share of the kept half). Adds that report the filter full are counted
 as refused. Both are measured from 1k to 10M keys; the incumbent scales
 linearly, so no row is projected.
 
+## Configuration for Count-Min
+
+Count-Min is compared with both sketches at the same geometry, 2,719 columns by
+7 rows, which is what `epsilon` 0.001 and `delta` 0.001 call for.
+
+Reaching that geometry in `bloom-filters` means passing `0.001` to an argument
+its documentation calls "the probability of accuracy". Its
+`create(errorRate, accuracy = 0.999)` sizes rows as
+`Math.ceil(Math.log(1 / accuracy))`, a formula that wants `delta`, the failure
+probability; the comment directly above that line in its source reads
+`rows = Math.ceil(Math.log(1 / delta))`. Measured, `create(0.001)` and
+`create(0.001, 0.999)` both give 2,719 columns by one row, where taking the
+minimum across rows buys nothing. Giving it seven rows is what makes the
+comparison equal-sized rather than flattering; a reader following its
+documentation gets the one-row sketch.
+
+Accuracy is measured on a Zipf-skewed stream over 10,000 distinct keys, rank
+`i` appearing with probability proportional to `1 / (i + 1)`. A uniform stream
+spreads counts evenly and hides the collisions between one heavy key and the
+light tail sharing its column, which is where a frequency estimate is tested.
+Overestimate columns are how far above the true count an estimate sits, over
+every distinct key in the stream. Answers below the true count are counted
+rather than assumed absent: that is the one answer neither sketch may give.
+
+Sizes are not the same encoding. distillate reports its binary frame length and
+`bloom-filters` the length of its JSON, as in the cardinality section.
+
 ## Keys
 
 `hitMissPools(n)` builds two disjoint sets: inserted "hit" keys `0:0 … 0:(n-1)`
@@ -155,4 +182,5 @@ charts. Capacities: 100k and 1M for space/accuracy, 100k for throughput. Cardina
 swept at 1k/10k/100k/1M/10M against `p = 14`, with the sketch throughput built at
 20k. Scalable Bloom is swept at 1k/10k/100k/1M/10M keys from an initial size of 1k,
 with `bloom-filters` capped at 100k. Cuckoo is swept at 1k/10k/100k/1M/10M keys
-for both filters.
+for both filters. Count-Min is swept at 1k/10k/100k/1M/10M events for both
+sketches.

@@ -19,6 +19,8 @@ import {
 import type { ScalableRow } from "./scalable.js";
 import { CUCKOO_KEY_COUNTS, cuckooRows } from "./cuckoo.js";
 import type { CuckooRow } from "./cuckoo.js";
+import { COUNTMIN_KEY_COUNTS, countMinRows } from "./countmin.js";
+import type { CountMinRow } from "./countmin.js";
 import type { ComparisonRow } from "./compare.js";
 import { TARGET_FPR } from "./adapters.js";
 import { envBanner } from "./harness.js";
@@ -95,6 +97,17 @@ export function cuckooTable(rows: CuckooRow[]): string {
   return [header, ...body].join("\n");
 }
 
+export function countMinTable(rows: CountMinRow[]): string {
+  const header =
+    "| Sketch | events | grid | size | mean over | max over | over bound | under | add | count |\n" +
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |";
+  const body = rows.map(
+    (r) =>
+      `| ${r.name} | ${capacityLabel(r.events)} | ${String(r.width)} x ${String(r.depth)} | ${String(r.bytes)} B | ${r.meanOverestimate.toFixed(1)} | ${String(r.maxOverestimate)} | ${(r.overBoundShare * 100).toFixed(2)}% | ${String(r.underestimates)} | ${ops(r.addOpsPerSec)} | ${ops(r.countOpsPerSec)} |`,
+  );
+  return [header, ...body].join("\n");
+}
+
 export interface ResultsOptions {
   banner: string;
   version: string;
@@ -106,6 +119,7 @@ export interface ResultsOptions {
   cardinalityTable?: string;
   scalableTable?: string;
   cuckooTable?: string;
+  countMinTable?: string;
 }
 
 function cardinalitySection(table: string): string[] {
@@ -163,6 +177,28 @@ export function cuckooSection(table: string): string[] {
   ];
 }
 
+export function countMinSection(table: string): string[] {
+  return [
+    "## Count-Min",
+    "",
+    "Both sketches are built at the same geometry, 2,719 columns by 7 rows, which is what `epsilon` 0.001 and `delta` 0.001 call for.",
+    "",
+    'Reaching that geometry in `bloom-filters` means passing `0.001` to an argument its documentation calls "the probability of accuracy".',
+    "Its `create(errorRate, accuracy = 0.999)` sizes rows as `Math.ceil(Math.log(1 / accuracy))`, a formula that wants `delta`, the failure probability; the comment directly above that line in its source even reads `rows = Math.ceil(Math.log(1 / delta))`.",
+    "Measured: `create(0.001)` and `create(0.001, 0.999)` both give 2,719 columns by **one** row, where taking the minimum across rows buys nothing at all.",
+    "A reader following its documentation gets that single-row sketch. The rows below give it the seven the target calls for, so the comparison is at equal size rather than against a sketch a seventh the height.",
+    "",
+    "Accuracy is measured on a Zipf-skewed stream over 10,000 distinct keys, the shape a frequency sketch exists for: a uniform stream spreads counts evenly and hides the collisions between one heavy key and the light tail sharing its column.",
+    "`mean over` and `max over` are how far above the true count an estimate sits, and `over bound` is the share of keys past `epsilon * events`, which the geometry allows at up to `delta`.",
+    "`under` counts answers below the true count, which neither sketch may ever give; it is measured rather than assumed.",
+    "",
+    "The two sizes are not the same encoding: distillate writes a binary frame and `bloom-filters` writes JSON.",
+    "",
+    table,
+    "",
+  ];
+}
+
 export function renderResults(opts: ResultsOptions): string {
   return [
     "# distillate-bench results",
@@ -181,6 +217,7 @@ export function renderResults(opts: ResultsOptions): string {
     ...(opts.cardinalityTable ? cardinalitySection(opts.cardinalityTable) : []),
     ...(opts.scalableTable ? scalableSection(opts.scalableTable) : []),
     ...(opts.cuckooTable ? cuckooSection(opts.cuckooTable) : []),
+    ...(opts.countMinTable ? countMinSection(opts.countMinTable) : []),
     `## Throughput (n = ${capacityLabel(opts.throughputCapacity)})`,
     "",
     "Absolute throughput is machine-relative: it depends on the CPU, the runtime, and the load on the box at measurement time.",
@@ -234,6 +271,7 @@ async function main(): Promise<void> {
     scalableRows(SCALABLE_INITIAL, SCALABLE_KEY_COUNTS),
   );
   const cuckTable = cuckooTable(cuckooRows(CUCKOO_KEY_COUNTS));
+  const cmTable = countMinTable(countMinRows(COUNTMIN_KEY_COUNTS));
   const tput = throughputTable(await collectThroughput(THROUGHPUT_CAPACITY));
 
   console.log(banner);
@@ -241,6 +279,7 @@ async function main(): Promise<void> {
   console.log("\n" + cardTable);
   console.log("\n" + scalTable);
   console.log("\n" + cuckTable);
+  console.log("\n" + cmTable);
   console.log("\n" + tput);
 
   const md = renderResults({
@@ -253,6 +292,7 @@ async function main(): Promise<void> {
     cardinalityTable: cardTable,
     scalableTable: scalTable,
     cuckooTable: cuckTable,
+    countMinTable: cmTable,
     throughputTable: tput,
   });
   writeFileSync(new URL("../RESULTS.md", import.meta.url), md);

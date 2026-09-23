@@ -15,6 +15,8 @@ The Scalable Bloom section was measured on 2026-09-21, on the same machine, from
 the unreleased build that adds `distillate/scalable` on top of 0.10.0.
 The Cuckoo section was measured on 2026-09-22, on the same machine, from the
 unreleased build that adds `distillate/cuckoo` on top of 0.11.0.
+The Count-Min section was measured on 2026-09-23, on the same machine, from the
+unreleased build that adds `distillate/countmin` on top of 0.12.0.
 
 ## Space and accuracy
 
@@ -153,6 +155,34 @@ its false-positive rate near 2.9% against the 1% it was asked for, where
 distillate's 10 bits land at 0.7% to 0.8%, for 2.2 to 2.6 more bits per key from
 10k up. From 10k up distillate adds 20 to 26 times faster and answers `has` and
 `delete` 22 to 33 times faster; the 1k row is a single short pass and closer.
+
+## Count-Min
+
+Both sketches are built at the same geometry, 2,719 columns by 7 rows, which is what `epsilon` 0.001 and `delta` 0.001 call for.
+
+Reaching that geometry in `bloom-filters` means passing `0.001` to an argument its documentation calls "the probability of accuracy".
+Its `create(errorRate, accuracy = 0.999)` sizes rows as `Math.ceil(Math.log(1 / accuracy))`, a formula that wants `delta`, the failure probability; the comment directly above that line in its source even reads `rows = Math.ceil(Math.log(1 / delta))`.
+Measured: `create(0.001)` and `create(0.001, 0.999)` both give 2,719 columns by **one** row, where taking the minimum across rows buys nothing at all.
+A reader following its documentation gets that single-row sketch. The rows below give it the seven the target calls for, so the comparison is at equal size rather than against a sketch a seventh the height.
+
+Accuracy is measured on a Zipf-skewed stream over 10,000 distinct keys, the shape a frequency sketch exists for: a uniform stream spreads counts evenly and hides the collisions between one heavy key and the light tail sharing its column.
+`mean over` and `max over` are how far above the true count an estimate sits, and `over bound` is the share of keys past `epsilon * events`, which the geometry allows at up to `delta`.
+`under` counts answers below the true count, which neither sketch may ever give; it is measured rather than assumed.
+
+The two sizes are not the same encoding: distillate writes a binary frame and `bloom-filters` writes JSON.
+
+| Sketch              | events | grid     | size    | mean over | max over | over bound | under | add           | count        |
+| ------------------- | ------ | -------- | ------- | --------- | -------- | ---------- | ----- | ------------- | ------------ |
+| distillate/countmin | 1k     | 2719 x 7 | 76168 B | 0.0       | 0        | 0.00%      | 0     | 1.27 M ops/s  | 1.51 M ops/s |
+| bloom-filters       | 1k     | 2719 x 7 | 38264 B | 0.0       | 0        | 0.00%      | 0     | 167 k ops/s   | 167 k ops/s  |
+| distillate/countmin | 10k    | 2719 x 7 | 76168 B | 0.0       | 3        | 0.00%      | 0     | 4.54 M ops/s  | 4.27 M ops/s |
+| bloom-filters       | 10k    | 2719 x 7 | 39257 B | 0.0       | 2        | 0.00%      | 0     | 173 k ops/s   | 183 k ops/s  |
+| distillate/countmin | 100k   | 2719 x 7 | 76168 B | 2.6       | 31       | 0.00%      | 0     | 10.20 M ops/s | 4.26 M ops/s |
+| bloom-filters       | 100k   | 2719 x 7 | 49982 B | 2.5       | 28       | 0.00%      | 0     | 173 k ops/s   | 179 k ops/s  |
+| distillate/countmin | 1M     | 2719 x 7 | 76168 B | 29.6      | 276      | 0.00%      | 0     | 9.59 M ops/s  | 8.93 M ops/s |
+| bloom-filters       | 1M     | 2719 x 7 | 68025 B | 29.7      | 211      | 0.00%      | 0     | 173 k ops/s   | 194 k ops/s  |
+| distillate/countmin | 10M    | 2719 x 7 | 76168 B | 301.3     | 2517     | 0.00%      | 0     | 10.62 M ops/s | 3.74 M ops/s |
+| bloom-filters       | 10M    | 2719 x 7 | 86630 B | 303.2     | 2226     | 0.00%      | 0     | 175 k ops/s   | 178 k ops/s  |
 
 ## Throughput (n = 100k)
 
