@@ -99,7 +99,7 @@ func find(t *testing.T, name string) entry {
 	return entry{}
 }
 
-var typeOf = map[string]byte{"bloom": 1, "blocked": 2, "fuse8": 3, "fuse16": 4, "hll": 5, "scalable": 6, "cuckoo": 7}
+var typeOf = map[string]byte{"bloom": 1, "blocked": 2, "fuse8": 3, "fuse16": 4, "hll": 5, "scalable": 6, "cuckoo": 7, "countmin": 8}
 
 func TestFrames(t *testing.T) {
 	for _, e := range golden(t) {
@@ -1136,5 +1136,102 @@ func TestCuckoo(t *testing.T) {
 	}
 	if !deleted {
 		t.Error("no cuckoo fixture exercises delete")
+	}
+}
+
+// Count-Min, frame type 8: width and depth rows of u32 counters, row major.
+// The frame stores no total, because under plain increment every row sums to
+// it; deriving it is therefore also an integrity check on the counters.
+type countMin struct {
+	width, depth, seed uint32
+	counters           []uint32
+	total              uint64
+}
+
+const countMinParams = 16
+
+func parseCountMin(f frame) (countMin, error) {
+	if len(f.body) < countMinParams {
+		return countMin{}, fmt.Errorf("body of %d bytes is shorter than the params block", len(f.body))
+	}
+	for at := 12; at < countMinParams; at++ {
+		if f.body[at] != 0 {
+			return countMin{}, fmt.Errorf("params padding at byte %d is not zero", at)
+		}
+	}
+	c := countMin{
+		width: le.Uint32(f.body),
+		depth: le.Uint32(f.body[4:]),
+		seed:  le.Uint32(f.body[8:]),
+	}
+	if c.width == 0 || c.depth == 0 {
+		return countMin{}, fmt.Errorf("geometry %dx%d has an empty dimension", c.width, c.depth)
+	}
+	cells := uint64(c.width) * uint64(c.depth)
+	if want := uint64(countMinParams) + 4*cells; uint64(len(f.body)) != want {
+		return countMin{}, fmt.Errorf("body of %d bytes disagrees with a %dx%d geometry (want %d)", len(f.body), c.width, c.depth, want)
+	}
+	c.counters = make([]uint32, cells)
+	for i := range c.counters {
+		c.counters[i] = le.Uint32(f.body[countMinParams+4*i:])
+	}
+	for r := uint32(0); r < c.depth; r++ {
+		var sum uint64
+		for i := r * c.width; i < (r+1)*c.width; i++ {
+			sum += uint64(c.counters[i])
+		}
+		if r == 0 {
+			c.total = sum
+		} else if sum != c.total {
+			return countMin{}, fmt.Errorf("row %d sums to %d, but row 0 sums to %d", r, sum, c.total)
+		}
+	}
+	return c, nil
+}
+
+// count is the smallest row's counter, each row probing at the same enhanced
+// double-hash position bloom uses, offset into that row.
+func (c countMin) count(key string) uint32 {
+	w := murmur3x86_128([]byte(key), c.seed)
+	min := ^uint32(0)
+	for r := uint32(0); r < c.depth; r++ {
+		at := r*c.width + reduce(w[0]+r*w[1]+r*r, c.width)
+		if v := c.counters[at]; v < min {
+			min = v
+		}
+	}
+	return min
+}
+
+func TestCountMin(t *testing.T) {
+	seeded := false
+	for _, e := range golden(t) {
+		if e.Kind != "countmin" {
+			continue
+		}
+		f, err := readFrame(frameOf(t, e))
+		if err != nil {
+			t.Fatal(err)
+		}
+		c, err := parseCountMin(f)
+		if err != nil {
+			t.Fatalf("%s: %v", e.Name, err)
+		}
+		seeded = seeded || c.seed != 0
+		truth := map[string]uint32{}
+		for _, key := range e.Keys {
+			truth[key]++
+		}
+		for key, n := range truth {
+			if got := c.count(key); got < n {
+				t.Errorf("%s: count(%q) is %d, below the true %d", e.Name, key, got, n)
+			}
+		}
+		if want := uint64(len(e.Keys)); c.total != want {
+			t.Errorf("%s: total %d, want %d", e.Name, c.total, want)
+		}
+	}
+	if !seeded {
+		t.Error("no countmin fixture carries a non-zero seed")
 	}
 }
