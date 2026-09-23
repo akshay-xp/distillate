@@ -129,3 +129,18 @@ test("error is the additive bound at the current total", () => {
 
   expect(s.error()).toBe(s.epsilon * 1000);
 });
+
+// A count below 1 would let an estimate fall under the true count, which is
+// the one thing the sketch promises cannot happen.
+test.each([0, -1, 1.5, Number.NaN])(
+  "add with a count of %s is rejected with ParamError",
+  (bad) => {
+    const s = CountMinSketch.create(0.01, 0.01);
+
+    expect(() => {
+      s.add("a", bad);
+    }).toThrow(ParamError);
+    expect(s.count("a")).toBe(0);
+    expect(s.total).toBe(0);
+  },
+);
