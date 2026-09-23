@@ -3,9 +3,11 @@ import { expect, test } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
 import {
+  CountMinOverflowError,
   CountMinSketch,
   type CountMinParams,
 } from "../../src/countmin/countmin.js";
+import { sampleStrings } from "../helpers/fpr.js";
 
 test("a sketch reports the geometry it was built with", () => {
   const s = new CountMinSketch({ width: 100, depth: 4 });
@@ -144,3 +146,23 @@ test.each([0, -1, 1.5, Number.NaN])(
     expect(s.total).toBe(0);
   },
 );
+
+// A saturating counter would underestimate from then on, silently. Width 8
+// keeps most columns untouched, so the snapshot is evidence that nothing moved
+// rather than a comparison of one value with itself.
+test("an add that would overflow a counter throws and changes nothing", () => {
+  const s = new CountMinSketch({ width: 8, depth: 2 });
+  const probes = sampleStrings(31, 200);
+  s.add("a", 0xffffffff);
+
+  expect(s.count("a")).toBe(0xffffffff);
+
+  const snapshot = probes.map((p) => s.count(p));
+
+  expect(() => {
+    s.add("a", 1);
+  }).toThrow(CountMinOverflowError);
+  expect(probes.map((p) => s.count(p))).toEqual(snapshot);
+  expect(s.count("a")).toBe(0xffffffff);
+  expect(s.total).toBe(0xffffffff);
+});
