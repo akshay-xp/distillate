@@ -87,6 +87,14 @@
       "import": "./dist/cuckoo/index.js",
       "require": "./dist/cuckoo/index.cjs"
     },
+    "./countmin": {
+      "types": {
+        "import": "./dist/countmin/index.d.ts",
+        "require": "./dist/countmin/index.d.cts"
+      },
+      "import": "./dist/countmin/index.js",
+      "require": "./dist/countmin/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",
