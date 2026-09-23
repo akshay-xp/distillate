@@ -1,7 +1,20 @@
 import type { BytesLike } from "../core/bytes.js";
 import { hash32x2Into, probeAt } from "../core/hasher.js";
 import { assertPositiveInt, assertUint32, ParamError } from "../core/params.js";
+import {
+  FORMAT_VERSION,
+  HASH_MURMUR128,
+  writeFrame,
+} from "../core/serialize.js";
 import { countMinSizing } from "../core/sizing.js";
+
+const TYPE = 8;
+
+/**
+ * Params occupy 12 bytes and the block is padded to 16, so the counters start
+ * at frame offset 32 and a foreign reader can map them as `u32`.
+ */
+const PARAMS_SIZE = 16;
 
 /** Thrown when an add would carry a counter past what a u32 holds. */
 export class CountMinOverflowError extends RangeError {
@@ -205,6 +218,32 @@ export class CountMinSketch {
       this.#counters[at] = (this.#counters[at] ?? 0) + count;
     }
     this.#total += count;
+  }
+
+  /**
+   * Serializes the sketch to a portable little-endian byte layout.
+   *
+   * The total is not stored. Under plain increment every row sums to it, so
+   * the field would be redundant, and a reader deriving it instead gets an
+   * integrity check on the counters for free.
+   *
+   * @returns The serialized sketch, readable by {@link CountMinSketch.fromBytes}.
+   */
+  toBytes(): Uint8Array {
+    const counters = this.#counters;
+    return writeFrame(
+      { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
+      PARAMS_SIZE,
+      4 * counters.length,
+      (_, view) => {
+        view.setUint32(0, this.#width, true);
+        view.setUint32(4, this.#depth, true);
+        view.setUint32(8, this.#seed, true);
+        counters.forEach((c, i) => {
+          view.setUint32(PARAMS_SIZE + 4 * i, c, true);
+        });
+      },
+    );
   }
 
   /**
