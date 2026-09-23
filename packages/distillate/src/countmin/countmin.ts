@@ -150,6 +150,9 @@ export class CountMinSketch {
    * @param count - How many occurrences to record; defaults to `1`.
    */
   add(key: BytesLike, count = 1): void {
+    // A count below 1 would let an estimate fall under the true count, the one
+    // thing this structure guarantees cannot happen.
+    assertPositiveInt(count, "count");
     hash32x2Into(key, this.#seed, this.#words);
     for (let r = 0; r < this.#depth; r++) {
       const at = this.#positionAt(r);
