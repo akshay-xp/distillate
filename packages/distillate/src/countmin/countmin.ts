@@ -55,6 +55,12 @@ function rowSum(counters: Uint32Array, width: number, depth: number): number {
   return expected;
 }
 
+/** Thrown when an operation requires two sketches built with identical parameters. */
+export class CountMinParamMismatchError extends Error {
+  /** Discriminates this error from other `Error`s. */
+  override readonly name = "CountMinParamMismatchError";
+}
+
 /** Thrown when an add would carry a counter past what a u32 holds. */
 export class CountMinOverflowError extends RangeError {
   /** Discriminates this error from other `Error`s. */
@@ -322,6 +328,15 @@ export class CountMinSketch {
    * @returns A new sketch holding both streams.
    */
   union(other: CountMinSketch): CountMinSketch {
+    if (
+      this.#width !== other.#width ||
+      this.#depth !== other.#depth ||
+      this.#seed !== other.#seed
+    ) {
+      throw new CountMinParamMismatchError(
+        "cannot union Count-Min sketches whose parameters do not match",
+      );
+    }
     const mine = this.#counters;
     const theirs = other.#counters;
     const merged = new CountMinSketch({

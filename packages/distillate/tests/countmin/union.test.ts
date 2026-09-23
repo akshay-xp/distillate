@@ -1,6 +1,10 @@
 import { expect, test } from "vitest";
 
-import { CountMinSketch } from "../../src/countmin/countmin.js";
+import {
+  CountMinParamMismatchError,
+  type CountMinParams,
+  CountMinSketch,
+} from "../../src/countmin/countmin.js";
 import { sampleStrings } from "../helpers/fpr.js";
 
 const streamA = sampleStrings(61, 200);
@@ -31,4 +35,19 @@ test("a union is the sketch the combined stream would have produced", () => {
   expect(u.total).toBe(a.total + b.total);
   expect(a.toBytes()).toEqual(beforeA);
   expect(b.toBytes()).toEqual(beforeB);
+});
+
+// A seed difference matters as much as a geometry one: the same key would have
+// landed in different columns, so adding the counters combines unrelated
+// numbers and the result means nothing.
+test.each<[string, CountMinParams]>([
+  ["width", { width: 9, depth: 2 }],
+  ["depth", { width: 8, depth: 3 }],
+  ["seed", { width: 8, depth: 2, seed: 1 }],
+])("a union across a differing %s is refused", (_, params) => {
+  const a = new CountMinSketch({ width: 8, depth: 2 });
+
+  expect(() => a.union(new CountMinSketch(params))).toThrow(
+    CountMinParamMismatchError,
+  );
 });
