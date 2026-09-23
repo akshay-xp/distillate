@@ -1,5 +1,6 @@
 import { BlockedBloomFilter, ParamError } from "distillate/blocked";
 import { BloomFilter } from "distillate/bloom";
+import { CountMinSketch } from "distillate/countmin";
 import { CuckooFilter, CuckooFullError } from "distillate/cuckoo";
 import { BinaryFuse8, BinaryFuseBuildError } from "distillate/fuse";
 import { ScalableBloomFilter } from "distillate/scalable";
@@ -23,6 +24,19 @@ export interface StructureReport {
   /** Miss-set keys `has()` claims are members. */
   falsePositives: number;
   measuredFpr: number;
+}
+
+/** What the sketch says about one key, beside what is actually true. */
+export interface CountReport {
+  key: string;
+  /** Occurrences actually recorded, which the page tracks itself. */
+  trueCount: number;
+  /** The sketch's answer, never below `trueCount`. */
+  estimate: number;
+  /** `estimate - trueCount`, the thing worth looking at. */
+  overestimate: number;
+  /** Everything the sketch has recorded, the denominator of its bound. */
+  total: number;
 }
 
 /** What one structure says about one queried key. */
@@ -74,6 +88,13 @@ export type RemoveResult =
     }
   | { ok: false; message: string };
 
+/**
+ * Failure probability the sketch is built at. Fixed rather than exposed: the
+ * page already asks for one error knob, and a second would be the only control
+ * here that does not change what any other structure does.
+ */
+const COUNTMIN_DELTA = 0.01;
+
 /** How many never-inserted keys the measured rate is averaged over. */
 export const PROBE_COUNT = 20_000;
 
@@ -103,6 +124,7 @@ function probeKeys(): string[] {
 
 interface Filters {
   bloom: BloomFilter;
+  countmin: CountMinSketch;
   blocked: BlockedBloomFilter;
   fuse8: BinaryFuse8;
   scalable: ScalableBloomFilter;
@@ -166,6 +188,8 @@ export class Playground {
   #cuckooFull = false;
   /** Keys generated so far, so growth continues the `key-<i>` sequence. */
   #generated: number;
+  /** Occurrences per key, so the panel can show the sketch's error exactly. */
+  readonly #counts = new Map<string, number>();
 
   private constructor(keys: string[], target: number, filters: Filters) {
     this.#built = keys;
@@ -175,6 +199,7 @@ export class Playground {
     this.#probes = probeKeys();
     this.#target = target;
     this.#filters = filters;
+    for (const key of keys) this.#counts.set(key, 1);
   }
 
   /** Builds all five structures from `keyCount` generated keys. */
@@ -197,6 +222,7 @@ export class Playground {
         fuse8: BinaryFuse8.from(keys),
         scalable: ScalableBloomFilter.from(keys, epsilon),
         cuckoo: CuckooFilter.from(keys, epsilon),
+        countmin: CountMinSketch.from(keys, epsilon, COUNTMIN_DELTA),
       };
     } catch (error) {
       return { ok: false, message: toMessage(error) };
@@ -313,6 +339,19 @@ export class Playground {
         // A key Cuckoo refused or had deleted is not one it holds.
         cuckoo: verdict(cuckoo, inserted && !this.#notInCuckoo.has(key)),
       },
+    };
+  }
+
+  /** What the sketch says about `key`, beside the count the page recorded. */
+  estimate(key: string): CountReport {
+    const trueCount = this.#counts.get(key) ?? 0;
+    const estimate = this.#filters.countmin.count(key);
+    return {
+      key,
+      trueCount,
+      estimate,
+      overestimate: estimate - trueCount,
+      total: this.#filters.countmin.total,
     };
   }
 
