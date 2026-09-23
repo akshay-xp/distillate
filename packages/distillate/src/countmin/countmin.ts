@@ -1,4 +1,8 @@
 import { assertPositiveInt, assertUint32, ParamError } from "../core/params.js";
+import { countMinSizing } from "../core/sizing.js";
+
+/** Options accepted alongside a sizing solve: everything but the geometry. */
+export type CountMinOptions = Omit<CountMinParams, "width" | "depth">;
 
 /** Low-level Count-Min sketch parameters. */
 export interface CountMinParams {
@@ -26,6 +30,29 @@ export class CountMinSketch {
   readonly #width: number;
   readonly #depth: number;
   readonly #seed: number;
+
+  /**
+   * Creates a sketch whose estimate is at most `epsilon * total` above the
+   * true count, with probability `1 - delta`.
+   *
+   * Unlike a filter, a sketch is sized by the error it targets rather than by
+   * how many keys it will see, so no key count is needed.
+   *
+   * @param epsilon - Error factor relative to the total recorded, e.g. `0.001`.
+   * @param delta - Probability the bound is exceeded, e.g. `0.001`.
+   * @param options - Optional seed.
+   * @returns A new, empty sketch.
+   */
+  static create(
+    epsilon: number,
+    delta: number,
+    options: CountMinOptions = {},
+  ): CountMinSketch {
+    return new CountMinSketch({
+      ...options,
+      ...countMinSizing(epsilon, delta),
+    });
+  }
 
   /**
    * Constructs a sketch from low-level {@link CountMinParams}. Prefer
