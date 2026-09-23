@@ -445,3 +445,23 @@ test("adding a deleted key back puts it back in Cuckoo", () => {
   expect(playground.lookup("key-5").verdicts.cuckoo).toBe("member");
   expect(playground.report().structures.cuckoo.heldKeys).toBe(KEYS);
 });
+
+test("the sketch counts the build set and never reads below the truth", () => {
+  const pg = built(1000);
+  const report = pg.estimate("key-5");
+
+  expect(report.key).toBe("key-5");
+  expect(report.trueCount).toBe(1);
+  expect(report.estimate).toBeGreaterThanOrEqual(1);
+  expect(report.overestimate).toBe(report.estimate - report.trueCount);
+  expect(report.total).toBe(1000);
+
+  expect(pg.estimate("never-seen").trueCount).toBe(0);
+
+  // The sketch's one hard guarantee, checked over every key it was built from
+  // rather than the one the panel happens to show.
+  for (let i = 0; i < 1000; i += 1) {
+    const r = pg.estimate(`key-${String(i)}`);
+    expect(r.estimate, `key-${String(i)}`).toBeGreaterThanOrEqual(r.trueCount);
+  }
+});
