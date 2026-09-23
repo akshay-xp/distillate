@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 
+import { hash32x2Into, probeAt } from "../../src/core/hasher.js";
 import { CountMinSketch } from "../../src/countmin/countmin.js";
 import {
   prefixedStream,
@@ -93,4 +94,51 @@ test("extra rows reduce error the way independent rows would", () => {
   };
 
   expect(meanOver(7)).toBeLessThan(0.4 * meanOver(1));
+});
+
+// The fallback this kernel was chosen over: one independent hash pass per row,
+// seeded by the row, which is Redis's CMS_HASH(item, len, i) shape. It costs
+// depth hash passes per operation instead of one, so it only earns that if it
+// is measurably more accurate. Built here as a throwaway oracle to find out.
+function perRowOracle(
+  width: number,
+  depth: number,
+): { add: (key: string) => void; count: (key: string) => number } {
+  const counters = new Uint32Array(width * depth);
+  const words = new Uint32Array(2);
+  const at = (key: string, row: number): number => {
+    // Offset so no row coincides with the sketch under test, which shares the
+    // library default seed 0.
+    hash32x2Into(key, 0x9e3779b9 + row, words);
+    return row * width + probeAt(words[0] ?? 0, words[1] ?? 0, 0, width);
+  };
+  return {
+    add(key) {
+      for (let r = 0; r < depth; r++) counters[at(key, r)]++;
+    },
+    count(key) {
+      let min = Infinity;
+      for (let r = 0; r < depth; r++) {
+        const v = counters[at(key, r)] ?? 0;
+        if (v < min) min = v;
+      }
+      return min;
+    },
+  };
+}
+
+test("derived positions are no worse than per-row hashing", () => {
+  const stream = zipfStream(14, DISTINCT, EVENTS, 1);
+  const truth = truthOf(stream);
+  const s = CountMinSketch.create(0.001, 0.001);
+  const oracle = perRowOracle(s.width, s.depth);
+  for (const key of stream) {
+    s.add(key);
+    oracle.add(key);
+  }
+
+  const mine = scoreOverestimate((key) => s.count(key), truth, Infinity);
+  const theirs = scoreOverestimate((key) => oracle.count(key), truth, Infinity);
+
+  expect(mine.mean).toBeLessThanOrEqual(1.5 * theirs.mean);
 });
