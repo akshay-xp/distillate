@@ -310,6 +310,34 @@ export class CountMinSketch {
   }
 
   /**
+   * Returns a new sketch counting everything both this one and `other` have
+   * recorded, as if one sketch had seen both streams.
+   *
+   * Both operands are left untouched.
+   *
+   * Unlike the filters, this is not idempotent: `a.union(a)` doubles every
+   * count, because counts add where bits only ever turn on.
+   *
+   * @param other - A sketch built with an identical geometry and seed.
+   * @returns A new sketch holding both streams.
+   */
+  union(other: CountMinSketch): CountMinSketch {
+    const mine = this.#counters;
+    const theirs = other.#counters;
+    const merged = new CountMinSketch({
+      width: this.#width,
+      depth: this.#depth,
+      seed: this.#seed,
+    });
+    const into = merged.#counters;
+    for (let i = 0; i < into.length; i++) {
+      into[i] = (mine[i] ?? 0) + (theirs[i] ?? 0);
+    }
+    merged.#total = this.#total + other.#total;
+    return merged;
+  }
+
+  /**
    * Serializes the sketch to a portable little-endian byte layout.
    *
    * The total is not stored. Under plain increment every row sums to it, so
