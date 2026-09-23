@@ -103,6 +103,38 @@ export class CountMinSketch {
     return this.#total;
   }
 
+  /**
+   * Error factor the geometry implements, `e / width`.
+   *
+   * Sizing rounds `width` up, so this is at or below the `epsilon` passed to
+   * {@link CountMinSketch.create}: the sketch reports what it delivers rather
+   * than what was asked for.
+   */
+  get epsilon(): number {
+    return Math.E / this.#width;
+  }
+
+  /**
+   * Probability the error bound is exceeded, `e ** -depth`. At or below the
+   * `delta` passed to {@link CountMinSketch.create}, for the same reason.
+   */
+  get delta(): number {
+    return Math.exp(-this.#depth);
+  }
+
+  /**
+   * The additive error bound right now, `epsilon * total`. A count is at most
+   * this far above the truth, with probability `1 - delta`.
+   *
+   * It grows with what the sketch has recorded, so an estimate means less as
+   * the stream goes on, the way a filter's `rate()` rises as it fills.
+   *
+   * @returns The bound, `0` for an empty sketch.
+   */
+  error(): number {
+    return this.epsilon * this.#total;
+  }
+
   // Row r's probe for the key hashed into #words, as an offset into #counters.
   #positionAt(row: number): number {
     return (
