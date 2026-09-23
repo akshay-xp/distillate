@@ -465,3 +465,39 @@ test("the sketch counts the build set and never reads below the truth", () => {
     expect(r.estimate, `key-${String(i)}`).toBeGreaterThanOrEqual(r.trueCount);
   }
 });
+
+test("recording repeats is what the sketch shows that a set cannot", () => {
+  const pg = built(1000);
+  const before = pg.estimate("key-5").total;
+  const result = pg.record("key-5", 4);
+
+  if (!result.ok) throw new Error(`record refused: ${result.message}`);
+  expect(result.trueCount).toBe(5);
+  expect(result.estimate).toBeGreaterThanOrEqual(5);
+  expect(result.total).toBe(before + 4);
+
+  const report = pg.estimate("key-5");
+  expect(report.trueCount).toBe(5);
+  expect(report.estimate).toBeGreaterThanOrEqual(5);
+});
+
+test("a key the build never saw can be recorded and then queried", () => {
+  const pg = built(1000);
+  const result = pg.record("brand-new", 3);
+
+  if (!result.ok) throw new Error(`record refused: ${result.message}`);
+  expect(pg.estimate("brand-new").trueCount).toBe(3);
+});
+
+// Bad input is a message, the way build and grow already handle it, so the
+// page never has to catch an exception from a form.
+test.each([0, -1, 1.5, "abc", "", null, undefined])(
+  "recording a count of %s is refused with a message",
+  (count) => {
+    const result = built(100).record("key-5", count);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected a refusal");
+    expect(result.message).toMatch(/whole number/);
+  },
+);
