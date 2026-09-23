@@ -5,6 +5,7 @@ import { crc32 } from "../../src/core/crc32.js";
 import {
   FORMAT_VERSION,
   HASH_MURMUR128,
+  readFrameAt,
   SerializationError,
   TruncatedError,
   UnknownHashVariantError,
@@ -221,4 +222,36 @@ test("the forged generator reaches both a working sketch and each rejection", ()
     "TruncatedError",
     "ok",
   ]);
+});
+
+test("the JSON envelope round-trips", () => {
+  const s = filled();
+  const restored = CountMinSketch.fromJSON(
+    JSON.parse(JSON.stringify(s)) as unknown,
+  );
+
+  expect(restored.toBytes()).toEqual(s.toBytes());
+  expect(restored.total).toBe(s.total);
+});
+
+test.each<[string, unknown]>([
+  ["a non-object", 7],
+  ["a wrong tag", { $: "other", v: FORMAT_VERSION, data: "" }],
+  ["a wrong version", { $: "distillate", v: 1, data: "" }],
+])("fromJSON rejects %s", (_, value) => {
+  expect(() => CountMinSketch.fromJSON(value)).toThrow(SerializationError);
+});
+
+test("a type 8 frame is walkable without knowing the structure", () => {
+  const a = filled().toBytes();
+  const b = new CountMinSketch({ width: 8, depth: 2 }).toBytes();
+  const buffer = new Uint8Array(a.length + b.length);
+  buffer.set(a);
+  buffer.set(b, a.length);
+
+  const first = readFrameAt(buffer, 0);
+
+  expect(first.type).toBe(8);
+  expect(first.byteLength).toBe(a.length);
+  expect(readFrameAt(buffer, first.byteLength).type).toBe(8);
 });

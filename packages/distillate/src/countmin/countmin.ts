@@ -5,10 +5,13 @@ import {
   assertBodyLength,
   assertMinBodyLength,
   assertParamsPadding,
+  type FilterJSON,
   FORMAT_VERSION,
+  fromJSONEnvelope,
   HASH_MURMUR128,
   readHeader,
   SerializationError,
+  toJSONEnvelope,
   UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
@@ -330,6 +333,26 @@ export class CountMinSketch {
         });
       },
     );
+  }
+
+  /**
+   * Serializes the sketch to a JSON-friendly envelope wrapping the base64 of
+   * {@link CountMinSketch.toBytes}.
+   *
+   * @returns The envelope, readable by {@link CountMinSketch.fromJSON}.
+   */
+  toJSON(): FilterJSON {
+    return toJSONEnvelope(this.toBytes());
+  }
+
+  /**
+   * Restores a sketch from its {@link CountMinSketch.toJSON} envelope.
+   *
+   * @param value - The JSON envelope.
+   * @returns The reconstructed sketch.
+   */
+  static fromJSON(value: unknown): CountMinSketch {
+    return CountMinSketch.fromBytes(fromJSONEnvelope(value));
   }
 
   /**
