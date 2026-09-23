@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { expect, test } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
@@ -50,4 +51,34 @@ test("a seed passed to create is kept", () => {
 test("create rejects non-probabilities", () => {
   expect(() => CountMinSketch.create(0, 0.01)).toThrow(ParamError);
   expect(() => CountMinSketch.create(0.01, 1)).toThrow(ParamError);
+});
+
+test("a key counts zero until it is added", () => {
+  expect(CountMinSketch.create(0.01, 0.01).count("a")).toBe(0);
+});
+
+test("add records one occurrence, or the count it is given", () => {
+  const s = CountMinSketch.create(0.01, 0.01);
+  s.add("a");
+
+  expect(s.count("a")).toBe(1);
+
+  s.add("a", 3);
+
+  expect(s.count("a")).toBe(4);
+});
+
+// The sketch's hard invariant: it may overestimate, never underestimate.
+test("every key counts at least as often as it was added", () => {
+  fc.assert(
+    fc.property(fc.array(fc.string(), { maxLength: 200 }), (keys) => {
+      const s = CountMinSketch.create(0.01, 0.01);
+      const truth = new Map<string, number>();
+      for (const k of keys) {
+        s.add(k);
+        truth.set(k, (truth.get(k) ?? 0) + 1);
+      }
+      return [...truth].every(([k, n]) => s.count(k) >= n);
+    }),
+  );
 });
