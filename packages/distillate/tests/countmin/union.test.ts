@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 
 import {
+  CountMinOverflowError,
   CountMinParamMismatchError,
   type CountMinParams,
   CountMinSketch,
@@ -50,4 +51,20 @@ test.each<[string, CountMinParams]>([
   expect(() => a.union(new CountMinSketch(params))).toThrow(
     CountMinParamMismatchError,
   );
+});
+
+// Without an explicit check a Uint32Array write wraps: 2^32 stores as 0, so
+// the largest possible count would read as the smallest. That is an
+// underestimate, the one outcome this structure rules out.
+test("a union that would overflow a counter throws and changes nothing", () => {
+  const a = new CountMinSketch({ width: 8, depth: 2 });
+  const b = new CountMinSketch({ width: 8, depth: 2 });
+  a.add("a", 0x80000000);
+  b.add("a", 0x80000000);
+  const beforeA = a.toBytes();
+  const beforeB = b.toBytes();
+
+  expect(() => a.union(b)).toThrow(CountMinOverflowError);
+  expect(a.toBytes()).toEqual(beforeA);
+  expect(b.toBytes()).toEqual(beforeB);
 });
