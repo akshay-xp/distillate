@@ -29,8 +29,8 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   <p>
     The playground builds real filters in your browser and needs JavaScript.
     With it off,{" "}
-    <a href="/guides/choosing-a-structure/">Choosing a structure</a> covers the
-    same ground in prose.
+    <a href="/guides/choosing-a-structure/">Choosing a structure</a> covers the same
+    ground in prose.
   </p>
 </noscript>
 
@@ -62,9 +62,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       Binary Fuse ignores this; its rate is fixed by fingerprint width.
     </p>
   </div>
-  <button class="dstl-btn" type="submit">
-    Build
-  </button>
+  <button class="dstl-btn" type="submit"> Build </button>
 </form>
 
 <form class="dstl-form-stack" data-pg-query novalidate>
@@ -76,9 +74,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       <code>miss-22</code>, which none of them ever saw.
     </p>
   </div>
-  <button class="dstl-btn" type="submit">
-    Query
-  </button>
+  <button class="dstl-btn" type="submit"> Query </button>
 </form>
 
 <form class="dstl-form-stack" data-pg-add novalidate>
@@ -90,9 +86,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       which is the trade it makes for its size.
     </p>
   </div>
-  <button class="dstl-btn" type="submit">
-    Add
-  </button>
+  <button class="dstl-btn" type="submit"> Add </button>
 </form>
 
 <form class="dstl-form-stack" data-pg-grow novalidate>
@@ -112,9 +106,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       the build too; once full it refuses keys rather than drop one it holds.
     </p>
   </div>
-  <button class="dstl-btn" type="submit">
-    Grow
-  </button>
+  <button class="dstl-btn" type="submit"> Grow </button>
 </form>
 
 <form class="dstl-form-stack" data-pg-delete novalidate>
@@ -126,9 +118,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       it, and say why.
     </p>
   </div>
-  <button class="dstl-btn" type="submit">
-    Delete
-  </button>
+  <button class="dstl-btn" type="submit"> Delete </button>
 </form>
 
 <div class="dstl-status" data-pg-status role="status" aria-live="polite"></div>
@@ -147,47 +137,103 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     </tr>
   </thead>
   <tbody>
-    {STRUCTURES.map((s) => (
-      <tr data-row={s.key}>
-        <th scope="row">
-          {s.label}
-          <span class="dstl-subpath">{s.subpath}</span>
-        </th>
-        <td data-cell="held" />
-        <td data-cell="missing" />
-        <td data-cell="bits" />
-        <td data-cell="size" />
-        <td data-cell="stages" />
-        <td data-cell="fpr" />
-        <td data-cell="verdict" />
-      </tr>
-    ))}
+    {
+      STRUCTURES.map((s) => (
+        <tr data-row={s.key}>
+          <th scope="row">
+            {s.label}
+            <span class="dstl-subpath">{s.subpath}</span>
+          </th>
+          <td data-cell="held" />
+          <td data-cell="missing" />
+          <td data-cell="bits" />
+          <td data-cell="size" />
+          <td data-cell="stages" />
+          <td data-cell="fpr" />
+          <td data-cell="verdict" />
+        </tr>
+      ))
+    }
   </tbody>
 </table>
 
+<section class="dstl-panel" data-pg-countmin>
+  <h3>Count how often, not whether</h3>
+
+  <p class="dstl-hint">
+    Every structure above answers <em>have I seen this key</em>. A Count-Min
+    sketch answers <em>how many times</em>, and it is the only one here whose
+    size was fixed before it saw a key: growing the set costs it nothing and
+    buys it less accuracy. It cannot answer membership at all, which is why it
+    is not a row in that table.
+  </p>
+
+  <form class="dstl-form-stack" data-pg-record novalidate>
+    <div class="dstl-field">
+      <label for="pg-count-key">Record occurrences of</label>
+      <input id="pg-count-key" name="key" type="text" value="key-5" />
+    </div>
+    <div class="dstl-field">
+      <label for="pg-count-n">How many</label>
+      <input
+        id="pg-count-n"
+        name="count"
+        type="text"
+        inputmode="numeric"
+        value="4"
+      />
+      <p class="dstl-hint">
+        The build recorded each key once. Add more and the estimate follows the
+        truth, never below it.
+      </p>
+    </div>
+    <button class="dstl-btn" type="submit"> Record </button>
+  </form>
+
+  <dl class="dstl-readout">
+    <div><dt>Grid</dt><dd data-cm="grid"></dd></div>
+    <div><dt>Size</dt><dd data-cm="size"></dd></div>
+    <div><dt>Recorded</dt><dd data-cm="total"></dd></div>
+    <div><dt>True count</dt><dd data-cm="true"></dd></div>
+    <div><dt>Estimate</dt><dd data-cm="estimate"></dd></div>
+    <div><dt>Overestimate</dt><dd data-cm="over"></dd></div>
+    <div><dt>Bound</dt><dd data-cm="bound"></dd></div>
+  </dl>
+
+  <p class="dstl-hint">
+    <strong>The estimate is never below the truth.</strong> Collisions with other
+    keys only push it up, by at most the bound, which is the error factor times everything
+    recorded. So the bound grows with the stream: an overestimate of a few hundred
+    is noise for a key seen eighty thousand times and useless for one seen three times.
+  </p>
+</section>
+
 <div data-pg-notes>
   <p class="dstl-hint">
-    <strong>A false positive is the filter working, not a bug.</strong> These
-    structures trade exactness for space: a key that was never inserted can
-    still answer yes, at roughly the target rate. What they never do is the
-    reverse.
+    <strong>A false positive is the filter working, not a bug.</strong> These structures
+    trade exactness for space: a key that was never inserted can still answer yes,
+    at roughly the target rate. What they never do is the reverse.
   </p>
 
   <p class="dstl-hint">
-    <strong>Not found is zero, and stays zero.</strong> That column counts
-    inserted keys the filter cannot find. It is guaranteed to be zero by how
-    these structures are built, not a lucky property of this sample: a key that
-    was added always answers yes. The measured rate is the false positive rate,
-    checked over {probes} keys that were never inserted; it is an estimate, so
-    expect it within roughly a factor of two of the target at these sample
-    sizes. Binary Fuse ignores the target entirely, so its rate is not compared
-    against one.
+    <strong>Not found is zero, and stays zero.</strong> That column counts inserted
+    keys the filter cannot find. It is guaranteed to be zero by how these structures
+    are built, not a lucky property of this sample: a key that was added always answers
+    yes. The measured rate is the false positive rate, checked over {probes} keys
+    that were never inserted; it is an estimate, so expect it within roughly a factor
+    of two of the target at these sample sizes. Binary Fuse ignores the target entirely,
+    so its rate is not compared against one.
   </p>
 </div>
 
 <script>
   import { Playground } from "./engine.js";
-  import type { PlaygroundReport, StructureKey } from "./engine.js";
+  import type {
+    CountMinReport,
+    CountReport,
+    PlaygroundReport,
+    StructureKey,
+  } from "./engine.js";
 
   const KEYS = ["bloom", "blocked", "fuse8", "scalable", "cuckoo"] as const;
 
@@ -210,6 +256,8 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   const growForm = document.querySelector<HTMLFormElement>("[data-pg-grow]");
   const deleteForm =
     document.querySelector<HTMLFormElement>("[data-pg-delete]");
+  const recordForm =
+    document.querySelector<HTMLFormElement>("[data-pg-record]");
   const status = document.querySelector<HTMLElement>("[data-pg-status]");
 
   // Held between events. `report()` walks every key it holds, so a query must
@@ -223,6 +271,27 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   function set(key: StructureKey, name: string, text: string): void {
     const el = cell(key, name);
     if (el) el.textContent = text;
+  }
+
+  function cm(name: string, text: string): void {
+    const el = document.querySelector(`[data-cm='${name}']`);
+    if (el) el.textContent = text;
+  }
+
+  // The sketch's own readout. Split from render() because the key set and the
+  // queried key change independently: growing rewrites the totals while the
+  // last estimate still stands.
+  function renderSketch(report: CountMinReport): void {
+    cm("grid", `${String(report.width)} x ${String(report.depth)}`);
+    cm("size", formatBytes(report.totalBytes));
+    cm("total", report.total.toLocaleString("en-US"));
+    cm("bound", report.bound.toFixed(1));
+  }
+
+  function renderEstimate(report: CountReport): void {
+    cm("true", String(report.trueCount));
+    cm("estimate", String(report.estimate));
+    cm("over", String(report.overestimate));
   }
 
   function formatPercent(rate: number): string {
@@ -255,6 +324,14 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     if (status) status.textContent = "";
     current = result.playground;
     render(current.report());
+    renderSketch(current.countMin());
+    renderEstimate(current.estimate(recordKey()));
+  }
+
+  /** The key the sketch panel is currently pointed at. */
+  function recordKey(): string {
+    if (!recordForm) return "key-5";
+    return String(new FormData(recordForm).get("key") ?? "key-5");
   }
 
   function insert(): void {
@@ -264,6 +341,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     const { fuseRefusal } = current.insert(key);
     if (status) status.textContent = fuseRefusal;
     render(current.report());
+    renderSketch(current.countMin());
   }
 
   function grow(): void {
@@ -280,6 +358,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
           : `Cuckoo filled up and refused ${result.cuckooRefused.toLocaleString("en-US")} of the added keys rather than drop any it held. It was sized for the build; delete keys to make room.`;
     }
     render(current.report());
+    renderSketch(current.countMin());
   }
 
   function remove(): void {
@@ -289,6 +368,20 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     if (status)
       status.textContent = result.ok ? result.refusal : result.message;
     if (result.ok) render(current.report());
+  }
+
+  function record(): void {
+    if (!recordForm || !current) return;
+    const data = new FormData(recordForm);
+    const key = String(data.get("key") ?? "");
+    const result = current.record(key, data.get("count"));
+    if (!result.ok) {
+      if (status) status.textContent = result.message;
+      return;
+    }
+    if (status) status.textContent = "";
+    renderSketch(current.countMin());
+    renderEstimate(current.estimate(key));
   }
 
   function query(): void {
@@ -311,5 +404,6 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   onSubmit(addForm, insert);
   onSubmit(growForm, grow);
   onSubmit(deleteForm, remove);
+  onSubmit(recordForm, record);
   build();
 </script>
