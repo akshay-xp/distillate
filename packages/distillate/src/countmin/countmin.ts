@@ -1,3 +1,5 @@
+import type { BytesLike } from "../core/bytes.js";
+import { hash32x2Into, probeAt } from "../core/hasher.js";
 import { assertPositiveInt, assertUint32, ParamError } from "../core/params.js";
 import { countMinSizing } from "../core/sizing.js";
 
@@ -27,9 +29,12 @@ export interface CountMinParams {
  * ```
  */
 export class CountMinSketch {
+  readonly #counters: Uint32Array;
   readonly #width: number;
   readonly #depth: number;
   readonly #seed: number;
+  // Reused across add and count so hashing a key allocates nothing per call.
+  readonly #words = new Uint32Array(2);
 
   /**
    * Creates a sketch whose estimate is at most `epsilon * total` above the
@@ -71,6 +76,7 @@ export class CountMinSketch {
         `width ${String(width)} by depth ${String(depth)} needs ${String(width * depth)} counters, above the maximum ${String(0xffffffff)}`,
       );
     }
+    this.#counters = new Uint32Array(width * depth);
     this.#width = width;
     this.#depth = depth;
     this.#seed = seed;
@@ -89,5 +95,44 @@ export class CountMinSketch {
   /** Hash seed. */
   get seed(): number {
     return this.#seed;
+  }
+
+  // Row r's probe for the key hashed into #words, as an offset into #counters.
+  #positionAt(row: number): number {
+    return (
+      row * this.#width +
+      probeAt(this.#words[0] ?? 0, this.#words[1] ?? 0, row, this.#width)
+    );
+  }
+
+  /**
+   * Records `count` occurrences of a key.
+   *
+   * @param key - The key to record, as a string or bytes.
+   * @param count - How many occurrences to record; defaults to `1`.
+   */
+  add(key: BytesLike, count = 1): void {
+    hash32x2Into(key, this.#seed, this.#words);
+    for (let r = 0; r < this.#depth; r++) {
+      const at = this.#positionAt(r);
+      this.#counters[at] = (this.#counters[at] ?? 0) + count;
+    }
+  }
+
+  /**
+   * Estimates how many times a key was added. The estimate is never below the
+   * true count and is at most {@link CountMinSketch.error} above it.
+   *
+   * @param key - The key to estimate.
+   * @returns The estimated count, `0` for a key the sketch has not seen.
+   */
+  count(key: BytesLike): number {
+    hash32x2Into(key, this.#seed, this.#words);
+    let min = Infinity;
+    for (let r = 0; r < this.#depth; r++) {
+      const at = this.#counters[this.#positionAt(r)] ?? 0;
+      if (at < min) min = at;
+    }
+    return min;
   }
 }
