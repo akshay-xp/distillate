@@ -34,3 +34,20 @@ test.each<[string, Partial<CountMinParams>]>([
     ParamError,
   );
 });
+
+test("create sizes the sketch from epsilon and delta", () => {
+  const s = CountMinSketch.create(0.001, 0.001);
+
+  expect(s.width).toBe(2719);
+  expect(s.depth).toBe(7);
+  expect(s.seed).toBe(0);
+});
+
+test("a seed passed to create is kept", () => {
+  expect(CountMinSketch.create(0.01, 0.01, { seed: 7 }).seed).toBe(7);
+});
+
+test("create rejects non-probabilities", () => {
+  expect(() => CountMinSketch.create(0, 0.01)).toThrow(ParamError);
+  expect(() => CountMinSketch.create(0.01, 1)).toThrow(ParamError);
+});
