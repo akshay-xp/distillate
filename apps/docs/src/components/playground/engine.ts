@@ -79,6 +79,16 @@ export type GrowResult =
     }
   | { ok: false; message: string };
 
+export type RecordResult =
+  | {
+      ok: true;
+      key: string;
+      trueCount: number;
+      estimate: number;
+      total: number;
+    }
+  | { ok: false; message: string };
+
 export type RemoveResult =
   | {
       ok: true;
@@ -102,6 +112,9 @@ export const PROBE_COUNT = 20_000;
 export const MAX_KEYS = 100_000;
 
 const KEY_COUNT_MESSAGE = `Key count must be a whole number between 1 and ${MAX_KEYS.toLocaleString("en-US")}. The playground builds real filters in your browser, so it stops there.`;
+
+const RECORD_MESSAGE =
+  "Occurrences must be a whole number of at least 1. The sketch counts events, and a count below one would let an estimate fall under the truth, which is the one thing it rules out.";
 
 const GROW_MESSAGE = `Keys to add must be a whole number of at least 1, and the total held must stay at or under ${MAX_KEYS.toLocaleString("en-US")}. The playground builds real filters in your browser, so it stops there.`;
 
@@ -340,6 +353,23 @@ export class Playground {
         cuckoo: verdict(cuckoo, inserted && !this.#notInCuckoo.has(key)),
       },
     };
+  }
+
+  /**
+   * Records `count` more occurrences of `key` in the sketch.
+   *
+   * This is the only control on the page that does something a set could not:
+   * every other one treats a repeated key as a no-op.
+   */
+  record(key: string, count: unknown): RecordResult {
+    const n = toNumber(count);
+    if (!Number.isInteger(n) || n < 1) {
+      return { ok: false, message: RECORD_MESSAGE };
+    }
+    this.#filters.countmin.add(key, n);
+    this.#counts.set(key, (this.#counts.get(key) ?? 0) + n);
+    const { trueCount, estimate, total } = this.estimate(key);
+    return { ok: true, key, trueCount, estimate, total };
   }
 
   /** What the sketch says about `key`, beside the count the page recorded. */
