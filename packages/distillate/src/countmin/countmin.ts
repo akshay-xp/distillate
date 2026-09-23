@@ -23,6 +23,35 @@ const TYPE = 8;
 const PARAMS_SIZE = 16;
 const PARAMS_FIELDS_END = 12;
 
+/**
+ * The total a frame's counters imply, which is why no total is stored.
+ *
+ * Under plain increment every add touches one counter per row, so every row
+ * sums to the same value. Deriving the total therefore doubles as an integrity
+ * check: rows that disagree were not written by this format, and a sum past
+ * the safe-integer range could not have been reached by counting.
+ */
+function rowSum(counters: Uint32Array, width: number, depth: number): number {
+  let expected = 0;
+  for (let r = 0; r < depth; r++) {
+    let sum = 0;
+    const from = r * width;
+    for (let c = from; c < from + width; c++) sum += counters[c] ?? 0;
+    if (sum > Number.MAX_SAFE_INTEGER) {
+      throw new SerializationError(
+        `countmin: row ${String(r)} sums to ${String(sum)}, past the safe integer range`,
+      );
+    }
+    if (r === 0) expected = sum;
+    else if (sum !== expected) {
+      throw new SerializationError(
+        `countmin: row ${String(r)} sums to ${String(sum)}, but row 0 sums to ${String(expected)}`,
+      );
+    }
+  }
+  return expected;
+}
+
 /** Thrown when an add would carry a counter past what a u32 holds. */
 export class CountMinOverflowError extends RangeError {
   /** Discriminates this error from other `Error`s. */
@@ -149,9 +178,7 @@ export class CountMinSketch {
     for (let i = 0; i < counters.length; i++) {
       counters[i] = view.getUint32(PARAMS_SIZE + 4 * i, true);
     }
-    let total = 0;
-    for (let c = 0; c < width; c++) total += counters[c] ?? 0;
-    sketch.#total = total;
+    sketch.#total = rowSum(counters, width, depth);
     return sketch;
   }
 
