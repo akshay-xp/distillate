@@ -173,7 +173,17 @@ export class CountMinSketch {
     // Length is checked before the constructor allocates, so a forged geometry
     // cannot request memory the body does not hold.
     assertBodyLength(body.length, PARAMS_SIZE + 4 * width * depth, "countmin");
-    const sketch = new CountMinSketch({ width, depth, seed });
+    let sketch: CountMinSketch;
+    try {
+      sketch = new CountMinSketch({ width, depth, seed });
+    } catch (err) {
+      // A geometry the body agrees with can still be one the constructor
+      // refuses, and a caller decoding a frame should see one error family.
+      if (err instanceof ParamError) {
+        throw new SerializationError(`countmin: ${err.message}`);
+      }
+      throw err;
+    }
     const counters = sketch.#counters;
     for (let i = 0; i < counters.length; i++) {
       counters[i] = view.getUint32(PARAMS_SIZE + 4 * i, true);
