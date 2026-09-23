@@ -5,6 +5,7 @@ import {
   assertBodyLength,
   assertMinBodyLength,
   assertParamsPadding,
+  bytesEqual,
   type FilterJSON,
   FORMAT_VERSION,
   fromJSONEnvelope,
@@ -384,6 +385,17 @@ export class CountMinSketch {
         });
       },
     );
+  }
+
+  /**
+   * Tests structural equality: `true` when `other` serializes to identical
+   * bytes, meaning identical geometry, seed and counters.
+   *
+   * @param other - The sketch to compare against.
+   * @returns `true` if the two sketches are byte-for-byte identical.
+   */
+  equals(other: CountMinSketch): boolean {
+    return bytesEqual(this.toBytes(), other.toBytes());
   }
 
   /**

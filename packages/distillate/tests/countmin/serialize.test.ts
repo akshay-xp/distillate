@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 
 import { crc32 } from "../../src/core/crc32.js";
 import {
+  bytesEqual,
   FORMAT_VERSION,
   HASH_MURMUR128,
   readFrameAt,
@@ -254,4 +255,40 @@ test("a type 8 frame is walkable without knowing the structure", () => {
   expect(first.type).toBe(8);
   expect(first.byteLength).toBe(a.length);
   expect(readFrameAt(buffer, first.byteLength).type).toBe(8);
+});
+
+test("equals is exactly byte equality of the frame (property)", () => {
+  // Three kinds of pair: independent sketches (mostly unequal, sometimes equal
+  // under the small alphabet), a sketch and its own restored copy (equal), and
+  // a sketch and its self-union, which is never equal because counts double.
+  const keys = fc.array(fc.constantFrom("a", "b", "c", "d"), { maxLength: 40 });
+  const seen = new Set<boolean>();
+  fc.assert(
+    fc.property(
+      keys,
+      keys,
+      fc.constantFrom("independent", "restored", "self-union"),
+      (ka, kb, pair) => {
+        const a = CountMinSketch.from(ka, 0.05, 0.05);
+        const b =
+          pair === "restored"
+            ? CountMinSketch.fromBytes(a.toBytes())
+            : pair === "self-union"
+              ? a.union(a)
+              : CountMinSketch.from(kb, 0.05, 0.05);
+        const same = bytesEqual(a.toBytes(), b.toBytes());
+        seen.add(same);
+        return a.equals(b) === same;
+      },
+    ),
+  );
+
+  expect([...seen].sort()).toEqual([false, true]);
+});
+
+test("sketches at different geometries are unequal rather than throwing", () => {
+  const a = new CountMinSketch({ width: 8, depth: 2 });
+  const b = new CountMinSketch({ width: 9, depth: 2 });
+
+  expect(a.equals(b)).toBe(false);
 });
