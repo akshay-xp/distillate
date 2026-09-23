@@ -11,8 +11,8 @@ Versioned, self-describing, little-endian binary format. Spec'd here so Rust/Go 
 Offset  Size  Field
 0       4     Magic "DSTL" (0x44 53 54 4C)
 4       1     Format version (u8)         # bump on incompatible layout change
-5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog 6=ScalableBloom 7=Cuckoo
-                                          # (8+ reserved: CountingBloom, ...)
+5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog 6=ScalableBloom 7=Cuckoo 8=CountMin
+                                          # (9+ reserved: CountingBloom, TopK, ...)
 6       1     Flags (u8)                  # bit0-3 hash variant, bit4-7 reserved (must be 0)
 7       1     Reserved (u8)               # must be 0
 8       4     Body length (u32)           # bytes of body, excluding header and CRC
@@ -179,11 +179,34 @@ Every add stores a fingerprint, including for a key already present, and `count`
 
 Geometry is stored rather than re-derived, so a reader needs no floating-point sizing and takes `f` and `buckets` from the params. For writers, informatively: `f = max(4, ceil(log2(8 / epsilon)))`, refused above 32, and `buckets = ceil(n / 3.8) + ceil(sqrt(n))`, 95% load plus slack that lets small tables take `n` keys. A writer refuses a table whose `m` would exceed `2^32 - 1`.
 
+Count-Min (type 8), little-endian. A grid of counters, one per row per key, whose smallest is the estimate:
+
+```
+Offset  Size  Field
+0       4     width: counters per row (u32)
+4       4     depth: number of rows (u32)
+8       4     seed (u32)
+12      4     padding (0)
+16      ...   counters: width * depth u32 little-endian, row major
+```
+
+The params end at 16, so the counters start at frame offset 32, a multiple of 8. Counter `r * width + c` is column `c` of row `r`. The body is exactly `16 + 4 * width * depth`; a reader rejects any other length, and rejects a `width` or `depth` of 0 and nonzero params padding.
+
+**No total is stored.** Every add increments one counter in each row, so under this format's update rule every row sums to the total recorded, and a reader derives it by summing any one row. That makes the absence of the field an integrity check rather than a saving: a reader must confirm every row sums to the same value and reject the frame when they disagree, and must reject a sum past `2^53 - 1`, which counting could not have reached. Storing the field instead would leave a forged or corrupted counter undetectable.
+
+This rule is what pins type 8 to plain increment. A conservative-update sketch, which raises only the counters at the current minimum, does not hold the row-sum invariant and would need its own type rather than this one.
+
+A reader builds the grid from the stored `width` and `depth`, which need not match what the current sizing gives for `epsilon` and `delta`, and must not re-derive them: sizing may be tuned, and frames written before that stay valid.
+
+A key's counters come from its hash words (see [hash variant](#hash-variant-flags-nibble)): row `r` uses the Bloom probe `g_r = (w0 + r*w1 + r*r) mod 2^32`, reduced into `[0, width)`, offset by `r * width`. `count(key)` is the smallest of the `depth` counters so addressed, and is never below the key's true count. Combining two grids of identical `width`, `depth` and `seed` adds their counters elementwise, giving the grid one sketch would hold had it seen both streams.
+
+Geometry is stored rather than re-derived, so a reader needs no floating-point sizing. For writers, informatively: `width = ceil(e / epsilon)` and `depth = ceil(ln(1 / delta))`, so an estimate is at most `epsilon` times the total above the truth with probability at least `1 - delta`. A writer refuses a grid whose `width * depth` would exceed `2^32 - 1`, and refuses an add that would carry a counter past `2^32 - 1` rather than wrapping.
+
 ### Hash variant (flags nibble)
 
 Bits 0-3 of the flags byte name the complete scheme that turns a key into stored bits: the hash **and the index mapping** from its output to positions, not the hash alone. A change to any component takes a new variant, even when the hash itself is unchanged, because a reader that recognises the old variant would otherwise read every stored frame at the wrong positions with no error. Version 5 uses one scheme for every structure:
 
-- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog, Scalable, Cuckoo) with the index mapping below
+- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog, Scalable, Cuckoo, Count-Min) with the index mapping below
 
 Variant `0` covers:
 
@@ -194,10 +217,11 @@ Variant `0` covers:
 - **HyperLogLog:** register `=` the top `p` bits of `w0`; rho `=` leading zeros + 1 over the remaining `64 - p` bits of `w0:w1`; a sparse entry's index is the top 25 bits of `w0`.
 - **Scalable:** a key is hashed once with the frame's seed, and every stage applies the Bloom mapping above to that one hash with its own `m` and `k`.
 - **Cuckoo:** fingerprint `fp = (w1 >>> (32 - f))`, or 1 when that is 0; bucket `i1 = reduce(w0, buckets)`; the other bucket `(fp * 0x5bd1e995 mod 2^32 mod buckets + buckets - i1) mod buckets`; an eviction walk starts from bit 0 of `w2` and draws its victim slots from a xorshift32 seeded with `w3 | 1`. The full rules are in the type 7 section above.
+- **Count-Min:** `a = w0`, `b = w1`, exactly as Bloom; row `r` of `depth` takes probe `g_r = (a + r*b + r*r) mod 2^32` reduced into `[0, width)` by Lemire multiply-shift, addressing counter `r * width + g_r`.
 
 This is the case Guava hit: `MURMUR128_MITZ_32` and `MURMUR128_MITZ_64` use the same hash and differ only in how its 128 bits map to indices, yet the change still needed a new `Strategy` ordinal because the stored bits differ. Guava's ordinal covers the whole strategy, and this nibble does too.
 
-All six structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header and version 5 only the params padding; neither touched the hash.
+All seven structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header and version 5 only the params padding; neither touched the hash.
 
 That version 3 bump (rather than a flags-only change) was deliberate: the version-2 Fuse reader had no variant check and would silently misread a version-3 frame, so bumping the version made it reject on the version byte instead.
 

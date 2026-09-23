@@ -115,7 +115,16 @@ function sparseEntryLayout(): {
   };
 }
 
-const NUMERALS = ["zero", "one", "two", "three", "four", "five", "six"];
+const NUMERALS = [
+  "zero",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+];
 
 /** The structures the hash-variant section lists, and the count it claims. */
 function hashVariant(): { families: string[]; count: string } {
@@ -376,4 +385,42 @@ test("the cuckoo section documents every field and the add and delete rules", ()
   expect(section).toContain("500");
   expect(section).toContain("xorshift");
   expect(section).toMatch(/delete/i);
+});
+
+test("the layout table names type 8 as CountMin", () => {
+  const { types, reserved } = typeRows();
+  const named = new Map(
+    [...types.matchAll(/(\d+)=([A-Za-z0-9]+)/g)].map(([, n, name]) => [
+      Number(n),
+      name,
+    ]),
+  );
+
+  expect(named.get(8)).toBe("CountMin");
+  expect(reserved).not.toMatch(/\b8\+/);
+  expect(reserved).not.toContain("CountMin");
+});
+
+test("the hash variant section lists Count-Min among the variant 0 writers", () => {
+  expect(hashVariant().families).toContain("Count-Min");
+});
+
+test("the count-min section documents every field and the row-sum rule", () => {
+  const section = sectionFrom(
+    "Count-Min (type 8)",
+    "\n### ",
+    "serialization.md has no Count-Min section",
+  );
+
+  for (const field of ["width", "depth", "seed"]) {
+    expect(section, field).toMatch(new RegExp(`\\b${field}\\b`));
+  }
+  expect(section).toContain("row major");
+  // The total is derivable, which is why it is not stored, and checking it is
+  // what makes a forged frame detectable.
+  expect(section).toMatch(/no total|total is not stored/i);
+  expect(section).toContain("every row sums");
+  expect(section).toMatch(/reject/i);
+  // Same rule Cuckoo learned: geometry comes from the frame.
+  expect(section).toContain("must not re-derive");
 });
