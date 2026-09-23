@@ -3,6 +3,12 @@ import { hash32x2Into, probeAt } from "../core/hasher.js";
 import { assertPositiveInt, assertUint32, ParamError } from "../core/params.js";
 import { countMinSizing } from "../core/sizing.js";
 
+/** Thrown when an add would carry a counter past what a u32 holds. */
+export class CountMinOverflowError extends RangeError {
+  /** Discriminates this error from other `Error`s. */
+  override readonly name = "CountMinOverflowError";
+}
+
 /** Options accepted alongside a sizing solve: everything but the geometry. */
 export type CountMinOptions = Omit<CountMinParams, "width" | "depth">;
 
@@ -35,6 +41,8 @@ export class CountMinSketch {
   readonly #seed: number;
   // Reused across add and count so hashing a key allocates nothing per call.
   readonly #words = new Uint32Array(2);
+  // One position per row, held between add's overflow check and its writes.
+  readonly #positions: Uint32Array;
   #total = 0;
 
   /**
@@ -78,6 +86,7 @@ export class CountMinSketch {
       );
     }
     this.#counters = new Uint32Array(width * depth);
+    this.#positions = new Uint32Array(depth);
     this.#width = width;
     this.#depth = depth;
     this.#seed = seed;
@@ -154,8 +163,20 @@ export class CountMinSketch {
     // thing this structure guarantees cannot happen.
     assertPositiveInt(count, "count");
     hash32x2Into(key, this.#seed, this.#words);
+    // Every position is checked before any is written, so a refused add leaves
+    // the sketch exactly as it was rather than partly updated.
+    const headroom = 0xffffffff - count;
     for (let r = 0; r < this.#depth; r++) {
       const at = this.#positionAt(r);
+      if ((this.#counters[at] ?? 0) > headroom) {
+        throw new CountMinOverflowError(
+          `adding ${String(count)} would carry a counter past ${String(0xffffffff)}`,
+        );
+      }
+      this.#positions[r] = at;
+    }
+    for (let r = 0; r < this.#depth; r++) {
+      const at = this.#positions[r] ?? 0;
       this.#counters[at] = (this.#counters[at] ?? 0) + count;
     }
     this.#total += count;
