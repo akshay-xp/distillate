@@ -50,10 +50,12 @@ Each structure ships as its own subpath, so you only bundle what you import.
 | `distillate/fuse`     | Binary Fuse    | seen this key?     | Static set built once and queried a lot; least space     |
 | `distillate/cuckoo`   | Cuckoo         | seen this key?     | Keys come and go; the one filter with delete             |
 | `distillate/hll`      | HyperLogLog    | how many distinct? | Counting distinct users, IPs, or keys in fixed space     |
+| `distillate/countmin` | Count-Min      | how many times?    | Counting events per key in fixed space                   |
 
 The filters are mutable except Binary Fuse, which is built once from the whole
-key set. HyperLogLog is not a filter: it counts distinct keys and cannot report
-whether it saw any particular one.
+key set. HyperLogLog and Count-Min are sketches rather than filters: neither
+reports whether it saw any particular key. HyperLogLog counts distinct keys,
+Count-Min counts how often each key appeared.
 
 ### Classic Bloom (`distillate/bloom`)
 
@@ -162,6 +164,30 @@ sketch.union(other).count(); // 3
 Below a few thousand distinct keys the sketch counts rather than estimates, so small answers are exact. It switches to fixed-size registers on its own once that stops paying, with nothing to configure.
 
 Also: `equals`, `toBytes` / `fromBytes`, `toJSON` / `fromJSON`, `standardError`, `hllSizing(relativeError)`, and a low-level `new HyperLogLog({ p, seed })`.
+
+### Count-Min (`distillate/countmin`)
+
+A **sketch**, not a filter: it estimates how many times each key appeared, in space fixed by the error you ask for rather than by how many keys arrive. The estimate is never below the truth, and at most `epsilon` of the total above it. Full API and sizing: [Count-Min guide](https://distillate.akxp.net/guides/countmin/).
+
+```ts
+import { CountMinSketch } from "distillate/countmin";
+
+const hits = CountMinSketch.create(0.001, 0.001); // error factor, failure probability
+hits.add("/login");
+hits.add("/login", 4);
+hits.add("/signup");
+
+hits.count("/login"); // 5
+hits.total; // 6
+
+// Combine per-shard sketches: counts add, exactly as if one sketch saw both streams.
+const other = CountMinSketch.from(["/login", "/login"], 0.001, 0.001);
+hits.union(other).count("/login"); // 7
+```
+
+`from` counts repeats, unlike `CuckooFilter.from` which ignores them: for a frequency sketch the repeats are the measurement. A counter that would pass `2^32 - 1` throws `CountMinOverflowError` rather than wrapping, since a wrapped counter would read as an underestimate.
+
+Also: `equals`, `toBytes` / `fromBytes`, `toJSON` / `fromJSON`, `error()`, `epsilon`, `delta`, `width`, `depth`, `countMinSizing(epsilon, delta)`, and a low-level `new CountMinSketch({ width, depth, seed })`.
 
 ## Performance
 
