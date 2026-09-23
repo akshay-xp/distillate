@@ -1,6 +1,11 @@
 import { expect, test } from "vitest";
 
-import { truthOf, zipfStream } from "../helpers/frequency.js";
+import { CountMinSketch } from "../../src/countmin/countmin.js";
+import {
+  scoreOverestimate,
+  truthOf,
+  zipfStream,
+} from "../helpers/frequency.js";
 
 test("zipfStream is deterministic for a given seed", () => {
   expect(zipfStream(1, 1000, 10_000, 1)).toEqual(
@@ -29,4 +34,26 @@ test("zipfStream is heavily skewed, not near-uniform", () => {
   const median = counts[counts.length >> 1] ?? 0;
 
   expect(counts[0] ?? 0).toBeGreaterThanOrEqual(10 * median);
+});
+
+const EVENTS = 1_000_000;
+const DISTINCT = 100_000;
+
+// The contract is per query, so a correct sketch is expected to exceed the
+// bound on about `delta` of the keys, not on none of them. Asserting zero
+// would be flaky against a good kernel.
+test("the error bound holds on a Zipf stream", () => {
+  const s = CountMinSketch.create(0.001, 0.001);
+  const stream = zipfStream(11, DISTINCT, EVENTS, 1);
+  for (const key of stream) s.add(key);
+
+  const score = scoreOverestimate(
+    (key) => s.count(key),
+    truthOf(stream),
+    s.error(),
+  );
+
+  expect(score.violations).toBeLessThanOrEqual(s.delta * score.keys);
+  expect(score.mean).toBeLessThan(s.error());
+  expect(Number.isFinite(score.max)).toBe(true);
 });
