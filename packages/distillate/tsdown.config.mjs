@@ -10,6 +10,7 @@ export default defineConfig({
     "src/frame/index.ts",
     "src/scalable/index.ts",
     "src/cuckoo/index.ts",
+    "src/countmin/index.ts",
   ],
   format: ["esm", "cjs"],
   fixedExtension: false,

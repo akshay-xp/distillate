@@ -17,6 +17,7 @@ import { readFrameAt } from "../dist/frame/index.js";
 import { HyperLogLog, hllSizing } from "../dist/hll/index.js";
 import { ScalableBloomFilter } from "../dist/scalable/index.js";
 import { CuckooFilter } from "../dist/cuckoo/index.js";
+import { CountMinSketch, countMinSizing } from "../dist/countmin/index.js";
 
 if (typeof VERSION !== "string") {
   console.error(
@@ -108,6 +109,7 @@ const rebuild = ({
   kind,
   keys,
   epsilon,
+  delta,
   p,
   n,
   growth,
@@ -143,6 +145,11 @@ const rebuild = ({
       for (const key of keys) filter.add(key);
       for (const key of deletes) filter.delete(key);
       return filter;
+    }
+    case "countmin": {
+      const sketch = CountMinSketch.create(epsilon, delta, { seed });
+      for (const key of keys) sketch.add(key);
+      return sketch;
     }
     default:
       console.error(`smoke: unknown golden kind ${kind}`);
@@ -195,6 +202,28 @@ if (
   process.exit(1);
 }
 
+const cms = CountMinSketch.create(0.001, 0.001);
+cms.add("smoke", 3);
+if (cms.count("smoke") < 3 || cms.total !== 3) {
+  console.error(
+    `smoke: CountMinSketch counted ${cms.count("smoke")} of 3, total ${cms.total}`,
+  );
+  process.exit(1);
+}
+
+const cmsSizing = countMinSizing(0.001, 0.001);
+if (cmsSizing.width !== 2719 || cmsSizing.depth !== 7) {
+  console.error(
+    `smoke: countMinSizing gave ${cmsSizing.width}x${cmsSizing.depth}, want 2719x7`,
+  );
+  process.exit(1);
+}
+
+if (!CountMinSketch.fromBytes(cms.toBytes()).equals(cms)) {
+  console.error("smoke: CountMinSketch did not survive a byte round-trip");
+  process.exit(1);
+}
+
 // A log of concatenated frames must walk by declared length alone.
 const log = [
   golden.find((g) => g.name === "bloom"),
@@ -218,5 +247,5 @@ if (walked.join() !== "1,5" || at !== stream.length) {
 }
 
 console.log(
-  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo work (filters, sketch, sizing helpers, frame walk, growth, delete), toBytes byte-identical to golden`,
+  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo + distillate/countmin work (filters, sketches, sizing helpers, frame walk, growth, delete, counting), toBytes byte-identical to golden`,
 );
