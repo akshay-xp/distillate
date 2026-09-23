@@ -22,6 +22,7 @@ const entries = [
   { name: "frame", dts: "dist/frame/index.d.ts" },
   { name: "scalable", dts: "dist/scalable/index.d.ts" },
   { name: "cuckoo", dts: "dist/cuckoo/index.d.ts" },
+  { name: "countmin", dts: "dist/countmin/index.d.ts" },
 ];
 
 let failed = false;
