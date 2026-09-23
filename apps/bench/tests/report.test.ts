@@ -5,10 +5,12 @@ import { expect, test } from "vitest";
 
 import type { CardinalityRow } from "../src/cardinality.js";
 import type { ComparisonRow } from "../src/compare.js";
+import type { CountMinRow } from "../src/countmin.js";
 import type { CuckooRow } from "../src/cuckoo.js";
 import type { ScalableRow } from "../src/scalable.js";
 import {
   cardinalityTable,
+  countMinTable,
   cuckooTable,
   renderResults,
   scalableTable,
@@ -404,4 +406,108 @@ test("RESULTS carries the measured cuckoo section for both filters", () => {
   }
   // The header note says which build the section was measured on.
   expect(md.slice(0, md.indexOf("## Space"))).toContain("Cuckoo");
+});
+
+const countMinRowsFixture: CountMinRow[] = [
+  {
+    name: "distillate/countmin",
+    events: 1_000_000,
+    width: 2719,
+    depth: 7,
+    bytes: 76_168,
+    meanOverestimate: 29.6,
+    maxOverestimate: 276,
+    overBoundShare: 0,
+    underestimates: 0,
+    addOpsPerSec: 17_080_000,
+    countOpsPerSec: 4_530_000,
+  },
+  {
+    name: "bloom-filters",
+    events: 1_000_000,
+    width: 2719,
+    depth: 7,
+    bytes: 68_025,
+    meanOverestimate: 29.7,
+    maxOverestimate: 211,
+    overBoundShare: 0,
+    underestimates: 0,
+    addOpsPerSec: 270_000,
+    countOpsPerSec: 260_000,
+  },
+];
+
+test("countMinTable renders the grid, size, overestimates and both throughputs", () => {
+  const table = countMinTable(countMinRowsFixture);
+  expect(table).toContain(
+    "| Sketch | events | grid | size | mean over | max over | over bound | under | add | count |",
+  );
+  expect(table).toContain(
+    "| distillate/countmin | 1M | 2719 x 7 | 76168 B | 29.6 | 276 | 0.00% | 0 | 17.08 M ops/s | 4.53 M ops/s |",
+  );
+  expect(table).toContain(
+    "| bloom-filters | 1M | 2719 x 7 | 68025 B | 29.7 | 211 | 0.00% | 0 | 270 k ops/s | 260 k ops/s |",
+  );
+});
+
+test("renderResults places the count-min section after cuckoo and states the sizing trap", () => {
+  const md = renderResults({
+    banner: "distillate-bench | node v24 | arm64 | Apple M1 | 8 cores",
+    version: "0.1.1",
+    date: "2026-07-31",
+    targetFpr: 0.01,
+    throughputCapacity: 100000,
+    spaceTable: "SPACE_TBL",
+    throughputTable: "TPUT_TBL",
+    cardinalityTable: "CARD_TBL",
+    scalableTable: "SCALABLE_TBL",
+    cuckooTable: "CUCKOO_TBL",
+    countMinTable: "COUNTMIN_TBL",
+  });
+  expect(md).toContain("COUNTMIN_TBL");
+  const at = md.indexOf("## Count-Min");
+  expect(at).toBeGreaterThan(md.indexOf("## Cuckoo"));
+  expect(at).toBeLessThan(md.indexOf("## Throughput"));
+  const section = md.slice(at, md.indexOf("## Throughput"));
+  // A reader following the incumbent's docs gets one row, which is the whole
+  // reason this section configures it the way it does.
+  for (const phrase of ["one** row", "accuracy", "Zipf", "below the true"]) {
+    expect(section, phrase).toContain(phrase);
+  }
+});
+
+test("METHODOLOGY states the count-min configuration and the accuracy inversion", () => {
+  const md = readFileSync(
+    fileURLToPath(new URL("../METHODOLOGY.md", import.meta.url)),
+    "utf8",
+  );
+  const at = md.indexOf("## Configuration for Count-Min");
+  expect(at).toBeGreaterThan(-1);
+  const section = md.slice(at, md.indexOf("\n## ", at + 1));
+  for (const phrase of ["accuracy", "one row", "Zipf", "10,000 distinct"]) {
+    expect(section, phrase).toContain(phrase);
+  }
+});
+
+test("RESULTS carries the measured count-min section for both sketches", () => {
+  const md = readFileSync(
+    fileURLToPath(new URL("../RESULTS.md", import.meta.url)),
+    "utf8",
+  );
+  expect(md).toContain("## Count-Min");
+  const rows = resultsSection(md, "Count-Min")
+    .split("\n")
+    .filter((l) => /^\| (distillate\/countmin|bloom-filters) /.test(l));
+  expect(rows).toHaveLength(10);
+  const cells = (r: string): string[] => r.split("|").map((c) => c.trim());
+  for (const events of ["1k", "10k", "100k", "1M", "10M"]) {
+    for (const name of ["distillate/countmin", "bloom-filters"]) {
+      const row = rows.find(
+        (r) => cells(r)[1] === name && cells(r)[2] === events,
+      );
+      expect(row, `${name} ${events}`).toBeDefined();
+      // Neither library may ever answer below the truth, in any published row.
+      expect(cells(row ?? "")[8], `${name} ${events} under`).toBe("0");
+    }
+  }
 });
