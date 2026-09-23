@@ -128,6 +128,7 @@ export default defineConfig({
             { label: "Binary Fuse", link: "/guides/fuse/" },
             { label: "Cuckoo", link: "/guides/cuckoo/" },
             { label: "HyperLogLog", link: "/guides/hll/" },
+            { label: "Count-Min", link: "/guides/countmin/" },
             { label: "Sizing and tuning FPR", link: "/guides/sizing/" },
             {
               label: "Sizing calculator",
@@ -175,6 +176,7 @@ export default defineConfig({
             "../../packages/distillate/src/frame/index.ts",
             "../../packages/distillate/src/scalable/index.ts",
             "../../packages/distillate/src/cuckoo/index.ts",
+            "../../packages/distillate/src/countmin/index.ts",
           ],
           tsconfig: "../../packages/distillate/tsconfig.json",
           sidebar: { label: "API reference" },
