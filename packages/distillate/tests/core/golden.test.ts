@@ -7,6 +7,7 @@ import { hash128Key, reduce } from "../../src/core/hasher.js";
 import { bytesEqual, UnknownVersionError } from "../../src/core/serialize.js";
 import { BinaryFuse8, BinaryFuse16 } from "../../src/fuse/index.js";
 import { HyperLogLog } from "../../src/hll/hll.js";
+import { CountMinSketch } from "../../src/countmin/countmin.js";
 import { CuckooFilter } from "../../src/cuckoo/cuckoo.js";
 import { ScalableBloomFilter } from "../../src/scalable/scalable.js";
 import goldenJson from "../fixtures/golden.json" with { type: "json" };
@@ -16,6 +17,7 @@ interface GoldenEntry {
   kind: string;
   keys: string[];
   epsilon?: number;
+  delta?: number;
   p?: number;
   n?: number;
   growth?: number;
@@ -69,6 +71,12 @@ const build = (entry: GoldenEntry): Serializable => {
       for (const key of deletes) filter.delete(key);
       return filter;
     }
+    case "countmin": {
+      const { delta = 0.01, seed } = entry;
+      const sketch = CountMinSketch.create(epsilon, delta, { seed });
+      for (const key of keys) sketch.add(key);
+      return sketch;
+    }
     default:
       throw new Error(`unknown kind ${kind}`);
   }
@@ -90,6 +98,8 @@ const parse = (kind: string, bytes: Uint8Array): Serializable => {
       return ScalableBloomFilter.fromBytes(bytes);
     case "cuckoo":
       return CuckooFilter.fromBytes(bytes);
+    case "countmin":
+      return CountMinSketch.fromBytes(bytes);
     default:
       throw new Error(`unknown kind ${kind}`);
   }
@@ -112,10 +122,13 @@ describe.each(structures)("golden fixture $name", (entry) => {
     const parsed = parse(kind, bytes);
 
     // Filters answer for their keys. A sketch is checked against a fresh build
-    // instead: its count is an estimate, and the dense fixture sits at p=4
-    // where sixteen registers hold ten keys, so it reports 8 by design.
+    // instead, since neither answers membership: an HLL count is an estimate,
+    // and the dense fixture sits at p=4 where sixteen registers hold ten keys,
+    // so it reports 8 by design.
     if (parsed instanceof HyperLogLog) {
       expect(parsed.equals(build(entry) as HyperLogLog)).toBe(true);
+    } else if (parsed instanceof CountMinSketch) {
+      expect(parsed.equals(build(entry) as CountMinSketch)).toBe(true);
     } else {
       // A deleted key may still answer true (a false positive), so only the
       // keys still held are asserted.

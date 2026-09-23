@@ -8,6 +8,7 @@ import { BloomFilter } from "../src/bloom/index.js";
 import { toBase64 } from "../src/core/base64.js";
 import { BinaryFuse8, BinaryFuse16 } from "../src/fuse/index.js";
 import { HyperLogLog } from "../src/hll/hll.js";
+import { CountMinSketch } from "../src/countmin/countmin.js";
 import { CuckooFilter } from "../src/cuckoo/cuckoo.js";
 import { ScalableBloomFilter } from "../src/scalable/scalable.js";
 
@@ -16,6 +17,7 @@ interface Entry {
   kind: string;
   keys: string[];
   epsilon?: number;
+  delta?: number;
   p?: number;
   n?: number;
   growth?: number;
@@ -62,6 +64,15 @@ const bytes = (entry: Entry): Uint8Array => {
       for (const key of keys) filter.add(key);
       for (const key of deletes) filter.delete(key);
       return filter.toBytes();
+    }
+    case "countmin": {
+      // Repeats in the key list are how a fixture reaches counter values above
+      // one: in the frame, three adds of a key and one add of three are the
+      // same bytes, so no separate counts field is needed.
+      const { delta = 0.01, seed } = entry;
+      const sketch = CountMinSketch.create(epsilon, delta, { seed });
+      for (const key of keys) sketch.add(key);
+      return sketch.toBytes();
     }
     case "v2": {
       // A well-formed current-version Bloom frame with the version byte forced
