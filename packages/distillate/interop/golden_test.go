@@ -1261,3 +1261,38 @@ func TestCountMin(t *testing.T) {
 		t.Error("no countmin fixture carries a non-zero seed")
 	}
 }
+
+// reseal recomputes the CRC trailer so a mutation reaches the check under test
+// instead of stopping at the checksum.
+func reseal(b []byte) []byte {
+	end := len(b) - trailerSize
+	le.PutUint32(b[end:], crc32.ChecksumIEEE(b[:end]))
+	return b
+}
+
+func TestCountMinDamaged(t *testing.T) {
+	e := find(t, "countmin")
+
+	short := frameOf(t, e)
+	if _, err := readFrame(short[:len(short)-1]); err == nil || !strings.Contains(err.Error(), "body length") {
+		t.Errorf("truncated frame: want a body length error, got %v", err)
+	}
+
+	stale := frameOf(t, e)
+	stale[headerSize+countMinParams]++
+	if _, err := readFrame(stale); err == nil || !strings.Contains(err.Error(), "CRC") {
+		t.Errorf("altered counter: want a CRC error, got %v", err)
+	}
+
+	// Resealed, the mutation gets past the trailer and has to be caught by the
+	// row sums alone. This is what lets the frame leave the total out.
+	hidden := frameOf(t, e)
+	hidden[headerSize+countMinParams]++
+	f, err := readFrame(reseal(hidden))
+	if err != nil {
+		t.Fatalf("resealed frame: %v", err)
+	}
+	if _, err := parseCountMin(f); err == nil || !strings.Contains(err.Error(), "sums to") {
+		t.Errorf("altered counter: want a row sum error, got %v", err)
+	}
+}
