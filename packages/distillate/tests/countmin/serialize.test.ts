@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { expect, test } from "vitest";
 
 import { crc32 } from "../../src/core/crc32.js";
@@ -162,4 +163,62 @@ test("every truncated prefix of a frame is rejected with a typed error", () => {
       SerializationError,
     );
   }
+});
+
+// Arbitrary geometry and counter bytes, sealed with a valid CRC so every frame
+// reaches the structure's own checks rather than stopping at the trailer.
+const forged = fc
+  .tuple(
+    fc.nat({ max: 12 }),
+    fc.nat({ max: 4 }),
+    fc.nat({ max: 0xffff }),
+    fc.nat({ max: 255 }),
+    fc.array(fc.nat({ max: 0xffffffff }), { maxLength: 48 }),
+  )
+  .map(([width, depth, seed, pad, counters]) => {
+    const body = new Uint8Array(16 + 4 * counters.length);
+    const view = new DataView(body.buffer);
+    view.setUint32(0, width, true);
+    view.setUint32(4, depth, true);
+    view.setUint32(8, seed, true);
+    body[12] = pad;
+    counters.forEach((c, i) => {
+      view.setUint32(16 + 4 * i, c, true);
+    });
+    return writeHeader(
+      { version: FORMAT_VERSION, type: 8, flags: HASH_MURMUR128 },
+      body,
+    );
+  });
+
+test("a forged frame yields a working sketch or a typed error (fuzz)", () => {
+  fc.assert(
+    fc.property(forged, (frame) => {
+      try {
+        const s = CountMinSketch.fromBytes(frame);
+        expect(typeof s.count("probe")).toBe("number");
+      } catch (err) {
+        expect(err).toBeInstanceOf(SerializationError);
+      }
+    }),
+    { numRuns: 500 },
+  );
+});
+
+test("the forged generator reaches both a working sketch and each rejection", () => {
+  const outcomes = new Set<string>();
+  for (const frame of fc.sample(forged, { numRuns: 2000, seed: 42 })) {
+    try {
+      CountMinSketch.fromBytes(frame);
+      outcomes.add("ok");
+    } catch (err) {
+      outcomes.add((err as Error).name);
+    }
+  }
+
+  expect([...outcomes].sort()).toEqual([
+    "SerializationError",
+    "TruncatedError",
+    "ok",
+  ]);
 });
