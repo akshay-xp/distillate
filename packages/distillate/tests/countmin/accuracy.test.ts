@@ -2,8 +2,10 @@ import { expect, test } from "vitest";
 
 import { CountMinSketch } from "../../src/countmin/countmin.js";
 import {
+  prefixedStream,
   scoreOverestimate,
   truthOf,
+  uniformStream,
   zipfStream,
 } from "../helpers/frequency.js";
 
@@ -56,4 +58,24 @@ test("the error bound holds on a Zipf stream", () => {
   expect(score.violations).toBeLessThanOrEqual(s.delta * score.keys);
   expect(score.mean).toBeLessThan(s.error());
   expect(Number.isFinite(score.max)).toBe(true);
+});
+
+test.each<[string, (seed: number) => string[]]>([
+  ["uniform", (seed) => uniformStream(seed, DISTINCT, EVENTS)],
+  // Keys sharing a 64-character head, which is what catches a hash that
+  // under-mixes the front of a key.
+  ["prefixed", (seed) => prefixedStream(seed, DISTINCT, EVENTS)],
+])("the error bound holds on a %s stream", (_, build) => {
+  const s = CountMinSketch.create(0.001, 0.001);
+  const stream = build(12);
+  for (const key of stream) s.add(key);
+
+  const score = scoreOverestimate(
+    (key) => s.count(key),
+    truthOf(stream),
+    s.error(),
+  );
+
+  expect(score.violations).toBeLessThanOrEqual(s.delta * score.keys);
+  expect(score.mean).toBeLessThan(s.error());
 });
