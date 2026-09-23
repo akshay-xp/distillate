@@ -127,3 +127,89 @@ export function zipfStream(
   }
   return out;
 }
+
+/** Events per run, a thousand to ten million, the same reach as every structure. */
+export const COUNTMIN_KEY_COUNTS = [
+  1_000, 10_000, 100_000, 1_000_000, 10_000_000,
+];
+
+/** Distinct keys the stream draws from, so collisions are the measured effect. */
+const DISTINCT = 10_000;
+
+export interface CountMinRow {
+  name: string;
+  events: number;
+  width: number;
+  depth: number;
+  bytes: number;
+  /** Mean overestimate across distinct keys. */
+  meanOverestimate: number;
+  /** Largest overestimate seen. */
+  maxOverestimate: number;
+  /** Share of keys whose estimate exceeded `epsilon * events`. */
+  overBoundShare: number;
+  /** Answers below the true count. Must be zero for both libraries. */
+  underestimates: number;
+  addOpsPerSec: number;
+  countOpsPerSec: number;
+}
+
+const rate = (n: number, ms: number): number => n / (ms / 1000);
+
+export function countMinRows(
+  eventCounts: number[],
+  adapters: CountMinAdapter[] = countMinAdapters,
+): CountMinRow[] {
+  const rows: CountMinRow[] = [];
+  for (const events of eventCounts) {
+    // One stream per event count, shared by both adapters, so the accuracy
+    // columns compare answers to the same keys.
+    const stream = zipfStream(17, DISTINCT, events);
+    const truth = new Map<string, number>();
+    for (const key of stream) truth.set(key, (truth.get(key) ?? 0) + 1);
+    const keys = [...truth.keys()];
+    const bound = COUNTMIN_EPSILON * events;
+
+    for (const adapter of adapters) {
+      const s = adapter.create(COUNTMIN_EPSILON, COUNTMIN_DELTA);
+
+      let started = performance.now();
+      for (const key of stream) s.add(key);
+      const addMs = performance.now() - started;
+
+      started = performance.now();
+      for (const key of keys) s.count(key);
+      const countMs = performance.now() - started;
+
+      let sum = 0;
+      let max = 0;
+      let overBound = 0;
+      let underestimates = 0;
+      for (const [key, actual] of truth) {
+        const over = s.count(key) - actual;
+        if (over < 0) {
+          underestimates++;
+          continue;
+        }
+        sum += over;
+        if (over > max) max = over;
+        if (over > bound) overBound++;
+      }
+
+      rows.push({
+        name: adapter.name,
+        events,
+        width: s.settings.width,
+        depth: s.settings.depth,
+        bytes: s.bytes(),
+        meanOverestimate: sum / truth.size,
+        maxOverestimate: max,
+        overBoundShare: overBound / truth.size,
+        underestimates,
+        addOpsPerSec: rate(events, addMs),
+        countOpsPerSec: rate(keys.length, countMs),
+      });
+    }
+  }
+  return rows;
+}

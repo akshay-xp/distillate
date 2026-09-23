@@ -4,6 +4,7 @@ import {
   COUNTMIN_DELTA,
   COUNTMIN_EPSILON,
   countMinAdapters,
+  countMinRows,
   zipfStream,
 } from "../src/countmin.js";
 
@@ -50,4 +51,25 @@ test("zipfStream is deterministic and heavily skewed", () => {
   expect(sorted[0] ?? 0).toBeGreaterThanOrEqual(
     10 * (sorted[sorted.length >> 1] ?? 0),
   );
+});
+
+test("count-min rows measure space, overestimate and throughput", () => {
+  const rows = countMinRows([1_000, 10_000]);
+
+  expect(rows).toHaveLength(4);
+  for (const r of rows) {
+    expect(r.bytes, r.name).toBeGreaterThan(0);
+    expect(r.meanOverestimate, r.name).toBeGreaterThanOrEqual(0);
+    expect(r.maxOverestimate, r.name).toBeGreaterThanOrEqual(
+      r.meanOverestimate,
+    );
+    expect(r.overBoundShare, r.name).toBeGreaterThanOrEqual(0);
+    expect(r.overBoundShare, r.name).toBeLessThanOrEqual(1);
+    // An answer below the true count is the one thing neither library may
+    // ever give, so the bench counts it rather than assuming it.
+    expect(r.underestimates, r.name).toBe(0);
+    for (const rate of [r.addOpsPerSec, r.countOpsPerSec]) {
+      expect(Number.isFinite(rate) && rate > 0, r.name).toBe(true);
+    }
+  }
 });
