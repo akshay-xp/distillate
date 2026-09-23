@@ -9,6 +9,9 @@ First, which question are you asking?
 - **"How many distinct keys have I seen?"** A cardinality sketch:
   [HyperLogLog](/guides/hll/). No filter can answer this, and no sketch can
   answer the first.
+- **"How many times have I seen this key?"** A frequency sketch:
+  [Count-Min](/guides/countmin/). It attributes a number to a key you name,
+  which neither a filter nor HyperLogLog can do.
 
 There is no best filter, only a best filter for a workload. Answer three
 questions and the choice is usually forced:
@@ -32,11 +35,13 @@ questions and the choice is usually forced:
 | Very low FPR (1e-4 or below)              | [Binary Fuse 16](/guides/fuse/)                                                 |
 | Migrating from `bloom-filters`            | [Classic Bloom](/guides/bloom/)                                                 |
 | Counting distinct keys, not membership    | [HyperLogLog](/guides/hll/)                                                     |
+| Counting how often each key appears       | [Count-Min](/guides/countmin/)                                                  |
 
 For the filters, space below is stated as overhead over the
 information-theoretic floor of `log2(1/epsilon)` bits per key: 6.64 bits/key at
 a 1% FPR, 9.97 at 0.1%. A sketch has no per-key cost to state, its size being
-fixed by precision before it sees a key.
+fixed before it sees a key: by precision for HyperLogLog, by the error bound
+for Count-Min.
 
 ## What ships today
 
