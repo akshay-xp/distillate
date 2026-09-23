@@ -5,6 +5,8 @@ import {
   FORMAT_VERSION,
   HASH_MURMUR128,
   SerializationError,
+  TruncatedError,
+  UnknownHashVariantError,
   writeHeader,
 } from "../../src/core/serialize.js";
 import { CountMinSketch } from "../../src/countmin/countmin.js";
@@ -105,4 +107,59 @@ test("a frame whose rows sum past the safe integer range is rejected", () => {
   );
 
   expect(() => CountMinSketch.fromBytes(frame)).toThrow(SerializationError);
+});
+
+type Mutation = (frame: Uint8Array, view: DataView) => void;
+
+const lies: [string, Mutation, new (...args: never[]) => Error][] = [
+  ["type 1", (f) => (f[5] = 1), SerializationError],
+  ["hash variant 1", (f) => (f[6] = 1), UnknownHashVariantError],
+  ["a params padding byte set", (f) => (f[BODY + 12] = 1), SerializationError],
+  [
+    "a width the body cannot hold",
+    (_, v) => {
+      v.setUint32(BODY, 9999, true);
+    },
+    TruncatedError,
+  ],
+];
+
+test.each(lies)("fromBytes rejects %s", (_, mutate, expected) => {
+  const frame = filled().toBytes();
+  mutate(frame, new DataView(frame.buffer));
+
+  expect(() => CountMinSketch.fromBytes(resealed(frame))).toThrow(expected);
+});
+
+// A degenerate geometry whose body length agrees with it reaches the
+// constructor, where a raw ParamError would escape as a RangeError rather than
+// as the SerializationError every other decode failure throws.
+const emptyFrame = (width: number, depth: number): Uint8Array => {
+  const body = new Uint8Array(16 + 4 * width * depth);
+  const view = new DataView(body.buffer);
+  view.setUint32(0, width, true);
+  view.setUint32(4, depth, true);
+  return writeHeader(
+    { version: FORMAT_VERSION, type: 8, flags: HASH_MURMUR128 },
+    body,
+  );
+};
+
+test.each<[string, number, number]>([
+  ["width 0", 0, 5],
+  ["depth 0", 7, 0],
+  ["both 0", 0, 0],
+])("fromBytes rejects a self-consistent frame with %s", (_, width, depth) => {
+  expect(() => CountMinSketch.fromBytes(emptyFrame(width, depth))).toThrow(
+    SerializationError,
+  );
+});
+
+test("every truncated prefix of a frame is rejected with a typed error", () => {
+  const frame = filled().toBytes();
+  for (let n = 0; n < frame.length; n += 97) {
+    expect(() => CountMinSketch.fromBytes(frame.subarray(0, n))).toThrow(
+      SerializationError,
+    );
+  }
 });
