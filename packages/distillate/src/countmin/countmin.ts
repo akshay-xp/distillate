@@ -35,6 +35,7 @@ export class CountMinSketch {
   readonly #seed: number;
   // Reused across add and count so hashing a key allocates nothing per call.
   readonly #words = new Uint32Array(2);
+  #total = 0;
 
   /**
    * Creates a sketch whose estimate is at most `epsilon * total` above the
@@ -97,6 +98,11 @@ export class CountMinSketch {
     return this.#seed;
   }
 
+  /** Sum of every count recorded, the denominator of the error bound. */
+  get total(): number {
+    return this.#total;
+  }
+
   // Row r's probe for the key hashed into #words, as an offset into #counters.
   #positionAt(row: number): number {
     return (
@@ -117,6 +123,7 @@ export class CountMinSketch {
       const at = this.#positionAt(r);
       this.#counters[at] = (this.#counters[at] ?? 0) + count;
     }
+    this.#total += count;
   }
 
   /**

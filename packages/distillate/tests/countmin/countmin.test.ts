@@ -82,3 +82,29 @@ test("every key counts at least as often as it was added", () => {
     }),
   );
 });
+
+test("total is the sum of every count recorded", () => {
+  const s = CountMinSketch.create(0.01, 0.01);
+
+  expect(s.total).toBe(0);
+
+  s.add("a");
+  s.add("b", 5);
+
+  expect(s.total).toBe(6);
+});
+
+test("total tracks the counts whatever keys they land on", () => {
+  fc.assert(
+    fc.property(
+      fc.array(fc.tuple(fc.string(), fc.integer({ min: 1, max: 1000 })), {
+        maxLength: 200,
+      }),
+      (entries) => {
+        const s = CountMinSketch.create(0.01, 0.01);
+        for (const [key, n] of entries) s.add(key, n);
+        return s.total === entries.reduce((sum, [, n]) => sum + n, 0);
+      },
+    ),
+  );
+});
