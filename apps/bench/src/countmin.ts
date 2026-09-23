@@ -76,3 +76,54 @@ export const countMinAdapters: CountMinAdapter[] = [
   distillateCountMinAdapter,
   incumbentCountMinAdapter,
 ];
+
+// xorshift32, so a surprising row reproduces exactly.
+function rng(seed: number): () => number {
+  let x = seed | 0 || 1;
+  return () => {
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
+    return (x >>> 0) / 0x100000000;
+  };
+}
+
+/**
+ * `events` keys drawn from a Zipf distribution over `distinct` keys, rank `i`
+ * appearing with probability proportional to `1 / (i + 1)`.
+ *
+ * This is the shape a frequency sketch exists for. A uniform stream spreads
+ * counts evenly and hides the collisions between one heavy key and the many
+ * light keys sharing its column, which is exactly where the estimate is tested.
+ *
+ * `packages/distillate` has its own copy in `tests/helpers/frequency.ts`. That
+ * one is test-only code in another package and is not published, so it cannot
+ * be imported here.
+ */
+export function zipfStream(
+  seed: number,
+  distinct: number,
+  events: number,
+): string[] {
+  const cdf = new Float64Array(distinct);
+  let total = 0;
+  for (let i = 0; i < distinct; i++) {
+    total += 1 / (i + 1);
+    cdf[i] = total;
+  }
+
+  const next = rng(seed);
+  const out = new Array<string>(events);
+  for (let e = 0; e < events; e++) {
+    const target = next() * total;
+    let lo = 0;
+    let hi = distinct - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if ((cdf[mid] ?? 0) < target) lo = mid + 1;
+      else hi = mid;
+    }
+    out[e] = `key:${String(lo)}`;
+  }
+  return out;
+}
