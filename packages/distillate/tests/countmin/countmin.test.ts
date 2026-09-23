@@ -166,3 +166,25 @@ test("an add that would overflow a counter throws and changes nothing", () => {
   expect(s.count("a")).toBe(0xffffffff);
   expect(s.total).toBe(0xffffffff);
 });
+
+// The opposite of CuckooFilter.from, which drops repeats because a repeat
+// costs it a slot. Here a repeat is the measurement.
+test("from counts repeated keys rather than deduping them", () => {
+  const s = CountMinSketch.from(["a", "a", "b"], 0.01, 0.01);
+
+  expect(s.count("a")).toBe(2);
+  expect(s.count("b")).toBe(1);
+  expect(s.total).toBe(3);
+});
+
+test("from with no keys gives an empty sketch at the target geometry", () => {
+  const s = CountMinSketch.from([], 0.001, 0.001);
+
+  expect(s.total).toBe(0);
+  expect(s.width).toBe(2719);
+  expect(s.depth).toBe(7);
+});
+
+test("a seed passed to from is kept", () => {
+  expect(CountMinSketch.from(["a"], 0.01, 0.01, { seed: 7 }).seed).toBe(7);
+});

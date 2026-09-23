@@ -69,6 +69,31 @@ export class CountMinSketch {
   }
 
   /**
+   * Builds a sketch recording `keys`, at the target error bound. The
+   * ergonomic entry point when the stream is already in hand.
+   *
+   * A repeated key is counted once per occurrence, which is the whole point of
+   * a frequency sketch. This is the opposite of `CuckooFilter.from`, where a
+   * repeat costs a slot and is therefore dropped.
+   *
+   * @param keys - The keys to record, repeats included.
+   * @param epsilon - Error factor relative to the total recorded.
+   * @param delta - Probability the bound is exceeded.
+   * @param options - Optional seed.
+   * @returns A new sketch holding every occurrence.
+   */
+  static from(
+    keys: Iterable<BytesLike>,
+    epsilon: number,
+    delta: number,
+    options: CountMinOptions = {},
+  ): CountMinSketch {
+    const sketch = CountMinSketch.create(epsilon, delta, options);
+    for (const key of keys) sketch.add(key);
+    return sketch;
+  }
+
+  /**
    * Constructs a sketch from low-level {@link CountMinParams}. Prefer
    * {@link CountMinSketch.create} unless restoring a specific geometry.
    */
