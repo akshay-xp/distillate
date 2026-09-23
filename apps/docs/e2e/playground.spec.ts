@@ -333,3 +333,72 @@ test("the page that introduces the guarantee links to the demo", async ({
     page.locator("[data-row='bloom'] [data-cell='held']"),
   ).toHaveText("10,000");
 });
+
+test("the sketch panel states its geometry and fixed size after a build", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  const panel = page.locator("[data-pg-countmin]");
+  await expect(panel.locator("[data-cm='grid']")).not.toBeEmpty();
+  await expect(panel.locator("[data-cm='size']")).not.toBeEmpty();
+  await expect(panel.locator("[data-cm='total']")).not.toBeEmpty();
+  expect(errors).toEqual([]);
+});
+
+test("recording repeats shows the estimate beside the truth", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  const panel = page.locator("[data-pg-countmin]");
+  await page.locator("#pg-count-key").fill("key-5");
+  await page.locator("#pg-count-n").fill("4");
+  await page.getByRole("button", { name: "Record" }).click();
+
+  await expect(panel.locator("[data-cm='true']")).toHaveText("5");
+  const estimate = Number(
+    await panel.locator("[data-cm='estimate']").textContent(),
+  );
+  expect(estimate).toBeGreaterThanOrEqual(5);
+  // The gap is the thing worth looking at, so it is shown rather than implied.
+  await expect(panel.locator("[data-cm='over']")).not.toBeEmpty();
+  expect(errors).toEqual([]);
+});
+
+test("a count that is not a whole number is refused in the page", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  await page.locator("#pg-count-key").fill("key-5");
+  await page.locator("#pg-count-n").fill("0");
+  await page.getByRole("button", { name: "Record" }).click();
+
+  // One error surface for the whole page, not a second one per panel.
+  await expect(page.locator("[data-pg-status]")).toContainText("whole number");
+  expect(errors).toEqual([]);
+});
+
+test("growing the key set leaves the sketch size alone and widens its bound", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  const panel = page.locator("[data-pg-countmin]");
+  const size = await panel.locator("[data-cm='size']").textContent();
+  const bound = Number(await panel.locator("[data-cm='bound']").textContent());
+
+  await page.locator("#pg-grow").fill("5000");
+  await page.getByRole("button", { name: "Grow" }).click();
+
+  await expect(panel.locator("[data-cm='size']")).toHaveText(size ?? "");
+  expect(
+    Number(await panel.locator("[data-cm='bound']").textContent()),
+  ).toBeGreaterThan(bound);
+  expect(errors).toEqual([]);
+});
