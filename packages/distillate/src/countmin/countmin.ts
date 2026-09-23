@@ -346,7 +346,15 @@ export class CountMinSketch {
     });
     const into = merged.#counters;
     for (let i = 0; i < into.length; i++) {
-      into[i] = (mine[i] ?? 0) + (theirs[i] ?? 0);
+      const sum = (mine[i] ?? 0) + (theirs[i] ?? 0);
+      // A Uint32Array write wraps rather than saturating, so 2^32 would store
+      // as 0 and the largest count would read as the smallest.
+      if (sum > 0xffffffff) {
+        throw new CountMinOverflowError(
+          `union would carry a counter to ${String(sum)}, past ${String(0xffffffff)}`,
+        );
+      }
+      into[i] = sum;
     }
     merged.#total = this.#total + other.#total;
     return merged;
