@@ -1203,6 +1203,28 @@ func (c countMin) count(key string) uint32 {
 	return min
 }
 
+// buildCountMin writes the frame the recipe implies, from the geometry the
+// golden frame stores. Comparing bytes rather than fields is what proves the
+// two writers agree on the whole layout, not only on the parts a reader reads.
+func buildCountMin(c countMin, keys []string) []byte {
+	counters := make([]uint32, uint64(c.width)*uint64(c.depth))
+	for _, key := range keys {
+		w := murmur3x86_128([]byte(key), c.seed)
+		for r := uint32(0); r < c.depth; r++ {
+			counters[r*c.width+reduce(w[0]+r*w[1]+r*r, c.width)]++
+		}
+	}
+	params := make([]byte, countMinParams)
+	le.PutUint32(params, c.width)
+	le.PutUint32(params[4:], c.depth)
+	le.PutUint32(params[8:], c.seed)
+	payload := make([]byte, 4*len(counters))
+	for i, v := range counters {
+		le.PutUint32(payload[4*i:], v)
+	}
+	return writeFrame(8, params, payload)
+}
+
 func TestCountMin(t *testing.T) {
 	seeded := false
 	for _, e := range golden(t) {
@@ -1229,6 +1251,10 @@ func TestCountMin(t *testing.T) {
 		}
 		if want := uint64(len(e.Keys)); c.total != want {
 			t.Errorf("%s: total %d, want %d", e.Name, c.total, want)
+		}
+		rebuilt := buildCountMin(c, e.Keys)
+		if golden := frameOf(t, e); !bytes.Equal(rebuilt, golden) {
+			t.Errorf("%s: rebuilt frame differs:\n got %x\nwant %x", e.Name, rebuilt, golden)
 		}
 	}
 	if !seeded {
