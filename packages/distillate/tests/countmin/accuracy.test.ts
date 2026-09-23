@@ -79,3 +79,18 @@ test.each<[string, (seed: number) => string[]]>([
   expect(score.violations).toBeLessThanOrEqual(s.delta * score.keys);
   expect(score.mean).toBeLessThan(s.error());
 });
+
+// The property in doubt: all d positions come from one 128-bit hash, so if the
+// rows were correlated the minimum across them would buy nothing and this
+// ratio would sit near 1. Independent rows put it near 1/depth.
+test("extra rows reduce error the way independent rows would", () => {
+  const stream = zipfStream(13, DISTINCT, EVENTS, 1);
+  const truth = truthOf(stream);
+  const meanOver = (depth: number): number => {
+    const s = new CountMinSketch({ width: 2719, depth });
+    for (const key of stream) s.add(key);
+    return scoreOverestimate((key) => s.count(key), truth, Infinity).mean;
+  };
+
+  expect(meanOver(7)).toBeLessThan(0.4 * meanOver(1));
+});
