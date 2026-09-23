@@ -1,5 +1,6 @@
 import { BlockedBloomFilter } from "distillate/blocked";
 import { bloomSizing } from "distillate/bloom";
+import { countMinSizing } from "distillate/countmin";
 import { BinaryFuse8, BinaryFuseBuildError } from "distillate/fuse";
 import { CuckooFilter } from "distillate/cuckoo";
 import { ScalableBloomFilter } from "distillate/scalable";
@@ -501,3 +502,28 @@ test.each([0, -1, 1.5, "abc", "", null, undefined])(
     expect(result.message).toMatch(/whole number/);
   },
 );
+
+test("the sketch reports its geometry, its fixed size and its bound", () => {
+  const pg = built(1000);
+  const sizing = countMinSizing(TARGET, 0.01);
+  const report = pg.countMin();
+
+  expect(report.width).toBe(sizing.width);
+  expect(report.depth).toBe(sizing.depth);
+  expect(report.totalBytes).toBe(sizing.width * sizing.depth * 4);
+  expect(report.total).toBe(1000);
+  expect(report.bound).toBeCloseTo(report.epsilon * 1000, 10);
+});
+
+// The property that separates a sketch from every filter on the page: it was
+// sized before it saw a key, so more keys cost nothing and buy less accuracy.
+test("growing the key set leaves the sketch's size alone and widens its bound", () => {
+  const pg = built(1000);
+  const before = pg.countMin();
+  pg.grow(1000);
+  const after = pg.countMin();
+
+  expect(after.totalBytes).toBe(before.totalBytes);
+  expect(after.total).toBe(2000);
+  expect(after.bound).toBeGreaterThan(before.bound);
+});

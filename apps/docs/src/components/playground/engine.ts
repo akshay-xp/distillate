@@ -39,6 +39,22 @@ export interface CountReport {
   total: number;
 }
 
+/** What the sketch costs and what it promises, at the current total. */
+export interface CountMinReport {
+  /** Counters per row. */
+  width: number;
+  /** Rows, one probe each. */
+  depth: number;
+  /** Fixed by `epsilon` and `delta` before the sketch saw a key. */
+  totalBytes: number;
+  /** Everything recorded so far. */
+  total: number;
+  /** The error factor the geometry implements, at or below the target. */
+  epsilon: number;
+  /** `epsilon * total`: how far above the truth an estimate may sit now. */
+  bound: number;
+}
+
 /** What one structure says about one queried key. */
 export type Verdict =
   "member" | "false positive" | "absent" | "added after build";
@@ -303,6 +319,10 @@ export class Playground {
     this.#filters.blocked.add(key);
     this.#filters.scalable.add(key);
     this.#addToCuckoo(key);
+    // One occurrence, like every other key the build generated. Repeats come
+    // from record(), which is the only control that offers them.
+    this.#filters.countmin.add(key);
+    this.#counts.set(key, (this.#counts.get(key) ?? 0) + 1);
     this.#keys.push(key);
     this.#inserted.add(key);
     this.#late.add(key);
@@ -352,6 +372,25 @@ export class Playground {
         // A key Cuckoo refused or had deleted is not one it holds.
         cuckoo: verdict(cuckoo, inserted && !this.#notInCuckoo.has(key)),
       },
+    };
+  }
+
+  /**
+   * What the sketch costs and promises right now.
+   *
+   * Its size is fixed before it sees a key, so it never appears in the space
+   * columns beside the filters: those are per key, and this one has no such
+   * denominator.
+   */
+  countMin(): CountMinReport {
+    const s = this.#filters.countmin;
+    return {
+      width: s.width,
+      depth: s.depth,
+      totalBytes: s.width * s.depth * 4,
+      total: s.total,
+      epsilon: s.epsilon,
+      bound: s.error(),
     };
   }
 
