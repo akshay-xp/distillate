@@ -59,3 +59,19 @@ test("the Count-Min guide covers what a reader needs to choose and use it", () =
   expect(space).toContain("delta");
   expect(space).toMatch(/not|never|rather than/);
 });
+
+const choosing = (): string =>
+  read("../src/content/docs/guides/choosing-a-structure.md");
+
+test("choosing a structure routes the frequency question to Count-Min", () => {
+  const page = choosing();
+
+  expect(page).toContain("How many times");
+  expect(page).toContain("/guides/countmin/");
+  // The matrix is what a reader scans; the question list alone is not enough.
+  expect(page).toMatch(/\|.*Count-Min.*\|/);
+
+  // The three families stay distinct: adding a frequency row must not blur
+  // the existing claim that no filter answers the cardinality question.
+  expect(page).toContain("No filter can answer this");
+});
