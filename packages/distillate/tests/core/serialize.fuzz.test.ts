@@ -9,7 +9,7 @@ import {
   SerializationError,
   writeHeader,
 } from "../../src/core/serialize.js";
-import { HLL_MAX_P, HLL_MIN_P } from "../../src/core/sizing.js";
+import { HLL_MAX_P, HLL_MIN_P } from "../../src/hll/sizing.js";
 import { CuckooFilter } from "../../src/cuckoo/cuckoo.js";
 import { BinaryFuse8, BinaryFuse16 } from "../../src/fuse/index.js";
 import { HyperLogLog } from "../../src/hll/hll.js";
