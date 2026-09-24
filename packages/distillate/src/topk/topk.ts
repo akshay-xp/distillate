@@ -39,6 +39,7 @@ export class TopK {
   readonly #keyLengths: Uint32Array;
   #arena: Uint8Array;
   #arenaLen = 0;
+  #entries = 0;
   #offset = 0;
   #total = 0;
 
@@ -111,6 +112,63 @@ export class TopK {
     return this.#total;
   }
 
+  /**
+   * The most any estimate can exceed the truth by: everything the purges have
+   * subtracted so far.
+   *
+   * It is also the threshold of the one-sided guarantee. Every key whose true
+   * count exceeds this is still held, so nothing heavier than the error can
+   * have been silently dropped.
+   *
+   * @returns The accumulated purge offset, `0` before the first purge.
+   */
+  error(): number {
+    return this.#offset;
+  }
+
+  /**
+   * Subtracts the median stored count from every entry, drops those reaching
+   * zero, and charges what was subtracted to the offset.
+   *
+   * The upper median guarantees at least `(entries >> 1) + 1` entries go, so a
+   * purge always makes room. Survivors are rebuilt into a fresh table and
+   * arena rather than deleted in place: holes would break the linear probe
+   * chains that run through them, and a rebuild also compacts the arena that
+   * the dropped keys were occupying.
+   */
+  #purge(): void {
+    const live: number[] = [];
+    for (let slot = 0; slot < this.#capacity; slot++) {
+      const stored = this.#counts[slot] ?? 0;
+      if (stored !== 0) live.push(stored);
+    }
+    live.sort((a, b) => a - b);
+    const median = live[live.length >> 1] ?? 0;
+
+    const keys: Uint8Array[] = [];
+    const counts: number[] = [];
+    for (let slot = 0; slot < this.#capacity; slot++) {
+      const stored = this.#counts[slot] ?? 0;
+      if (stored === 0) continue;
+      const survived = stored - median;
+      if (survived <= 0) continue;
+      const at = this.#keyOffsets[slot] ?? 0;
+      keys.push(this.#arena.slice(at, at + (this.#keyLengths[slot] ?? 0)));
+      counts.push(survived);
+    }
+
+    this.#counts.fill(0);
+    this.#arenaLen = 0;
+    this.#entries = keys.length;
+    for (let i = 0; i < keys.length; i++) {
+      const bytes = keys[i] ?? new Uint8Array(0);
+      const slot = this.#slotFor(bytes);
+      this.#storeKey(slot, bytes);
+      this.#counts[slot] = counts[i] ?? 0;
+    }
+    this.#offset += median;
+  }
+
   // True when the key stored at `slot` is exactly `bytes`.
   #slotHolds(slot: number, bytes: Uint8Array): boolean {
     const len = this.#keyLengths[slot] ?? 0;
@@ -171,9 +229,11 @@ export class TopK {
     const slot = this.#slotFor(bytes);
     if ((this.#counts[slot] ?? 0) === 0) {
       this.#storeKey(slot, bytes);
+      this.#entries++;
     }
     this.#counts[slot] = (this.#counts[slot] ?? 0) + count;
     this.#total += count;
+    if (this.#entries > this.#loadLimit) this.#purge();
   }
 
   /**

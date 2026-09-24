@@ -8,7 +8,7 @@ export interface TopKSizing {
 
 /** Smallest and largest counter map a sketch may use. */
 export const TOPK_MIN_CAPACITY = 4;
-export const TOPK_MAX_CAPACITY = 2 ** 24;
+export const TOPK_MAX_CAPACITY: number = 2 ** 24;
 
 /**
  * Smallest power-of-two capacity whose load limit `0.75 * capacity` keeps the
