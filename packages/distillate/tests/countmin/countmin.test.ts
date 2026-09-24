@@ -1,6 +1,7 @@
 import fc from "fast-check";
 import { expect, test } from "vitest";
 
+import { crc32 } from "../../src/core/crc32.js";
 import { ParamError } from "../../src/core/params.js";
 import {
   CountMinOverflowError,
@@ -187,4 +188,50 @@ test("from with no keys gives an empty sketch at the target geometry", () => {
 
 test("a seed passed to from is kept", () => {
   expect(CountMinSketch.from(["a"], 0.01, 0.01, { seed: 7 }).seed).toBe(7);
+});
+
+// A counter caps at 2^32 - 1, but `total` is the sum across a row, so a wide
+// enough sketch can carry it past 2^53 while every counter stays legal. Past
+// that point `total` silently loses precision and `error()` drifts with it,
+// and worse, `fromBytes` rejects the row sum, so the writer would be able to
+// produce a frame its own reader refuses. Reached here by loading a frame
+// rather than by counting to it, which takes a couple of million adds.
+const nearSafeLimit = (): CountMinSketch => {
+  const width = 2 ** 22;
+  const each = 2 ** 31 - 1;
+  const frame = new CountMinSketch({ width, depth: 1 }).toBytes();
+  const view = new DataView(frame.buffer, frame.byteOffset, frame.byteLength);
+  for (let i = 0; i < width; i++) view.setUint32(32 + 4 * i, each, true);
+  view.setUint32(
+    frame.length - 4,
+    crc32(frame.subarray(0, frame.length - 4)),
+    true,
+  );
+  return CountMinSketch.fromBytes(frame);
+};
+
+test("an add that would carry the total past the safe integer range throws", () => {
+  const s = nearSafeLimit();
+  const room = Number.MAX_SAFE_INTEGER - s.total;
+
+  expect(s.total).toBe(2 ** 53 - 2 ** 22);
+  expect(room).toBeGreaterThan(0);
+
+  // One more than the room left. Every counter has headroom to spare, so a
+  // counter guard cannot be what rejects this.
+  expect(() => {
+    s.add("a", room + 1);
+  }).toThrow(CountMinOverflowError);
+  expect(s.total).toBe(2 ** 53 - 2 ** 22);
+
+  // The frame still loads, which is the property the guard protects.
+  expect(CountMinSketch.fromBytes(s.toBytes()).total).toBe(s.total);
+});
+
+test("a union that would carry the total past the safe integer range throws", () => {
+  const s = nearSafeLimit();
+
+  // Counters sum to 2^32 - 2 here, inside the per-counter limit, so this is
+  // the total overflowing on its own rather than a counter dragging it over.
+  expect(() => s.union(s)).toThrow(CountMinOverflowError);
 });
