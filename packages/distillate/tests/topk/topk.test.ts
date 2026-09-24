@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 
+import { hash32x2Into } from "../../src/core/hasher.js";
 import { ParamError } from "../../src/core/params.js";
 import { topKSizing } from "../../src/topk/sizing.js";
 import { TopK } from "../../src/topk/topk.js";
@@ -77,4 +78,33 @@ test("a count that could produce an underestimate is refused", () => {
 
   sketch.add("a", 2);
   expect(sketch.count("a")).toBe(2);
+});
+
+// The first two keys landing in the same bucket of a 16-slot map, found rather
+// than hardcoded so the pair survives a change of hash seed or key shape.
+const collidingPair = (capacity: number): [string, string] => {
+  const words = new Uint32Array(2);
+  const seen = new Map<number, string>();
+  for (let i = 0; i < 1000; i++) {
+    const key = `key:${String(i)}`;
+    hash32x2Into(key, 0, words);
+    const bucket = (words[0] ?? 0) & (capacity - 1);
+    const first = seen.get(bucket);
+    if (first !== undefined) return [first, key];
+    seen.set(bucket, key);
+  }
+  throw new Error("no colliding pair found");
+};
+
+test("two keys sharing a bucket keep their own counts", () => {
+  const sketch = new TopK({ capacity: 16 });
+  const [first, second] = collidingPair(16);
+
+  sketch.add(first, 3);
+  sketch.add(second, 5);
+
+  expect(sketch.count(first)).toBe(3);
+  expect(sketch.count(second)).toBe(5);
+  expect(sketch.count("never-added")).toBe(0);
+  expect(sketch.total).toBe(8);
 });

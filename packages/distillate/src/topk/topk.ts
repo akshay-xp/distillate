@@ -140,6 +140,24 @@ export class TopK {
   }
 
   /**
+   * The slot holding `bytes`, or the first empty slot on its probe path.
+   *
+   * Unbounded by design: the purge keeps live entries at or below the load
+   * limit, which is below capacity, so an empty slot always exists and the
+   * scan always returns from inside.
+   */
+  #slotFor(bytes: Uint8Array): number {
+    hash32x2Into(bytes, this.#seed, this.#words);
+    const mask = this.#capacity - 1;
+    let slot = (this.#words[0] ?? 0) & mask;
+    for (;;) {
+      if ((this.#counts[slot] ?? 0) === 0) return slot;
+      if (this.#slotHolds(slot, bytes)) return slot;
+      slot = (slot + 1) & mask;
+    }
+  }
+
+  /**
    * Records `count` occurrences of a key.
    *
    * @param key - The key to record, as a string or bytes.
@@ -150,8 +168,7 @@ export class TopK {
     // thing this structure guarantees cannot happen.
     assertPositiveInt(count, "count");
     const bytes = normalize(key);
-    hash32x2Into(bytes, this.#seed, this.#words);
-    const slot = (this.#words[0] ?? 0) & (this.#capacity - 1);
+    const slot = this.#slotFor(bytes);
     if ((this.#counts[slot] ?? 0) === 0) {
       this.#storeKey(slot, bytes);
     }
@@ -171,10 +188,7 @@ export class TopK {
    */
   count(key: BytesLike): number {
     const bytes = normalize(key);
-    hash32x2Into(bytes, this.#seed, this.#words);
-    const slot = (this.#words[0] ?? 0) & (this.#capacity - 1);
-    if ((this.#counts[slot] ?? 0) === 0) return 0;
-    if (!this.#slotHolds(slot, bytes)) return 0;
-    return (this.#counts[slot] ?? 0) + this.#offset;
+    const stored = this.#counts[this.#slotFor(bytes)] ?? 0;
+    return stored === 0 ? 0 : stored + this.#offset;
   }
 }
