@@ -29,8 +29,8 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   <p>
     The playground builds real filters in your browser and needs JavaScript.
     With it off,{" "}
-    <a href="/guides/choosing-a-structure/">Choosing a structure</a> covers the same
-    ground in prose.
+    <a href="/guides/choosing-a-structure/">Choosing a structure</a> covers the
+    same ground in prose.
   </p>
 </noscript>
 
@@ -62,7 +62,9 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       Binary Fuse ignores this; its rate is fixed by fingerprint width.
     </p>
   </div>
-  <button class="dstl-btn" type="submit"> Build </button>
+  <button class="dstl-btn" type="submit">
+    Build
+  </button>
 </form>
 
 <form class="dstl-form-stack" data-pg-query novalidate>
@@ -74,7 +76,9 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       <code>miss-22</code>, which none of them ever saw.
     </p>
   </div>
-  <button class="dstl-btn" type="submit"> Query </button>
+  <button class="dstl-btn" type="submit">
+    Query
+  </button>
 </form>
 
 <form class="dstl-form-stack" data-pg-add novalidate>
@@ -86,7 +90,9 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       which is the trade it makes for its size.
     </p>
   </div>
-  <button class="dstl-btn" type="submit"> Add </button>
+  <button class="dstl-btn" type="submit">
+    Add
+  </button>
 </form>
 
 <form class="dstl-form-stack" data-pg-grow novalidate>
@@ -106,7 +112,9 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       the build too; once full it refuses keys rather than drop one it holds.
     </p>
   </div>
-  <button class="dstl-btn" type="submit"> Grow </button>
+  <button class="dstl-btn" type="submit">
+    Grow
+  </button>
 </form>
 
 <form class="dstl-form-stack" data-pg-delete novalidate>
@@ -118,7 +126,9 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       it, and say why.
     </p>
   </div>
-  <button class="dstl-btn" type="submit"> Delete </button>
+  <button class="dstl-btn" type="submit">
+    Delete
+  </button>
 </form>
 
 <div class="dstl-status" data-pg-status role="status" aria-live="polite"></div>
@@ -137,23 +147,21 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     </tr>
   </thead>
   <tbody>
-    {
-      STRUCTURES.map((s) => (
-        <tr data-row={s.key}>
-          <th scope="row">
-            {s.label}
-            <span class="dstl-subpath">{s.subpath}</span>
-          </th>
-          <td data-cell="held" />
-          <td data-cell="missing" />
-          <td data-cell="bits" />
-          <td data-cell="size" />
-          <td data-cell="stages" />
-          <td data-cell="fpr" />
-          <td data-cell="verdict" />
-        </tr>
-      ))
-    }
+    {STRUCTURES.map((s) => (
+      <tr data-row={s.key}>
+        <th scope="row">
+          {s.label}
+          <span class="dstl-subpath">{s.subpath}</span>
+        </th>
+        <td data-cell="held" />
+        <td data-cell="missing" />
+        <td data-cell="bits" />
+        <td data-cell="size" />
+        <td data-cell="stages" />
+        <td data-cell="fpr" />
+        <td data-cell="verdict" />
+      </tr>
+    ))}
   </tbody>
 </table>
 
@@ -187,42 +195,68 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
         truth, never below it.
       </p>
     </div>
-    <button class="dstl-btn" type="submit"> Record </button>
+    <button class="dstl-btn" type="submit">
+      Record
+    </button>
   </form>
 
   <dl class="dstl-readout">
-    <div><dt>Grid</dt><dd data-cm="grid"></dd></div>
-    <div><dt>Size</dt><dd data-cm="size"></dd></div>
-    <div><dt>Recorded</dt><dd data-cm="total"></dd></div>
-    <div><dt>True count</dt><dd data-cm="true"></dd></div>
-    <div><dt>Estimate</dt><dd data-cm="estimate"></dd></div>
-    <div><dt>Overestimate</dt><dd data-cm="over"></dd></div>
-    <div><dt>Bound</dt><dd data-cm="bound"></dd></div>
+    <div>
+      <dt>Grid</dt>
+      <dd data-cm="grid"></dd>
+    </div>
+    <div>
+      <dt>Size</dt>
+      <dd data-cm="size"></dd>
+    </div>
+    <div>
+      <dt>Recorded</dt>
+      <dd data-cm="total"></dd>
+    </div>
+    <div>
+      <dt>True count</dt>
+      <dd data-cm="true"></dd>
+    </div>
+    <div>
+      <dt>Estimate</dt>
+      <dd data-cm="estimate"></dd>
+    </div>
+    <div>
+      <dt>Overestimate</dt>
+      <dd data-cm="over"></dd>
+    </div>
+    <div>
+      <dt>Bound</dt>
+      <dd data-cm="bound"></dd>
+    </div>
   </dl>
 
   <p class="dstl-hint">
-    <strong>The estimate is never below the truth.</strong> Collisions with other
-    keys only push it up, by at most the bound, which is the error factor times everything
-    recorded. So the bound grows with the stream: an overestimate of a few hundred
-    is noise for a key seen eighty thousand times and useless for one seen three times.
+    <strong>The estimate is never below the truth.</strong> Collisions with
+    other keys only push it up, by at most the bound, which is the error factor
+    times everything recorded. So the bound grows with the stream: an
+    overestimate of a few hundred is noise for a key seen eighty thousand times
+    and useless for one seen three times.
   </p>
 </section>
 
 <div data-pg-notes>
   <p class="dstl-hint">
-    <strong>A false positive is the filter working, not a bug.</strong> These structures
-    trade exactness for space: a key that was never inserted can still answer yes,
-    at roughly the target rate. What they never do is the reverse.
+    <strong>A false positive is the filter working, not a bug.</strong> These
+    structures trade exactness for space: a key that was never inserted can
+    still answer yes, at roughly the target rate. What they never do is the
+    reverse.
   </p>
 
   <p class="dstl-hint">
-    <strong>Not found is zero, and stays zero.</strong> That column counts inserted
-    keys the filter cannot find. It is guaranteed to be zero by how these structures
-    are built, not a lucky property of this sample: a key that was added always answers
-    yes. The measured rate is the false positive rate, checked over {probes} keys
-    that were never inserted; it is an estimate, so expect it within roughly a factor
-    of two of the target at these sample sizes. Binary Fuse ignores the target entirely,
-    so its rate is not compared against one.
+    <strong>Not found is zero, and stays zero.</strong> That column counts
+    inserted keys the filter cannot find. It is guaranteed to be zero by how
+    these structures are built, not a lucky property of this sample: a key that
+    was added always answers yes. The measured rate is the false positive rate,
+    checked over {probes} keys that were never inserted; it is an estimate, so
+    expect it within roughly a factor of two of the target at these sample
+    sizes. Binary Fuse ignores the target entirely, so its rate is not compared
+    against one.
   </p>
 </div>
 
