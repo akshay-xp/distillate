@@ -61,6 +61,8 @@ Introspection accessors sit alongside the narrow interface, not in it: Bloom exp
 
 `bloomSizing(n, epsilon)` returns the params for a target count and false-positive rate. Incumbents force manual computation; this is a core ergonomics win.
 
+A sizing helper lives with the structure it sizes, and `core/sizing.ts` keeps only helpers two or more structures import. Today that is `bloomSizing` alone, reached by `bloom/bloom.ts` and by `scalable/scalable.ts`, which builds its stages from `BitSet` and otherwise never touches `bloom/`. The rule is a bundling one: anything in `core/sizing.ts` is a chunk that every importing subpath downloads whole, so a helper parked there is shipped to consumers who cannot call it.
+
 ## Storage
 
 - Backing: `Uint8Array` (bit array, serializable, `SharedArrayBuffer`-friendly) or `Uint32Array` for word ops.
@@ -84,15 +86,16 @@ src/
     crc32.ts        # slice-by-8 CRC32
     base64.ts       # JSON envelope encoding
     params.ts       # ParamError and argument checks
-    sizing.ts       # bloomSizing, hllSizing (shared by several subpaths)
+    sizing.ts       # bloomSizing only: bloom and scalable both import it
   bloom/            # classic Bloom
   blocked/          # split-block (Parquet layout) Bloom
   fuse/             # Binary Fuse 8 / 16
-  hll/              # HyperLogLog: dense registers, sparse store, estimator, fold
+  hll/              # HyperLogLog: dense registers, sparse store, estimator, fold,
+                    # and sizing.ts for hllSizing
   scalable/         # scalable Bloom: a chain of Bloom stages sharing one hash
   cuckoo/           # cuckoo filter with delete: cuckoo.ts, and sizing.ts for
-                    # cuckooSizing, kept here rather than in core/sizing.ts because
-                    # that module is one chunk every sizing subpath downloads
+                    # cuckooSizing
+  countmin/         # Count-Min sketch: countmin.ts, and sizing.ts for countMinSizing
   frame/            # distillate/frame: readFrameAt for walking a stream of frames
   index.ts          # root barrel (VERSION only)
 ```
