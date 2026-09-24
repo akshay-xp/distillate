@@ -27,13 +27,18 @@ const TYPE = 8;
 const PARAMS_SIZE = 16;
 const PARAMS_FIELDS_END = 12;
 
+/** The counters as bytes, for comparing two sketches without serializing them. */
+const counterBytes = (counters: Uint32Array): Uint8Array =>
+  new Uint8Array(counters.buffer, counters.byteOffset, counters.byteLength);
+
 /**
  * The total a frame's counters imply, which is why no total is stored.
  *
  * Under plain increment every add touches one counter per row, so every row
  * sums to the same value. Deriving the total therefore doubles as an integrity
- * check: rows that disagree were not written by this format, and a sum past
- * the safe-integer range could not have been reached by counting.
+ * check: rows that disagree were not written by this format, and a sum past the
+ * safe-integer range cannot have been reached by counting, because `add` and
+ * `union` both refuse before the total gets there.
  */
 function rowSum(counters: Uint32Array, width: number, depth: number): number {
   let expected = 0;
@@ -296,6 +301,16 @@ export class CountMinSketch {
     // A count below 1 would let an estimate fall under the true count, the one
     // thing this structure guarantees cannot happen.
     assertPositiveInt(count, "count");
+    // Counters cap at 2^32 - 1 each, but the total is their sum across a row,
+    // so a wide sketch can carry it past 2^53 with every counter still legal.
+    // Beyond that the total loses precision, error() drifts with it, and
+    // fromBytes refuses the row sum, so the writer could otherwise produce a
+    // frame its own reader rejects.
+    if (this.#total + count > Number.MAX_SAFE_INTEGER) {
+      throw new CountMinOverflowError(
+        `adding ${String(count)} would carry the total past ${String(Number.MAX_SAFE_INTEGER)}`,
+      );
+    }
     hash32x2Into(key, this.#seed, this.#words);
     // Every position is checked before any is written, so a refused add leaves
     // the sketch exactly as it was rather than partly updated.
@@ -336,6 +351,13 @@ export class CountMinSketch {
     ) {
       throw new CountMinParamMismatchError(
         "cannot union Count-Min sketches whose parameters do not match",
+      );
+    }
+    // Checked before the counters, because the totals can sum past 2^53 while
+    // every counter pair stays inside its own limit.
+    if (this.#total + other.#total > Number.MAX_SAFE_INTEGER) {
+      throw new CountMinOverflowError(
+        `union would carry the total past ${String(Number.MAX_SAFE_INTEGER)}`,
       );
     }
     const mine = this.#counters;
@@ -395,7 +417,17 @@ export class CountMinSketch {
    * @returns `true` if the two sketches are byte-for-byte identical.
    */
   equals(other: CountMinSketch): boolean {
-    return bytesEqual(this.toBytes(), other.toBytes());
+    if (
+      this.#width !== other.#width ||
+      this.#depth !== other.#depth ||
+      this.#seed !== other.#seed
+    ) {
+      return false;
+    }
+    return bytesEqual(
+      counterBytes(this.#counters),
+      counterBytes(other.#counters),
+    );
   }
 
   /**
