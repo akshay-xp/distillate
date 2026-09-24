@@ -119,7 +119,15 @@ test("equals is exactly byte equality of the frame (property)", () => {
   // Small alphabet so independent builds sometimes match; the other kinds
   // each differ from the base in one way (a key, the seed, a delete) or not
   // at all (a restored copy).
-  const keys = fc.array(fc.constantFrom("a", "b", "c", "d"), { maxLength: 40 });
+  //
+  // maxLength is the duplicate ceiling, not an arbitrary bound. A key's copies
+  // all share a fingerprint and so share the same two candidate buckets, and
+  // kicking cannot relocate them because every resident it would displace is
+  // identical. So at most BUCKET_SIZE * 2 copies of one key ever fit, however
+  // much of the table is free, and the 9th throws CuckooFullError at 8 of 88
+  // slots. With 40 draws from 4 letters that happened about once in 10,000
+  // property runs, which is the kind of flake that waits for a release.
+  const keys = fc.array(fc.constantFrom("a", "b", "c", "d"), { maxLength: 8 });
   const seen = new Set<boolean>();
   fc.assert(
     fc.property(
@@ -300,4 +308,33 @@ test("the JSON envelope round-trips", () => {
 
   const restored = CuckooFilter.fromJSON(JSON.parse(JSON.stringify(json)));
   expect(bytesEqual(restored.toBytes(), f.toBytes())).toBe(true);
+});
+
+// equals promises byte equality of the frame, and the frame stores f and
+// buckets. Once fromBytes started trusting the stored geometry rather than
+// deriving it from n and epsilon, two frames could agree on n, epsilon, seed,
+// count and every slot word while splitting the same total bits differently.
+// Empty words are what makes it reachable: they decode to zero occupied slots
+// under either split, so the occupancy check cannot catch it.
+test("equals compares the stored geometry, not just the slots", () => {
+  const frame = CuckooFilter.create(20, 0.01).toBytes();
+  const view = new DataView(frame.buffer, frame.byteOffset, frame.byteLength);
+  const f = view.getUint32(32, true);
+  const buckets = view.getUint32(36, true);
+
+  const regeometried = (nf: number, nb: number): CuckooFilter => {
+    const out = frame.slice();
+    const v = new DataView(out.buffer, out.byteOffset, out.byteLength);
+    v.setUint32(32, nf, true);
+    v.setUint32(36, nb, true);
+    return CuckooFilter.fromBytes(resealed(out));
+  };
+
+  const a = regeometried(f, buckets);
+  const b = regeometried(f / 2, buckets * 2);
+
+  // Same total bits, so the same word count and the same all-zero payload.
+  expect(bytesEqual(a.toBytes(), b.toBytes())).toBe(false);
+  expect(a.equals(b)).toBe(false);
+  expect(a.equals(regeometried(f, buckets))).toBe(true);
 });
