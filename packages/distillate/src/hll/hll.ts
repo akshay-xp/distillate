@@ -16,7 +16,7 @@ import {
   UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
-import { HLL_MAX_P, HLL_MIN_P, hllSizing } from "../core/sizing.js";
+import { HLL_MAX_P, HLL_MIN_P, hllSizing } from "./sizing.js";
 import { estimate } from "./estimate.js";
 import { foldDense } from "./fold.js";
 import { Registers } from "./registers.js";
