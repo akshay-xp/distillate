@@ -108,3 +108,36 @@ test("two keys sharing a bucket keep their own counts", () => {
   expect(sketch.count("never-added")).toBe(0);
   expect(sketch.total).toBe(8);
 });
+
+test("error is 0 until the load limit is passed", () => {
+  const sketch = new TopK({ capacity: 16 });
+
+  expect(sketch.error()).toBe(0);
+  for (let i = 0; i < 12; i++) sketch.add(`key:${String(i)}`);
+  expect(sketch.error()).toBe(0);
+});
+
+test("passing the load limit purges the median away", () => {
+  const sketch = new TopK({ capacity: 16 });
+
+  // 13 distinct keys at one occurrence each: the median is 1, so every entry
+  // reaches zero and the map empties.
+  for (let i = 0; i < 13; i++) sketch.add(`key:${String(i)}`);
+
+  expect(sketch.error()).toBe(1);
+  expect(sketch.total).toBe(13);
+  expect(sketch.count("key:0")).toBe(0);
+});
+
+test("a heavy key survives a purge with its count intact", () => {
+  const sketch = new TopK({ capacity: 16 });
+
+  sketch.add("heavy", 20);
+  for (let i = 0; i < 12; i++) sketch.add(`key:${String(i)}`);
+
+  // Median 1 drops the twelve singletons and takes 1 off heavy, which the
+  // offset then gives back.
+  expect(sketch.error()).toBe(1);
+  expect(sketch.count("heavy")).toBe(20);
+  expect(sketch.total).toBe(32);
+});
