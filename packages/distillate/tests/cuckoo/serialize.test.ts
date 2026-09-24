@@ -125,8 +125,15 @@ test("equals is exactly byte equality of the frame (property)", () => {
   // kicking cannot relocate them because every resident it would displace is
   // identical. So at most BUCKET_SIZE * 2 copies of one key ever fit, however
   // much of the table is free, and the 9th throws CuckooFullError at 8 of 88
-  // slots. With 40 draws from 4 letters that happened about once in 10,000
-  // property runs, which is the kind of flake that waits for a release.
+  // slots.
+  //
+  // The old bound of 40 hit that 9 times in 1,000,000 property runs (0.0009%),
+  // so about 0.27% per suite run at numRuns 300 and roughly 0.5% per push
+  // across both node jobs. Rare, but it did fail CI.
+  //
+  // Dropping 40 to 8 costs almost no coverage: fast-check's default size never
+  // generated an array longer than 10 in that million, so the old bound was
+  // decorative. 8 makes the failure unreachable rather than unlikely.
   const keys = fc.array(fc.constantFrom("a", "b", "c", "d"), { maxLength: 8 });
   const seen = new Set<boolean>();
   fc.assert(
