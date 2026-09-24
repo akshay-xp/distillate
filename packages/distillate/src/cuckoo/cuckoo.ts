@@ -403,6 +403,10 @@ export class CuckooFilter {
       this.#epsilon === other.#epsilon &&
       this.#seed === other.#seed &&
       this.#count === other.#count &&
+      // The frame stores the geometry and fromBytes trusts it, so equal n and
+      // epsilon no longer imply equal f and buckets.
+      this.#f === other.#f &&
+      this.#buckets === other.#buckets &&
       bytesEqual(wordBytes(this.#words), wordBytes(other.#words))
     );
   }
