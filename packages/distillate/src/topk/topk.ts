@@ -1,3 +1,5 @@
+import { type BytesLike, normalize } from "../core/bytes.js";
+import { hash32x2Into } from "../core/hasher.js";
 import { assertUint32, ParamError } from "../core/params.js";
 import { TOPK_MAX_CAPACITY, TOPK_MIN_CAPACITY, topKSizing } from "./sizing.js";
 
@@ -26,6 +28,19 @@ export class TopK {
   readonly #capacity: number;
   readonly #loadLimit: number;
   readonly #seed: number;
+  // Reused across add and count so hashing a key allocates nothing per call.
+  readonly #words = new Uint32Array(2);
+  // Stored counts, where 0 marks an empty slot. A live entry always holds at
+  // least 1, since the purge drops everything reaching zero, so occupancy
+  // needs no array of its own.
+  readonly #counts: Uint32Array;
+  // Where each slot's key sits in the arena.
+  readonly #keyOffsets: Uint32Array;
+  readonly #keyLengths: Uint32Array;
+  #arena: Uint8Array;
+  #arenaLen = 0;
+  #offset = 0;
+  #total = 0;
 
   /**
    * Creates a sketch whose estimate is at most `epsilon` of the total recorded
@@ -64,6 +79,10 @@ export class TopK {
     this.#capacity = capacity;
     this.#loadLimit = Math.floor(0.75 * capacity);
     this.#seed = seed;
+    this.#counts = new Uint32Array(capacity);
+    this.#keyOffsets = new Uint32Array(capacity);
+    this.#keyLengths = new Uint32Array(capacity);
+    this.#arena = new Uint8Array(256);
   }
 
   /** Slots in the counter map. */
@@ -85,5 +104,74 @@ export class TopK {
    */
   get epsilon(): number {
     return 1 / this.#loadLimit;
+  }
+
+  /** Sum of every count recorded, whatever the map has since purged. */
+  get total(): number {
+    return this.#total;
+  }
+
+  // True when the key stored at `slot` is exactly `bytes`.
+  #slotHolds(slot: number, bytes: Uint8Array): boolean {
+    const len = this.#keyLengths[slot] ?? 0;
+    if (len !== bytes.length) return false;
+    const at = this.#keyOffsets[slot] ?? 0;
+    for (let i = 0; i < len; i++) {
+      if (this.#arena[at + i] !== bytes[i]) return false;
+    }
+    return true;
+  }
+
+  // Copy `bytes` into the arena and record where they landed for `slot`.
+  #storeKey(slot: number, bytes: Uint8Array): void {
+    let arena = this.#arena;
+    if (this.#arenaLen + bytes.length > arena.length) {
+      let size = arena.length;
+      while (size < this.#arenaLen + bytes.length) size *= 2;
+      const grown = new Uint8Array(size);
+      grown.set(arena.subarray(0, this.#arenaLen));
+      arena = grown;
+      this.#arena = grown;
+    }
+    arena.set(bytes, this.#arenaLen);
+    this.#keyOffsets[slot] = this.#arenaLen;
+    this.#keyLengths[slot] = bytes.length;
+    this.#arenaLen += bytes.length;
+  }
+
+  /**
+   * Records `count` occurrences of a key.
+   *
+   * @param key - The key to record, as a string or bytes.
+   * @param count - How many occurrences to record; defaults to `1`.
+   */
+  add(key: BytesLike, count = 1): void {
+    const bytes = normalize(key);
+    hash32x2Into(bytes, this.#seed, this.#words);
+    const slot = (this.#words[0] ?? 0) & (this.#capacity - 1);
+    if ((this.#counts[slot] ?? 0) === 0) {
+      this.#storeKey(slot, bytes);
+    }
+    this.#counts[slot] = (this.#counts[slot] ?? 0) + count;
+    this.#total += count;
+  }
+
+  /**
+   * Estimates how many times a key was added.
+   *
+   * For a key the map holds this is `stored + error()`, never below the true
+   * count. A key the map does not hold returns `0` rather than the offset,
+   * since its true count may genuinely be zero.
+   *
+   * @param key - The key to estimate.
+   * @returns The estimated count, `0` for a key the map does not hold.
+   */
+  count(key: BytesLike): number {
+    const bytes = normalize(key);
+    hash32x2Into(bytes, this.#seed, this.#words);
+    const slot = (this.#words[0] ?? 0) & (this.#capacity - 1);
+    if ((this.#counts[slot] ?? 0) === 0) return 0;
+    if (!this.#slotHolds(slot, bytes)) return 0;
+    return (this.#counts[slot] ?? 0) + this.#offset;
   }
 }

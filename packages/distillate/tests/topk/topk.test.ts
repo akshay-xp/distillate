@@ -28,3 +28,36 @@ test("the constructor refuses a capacity it cannot hold", () => {
   expect(() => new TopK({ capacity: 2 })).toThrow(ParamError);
   expect(() => new TopK({ capacity: 2 ** 25 })).toThrow(ParamError);
 });
+
+test("add records occurrences and count reads them back", () => {
+  const sketch = TopK.create(0.01);
+
+  expect(sketch.total).toBe(0);
+  expect(sketch.count("alice")).toBe(0);
+
+  sketch.add("alice");
+  expect(sketch.count("alice")).toBe(1);
+
+  sketch.add("alice");
+  sketch.add("alice");
+  sketch.add("alice");
+  expect(sketch.count("alice")).toBe(4);
+
+  sketch.add("alice", 5);
+  expect(sketch.count("alice")).toBe(9);
+  expect(sketch.total).toBe(9);
+});
+
+test("a key is one entry however it is spelled", () => {
+  const sketch = TopK.create(0.01);
+  const bytes = new TextEncoder().encode("alice");
+
+  sketch.add("alice", 9);
+
+  expect(sketch.count(bytes)).toBe(9);
+  expect(sketch.count(bytes.buffer)).toBe(9);
+
+  sketch.add(bytes);
+  expect(sketch.count("alice")).toBe(10);
+  expect(sketch.total).toBe(10);
+});
