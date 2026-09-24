@@ -217,3 +217,18 @@ test("a returned key is a copy, not a window into the arena", () => {
 
   expect(decode(sketch.top(1)[0]?.key ?? new Uint8Array())).toBe("a");
 });
+
+test("from counts repeats rather than deduping them", () => {
+  const sketch = TopK.from(["a", "a", "b"], 0.01);
+
+  expect(sketch.count("a")).toBe(2);
+  expect(sketch.count("b")).toBe(1);
+  expect(sketch.total).toBe(3);
+  expect(sketch.capacity).toBe(topKSizing(0.01).capacity);
+});
+
+test("from carries its options and takes an empty stream", () => {
+  expect(TopK.from([], 0.01, { seed: 7 }).seed).toBe(7);
+  expect(TopK.from([], 0.01).total).toBe(0);
+  expect(TopK.from([], 0.01).top(1)).toEqual([]);
+});
