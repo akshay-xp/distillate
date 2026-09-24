@@ -1,6 +1,6 @@
 import { type BytesLike, normalize } from "../core/bytes.js";
 import { hash32x2Into } from "../core/hasher.js";
-import { assertUint32, ParamError } from "../core/params.js";
+import { assertPositiveInt, assertUint32, ParamError } from "../core/params.js";
 import { TOPK_MAX_CAPACITY, TOPK_MIN_CAPACITY, topKSizing } from "./sizing.js";
 
 /** Options accepted alongside a sizing solve: everything but the geometry. */
@@ -146,6 +146,9 @@ export class TopK {
    * @param count - How many occurrences to record; defaults to `1`.
    */
   add(key: BytesLike, count = 1): void {
+    // A count below 1 would let an estimate fall under the true count, the one
+    // thing this structure guarantees cannot happen.
+    assertPositiveInt(count, "count");
     const bytes = normalize(key);
     hash32x2Into(bytes, this.#seed, this.#words);
     const slot = (this.#words[0] ?? 0) & (this.#capacity - 1);

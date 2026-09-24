@@ -61,3 +61,20 @@ test("a key is one entry however it is spelled", () => {
   expect(sketch.count("alice")).toBe(10);
   expect(sketch.total).toBe(10);
 });
+
+test("a count that could produce an underestimate is refused", () => {
+  const sketch = TopK.create(0.01);
+
+  for (const bad of [0, -1, 1.5, Number.NaN]) {
+    expect(() => {
+      sketch.add("a", bad);
+    }).toThrow(ParamError);
+  }
+
+  // The refusals must leave nothing behind, not even an occupied slot.
+  expect(sketch.count("a")).toBe(0);
+  expect(sketch.total).toBe(0);
+
+  sketch.add("a", 2);
+  expect(sketch.count("a")).toBe(2);
+});
