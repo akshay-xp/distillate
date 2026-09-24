@@ -141,3 +141,50 @@ test("a heavy key survives a purge with its count intact", () => {
   expect(sketch.count("heavy")).toBe(20);
   expect(sketch.total).toBe(32);
 });
+
+const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
+
+test("top returns the heaviest keys, as bytes, with their bounds", () => {
+  const sketch = new TopK({ capacity: 16 });
+  sketch.add("a", 5);
+  sketch.add("b", 3);
+  sketch.add("c", 1);
+
+  const top2 = sketch.top(2);
+  expect(top2).toHaveLength(2);
+  expect(top2[0]?.key).toBeInstanceOf(Uint8Array);
+  expect(decode(top2[0]?.key ?? new Uint8Array())).toBe("a");
+  expect(top2[0]?.count).toBe(5);
+  expect(top2[0]?.lowerBound).toBe(5);
+  expect(decode(top2[1]?.key ?? new Uint8Array())).toBe("b");
+
+  expect(sketch.top(10)).toHaveLength(3);
+  expect(sketch.top(1)).toHaveLength(1);
+});
+
+test("top on an empty sketch is empty, and k must be a positive integer", () => {
+  const sketch = new TopK({ capacity: 16 });
+
+  expect(sketch.top(5)).toEqual([]);
+  for (const bad of [0, -1, 1.5]) {
+    expect(() => sketch.top(bad)).toThrow(ParamError);
+  }
+});
+
+test("top breaks a tie by key bytes so the order never depends on insertion", () => {
+  const sketch = new TopK({ capacity: 16 });
+  sketch.add("b");
+  sketch.add("a");
+
+  expect(sketch.top(2).map((e) => decode(e.key))).toEqual(["a", "b"]);
+});
+
+test("a returned key is a copy, not a window into the arena", () => {
+  const sketch = new TopK({ capacity: 16 });
+  sketch.add("a", 5);
+
+  const first = sketch.top(1)[0]?.key ?? new Uint8Array();
+  first[0] = 0x7a;
+
+  expect(decode(sketch.top(1)[0]?.key ?? new Uint8Array())).toBe("a");
+});

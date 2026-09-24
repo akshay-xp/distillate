@@ -6,6 +6,16 @@ import { TOPK_MAX_CAPACITY, TOPK_MIN_CAPACITY, topKSizing } from "./sizing.js";
 /** Options accepted alongside a sizing solve: everything but the geometry. */
 export type TopKOptions = Omit<TopKParams, "capacity">;
 
+/** One of the heaviest keys, with the bracket its stored count implies. */
+export interface TopKEntry {
+  /** The key exactly as it was recorded. A copy, safe to keep or mutate. */
+  key: Uint8Array;
+  /** Upper bound, `stored + error()`. Never below the true count. */
+  count: number;
+  /** Lower bound, the stored count alone. Never above the true count. */
+  lowerBound: number;
+}
+
 /** Low-level Top-K sketch parameters. */
 export interface TopKParams {
   /** Slots in the counter map; must be a power of two. */
@@ -250,5 +260,54 @@ export class TopK {
     const bytes = normalize(key);
     const stored = this.#counts[this.#slotFor(bytes)] ?? 0;
     return stored === 0 ? 0 : stored + this.#offset;
+  }
+
+  /**
+   * The `k` heaviest keys the map holds, heaviest first.
+   *
+   * `k` is taken per call rather than fixed when the sketch was built, so one
+   * sketch answers top-10 and top-100 without a rebuild.
+   *
+   * Fewer than `k` entries come back when the map holds fewer, and a key
+   * purged away is not among them: what is guaranteed present is every key
+   * whose true count exceeds {@link TopK.error}.
+   *
+   * @param k - How many entries to return at most.
+   * @returns The heaviest entries, each with its upper and lower bound.
+   */
+  top(k: number): TopKEntry[] {
+    assertPositiveInt(k, "k");
+    const slots: number[] = [];
+    for (let slot = 0; slot < this.#capacity; slot++) {
+      if ((this.#counts[slot] ?? 0) !== 0) slots.push(slot);
+    }
+    // Ties break on the key bytes, so the order depends on what the map holds
+    // rather than on the order it was filled. Frame type 9 writes entries in
+    // this same order, which is what lets equals be byte equality.
+    slots.sort((a, b) => {
+      const byCount = (this.#counts[b] ?? 0) - (this.#counts[a] ?? 0);
+      return byCount !== 0 ? byCount : this.#compareKeys(a, b);
+    });
+    return slots.slice(0, k).map((slot) => {
+      const at = this.#keyOffsets[slot] ?? 0;
+      return {
+        key: this.#arena.slice(at, at + (this.#keyLengths[slot] ?? 0)),
+        count: (this.#counts[slot] ?? 0) + this.#offset,
+        lowerBound: this.#counts[slot] ?? 0,
+      };
+    });
+  }
+
+  // Lexicographic order of two slots' stored key bytes.
+  #compareKeys(a: number, b: number): number {
+    const aAt = this.#keyOffsets[a] ?? 0;
+    const bAt = this.#keyOffsets[b] ?? 0;
+    const aLen = this.#keyLengths[a] ?? 0;
+    const bLen = this.#keyLengths[b] ?? 0;
+    for (let i = 0; i < Math.min(aLen, bLen); i++) {
+      const diff = (this.#arena[aAt + i] ?? 0) - (this.#arena[bAt + i] ?? 0);
+      if (diff !== 0) return diff;
+    }
+    return aLen - bLen;
   }
 }
