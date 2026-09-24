@@ -16,7 +16,7 @@ import {
   UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
-import { countMinSizing } from "../core/sizing.js";
+import { countMinSizing } from "./sizing.js";
 
 const TYPE = 8;
 
