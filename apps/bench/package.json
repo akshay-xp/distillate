@@ -11,14 +11,14 @@
   },
   "dependencies": {
     "bloom-filters": "^3.0.4",
-    "bloomfilter": "^1.1.0",
+    "bloomfilter": "^1.1.2",
     "distillate": "workspace:*"
   },
   "devDependencies": {
     "@types/bloomfilter": "^0.0.2",
-    "@types/node": "^22.20.3",
+    "@types/node": "^22.20.4",
     "mitata": "^1.0.34",
-    "tsx": "^4.23.13",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^5.0.1"
   }
