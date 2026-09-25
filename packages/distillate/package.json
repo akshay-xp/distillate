@@ -121,13 +121,13 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
     "@microsoft/api-extractor": "^7.59.1",
-    "@types/node": "^22.20.3",
+    "@types/node": "^22.20.4",
     "@vitest/coverage-v8": "^5.0.1",
-    "fast-check": "^4.10.1",
+    "fast-check": "^4.10.2",
     "mitata": "^1.0.34",
     "publint": "^0.3.24",
     "tsdown": "^0.23.0",
-    "tsx": "^4.23.13",
+    "tsx": "^4.23.15",
     "typedoc": "^0.28.20",
     "typescript": "^5.9.3",
     "vitest": "^5.0.1"
