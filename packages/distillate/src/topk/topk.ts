@@ -213,7 +213,7 @@ export class TopK {
     // back byte for byte, and no two frames decode to the same sketch.
     let keyAt = tableEnd;
     let prevCount = Infinity;
-    let prevKey = new Uint8Array(0);
+    let prevKey: Uint8Array = new Uint8Array(0);
     for (let i = 0; i < entries; i++) {
       const count = view.getUint32(PARAMS_SIZE + 4 * i, true);
       const len = view.getUint32(PARAMS_SIZE + 4 * (entries + i), true);
