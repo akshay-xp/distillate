@@ -321,32 +321,44 @@ export class TopK {
   /**
    * Subtracts the median stored count from every entry, drops those reaching
    * zero, and charges what was subtracted to the offset.
-   *
-   * The upper median guarantees at least `(entries >> 1) + 1` entries go, so a
-   * purge always makes room. Survivors are rebuilt into a fresh table and
-   * arena rather than deleted in place: holes would break the linear probe
-   * chains that run through them, and a rebuild also compacts the arena that
-   * the dropped keys were occupying.
    */
   #purge(): void {
-    const live: number[] = [];
-    for (let slot = 0; slot < this.#capacity; slot++) {
-      const stored = this.#counts[slot] ?? 0;
-      if (stored !== 0) live.push(stored);
-    }
-    live.sort((a, b) => a - b);
-    const median = live[live.length >> 1] ?? 0;
-
     const keys: Uint8Array[] = [];
     const counts: number[] = [];
     for (let slot = 0; slot < this.#capacity; slot++) {
       const stored = this.#counts[slot] ?? 0;
       if (stored === 0) continue;
-      const survived = stored - median;
-      if (survived <= 0) continue;
-      const at = this.#keyOffsets[slot] ?? 0;
-      keys.push(this.#arena.slice(at, at + (this.#keyLengths[slot] ?? 0)));
-      counts.push(survived);
+      keys.push(this.#keyAt(slot).slice());
+      counts.push(stored);
+    }
+    this.#reduceTo(keys, counts);
+  }
+
+  /**
+   * Purges `keys` and `counts` until they fit within the load limit, then
+   * rebuilds the table and arena from what survives.
+   *
+   * Each pass subtracts the upper median, which guarantees at least
+   * `(entries >> 1) + 1` entries go, so a purge always makes room. Survivors
+   * are rebuilt rather than deleted in place: holes would break the linear
+   * probe chains that run through them, and a rebuild also compacts the arena
+   * the dropped keys were occupying. Working on lists rather than the table is
+   * what lets a union, whose merged entries may outnumber the slots, share it.
+   */
+  #reduceTo(keys: Uint8Array[], counts: number[]): void {
+    while (keys.length > this.#loadLimit) {
+      const median = [...counts].sort((a, b) => a - b)[counts.length >> 1] ?? 0;
+      let kept = 0;
+      for (let i = 0; i < keys.length; i++) {
+        const survived = (counts[i] ?? 0) - median;
+        if (survived <= 0) continue;
+        keys[kept] = keys[i] ?? new Uint8Array(0);
+        counts[kept] = survived;
+        kept++;
+      }
+      keys.length = kept;
+      counts.length = kept;
+      this.#offset += median;
     }
 
     this.#counts.fill(0);
@@ -358,7 +370,6 @@ export class TopK {
       this.#storeKey(slot, bytes);
       this.#counts[slot] = counts[i] ?? 0;
     }
-    this.#offset += median;
   }
 
   // True when the key stored at `slot` is exactly `bytes`.
