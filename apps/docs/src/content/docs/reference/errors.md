@@ -3,36 +3,42 @@ title: Errors
 description: Every error class distillate exports, when it is thrown, and what to do about it.
 ---
 
-distillate exports thirteen error classes. Each has a `name` that discriminates it
+distillate exports seventeen error classes. Each has a `name` that discriminates it
 from a plain `Error`, so you can narrow with `instanceof` or switch on `name`.
 
-They fall into five groups by cause: bad parameters, an operation two filters
-cannot support, a build that could not finish, a filter with no room left, and
-a frame that will not decode.
+They fall into five groups by cause: bad parameters, an operation two structures
+cannot support, a build that could not finish, a structure with no room left,
+and a frame that will not decode.
 
-| Error                                                                                    | Thrown by                                 | Cause                                     |
-| ---------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------- |
-| [`ParamError`](/api/bloom/classes/paramerror/)                                           | constructors, `create`, sizing            | A parameter is out of range               |
-| [`BloomParamMismatchError`](/api/bloom/classes/bloomparammismatcherror/)                 | `BloomFilter.union`                       | Filters disagree on geometry              |
-| [`BlockedBloomParamMismatchError`](/api/blocked/classes/blockedbloomparammismatcherror/) | `BlockedBloomFilter.union`                | Filters disagree on geometry              |
-| [`ScalableParamMismatchError`](/api/scalable/classes/scalableparammismatcherror/)        | `ScalableBloomFilter.union`               | Filters disagree on settings or stages    |
-| [`BinaryFuseBuildError`](/api/fuse/classes/binaryfusebuilderror/)                        | `BinaryFuse8.from`, `BinaryFuse16.from`   | The peel stalled on every seed            |
-| [`CuckooFullError`](/api/cuckoo/classes/cuckoofullerror/)                                | `CuckooFilter.add`                        | No room for the key after 500 moves       |
-| [`SerializationError`](/api/bloom/classes/serializationerror/)                           | `fromJSON`, and the base of the six below | The envelope is malformed                 |
-| [`TruncatedError`](/api/bloom/classes/truncatederror/)                                   | `fromBytes`                               | The frame is short                        |
-| [`BadMagicError`](/api/bloom/classes/badmagicerror/)                                     | `fromBytes`                               | Not a DSTL frame                          |
-| [`UnknownVersionError`](/api/bloom/classes/unknownversionerror/)                         | `fromBytes`, `fromJSON`                   | A format version this build cannot read   |
-| [`UnknownHashVariantError`](/api/bloom/classes/unknownhashvarianterror/)                 | `fromBytes`                               | A hash scheme this build cannot reproduce |
-| [`ReservedBitsError`](/api/bloom/classes/reservedbitserror/)                             | `fromBytes`                               | A newer frame sets reserved header bits   |
-| [`ChecksumError`](/api/bloom/classes/checksumerror/)                                     | `fromBytes`                               | CRC32 does not match                      |
+| Error                                                                                    | Thrown by                                 | Cause                                                 |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------- |
+| [`ParamError`](/api/bloom/classes/paramerror/)                                           | constructors, `create`, sizing            | A parameter is out of range                           |
+| [`BloomParamMismatchError`](/api/bloom/classes/bloomparammismatcherror/)                 | `BloomFilter.union`                       | Filters disagree on geometry                          |
+| [`BlockedBloomParamMismatchError`](/api/blocked/classes/blockedbloomparammismatcherror/) | `BlockedBloomFilter.union`                | Filters disagree on geometry                          |
+| [`ScalableParamMismatchError`](/api/scalable/classes/scalableparammismatcherror/)        | `ScalableBloomFilter.union`               | Filters disagree on settings or stages                |
+| [`CountMinParamMismatchError`](/api/countmin/classes/countminparammismatcherror/)        | `CountMinSketch.union`                    | Sketches disagree on geometry or seed                 |
+| [`TopKParamMismatchError`](/api/topk/classes/topkparammismatcherror/)                    | `TopK.union`                              | Sketches disagree on capacity or seed                 |
+| [`BinaryFuseBuildError`](/api/fuse/classes/binaryfusebuilderror/)                        | `BinaryFuse8.from`, `BinaryFuse16.from`   | The peel stalled on every seed                        |
+| [`CuckooFullError`](/api/cuckoo/classes/cuckoofullerror/)                                | `CuckooFilter.add`                        | No room for the key after 500 moves                   |
+| [`CountMinOverflowError`](/api/countmin/classes/countminoverflowerror/)                  | `CountMinSketch.add`, `union`             | A counter would pass `2^32 - 1`                       |
+| [`TopKOverflowError`](/api/topk/classes/topkoverflowerror/)                              | `TopK.add`, `union`                       | A count would pass `2^32 - 1` or the total `2^53 - 1` |
+| [`SerializationError`](/api/bloom/classes/serializationerror/)                           | `fromJSON`, and the base of the six below | The envelope is malformed                             |
+| [`TruncatedError`](/api/bloom/classes/truncatederror/)                                   | `fromBytes`                               | The frame is short                                    |
+| [`BadMagicError`](/api/bloom/classes/badmagicerror/)                                     | `fromBytes`                               | Not a DSTL frame                                      |
+| [`UnknownVersionError`](/api/bloom/classes/unknownversionerror/)                         | `fromBytes`, `fromJSON`                   | A format version this build cannot read               |
+| [`UnknownHashVariantError`](/api/bloom/classes/unknownhashvarianterror/)                 | `fromBytes`                               | A hash scheme this build cannot reproduce             |
+| [`ReservedBitsError`](/api/bloom/classes/reservedbitserror/)                             | `fromBytes`                               | A newer frame sets reserved header bits               |
+| [`ChecksumError`](/api/bloom/classes/checksumerror/)                                     | `fromBytes`                               | CRC32 does not match                                  |
 
-The seven serialization errors are exported from all six structure subpaths
+The seven serialization errors are exported from all eight structure subpaths
 (`distillate/bloom`, `distillate/blocked`, `distillate/fuse`, `distillate/hll`,
-`distillate/scalable` and `distillate/cuckoo`); `distillate/frame` exports the
+`distillate/scalable`, `distillate/cuckoo`, `distillate/countmin` and
+`distillate/topk`); `distillate/frame` exports the
 six a frame read can throw (all but `UnknownHashVariantError`). The rest are
 exported from the subpath of the structure that throws them, except
 `ParamError`, which is exported from `distillate/bloom`, `distillate/blocked`,
-`distillate/hll`, `distillate/scalable` and `distillate/cuckoo`.
+`distillate/hll`, `distillate/scalable`, `distillate/cuckoo`,
+`distillate/countmin` and `distillate/topk`.
 
 ## Parameter errors
 
@@ -71,7 +77,7 @@ than a different number. See [sizing and tuning](/guides/sizing/).
 
 ## Merge errors
 
-Each filter's `union` requires the two filters to be built alike. None of them
+Each structure's `union` requires the two sides to be built alike. None of them
 silently reshapes.
 
 ### `BloomParamMismatchError`
@@ -159,6 +165,60 @@ try {
 error instanceof ScalableParamMismatchError; // true
 ```
 
+### `CountMinParamMismatchError`
+
+[API reference](/api/countmin/classes/countminparammismatcherror/).
+
+**Thrown when** `CountMinSketch.union` is given a sketch whose `width`,
+`depth`, or `seed` differs from the receiver's.
+
+**What to do:** build both sides with the same `epsilon`, `delta` and seed.
+The geometry is a pure function of `epsilon` and `delta`, so equal arguments to
+`create` are enough.
+
+```ts
+import {
+  CountMinParamMismatchError,
+  CountMinSketch,
+} from "distillate/countmin";
+
+const a = CountMinSketch.create(0.01, 0.01);
+const b = CountMinSketch.create(0.001, 0.01); // wider rows
+
+let error: unknown;
+try {
+  a.union(b);
+} catch (e) {
+  error = e;
+}
+error instanceof CountMinParamMismatchError; // true
+```
+
+### `TopKParamMismatchError`
+
+[API reference](/api/topk/classes/topkparammismatcherror/).
+
+**Thrown when** `TopK.union` is given a sketch whose `capacity` or `seed`
+differs from the receiver's. The message names both values.
+
+**What to do:** build both sides with the same `epsilon` and seed. `capacity`
+is a pure function of `epsilon`, so equal arguments to `create` are enough.
+
+```ts
+import { TopK, TopKParamMismatchError } from "distillate/topk";
+
+const a = TopK.create(0.01);
+const b = TopK.create(0.001); // a larger map
+
+let error: unknown;
+try {
+  a.union(b);
+} catch (e) {
+  error = e;
+}
+error instanceof TopKParamMismatchError; // true
+```
+
 ## Build errors
 
 ### `BinaryFuseBuildError`
@@ -216,6 +276,62 @@ for (let i = 0; i < 20 && error === undefined; i++) {
   }
 }
 error instanceof CuckooFullError; // true
+```
+
+### `CountMinOverflowError`
+
+[API reference](/api/countmin/classes/countminoverflowerror/).
+
+**Thrown when** an `add` or a `union` would carry a counter past `2^32 - 1`,
+or the total past `2^53 - 1`. The sketch is left exactly as it was: a counter
+that wrapped would read as an underestimate, the one outcome Count-Min rules
+out.
+
+**What to do:** a counter that full means a key has been counted four billion
+times in one cell. Split the stream across sketches by time window, or scale
+the counts you add down before recording them.
+
+```ts
+import { CountMinOverflowError, CountMinSketch } from "distillate/countmin";
+
+const s = new CountMinSketch({ width: 8, depth: 2 });
+s.add("a", 0xffffffff);
+
+let error: unknown;
+try {
+  s.add("a");
+} catch (e) {
+  error = e;
+}
+error instanceof CountMinOverflowError; // true
+```
+
+### `TopKOverflowError`
+
+[API reference](/api/topk/classes/topkoverflowerror/).
+
+**Thrown when** an `add` or a `union` would carry a key's stored count past
+`2^32 - 1`, or the total past `2^53 - 1`. The sketch is left exactly as it
+was, with no entry claimed for the refused key.
+
+**What to do:** as for `CountMinOverflowError`, split the stream by time
+window or scale the counts down. A stored count that large is a single key
+counted four billion times.
+
+```ts
+import { TopK, TopKOverflowError } from "distillate/topk";
+
+const s = new TopK({ capacity: 4 });
+s.add("a", 0xffffffff);
+
+let error: unknown;
+try {
+  s.add("a");
+} catch (e) {
+  error = e;
+}
+error instanceof TopKOverflowError; // true
+s.count("a"); // 4294967295
 ```
 
 ## Serialization errors

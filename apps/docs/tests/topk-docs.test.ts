@@ -94,3 +94,28 @@ test("the Count-Min guide points to Top-K rather than calling it unshipped", () 
   expect(pick).toContain("/guides/topk/");
   expect(pick).not.toContain("not shipped");
 });
+
+const errors = (): string => read("../src/content/docs/reference/errors.md");
+
+// Count-Min's errors never reached this page either, and adding only Top-K's
+// would leave its counts wrong in a new way, so both sketches are pinned.
+test("the errors reference documents the Count-Min and Top-K errors", () => {
+  const page = errors();
+  for (const [subpath, name] of [
+    ["countmin", "CountMinParamMismatchError"],
+    ["countmin", "CountMinOverflowError"],
+    ["topk", "TopKParamMismatchError"],
+    ["topk", "TopKOverflowError"],
+  ]) {
+    expect(page).toContain(
+      `[\`${name}\`](/api/${subpath}/classes/${name.toLowerCase()}/)`,
+    );
+  }
+
+  const merge = section(page, "Merge errors");
+  expect(merge).toContain("### `CountMinParamMismatchError`");
+  expect(merge).toContain("### `TopKParamMismatchError`");
+  const capacity = section(page, "Capacity errors");
+  expect(capacity).toContain("### `CountMinOverflowError`");
+  expect(capacity).toContain("### `TopKOverflowError`");
+});
