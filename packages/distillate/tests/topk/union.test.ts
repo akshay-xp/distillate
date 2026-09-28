@@ -1,6 +1,8 @@
 import { expect, test } from "vitest";
 
 import { TopK, TopKParamMismatchError } from "../../src/topk/topk.js";
+import { truthOf, zipfStream } from "../helpers/frequency.js";
+import { expectOneSided } from "../helpers/topk.js";
 
 // A differing seed matters as much as a differing capacity: the same key would
 // hash elsewhere, and the error naming both values says which side to rebuild.
@@ -44,3 +46,38 @@ test("a union with an empty sketch is the other side", () => {
   expect(a.union(empty).toBytes()).toEqual(a.toBytes());
   expect(empty.union(a).toBytes()).toEqual(a.toBytes());
 });
+
+const heavy = zipfStream(71, 2_000, 20_000, 1.1);
+const flatter = zipfStream(72, 2_000, 20_000, 0.8);
+const small = ["key:0", "key:0", "key:5"];
+
+const fed = (stream: string[]): TopK => {
+  const s = new TopK({ capacity: 64 });
+  for (const key of stream) s.add(key);
+  return s;
+};
+
+test.each<[string, string[], string[]]>([
+  ["both sides", heavy, flatter],
+  ["the left side only", heavy, small],
+  ["the right side only", small, flatter],
+])(
+  "a union after a purge on %s holds the guarantee in either order",
+  (_, streamA, streamB) => {
+    const a = fed(streamA);
+    const b = fed(streamB);
+    for (const [s, stream] of [
+      [a, streamA],
+      [b, streamB],
+    ] as const) {
+      if (stream !== small) expect(s.error()).toBeGreaterThan(0);
+    }
+    const truth = truthOf([...streamA, ...streamB]);
+
+    for (const u of [a.union(b), b.union(a)]) {
+      expectOneSided(u, truth);
+      expect(u.total).toBe(a.total + b.total);
+      expect(u.error()).toBeGreaterThanOrEqual(a.error() + b.error());
+    }
+  },
+);
