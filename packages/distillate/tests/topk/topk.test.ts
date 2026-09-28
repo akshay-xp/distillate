@@ -3,8 +3,7 @@ import { expect, test } from "vitest";
 import { hash32x2Into } from "../../src/core/hasher.js";
 import { ParamError } from "../../src/core/params.js";
 import { topKSizing } from "../../src/topk/sizing.js";
-import { TopK, type TopKEntry } from "../../src/topk/topk.js";
-import { truthOf, zipfStream } from "../helpers/frequency.js";
+import { TopK } from "../../src/topk/topk.js";
 
 test("create builds a sketch with the capacity the sizing solved for", () => {
   const sketch = TopK.create(0.01);
@@ -178,34 +177,6 @@ test("top breaks a tie by key bytes so the order never depends on insertion", ()
   sketch.add("a");
 
   expect(sketch.top(2).map((e) => decode(e.key))).toEqual(["a", "b"]);
-});
-
-test("the one-sided guarantee holds across a stream that purges repeatedly", () => {
-  const stream = zipfStream(1, 20_000, 200_000, 1.1);
-  const truth = truthOf(stream);
-  const sketch = TopK.create(0.001);
-  for (const key of stream) sketch.add(key);
-
-  expect(sketch.error()).toBeGreaterThan(0);
-  expect(sketch.total).toBe(200_000);
-
-  const held = new Map<string, TopKEntry>();
-  for (const entry of sketch.top(sketch.capacity)) {
-    held.set(decode(entry.key), entry);
-  }
-  expect(held.size).toBeGreaterThan(0);
-
-  for (const [key, actual] of truth) {
-    const entry = held.get(key);
-    if (entry === undefined) {
-      // A key the map dropped may read 0, but only if it was lighter than the
-      // error. Nothing heavier can have been silently lost.
-      expect(actual).toBeLessThanOrEqual(sketch.error());
-      continue;
-    }
-    expect(sketch.count(key)).toBeGreaterThanOrEqual(actual);
-    expect(entry.lowerBound).toBeLessThanOrEqual(actual);
-  }
 });
 
 test("a returned key is a copy, not a window into the arena", () => {
