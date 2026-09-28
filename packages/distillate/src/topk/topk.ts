@@ -2,12 +2,25 @@ import { type BytesLike, normalize } from "../core/bytes.js";
 import { hash32x2Into } from "../core/hasher.js";
 import { assertPositiveInt, assertUint32, ParamError } from "../core/params.js";
 import {
+  FORMAT_VERSION,
+  HASH_MURMUR128,
+  writeFrame,
+} from "../core/serialize.js";
+import {
   TOPK_MAX_CAPACITY,
   TOPK_MIN_CAPACITY,
   topKLoadLimit,
   topKPurgeWidth,
   topKSizing,
 } from "./sizing.js";
+
+const TYPE = 9;
+
+/**
+ * Params occupy 28 bytes and the block is padded to 32, so the payload starts
+ * at frame offset 48 and its counts and lengths can be mapped as `u32`.
+ */
+const PARAMS_SIZE = 32;
 
 /**
  * Thrown when an `add` would carry a stored count past `2^32 - 1`. Counts are
@@ -323,24 +336,66 @@ export class TopK {
    */
   top(k: number): TopKEntry[] {
     assertPositiveInt(k, "k");
+    return this.#canonicalSlots()
+      .slice(0, k)
+      .map((slot) => {
+        const at = this.#keyOffsets[slot] ?? 0;
+        return {
+          key: this.#arena.slice(at, at + (this.#keyLengths[slot] ?? 0)),
+          count: (this.#counts[slot] ?? 0) + this.#offset,
+          lowerBound: this.#counts[slot] ?? 0,
+        };
+      });
+  }
+
+  /**
+   * Serializes the sketch to a portable little-endian byte layout.
+   *
+   * Entries are written in the order `top` returns them, so the bytes depend
+   * only on what the map holds and never on the order it was filled in.
+   *
+   * @returns The serialized sketch.
+   */
+  toBytes(): Uint8Array {
+    const slots = this.#canonicalSlots();
+    const tableEnd = PARAMS_SIZE + 8 * slots.length;
+    return writeFrame(
+      { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
+      PARAMS_SIZE,
+      8 * slots.length + this.#arenaLen,
+      (body, view) => {
+        view.setUint32(0, this.#capacity, true);
+        view.setUint32(4, slots.length, true);
+        view.setFloat64(8, this.#offset, true);
+        view.setFloat64(16, this.#total, true);
+        view.setUint32(24, this.#seed, true);
+        let keyAt = tableEnd;
+        slots.forEach((slot, i) => {
+          const at = this.#keyOffsets[slot] ?? 0;
+          const len = this.#keyLengths[slot] ?? 0;
+          view.setUint32(PARAMS_SIZE + 4 * i, this.#counts[slot] ?? 0, true);
+          view.setUint32(PARAMS_SIZE + 4 * (slots.length + i), len, true);
+          body.set(this.#arena.subarray(at, at + len), keyAt);
+          keyAt += len;
+        });
+      },
+    );
+  }
+
+  /**
+   * Live slots heaviest first, ties broken on the key bytes, so the order
+   * depends on what the map holds rather than on the order it was filled.
+   * Frame type 9 writes entries in this order, which is what lets equals be
+   * byte equality.
+   */
+  #canonicalSlots(): number[] {
     const slots: number[] = [];
     for (let slot = 0; slot < this.#capacity; slot++) {
       if ((this.#counts[slot] ?? 0) !== 0) slots.push(slot);
     }
-    // Ties break on the key bytes, so the order depends on what the map holds
-    // rather than on the order it was filled. Frame type 9 writes entries in
-    // this same order, which is what lets equals be byte equality.
-    slots.sort((a, b) => {
+    return slots.sort((a, b) => {
       const byCount = (this.#counts[b] ?? 0) - (this.#counts[a] ?? 0);
       return byCount !== 0 ? byCount : this.#compareKeys(a, b);
-    });
-    return slots.slice(0, k).map((slot) => {
-      const at = this.#keyOffsets[slot] ?? 0;
-      return {
-        key: this.#arena.slice(at, at + (this.#keyLengths[slot] ?? 0)),
-        count: (this.#counts[slot] ?? 0) + this.#offset,
-        lowerBound: this.#counts[slot] ?? 0,
-      };
     });
   }
 
