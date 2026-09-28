@@ -9,6 +9,16 @@ import {
   topKSizing,
 } from "./sizing.js";
 
+/**
+ * Thrown when an `add` would carry a stored count past `2^32 - 1`. Counts are
+ * `u32`, so a wrapped one would read back below the truth, the one outcome
+ * this structure rules out. The sketch is left exactly as it was.
+ */
+export class TopKOverflowError extends RangeError {
+  /** Discriminates this error from other `Error`s. */
+  override readonly name = "TopKOverflowError";
+}
+
 /** Options accepted alongside a sizing solve: everything but the geometry. */
 export type TopKOptions = Omit<TopKParams, "capacity">;
 
@@ -266,11 +276,18 @@ export class TopK {
     assertPositiveInt(count, "count");
     const bytes = normalize(key);
     const slot = this.#slotFor(bytes);
-    if ((this.#counts[slot] ?? 0) === 0) {
+    const stored = this.#counts[slot] ?? 0;
+    // Checked before the key is stored, so a refused add leaves no entry.
+    if (stored + count > 0xffffffff) {
+      throw new TopKOverflowError(
+        `adding ${String(count)} would carry a stored count past ${String(0xffffffff)}`,
+      );
+    }
+    if (stored === 0) {
       this.#storeKey(slot, bytes);
       this.#entries++;
     }
-    this.#counts[slot] = (this.#counts[slot] ?? 0) + count;
+    this.#counts[slot] = stored + count;
     this.#total += count;
     if (this.#entries > this.#loadLimit) this.#purge();
   }
