@@ -562,3 +562,19 @@ test("growing and inserting feed the heaviest keys through the same seam", () =>
   pg.insert("new-key");
   expect(pg.heaviest(10).total).toBe(before + 1001);
 });
+
+// Past a u32 either sketch would throw from inside the library, and one could
+// refuse after the other had already counted. The page refuses first instead.
+test("a record count past 1,000,000 is refused and changes neither sketch", () => {
+  const pg = built(1000);
+  const before = { cm: pg.countMin().total, tk: pg.heaviest(10).total };
+
+  const result = pg.record("key-5", 2 ** 32);
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.message).toContain("1,000,000");
+  expect(pg.countMin().total).toBe(before.cm);
+  expect(pg.heaviest(10).total).toBe(before.tk);
+
+  expect(pg.record("key-5", 1_000_000).ok).toBe(true);
+});
