@@ -1,6 +1,11 @@
 import { expect, test } from "vitest";
 
-import { TopK, TopKParamMismatchError } from "../../src/topk/topk.js";
+import { crc32 } from "../../src/core/crc32.js";
+import {
+  TopK,
+  TopKOverflowError,
+  TopKParamMismatchError,
+} from "../../src/topk/topk.js";
 import { truthOf, zipfStream } from "../helpers/frequency.js";
 import { expectOneSided } from "../helpers/topk.js";
 
@@ -81,3 +86,40 @@ test.each<[string, string[], string[]]>([
     }
   },
 );
+
+// Without the check a Uint32Array write wraps: 2^32 stores as 0, and the
+// merged key would read as absent, below its true count.
+test("a union that would wrap a stored count is refused", () => {
+  const a = new TopK({ capacity: 16 });
+  a.add("k", 2 ** 32 - 1);
+  const b = new TopK({ capacity: 16 });
+  b.add("k", 1);
+  const beforeA = a.toBytes();
+  const beforeB = b.toBytes();
+
+  expect(() => a.union(b)).toThrow(TopKOverflowError);
+  expect(a.toBytes()).toEqual(beforeA);
+  expect(b.toBytes()).toEqual(beforeB);
+});
+
+// Reaching the safe-integer edge by adding takes 2^21 maximal adds, so the
+// total is written into a frame directly instead.
+const withTotal = (sketch: TopK, total: number): TopK => {
+  const frame = sketch.toBytes();
+  const view = new DataView(frame.buffer);
+  view.setFloat64(32, total, true);
+  view.setUint32(
+    frame.length - 4,
+    crc32(frame.subarray(0, frame.length - 4)),
+    true,
+  );
+  return TopK.fromBytes(frame);
+};
+
+test("a union that would carry the total past the safe integer range is refused", () => {
+  const a = withTotal(new TopK({ capacity: 16 }), Number.MAX_SAFE_INTEGER - 5);
+  const b = new TopK({ capacity: 16 });
+  b.add("k", 6);
+
+  expect(() => a.union(b)).toThrow(TopKOverflowError);
+});
