@@ -1,7 +1,13 @@
 import { type BytesLike, normalize } from "../core/bytes.js";
 import { hash32x2Into } from "../core/hasher.js";
 import { assertPositiveInt, assertUint32, ParamError } from "../core/params.js";
-import { TOPK_MAX_CAPACITY, TOPK_MIN_CAPACITY, topKSizing } from "./sizing.js";
+import {
+  TOPK_MAX_CAPACITY,
+  TOPK_MIN_CAPACITY,
+  topKLoadLimit,
+  topKPurgeWidth,
+  topKSizing,
+} from "./sizing.js";
 
 /** Options accepted alongside a sizing solve: everything but the geometry. */
 export type TopKOptions = Omit<TopKParams, "capacity">;
@@ -111,7 +117,7 @@ export class TopK {
       );
     }
     this.#capacity = capacity;
-    this.#loadLimit = Math.floor(0.75 * capacity);
+    this.#loadLimit = topKLoadLimit(capacity);
     this.#seed = seed;
     this.#counts = new Uint32Array(capacity);
     this.#keyOffsets = new Uint32Array(capacity);
@@ -130,14 +136,14 @@ export class TopK {
   }
 
   /**
-   * Error factor the geometry implements, `1 / loadLimit`.
+   * Error factor the geometry implements, `1 / topKPurgeWidth(capacity)`.
    *
    * Sizing rounds the capacity up to a power of two, so this is at or below the
    * `epsilon` passed to {@link TopK.create}: the sketch reports what it
    * delivers rather than what was asked for.
    */
   get epsilon(): number {
-    return 1 / this.#loadLimit;
+    return 1 / topKPurgeWidth(this.#capacity);
   }
 
   /** Sum of every count recorded, whatever the map has since purged. */

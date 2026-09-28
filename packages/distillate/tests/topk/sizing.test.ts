@@ -4,14 +4,16 @@ import { ParamError } from "../../src/core/params.js";
 import { topKSizing } from "../../src/topk/sizing.js";
 
 test("topKSizing(0.01) pins exact capacity", () => {
-  expect(topKSizing(0.01)).toEqual({ capacity: 256 });
+  expect(topKSizing(0.01)).toEqual({ capacity: 512 });
 });
 
-test("topKSizing returns a power of two whose load limit meets the target", () => {
+test("topKSizing returns a power of two whose purge width meets the target", () => {
   for (const epsilon of [0.5, 0.1, 0.05, 0.01, 0.001, 0.0001]) {
     const { capacity } = topKSizing(epsilon);
     expect(Number.isInteger(Math.log2(capacity))).toBe(true);
-    expect(1 / Math.floor(0.75 * capacity)).toBeLessThanOrEqual(epsilon);
+    expect(1 / ((Math.floor(0.75 * capacity) + 2) >> 1)).toBeLessThanOrEqual(
+      epsilon,
+    );
   }
 });
 
