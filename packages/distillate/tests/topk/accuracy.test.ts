@@ -71,3 +71,59 @@ test.each<[string, () => string[]]>([
   expect(heavy.length).toBeGreaterThan(0);
   for (const [key] of heavy) expect(held.has(key)).toBe(true);
 });
+
+// Built to make each purge charge as few entries as possible: just under half
+// the map is singletons, so the upper median lands on the heavy half and only
+// those entries pay it in full. Fresh keys each round, so every round ends in
+// a purge that empties the map. This is the stream that separates the bound a
+// purge can prove from the one the load limit suggests; natural streams sit
+// under both.
+function feedAdversary(sketch: TopK, events: number): void {
+  const load = Math.floor(0.75 * sketch.capacity);
+  const singles = (load + 1) >> 1;
+  const heavies = load + 1 - singles;
+  for (let round = 0; sketch.total < events; round++) {
+    for (let i = 0; i < heavies; i++)
+      sketch.add(`h${String(round)}:${String(i)}`, 100);
+    for (let i = 0; i < singles; i++)
+      sketch.add(`s${String(round)}:${String(i)}`);
+  }
+}
+
+const EPSILONS = [0.01, 0.001, 0.0001];
+const SHAPES: [string, (sketch: TopK) => void][] = [
+  [
+    "Zipf",
+    (s) => {
+      for (const key of zipfStream(41, 100_000, 400_000, 1.1)) s.add(key);
+    },
+  ],
+  [
+    "uniform",
+    (s) => {
+      for (const key of uniformStream(42, 100_000, 400_000)) s.add(key);
+    },
+  ],
+  [
+    "adversarial",
+    (s) => {
+      feedAdversary(s, 400_000);
+    },
+  ],
+];
+
+test.each(
+  EPSILONS.flatMap((epsilon) =>
+    SHAPES.map(([name, feed]) => [epsilon, name, feed] as const),
+  ),
+)(
+  "the offset stays within epsilon %s of the total on %s input",
+  (epsilon, _, feed) => {
+    const sketch = TopK.create(epsilon);
+    feed(sketch);
+
+    expect(sketch.error()).toBeGreaterThan(0);
+    expect(sketch.error()).toBeLessThanOrEqual(epsilon * sketch.total);
+    expect(sketch.error()).toBeLessThanOrEqual(sketch.epsilon * sketch.total);
+  },
+);
