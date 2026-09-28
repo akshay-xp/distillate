@@ -42,6 +42,15 @@ function assertCount(value: number, label: string): void {
   }
 }
 
+/** Lexicographic order of two byte strings, a proper prefix first. */
+function compareBytes(a: Uint8Array, b: Uint8Array): number {
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    const diff = (a[i] ?? 0) - (b[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return a.length - b.length;
+}
+
 /**
  * Thrown when an `add` would carry a stored count past `2^32 - 1`. Counts are
  * `u32`, so a wrapped one would read back below the truth, the one outcome
@@ -195,13 +204,38 @@ export class TopK {
       }
       throw err;
     }
+    // Only the canonical order is accepted, so every frame that loads writes
+    // back byte for byte, and no two frames decode to the same sketch.
     let keyAt = tableEnd;
+    let prevCount = Infinity;
+    let prevKey = new Uint8Array(0);
     for (let i = 0; i < entries; i++) {
       const count = view.getUint32(PARAMS_SIZE + 4 * i, true);
       const len = view.getUint32(PARAMS_SIZE + 4 * (entries + i), true);
       const key = body.subarray(keyAt, keyAt + len);
       keyAt += len;
+      // A stored 0 is how the map marks an empty slot.
+      if (count === 0) {
+        throw new SerializationError(`topk: entry ${String(i)} has count 0`);
+      }
+      if (
+        count > prevCount ||
+        (count === prevCount && compareBytes(prevKey, key) >= 0)
+      ) {
+        throw new SerializationError(
+          `topk: entry ${String(i)} is out of canonical order`,
+        );
+      }
+      prevCount = count;
+      prevKey = key;
       const slot = sketch.#slotFor(key);
+      // Reached only by a key repeated at a different count, which the order
+      // check lets through.
+      if ((sketch.#counts[slot] ?? 0) !== 0) {
+        throw new SerializationError(
+          `topk: entry ${String(i)} repeats a key already held`,
+        );
+      }
       sketch.#storeKey(slot, key);
       sketch.#counts[slot] = count;
     }
@@ -492,14 +526,12 @@ export class TopK {
 
   // Lexicographic order of two slots' stored key bytes.
   #compareKeys(a: number, b: number): number {
-    const aAt = this.#keyOffsets[a] ?? 0;
-    const bAt = this.#keyOffsets[b] ?? 0;
-    const aLen = this.#keyLengths[a] ?? 0;
-    const bLen = this.#keyLengths[b] ?? 0;
-    for (let i = 0; i < Math.min(aLen, bLen); i++) {
-      const diff = (this.#arena[aAt + i] ?? 0) - (this.#arena[bAt + i] ?? 0);
-      if (diff !== 0) return diff;
-    }
-    return aLen - bLen;
+    return compareBytes(this.#keyAt(a), this.#keyAt(b));
+  }
+
+  // The key stored at `slot`, as a view into the arena.
+  #keyAt(slot: number): Uint8Array {
+    const at = this.#keyOffsets[slot] ?? 0;
+    return this.#arena.subarray(at, at + (this.#keyLengths[slot] ?? 0));
   }
 }
