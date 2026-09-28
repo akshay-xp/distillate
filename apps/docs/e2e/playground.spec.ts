@@ -428,3 +428,66 @@ test("the heaviest keys panel shows each key's bracket after a build", async ({
   }
   expect(errors).toEqual([]);
 });
+
+async function recordKey(
+  page: Page,
+  key: string,
+  count: string,
+): Promise<void> {
+  await page.locator("#pg-count-key").fill(key);
+  await page.locator("#pg-count-n").fill(count);
+  await page.getByRole("button", { name: "Record" }).click();
+}
+
+test("recording more of a key moves it to the top of the heaviest keys", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  const first = page
+    .locator("[data-pg-topk] tbody tr")
+    .first()
+    .locator("td")
+    .first();
+  await recordKey(page, "key-7", "10");
+  await expect(first).toHaveText("key-7");
+  await recordKey(page, "key-9", "20");
+  await expect(first).toHaveText("key-9");
+  expect(errors).toEqual([]);
+});
+
+// The #242 bug class: growing moved the filters but left a sketch's total
+// behind. Both sketches read the same seam, so their totals must agree.
+test("growing the key set refreshes the heaviest keys rather than leaving them stale", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  const total = page.locator("[data-tk='total']");
+  await expect(total).not.toBeEmpty();
+  const before = await total.textContent();
+
+  await page.locator("#pg-grow").fill("5000");
+  await page.getByRole("button", { name: "Grow" }).click();
+
+  await expect(total).not.toHaveText(before ?? "");
+  await expect(total).toHaveText(
+    (await page.locator("[data-cm='total']").textContent()) ?? "",
+  );
+  expect(errors).toEqual([]);
+});
+
+test("a record count the sketches could not hold is refused in the shared status", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  await recordKey(page, "key-5", "5000000000");
+
+  // One error surface for the whole page, not a second one per panel.
+  await expect(page.locator("[data-pg-status]")).toContainText("1,000,000");
+  expect(errors).toEqual([]);
+});
