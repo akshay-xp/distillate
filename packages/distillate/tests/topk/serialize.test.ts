@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 
 import { crc32 } from "../../src/core/crc32.js";
 import {
+  bytesEqual,
   FORMAT_VERSION,
   HASH_MURMUR128,
   SerializationError,
@@ -417,4 +418,48 @@ test("the forged generator reaches both a working sketch and each rejection", ()
     "TruncatedError",
     "ok",
   ]);
+});
+
+test("equals is exactly byte equality of the frame (property)", () => {
+  // No bound on the generator, unlike Cuckoo's: Top-K never refuses a key, it
+  // purges, so the only limit is a stored count under 2^32, which 40 single
+  // adds cannot approach. Capacity 4 (load limit 3) over six keys makes
+  // purges common. A self-union doubles every count and the offset, so it is
+  // unequal unless the stream was empty.
+  const keys = fc.array(fc.constantFrom("a", "b", "c", "d", "e", "f"), {
+    maxLength: 40,
+  });
+  const fed = (stream: string[]): TopK => {
+    const s = new TopK({ capacity: 4 });
+    for (const key of stream) s.add(key);
+    return s;
+  };
+  const seen = new Set<boolean>();
+  fc.assert(
+    fc.property(
+      keys,
+      keys,
+      fc.constantFrom("independent", "restored", "self-union"),
+      (ka, kb, pair) => {
+        const a = fed(ka);
+        const b =
+          pair === "restored"
+            ? TopK.fromBytes(a.toBytes())
+            : pair === "self-union"
+              ? a.union(a)
+              : fed(kb);
+        const same = bytesEqual(a.toBytes(), b.toBytes());
+        seen.add(same);
+        return a.equals(b) === same;
+      },
+    ),
+  );
+
+  expect([...seen].sort()).toEqual([false, true]);
+});
+
+test("sketches at different geometries are unequal rather than throwing", () => {
+  expect(new TopK({ capacity: 4 }).equals(new TopK({ capacity: 8 }))).toBe(
+    false,
+  );
 });
