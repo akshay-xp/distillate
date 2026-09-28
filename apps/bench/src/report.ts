@@ -21,6 +21,8 @@ import { CUCKOO_KEY_COUNTS, cuckooRows } from "./cuckoo.js";
 import type { CuckooRow } from "./cuckoo.js";
 import { COUNTMIN_KEY_COUNTS, countMinRows } from "./countmin.js";
 import type { CountMinRow } from "./countmin.js";
+import { TOPK_EVENT_COUNTS, topKRows } from "./topk.js";
+import type { TopKRow } from "./topk.js";
 import type { ComparisonRow } from "./compare.js";
 import { TARGET_FPR } from "./adapters.js";
 import { envBanner } from "./harness.js";
@@ -108,6 +110,17 @@ export function countMinTable(rows: CountMinRow[]): string {
   return [header, ...body].join("\n");
 }
 
+export function topKTable(rows: TopKRow[]): string {
+  const header =
+    "| Sketch | events | holds | size | precision | recall | under | add |\n" +
+    "| --- | --- | --- | --- | --- | --- | --- | --- |";
+  const body = rows.map(
+    (r) =>
+      `| ${r.name} | ${capacityLabel(r.events)} | ${r.holds} | ${String(r.bytes)} B | ${r.precision.toFixed(3)} | ${r.recall.toFixed(3)} | ${String(r.underestimates)} | ${ops(r.addOpsPerSec)} |`,
+  );
+  return [header, ...body].join("\n");
+}
+
 export interface ResultsOptions {
   banner: string;
   version: string;
@@ -120,6 +133,7 @@ export interface ResultsOptions {
   scalableTable?: string;
   cuckooTable?: string;
   countMinTable?: string;
+  topKTable?: string;
 }
 
 function cardinalitySection(table: string): string[] {
@@ -199,6 +213,28 @@ export function countMinSection(table: string): string[] {
   ];
 }
 
+export function topKSection(table: string): string[] {
+  return [
+    "## Top-K",
+    "",
+    "Both sketches target an error of 0.001 of the events recorded, and both are asked for the top k = 100.",
+    "The two are built differently, and that difference is the comparison: `bloom-filters` takes `k` at construction and keeps a Count-Min sketch plus a sorted list of that many candidates, where distillate keeps a Misra-Gries map sized by the error alone and takes `k` per query.",
+    "So the incumbent is given the same `k` that distillate is queried with, rather than a smaller one that would make it look worse.",
+    "",
+    "`bloom-filters`' `TopK(k, errorRate, accuracy)` hands `accuracy` straight to its Count-Min sketch, and inherits the inversion in the Count-Min section above: rows are sized as `Math.ceil(Math.log(1 / accuracy))`, a formula that wants the failure probability.",
+    "Measured: `new TopK(10, 0.001)` gives 2,719 columns by **one** row. The rows below pass `0.001` as `accuracy` to give it the seven rows the target calls for.",
+    "",
+    "The headline is precision and recall of the returned set against the true top k, on a Zipf-skewed stream over 10,000 distinct keys.",
+    "Keys tied at the k-th true count are interchangeable: every key above it must come back, and any tie may fill the places left, so an arbitrary but correct tie-break scores 1.",
+    "`under` counts returned keys whose estimate is below the true count, which distillate's sketch rules out; it is measured rather than assumed.",
+    "",
+    "`holds` is what each sketch was read back to hold. The sizes are not the same encoding: distillate writes a binary frame, holding every key its map has kept, and `bloom-filters` writes JSON.",
+    "",
+    table,
+    "",
+  ];
+}
+
 export function renderResults(opts: ResultsOptions): string {
   return [
     "# distillate-bench results",
@@ -218,6 +254,7 @@ export function renderResults(opts: ResultsOptions): string {
     ...(opts.scalableTable ? scalableSection(opts.scalableTable) : []),
     ...(opts.cuckooTable ? cuckooSection(opts.cuckooTable) : []),
     ...(opts.countMinTable ? countMinSection(opts.countMinTable) : []),
+    ...(opts.topKTable ? topKSection(opts.topKTable) : []),
     `## Throughput (n = ${capacityLabel(opts.throughputCapacity)})`,
     "",
     "Absolute throughput is machine-relative: it depends on the CPU, the runtime, and the load on the box at measurement time.",
@@ -272,6 +309,7 @@ async function main(): Promise<void> {
   );
   const cuckTable = cuckooTable(cuckooRows(CUCKOO_KEY_COUNTS));
   const cmTable = countMinTable(countMinRows(COUNTMIN_KEY_COUNTS));
+  const tkTable = topKTable(topKRows(TOPK_EVENT_COUNTS));
   const tput = throughputTable(await collectThroughput(THROUGHPUT_CAPACITY));
 
   console.log(banner);
@@ -280,6 +318,7 @@ async function main(): Promise<void> {
   console.log("\n" + scalTable);
   console.log("\n" + cuckTable);
   console.log("\n" + cmTable);
+  console.log("\n" + tkTable);
   console.log("\n" + tput);
 
   const md = renderResults({
@@ -293,6 +332,7 @@ async function main(): Promise<void> {
     scalableTable: scalTable,
     cuckooTable: cuckTable,
     countMinTable: cmTable,
+    topKTable: tkTable,
     throughputTable: tput,
   });
   writeFileSync(new URL("../RESULTS.md", import.meta.url), md);

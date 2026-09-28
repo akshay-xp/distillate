@@ -8,11 +8,13 @@ import type { ComparisonRow } from "../src/compare.js";
 import type { CountMinRow } from "../src/countmin.js";
 import type { CuckooRow } from "../src/cuckoo.js";
 import type { ScalableRow } from "../src/scalable.js";
+import type { TopKRow } from "../src/topk.js";
 import {
   cardinalityTable,
   countMinTable,
   cuckooTable,
   renderResults,
+  topKTable,
   scalableTable,
   spaceAccuracyTable,
   throughputTable,
@@ -509,5 +511,70 @@ test("RESULTS carries the measured count-min section for both sketches", () => {
       // Neither library may ever answer below the truth, in any published row.
       expect(cells(row ?? "")[8], `${name} ${events} under`).toBe("0");
     }
+  }
+});
+
+const topKRowsFixture: TopKRow[] = [
+  {
+    name: "distillate/topk",
+    events: 1_000_000,
+    holds: "4096 slots",
+    bytes: 40_333,
+    precision: 1,
+    recall: 1,
+    underestimates: 0,
+    addOpsPerSec: 4_310_000,
+  },
+  {
+    name: "bloom-filters",
+    events: 1_000_000,
+    holds: "2719 x 7 + top 100",
+    bytes: 71_733,
+    precision: 0.98,
+    recall: 0.98,
+    underestimates: 0,
+    addOpsPerSec: 140_000,
+  },
+];
+
+test("topKTable renders what each holds, its size, precision, recall and add rate", () => {
+  const table = topKTable(topKRowsFixture);
+  expect(table).toContain(
+    "| Sketch | events | holds | size | precision | recall | under | add |",
+  );
+  expect(table).toContain(
+    "| distillate/topk | 1M | 4096 slots | 40333 B | 1.000 | 1.000 | 0 | 4.31 M ops/s |",
+  );
+  expect(table).toContain(
+    "| bloom-filters | 1M | 2719 x 7 + top 100 | 71733 B | 0.980 | 0.980 | 0 | 140 k ops/s |",
+  );
+});
+
+test("renderResults places the top-k section after count-min and states the argument choice", () => {
+  const md = renderResults({
+    banner: "distillate-bench | node v24 | arm64 | Apple M1 | 8 cores",
+    version: "0.1.1",
+    date: "2026-07-31",
+    targetFpr: 0.01,
+    throughputCapacity: 100000,
+    spaceTable: "SPACE_TBL",
+    throughputTable: "TPUT_TBL",
+    countMinTable: "COUNTMIN_TBL",
+    topKTable: "TOPK_TBL",
+  });
+  expect(md).toContain("TOPK_TBL");
+  const at = md.indexOf("## Top-K");
+  expect(at).toBeGreaterThan(md.indexOf("## Count-Min"));
+  expect(at).toBeLessThan(md.indexOf("## Throughput"));
+  const section = md.slice(at, md.indexOf("## Throughput"));
+  for (const phrase of [
+    "accuracy",
+    "one** row",
+    "k = 100",
+    "tie",
+    "Zipf",
+    "below the true",
+  ]) {
+    expect(section, phrase).toContain(phrase);
   }
 });
