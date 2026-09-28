@@ -68,3 +68,29 @@ test("the Top-K guide covers what a reader needs to choose and use it", () => {
   expect(space).toContain("capacity");
   expect(space).toMatch(/rather than|not/);
 });
+
+const choosing = (): string =>
+  read("../src/content/docs/guides/choosing-a-structure.md");
+
+test("choosing a structure routes the heavy-hitters question to Top-K", () => {
+  const page = choosing();
+
+  expect(page).toContain("/guides/topk/");
+  // The matrix is what a reader scans; the question list alone is not enough.
+  expect(page).toMatch(/\|.*Top-K.*\|/);
+  expect(section(page, "What ships today")).toContain(
+    "### [Top-K](/guides/topk/)",
+  );
+
+  const planned = section(page, "What is not shipped yet");
+  expect(planned).not.toContain("heavy");
+  expect(planned).not.toContain("Top-K");
+});
+
+test("the Count-Min guide points to Top-K rather than calling it unshipped", () => {
+  const countmin = read("../src/content/docs/guides/countmin.md");
+  const pick = section(countmin, "When to pick it");
+
+  expect(pick).toContain("/guides/topk/");
+  expect(pick).not.toContain("not shipped");
+});
