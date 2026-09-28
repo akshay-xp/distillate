@@ -152,6 +152,11 @@ const rebuild = ({
       for (const key of keys) sketch.add(key);
       return sketch;
     }
+    case "topk": {
+      const sketch = TopK.create(epsilon, { seed });
+      for (const key of keys) sketch.add(key);
+      return sketch;
+    }
     default:
       console.error(`smoke: unknown golden kind ${kind}`);
       process.exit(1);
