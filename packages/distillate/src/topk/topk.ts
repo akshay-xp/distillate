@@ -66,6 +66,12 @@ export class TopKOverflowError extends RangeError {
   override readonly name = "TopKOverflowError";
 }
 
+/** Thrown when an operation requires two sketches built with identical parameters. */
+export class TopKParamMismatchError extends Error {
+  /** Discriminates this error from other `Error`s. */
+  override readonly name = "TopKParamMismatchError";
+}
+
 /** Options accepted alongside a sizing solve: everything but the geometry. */
 export type TopKOptions = Omit<TopKParams, "capacity">;
 
@@ -494,6 +500,26 @@ export class TopK {
           lowerBound: this.#counts[slot] ?? 0,
         };
       });
+  }
+
+  /**
+   * Combines this sketch with another built with the same parameters.
+   *
+   * @param other - The sketch to combine with.
+   * @returns A new sketch; neither input changes.
+   */
+  union(other: TopK): TopK {
+    if (this.#capacity !== other.#capacity) {
+      throw new TopKParamMismatchError(
+        `cannot union Top-K sketches with capacity ${String(this.#capacity)} and ${String(other.#capacity)}`,
+      );
+    }
+    if (this.#seed !== other.#seed) {
+      throw new TopKParamMismatchError(
+        `cannot union Top-K sketches with seed ${String(this.#seed)} and ${String(other.#seed)}`,
+      );
+    }
+    return new TopK({ capacity: this.#capacity, seed: this.#seed });
   }
 
   /**
