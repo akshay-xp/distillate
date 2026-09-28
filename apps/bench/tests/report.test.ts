@@ -599,3 +599,30 @@ test("METHODOLOGY states the top-k configuration, its k and the accuracy inversi
     expect(section, phrase).toContain(phrase);
   }
 });
+
+test("RESULTS carries the measured top-k section for both sketches", () => {
+  const md = readFileSync(
+    fileURLToPath(new URL("../RESULTS.md", import.meta.url)),
+    "utf8",
+  );
+  expect(md).toContain("## Top-K");
+  const rows = resultsSection(md, "Top-K")
+    .split("\n")
+    .filter((l) => /^\| (distillate\/topk|bloom-filters) /.test(l));
+  expect(rows).toHaveLength(8);
+  const cells = (r: string): string[] => r.split("|").map((c) => c.trim());
+  for (const events of ["1k", "10k", "100k", "1M"]) {
+    for (const name of ["distillate/topk", "bloom-filters"]) {
+      const row = rows.find(
+        (r) => cells(r)[1] === name && cells(r)[2] === events,
+      );
+      expect(row, `${name} ${events}`).toBeDefined();
+      // A held key never reads below its truth, in any published row of ours.
+      if (name === "distillate/topk") {
+        expect(cells(row ?? "")[7], `${name} ${events} under`).toBe("0");
+      }
+    }
+  }
+  // The header note says which build the section was measured on.
+  expect(md.slice(0, md.indexOf("## Space"))).toContain("Top-K");
+});

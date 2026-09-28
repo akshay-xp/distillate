@@ -17,6 +17,8 @@ The Cuckoo section was measured on 2026-09-22, on the same machine, from the
 unreleased build that adds `distillate/cuckoo` on top of 0.11.0.
 The Count-Min section was measured on 2026-09-23, on the same machine, from the
 unreleased build that adds `distillate/countmin` on top of 0.12.0.
+The Top-K section was measured on 2026-09-28, on the same machine, from the
+unreleased build that adds `distillate/topk` on top of 0.13.0.
 
 ## Space and accuracy
 
@@ -183,6 +185,32 @@ The two sizes are not the same encoding: distillate writes a binary frame and `b
 | bloom-filters       | 1M     | 2719 x 7 | 68025 B | 29.7      | 211      | 0.00%      | 0     | 173 k ops/s   | 194 k ops/s  |
 | distillate/countmin | 10M    | 2719 x 7 | 76168 B | 301.3     | 2517     | 0.00%      | 0     | 10.62 M ops/s | 3.74 M ops/s |
 | bloom-filters       | 10M    | 2719 x 7 | 86630 B | 303.2     | 2226     | 0.00%      | 0     | 175 k ops/s   | 178 k ops/s  |
+
+## Top-K
+
+Both sketches target an error of 0.001 of the events recorded, and both are asked for the top k = 100.
+The two are built differently, and that difference is the comparison: `bloom-filters` takes `k` at construction and keeps a Count-Min sketch plus a sorted list of that many candidates, where distillate keeps a Misra-Gries map sized by the error alone and takes `k` per query.
+So the incumbent is given the same `k` that distillate is queried with, rather than a smaller one that would make it look worse.
+
+`bloom-filters`' `TopK(k, errorRate, accuracy)` hands `accuracy` straight to its Count-Min sketch, and inherits the inversion in the Count-Min section above: rows are sized as `Math.ceil(Math.log(1 / accuracy))`, a formula that wants the failure probability.
+Measured: `new TopK(10, 0.001)` gives 2,719 columns by **one** row. The rows below pass `0.001` as `accuracy` to give it the seven rows the target calls for.
+
+The headline is precision and recall of the returned set against the true top k, on a Zipf-skewed stream over 10,000 distinct keys.
+Keys tied at the k-th true count are interchangeable: every key above it must come back, and any tie may fill the places left, so an arbitrary but correct tie-break scores 1.
+`under` counts returned keys whose estimate is below the true count, which distillate's sketch rules out; it is measured rather than assumed.
+
+`holds` is what each sketch was read back to hold. The sizes are not the same encoding: distillate writes a binary frame, holding every key its map has kept, and `bloom-filters` writes JSON.
+
+| Sketch          | events | holds              | size    | precision | recall | under | add          |
+| --------------- | ------ | ------------------ | ------- | --------- | ------ | ----- | ------------ |
+| distillate/topk | 1k     | 4096 slots         | 7770 B  | 1.000     | 1.000  | 0     | 1.00 M ops/s |
+| bloom-filters   | 1k     | 2719 x 7 + top 100 | 41707 B | 1.000     | 1.000  | 0     | 79 k ops/s   |
+| distillate/topk | 10k    | 4096 slots         | 43974 B | 1.000     | 1.000  | 0     | 3.88 M ops/s |
+| bloom-filters   | 10k    | 2719 x 7 + top 100 | 42773 B | 1.000     | 1.000  | 0     | 133 k ops/s  |
+| distillate/topk | 100k   | 4096 slots         | 41390 B | 1.000     | 1.000  | 0     | 4.42 M ops/s |
+| bloom-filters   | 100k   | 2719 x 7 + top 100 | 53589 B | 0.990     | 0.990  | 0     | 143 k ops/s  |
+| distillate/topk | 1M     | 4096 slots         | 40333 B | 1.000     | 1.000  | 0     | 4.55 M ops/s |
+| bloom-filters   | 1M     | 2719 x 7 + top 100 | 71733 B | 0.980     | 0.980  | 0     | 144 k ops/s  |
 
 ## Throughput (n = 100k)
 
