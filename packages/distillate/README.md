@@ -191,6 +191,30 @@ hits.union(other).count("/login"); // 7
 
 Also: `equals`, `toBytes` / `fromBytes`, `toJSON` / `fromJSON`, `error()`, `epsilon`, `delta`, `width`, `depth`, `countMinSizing(epsilon, delta)`, and a low-level `new CountMinSketch({ width, depth, seed })`.
 
+### Top-K (`distillate/topk`)
+
+A **sketch** that lists the keys seen most often, in a table fixed by the error you ask for rather than by how many keys arrive. A key it holds never reads below its true count, and any key heavier than `error()` is guaranteed to be held. Full API and the bound: [Top-K guide](https://distillate.akxp.net/guides/topk/).
+
+```ts
+import { TopK } from "distillate/topk";
+
+const routes = TopK.create(0.01); // error factor
+routes.add("/login", 5);
+routes.add("/signup", 2);
+routes.add("/about");
+
+const decoder = new TextDecoder();
+routes
+  .top(2)
+  .map((e) => decoder.decode(e.key))
+  .join(); // "/login,/signup"
+routes.count("/login"); // 5
+```
+
+Keys come back as `Uint8Array`, exactly as recorded, so a serialized Top-K sketch holds your keys verbatim, unlike every other frame here. `union` combines sketches soundly but, unlike Count-Min's, not byte for byte as one sketch fed both streams.
+
+Also: `equals`, `toBytes` / `fromBytes`, `toJSON` / `fromJSON`, `total`, `error()`, `epsilon`, `capacity`, `topKSizing(epsilon)`, and a low-level `new TopK({ capacity, seed })`.
+
 ## Performance
 
 Classic Bloom head-to-head at a **matched 1% false-positive rate** over the same 100k keys, measured by identical code (cross-library harness, node v24.14.1, Apple M5):
