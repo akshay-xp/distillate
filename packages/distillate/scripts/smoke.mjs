@@ -18,6 +18,7 @@ import { HyperLogLog, hllSizing } from "../dist/hll/index.js";
 import { ScalableBloomFilter } from "../dist/scalable/index.js";
 import { CuckooFilter } from "../dist/cuckoo/index.js";
 import { CountMinSketch, countMinSizing } from "../dist/countmin/index.js";
+import { TopK, topKSizing } from "../dist/topk/index.js";
 
 if (typeof VERSION !== "string") {
   console.error(
@@ -224,6 +225,32 @@ if (!CountMinSketch.fromBytes(cms.toBytes()).equals(cms)) {
   process.exit(1);
 }
 
+const tk = TopK.create(0.01);
+tk.add("smoke", 3);
+const heaviest = tk.top(1)[0];
+if (
+  tk.count("smoke") < 3 ||
+  tk.total !== 3 ||
+  new TextDecoder().decode(heaviest?.key) !== "smoke"
+) {
+  console.error(
+    `smoke: TopK counted ${tk.count("smoke")} of 3, total ${tk.total}, or lost the key from top`,
+  );
+  process.exit(1);
+}
+
+if (topKSizing(0.01).capacity !== 512) {
+  console.error(
+    `smoke: topKSizing(0.01) gave capacity ${topKSizing(0.01).capacity}, want 512`,
+  );
+  process.exit(1);
+}
+
+if (!TopK.fromBytes(tk.toBytes()).equals(tk)) {
+  console.error("smoke: TopK did not survive a byte round-trip");
+  process.exit(1);
+}
+
 // A log of concatenated frames must walk by declared length alone.
 const log = [
   golden.find((g) => g.name === "bloom"),
@@ -247,5 +274,5 @@ if (walked.join() !== "1,5" || at !== stream.length) {
 }
 
 console.log(
-  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo + distillate/countmin work (filters, sketches, sizing helpers, frame walk, growth, delete, counting), toBytes byte-identical to golden`,
+  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo + distillate/countmin + distillate/topk work (filters, sketches, sizing helpers, frame walk, growth, delete, counting, heavy hitters), toBytes byte-identical to golden`,
 );

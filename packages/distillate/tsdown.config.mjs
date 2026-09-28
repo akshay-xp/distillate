@@ -11,6 +11,7 @@ export default defineConfig({
     "src/scalable/index.ts",
     "src/cuckoo/index.ts",
     "src/countmin/index.ts",
+    "src/topk/index.ts",
   ],
   format: ["esm", "cjs"],
   fixedExtension: false,

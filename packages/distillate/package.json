@@ -95,6 +95,14 @@
       "import": "./dist/countmin/index.js",
       "require": "./dist/countmin/index.cjs"
     },
+    "./topk": {
+      "types": {
+        "import": "./dist/topk/index.d.ts",
+        "require": "./dist/topk/index.d.cts"
+      },
+      "import": "./dist/topk/index.js",
+      "require": "./dist/topk/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",
