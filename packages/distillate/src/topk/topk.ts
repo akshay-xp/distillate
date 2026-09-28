@@ -2,9 +2,13 @@ import { type BytesLike, normalize } from "../core/bytes.js";
 import { hash32x2Into } from "../core/hasher.js";
 import { assertPositiveInt, assertUint32, ParamError } from "../core/params.js";
 import {
+  assertMinBodyLength,
+  assertParamsPadding,
   FORMAT_VERSION,
   HASH_MURMUR128,
   readHeader,
+  SerializationError,
+  UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
 import {
@@ -22,6 +26,7 @@ const TYPE = 9;
  * at frame offset 48 and its counts and lengths can be mapped as `u32`.
  */
 const PARAMS_SIZE = 32;
+const PARAMS_FIELDS_END = 28;
 
 /**
  * Thrown when an `add` would carry a stored count past `2^32 - 1`. Counts are
@@ -128,11 +133,40 @@ export class TopK {
    * @returns The reconstructed sketch.
    */
   static fromBytes(bytes: Uint8Array): TopK {
-    const { body } = readHeader(bytes);
+    const { type, flags, body } = readHeader(bytes);
+    if (type !== TYPE) {
+      throw new SerializationError(
+        `expected DSTL type ${String(TYPE)}, got ${String(type)}`,
+      );
+    }
+    if ((flags & 0x0f) !== HASH_MURMUR128) {
+      throw new UnknownHashVariantError(
+        `unsupported hash variant ${String(flags & 0x0f)}`,
+      );
+    }
+    assertMinBodyLength(body.length, PARAMS_SIZE, "topk");
+    assertParamsPadding(body, PARAMS_FIELDS_END, PARAMS_SIZE, "topk");
     const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
     const capacity = view.getUint32(0, true);
     const entries = view.getUint32(4, true);
-    const sketch = new TopK({ capacity, seed: view.getUint32(24, true) });
+    // The purge never lets a live map past its load limit, and the probe loop
+    // relies on that to find an empty slot, so a frame claiming more was not
+    // written by this format.
+    if (entries > topKLoadLimit(capacity)) {
+      throw new SerializationError(
+        `topk: frame holds ${String(entries)} entries, above the load limit ${String(topKLoadLimit(capacity))} for capacity ${String(capacity)}`,
+      );
+    }
+    let sketch: TopK;
+    try {
+      sketch = new TopK({ capacity, seed: view.getUint32(24, true) });
+    } catch (err) {
+      // A caller decoding a frame should see one error family.
+      if (err instanceof ParamError) {
+        throw new SerializationError(`topk: ${err.message}`);
+      }
+      throw err;
+    }
     let keyAt = PARAMS_SIZE + 8 * entries;
     for (let i = 0; i < entries; i++) {
       const count = view.getUint32(PARAMS_SIZE + 4 * i, true);
