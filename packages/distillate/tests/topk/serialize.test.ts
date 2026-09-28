@@ -262,3 +262,26 @@ test.each<[string, Forged]>([
 ])("fromBytes rejects %s", (_, fields) => {
   expect(() => TopK.fromBytes(forge(fields))).toThrow(SerializationError);
 });
+
+// Both are f64 on the wire because both can pass 2^32, but only a non-negative
+// safe integer can have been reached by counting.
+test.each(
+  (["offset", "total"] as const).flatMap((field) =>
+    [-1, 0.5, 2 ** 53, Number.NaN, Infinity].map(
+      (value) => [field, value] as const,
+    ),
+  ),
+)("fromBytes rejects %s %s", (field, value) => {
+  expect(() => TopK.fromBytes(forge({ [field]: value }))).toThrow(
+    SerializationError,
+  );
+});
+
+test("fromBytes accepts an offset and total at the edge of the safe range", () => {
+  const s = TopK.fromBytes(
+    forge({ offset: 7, total: Number.MAX_SAFE_INTEGER }),
+  );
+
+  expect(s.error()).toBe(7);
+  expect(s.total).toBe(Number.MAX_SAFE_INTEGER);
+});

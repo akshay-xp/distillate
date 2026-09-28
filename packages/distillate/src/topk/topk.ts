@@ -30,6 +30,19 @@ const PARAMS_SIZE = 32;
 const PARAMS_FIELDS_END = 28;
 
 /**
+ * Rejects a frame's `offset` or `total` unless counting could have produced
+ * it: both are `f64` on the wire because both can pass `2^32`, but only a
+ * non-negative safe integer is reachable by `add`.
+ */
+function assertCount(value: number, label: string): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new SerializationError(
+      `topk: ${label} ${String(value)} is not an integer in [0, ${String(Number.MAX_SAFE_INTEGER)}]`,
+    );
+  }
+}
+
+/**
  * Thrown when an `add` would carry a stored count past `2^32 - 1`. Counts are
  * `u32`, so a wrapped one would read back below the truth, the one outcome
  * this structure rules out. The sketch is left exactly as it was.
@@ -168,6 +181,10 @@ export class TopK {
       keyBytes += view.getUint32(PARAMS_SIZE + 4 * (entries + i), true);
     }
     assertBodyLength(body.length, tableEnd + keyBytes, "topk");
+    const offset = view.getFloat64(8, true);
+    const total = view.getFloat64(16, true);
+    assertCount(offset, "offset");
+    assertCount(total, "total");
     let sketch: TopK;
     try {
       sketch = new TopK({ capacity, seed: view.getUint32(24, true) });
@@ -189,8 +206,8 @@ export class TopK {
       sketch.#counts[slot] = count;
     }
     sketch.#entries = entries;
-    sketch.#offset = view.getFloat64(8, true);
-    sketch.#total = view.getFloat64(16, true);
+    sketch.#offset = offset;
+    sketch.#total = total;
     return sketch;
   }
 
