@@ -8,7 +8,7 @@ import {
   UnknownHashVariantError,
   writeHeader,
 } from "../../src/core/serialize.js";
-import { TopK } from "../../src/topk/topk.js";
+import { TopK, TopKOverflowError } from "../../src/topk/topk.js";
 import { zipfStream } from "../helpers/frequency.js";
 
 const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
@@ -320,4 +320,19 @@ test("the empty key sorts first among a tie", () => {
 
   expect(s.count("")).toBe(3);
   expect(s.count("a")).toBe(3);
+});
+
+// Past the safe range the total loses precision and fromBytes refuses it, so
+// without the guard the writer could produce a frame its own reader rejects.
+test("an add that would carry the total past the safe integer range is refused", () => {
+  const s = TopK.fromBytes(forge({ total: Number.MAX_SAFE_INTEGER - 5 }));
+
+  expect(() => {
+    s.add("a", 6);
+  }).toThrow(TopKOverflowError);
+  expect(s.total).toBe(Number.MAX_SAFE_INTEGER - 5);
+  expect(s.count("a")).toBe(0);
+
+  s.add("a", 5);
+  expect(TopK.fromBytes(s.toBytes()).total).toBe(Number.MAX_SAFE_INTEGER);
 });
