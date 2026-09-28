@@ -1,8 +1,12 @@
 import { expect, test } from "vitest";
 
+import { crc32 } from "../../src/core/crc32.js";
 import {
+  FORMAT_VERSION,
   HASH_MURMUR128,
   SerializationError,
+  UnknownHashVariantError,
+  writeHeader,
 } from "../../src/core/serialize.js";
 import { TopK } from "../../src/topk/topk.js";
 import { zipfStream } from "../helpers/frequency.js";
@@ -128,4 +132,109 @@ test("every truncated prefix of a frame is rejected with a typed error", () => {
       SerializationError,
     );
   }
+});
+
+// Recomputes the trailer so a mutation reaches the check under test instead of
+// stopping at ChecksumError.
+const resealed = (frame: Uint8Array): Uint8Array => {
+  new DataView(frame.buffer).setUint32(
+    frame.length - 4,
+    crc32(frame.subarray(0, frame.length - 4)),
+    true,
+  );
+  return frame;
+};
+
+interface Forged {
+  capacity?: number;
+  entries?: number;
+  offset?: number;
+  total?: number;
+  seed?: number;
+  pad?: number;
+  counts?: number[];
+  lengths?: number[];
+  keys?: number[];
+  extra?: number[];
+}
+
+/**
+ * A type 9 frame assembled field by field, sealed with a valid CRC. Defaults
+ * are an empty 16-slot sketch; `entries` defaults to the number of counts, so
+ * a caller can make the two disagree.
+ */
+const forge = ({
+  capacity = 16,
+  counts = [],
+  entries = counts.length,
+  offset = 0,
+  total = 0,
+  seed = 0,
+  pad = 0,
+  lengths = [],
+  keys = [],
+  extra = [],
+}: Forged): Uint8Array => {
+  const table = 4 * (counts.length + lengths.length);
+  const body = new Uint8Array(32 + table + keys.length + extra.length);
+  const view = new DataView(body.buffer);
+  view.setUint32(0, capacity, true);
+  view.setUint32(4, entries, true);
+  view.setFloat64(8, offset, true);
+  view.setFloat64(16, total, true);
+  view.setUint32(24, seed, true);
+  body[28] = pad;
+  [...counts, ...lengths].forEach((v, i) => {
+    view.setUint32(32 + 4 * i, v, true);
+  });
+  body.set([...keys, ...extra], 32 + table);
+  return writeHeader(
+    { version: FORMAT_VERSION, type: 9, flags: HASH_MURMUR128 },
+    body,
+  );
+};
+
+type Mutation = (frame: Uint8Array) => void;
+
+const lies: [string, Mutation, new (...args: never[]) => Error][] = [
+  ["type 1", (f) => (f[5] = 1), SerializationError],
+  ["hash variant 1", (f) => (f[6] = 1), UnknownHashVariantError],
+  ...[44, 45, 46, 47].map(
+    (at): [string, Mutation, typeof SerializationError] => [
+      `params padding byte ${String(at - 16)} set`,
+      (f) => (f[at] = 1),
+      SerializationError,
+    ],
+  ),
+];
+
+test.each(lies)("fromBytes rejects %s", (_, mutate, expected) => {
+  const frame = filled().toBytes();
+  mutate(frame);
+
+  expect(() => TopK.fromBytes(resealed(frame))).toThrow(expected);
+});
+
+// A capacity the constructor refuses must surface as the error family every
+// other decode failure throws, not as a raw ParamError.
+test.each([100, 2, 0])(
+  "fromBytes rejects capacity %s as a topk: SerializationError",
+  (capacity) => {
+    const decode = (): TopK => TopK.fromBytes(forge({ capacity }));
+
+    expect(decode).toThrow(SerializationError);
+    expect(decode).toThrow(/^topk:/);
+  },
+);
+
+test("fromBytes rejects more entries than the load limit allows", () => {
+  const counts = Array.from({ length: 13 }, (_, i) => 13 - i);
+  const frame = forge({
+    capacity: 16,
+    counts,
+    lengths: counts.map(() => 1),
+    keys: counts.map((_, i) => 97 + i),
+  });
+
+  expect(() => TopK.fromBytes(frame)).toThrow(SerializationError);
 });
