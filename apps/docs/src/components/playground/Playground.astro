@@ -240,6 +240,46 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   </p>
 </section>
 
+<section class="dstl-panel" data-pg-topk>
+  <h3>Which keys, not how many times</h3>
+
+  <p class="dstl-hint">
+    Count-Min answers for a key you name. Top-K lists the heaviest keys without
+    being asked about any, because it keeps the keys it counts. It is fed by the
+    same Record form above: record more of a key and watch it climb.
+  </p>
+
+  <dl class="dstl-readout">
+    <div>
+      <dt>Error</dt>
+      <dd data-tk="error"></dd>
+    </div>
+    <div>
+      <dt>Recorded</dt>
+      <dd data-tk="total"></dd>
+    </div>
+  </dl>
+
+  <table class="dstl-table">
+    <thead>
+      <tr>
+        <th scope="col">Key</th>
+        <th scope="col">Estimate</th>
+        <th scope="col">Lower bound</th>
+        <th scope="col">True count</th>
+      </tr>
+    </thead>
+    <tbody data-tk="rows"></tbody>
+  </table>
+
+  <p class="dstl-hint">
+    <strong>The truth always sits inside the bracket.</strong> The estimate is
+    never below the true count and the lower bound never above it; the gap is at
+    most the error. A key that falls off the list was never heavier than the
+    error.
+  </p>
+</section>
+
 <div data-pg-notes>
   <p class="dstl-hint">
     <strong>A false positive is the filter working, not a bug.</strong> These
@@ -267,6 +307,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     CountReport,
     PlaygroundReport,
     StructureKey,
+    TopKReport,
   } from "./engine.js";
 
   const KEYS = ["bloom", "blocked", "fuse8", "scalable", "cuckoo"] as const;
@@ -328,6 +369,36 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     cm("over", String(report.overestimate));
   }
 
+  /** How many of the heaviest keys the panel lists. */
+  const HEAVIEST = 10;
+
+  // Rebuilt from text nodes rather than markup: the keys are whatever the
+  // reader typed into the Record form.
+  function renderHeaviest(report: TopKReport): void {
+    const error = document.querySelector("[data-tk='error']");
+    const total = document.querySelector("[data-tk='total']");
+    if (error) error.textContent = report.error.toLocaleString("en-US");
+    if (total) total.textContent = report.total.toLocaleString("en-US");
+    const body = document.querySelector("[data-tk='rows']");
+    if (!body) return;
+    body.replaceChildren(
+      ...report.entries.map((e) => {
+        const row = document.createElement("tr");
+        for (const value of [
+          e.key,
+          String(e.estimate),
+          String(e.lowerBound),
+          String(e.trueCount),
+        ]) {
+          const td = document.createElement("td");
+          td.textContent = value;
+          row.append(td);
+        }
+        return row;
+      }),
+    );
+  }
+
   function formatPercent(rate: number): string {
     return `${(rate * 100).toFixed(3)}%`;
   }
@@ -359,6 +430,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     current = result.playground;
     render(current.report());
     renderSketch(current.countMin());
+    renderHeaviest(current.heaviest(HEAVIEST));
     renderEstimate(current.estimate(recordKey()));
   }
 
@@ -376,6 +448,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     if (status) status.textContent = fuseRefusal;
     render(current.report());
     renderSketch(current.countMin());
+    renderHeaviest(current.heaviest(HEAVIEST));
   }
 
   function grow(): void {
@@ -393,6 +466,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     }
     render(current.report());
     renderSketch(current.countMin());
+    renderHeaviest(current.heaviest(HEAVIEST));
   }
 
   function remove(): void {
@@ -415,6 +489,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     }
     if (status) status.textContent = "";
     renderSketch(current.countMin());
+    renderHeaviest(current.heaviest(HEAVIEST));
     renderEstimate(current.estimate(key));
   }
 

@@ -402,3 +402,29 @@ test("growing the key set leaves the sketch size alone and widens its bound", as
   ).toBeGreaterThan(bound);
   expect(errors).toEqual([]);
 });
+
+test("the heaviest keys panel shows each key's bracket after a build", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  const panel = page.locator("[data-pg-topk]");
+  // Reuses the page's own table and heading markup rather than new controls.
+  await expect(panel.locator("table.dstl-table")).toHaveCount(1);
+  await expect(panel.locator("th[scope='col']")).toHaveCount(4);
+
+  const rows = panel.locator("tbody tr");
+  await expect(rows).toHaveCount(10);
+  for (const row of await rows.all()) {
+    const cells = (await row.locator("td").allTextContents()).map((c) =>
+      c.trim(),
+    );
+    // Text, decoded from the bytes the sketch returns, not a list of numbers.
+    expect(cells[0]).toMatch(/^key-\d+$/);
+    const [estimate, lower, truth] = cells.slice(1).map(Number);
+    expect(estimate).toBeGreaterThanOrEqual(truth);
+    expect(lower).toBeLessThanOrEqual(truth);
+  }
+  expect(errors).toEqual([]);
+});
