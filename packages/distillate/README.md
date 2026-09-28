@@ -42,20 +42,22 @@ Every push runs a CI smoke matrix that imports the built package on Node 22/24, 
 
 Each structure ships as its own subpath, so you only bundle what you import.
 
-| Import                | Structure      | Answers            | Use for                                                  |
-| --------------------- | -------------- | ------------------ | -------------------------------------------------------- |
-| `distillate/bloom`    | Classic Bloom  | seen this key?     | Familiar default, migration from `bloom-filters`         |
-| `distillate/scalable` | Scalable Bloom | seen this key?     | Key count unknown or growing; keeps its FPR bound        |
-| `distillate/blocked`  | Blocked Bloom  | seen this key?     | Faster lookups and a lower FPR for a small space premium |
-| `distillate/fuse`     | Binary Fuse    | seen this key?     | Static set built once and queried a lot; least space     |
-| `distillate/cuckoo`   | Cuckoo         | seen this key?     | Keys come and go; the one filter with delete             |
-| `distillate/hll`      | HyperLogLog    | how many distinct? | Counting distinct users, IPs, or keys in fixed space     |
-| `distillate/countmin` | Count-Min      | how many times?    | Counting events per key in fixed space                   |
+| Import                | Structure      | Answers             | Use for                                                  |
+| --------------------- | -------------- | ------------------- | -------------------------------------------------------- |
+| `distillate/bloom`    | Classic Bloom  | seen this key?      | Familiar default, migration from `bloom-filters`         |
+| `distillate/scalable` | Scalable Bloom | seen this key?      | Key count unknown or growing; keeps its FPR bound        |
+| `distillate/blocked`  | Blocked Bloom  | seen this key?      | Faster lookups and a lower FPR for a small space premium |
+| `distillate/fuse`     | Binary Fuse    | seen this key?      | Static set built once and queried a lot; least space     |
+| `distillate/cuckoo`   | Cuckoo         | seen this key?      | Keys come and go; the one filter with delete             |
+| `distillate/hll`      | HyperLogLog    | how many distinct?  | Counting distinct users, IPs, or keys in fixed space     |
+| `distillate/countmin` | Count-Min      | how many times?     | Counting events per key in fixed space                   |
+| `distillate/topk`     | Top-K          | which are heaviest? | Finding the most frequent keys in fixed space            |
 
 The filters are mutable except Binary Fuse, which is built once from the whole
-key set. HyperLogLog and Count-Min are sketches rather than filters: neither
-reports whether it saw any particular key. HyperLogLog counts distinct keys,
-Count-Min counts how often each key appeared.
+key set. HyperLogLog, Count-Min and Top-K are sketches rather than filters:
+none reports whether it saw any particular key. HyperLogLog counts distinct
+keys, Count-Min counts how often each key appeared, and Top-K reports which
+keys appeared most.
 
 ### Classic Bloom (`distillate/bloom`)
 
