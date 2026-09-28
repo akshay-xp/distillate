@@ -5,6 +5,7 @@ import {
   assertBodyLength,
   assertMinBodyLength,
   assertParamsPadding,
+  bytesEqual,
   type FilterJSON,
   FORMAT_VERSION,
   fromJSONEnvelope,
@@ -607,6 +608,20 @@ export class TopK {
         });
       },
     );
+  }
+
+  /**
+   * Tests structural equality: `true` when `other` serializes to identical
+   * bytes, meaning identical geometry, seed, offset, total and entries.
+   *
+   * Entries are written in canonical order, so equal bytes mean the same
+   * entries are held, whatever order they arrived in.
+   *
+   * @param other - The sketch to compare against.
+   * @returns `true` if the two sketches are byte-for-byte identical.
+   */
+  equals(other: TopK): boolean {
+    return bytesEqual(this.toBytes(), other.toBytes());
   }
 
   /**
