@@ -321,11 +321,18 @@ export class Playground {
     this.#addToCuckoo(key);
     // One occurrence, like every other key the build generated. Repeats come
     // from record(), which is the only control that offers them.
-    this.#filters.countmin.add(key);
-    this.#counts.set(key, (this.#counts.get(key) ?? 0) + 1);
+    this.#count(key, 1);
     this.#keys.push(key);
     this.#inserted.add(key);
     this.#late.add(key);
+  }
+
+  // The one place an occurrence is counted, so every sketch and the truth map
+  // move together. Updating them at each call site instead is how a grow once
+  // left the sketch's total stale while the filters had moved on.
+  #count(key: string, n: number): void {
+    this.#filters.countmin.add(key, n);
+    this.#counts.set(key, (this.#counts.get(key) ?? 0) + n);
   }
 
   // A full Cuckoo refuses rather than drops a key it holds, so the key is
@@ -405,8 +412,7 @@ export class Playground {
     if (!Number.isInteger(n) || n < 1) {
       return { ok: false, message: RECORD_MESSAGE };
     }
-    this.#filters.countmin.add(key, n);
-    this.#counts.set(key, (this.#counts.get(key) ?? 0) + n);
+    this.#count(key, n);
     const { trueCount, estimate, total } = this.estimate(key);
     return { ok: true, key, trueCount, estimate, total };
   }
