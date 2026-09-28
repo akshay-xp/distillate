@@ -123,3 +123,42 @@ test("a union that would carry the total past the safe integer range is refused"
 
   expect(() => a.union(b)).toThrow(TopKOverflowError);
 });
+
+const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
+const bracket = (s: TopK): [string, number, number][] =>
+  s.top(s.capacity).map((e) => [decode(e.key), e.count, e.lowerBound]);
+
+// The documented departure from Count-Min, whose union is byte-exact. Here B
+// alone purges to empty, so the union keeps everything A held and charges B's
+// purge to the offset; one sketch fed both streams purges A's entries along
+// with B's instead. Both answers are correct, and they are not the same.
+test("a union is not the sketch the combined stream would have produced", () => {
+  const streamA = ["x", "x", "x", "y", "y", "z"];
+  const streamB = ["p", "q", "x", "r"];
+  const a = new TopK({ capacity: 4 });
+  for (const key of streamA) a.add(key);
+  const b = new TopK({ capacity: 4 });
+  for (const key of streamB) b.add(key);
+  const both = new TopK({ capacity: 4 });
+  for (const key of [...streamA, ...streamB]) both.add(key);
+
+  const u = a.union(b);
+
+  expect(u.error()).toBe(1);
+  expect(bracket(u)).toEqual([
+    ["x", 4, 3],
+    ["y", 3, 2],
+    ["z", 2, 1],
+  ]);
+  expect(both.error()).toBe(2);
+  expect(bracket(both)).toEqual([
+    ["x", 4, 2],
+    ["q", 3, 1],
+    ["r", 3, 1],
+  ]);
+
+  expect(u.equals(both)).toBe(false);
+  const truth = truthOf([...streamA, ...streamB]);
+  expectOneSided(u, truth);
+  expectOneSided(both, truth);
+});
