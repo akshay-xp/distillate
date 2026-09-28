@@ -8,7 +8,7 @@ Static and mutable filters have honestly different lifecycles, and sketches answ
 
 - Mutable: `add` (and sometimes `delete`) after construction. Bloom, Blocked Bloom, Counting Bloom, Scalable Bloom, Cuckoo.
 - Static: `build(keys)` once, then immutable and queried. Binary Fuse, XOR. Smaller and faster; can fail-and-retry on build.
-- Sketches: `add` then ask an aggregate question rather than a membership one. HyperLogLog (cardinality) and Count-Min (frequency); t-digest/KLL (quantiles) and MinHash (similarity) are the same family, not yet shipped.
+- Sketches: `add` then ask an aggregate question rather than a membership one. HyperLogLog (cardinality), Count-Min (frequency of a named key) and Top-K (heavy hitters); t-digest/KLL (quantiles) and MinHash (similarity) are the same family, not yet shipped.
 
 ### Why a sketch is not a `Filter`
 
@@ -96,6 +96,7 @@ src/
   cuckoo/           # cuckoo filter with delete: cuckoo.ts, and sizing.ts for
                     # cuckooSizing
   countmin/         # Count-Min sketch: countmin.ts, and sizing.ts for countMinSizing
+  topk/             # Top-K heavy hitters: topk.ts, and sizing.ts for topKSizing
   frame/            # distillate/frame: readFrameAt for walking a stream of frames
   index.ts          # root barrel (VERSION only)
 ```
