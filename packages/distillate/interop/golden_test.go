@@ -1311,8 +1311,16 @@ type topK struct {
 const topKParams = 32
 
 func parseTopK(f frame) (topK, error) {
+	if f.typ != 9 {
+		return topK{}, fmt.Errorf("type %d, want 9", f.typ)
+	}
 	if len(f.body) < topKParams {
 		return topK{}, fmt.Errorf("body of %d bytes is shorter than the params block", len(f.body))
+	}
+	for at := 28; at < topKParams; at++ {
+		if f.body[at] != 0 {
+			return topK{}, fmt.Errorf("params padding at byte %d is not zero", at)
+		}
 	}
 	k := topK{
 		capacity: le.Uint32(f.body),
@@ -1325,15 +1333,31 @@ func parseTopK(f frame) (topK, error) {
 	if uint64(len(f.body)) < table {
 		return topK{}, fmt.Errorf("body of %d bytes cannot hold a table of %d entries", len(f.body), entries)
 	}
+	// Exact in both directions: bytes no entry accounts for were not written
+	// by this format any more than missing ones were.
+	length := func(i uint64) uint64 { return uint64(le.Uint32(f.body[topKParams+4*(entries+i):])) }
+	sum := uint64(0)
+	for i := uint64(0); i < entries; i++ {
+		sum += length(i)
+	}
+	if table+sum != uint64(len(f.body)) {
+		return topK{}, fmt.Errorf("lengths consume %d bytes, body has %d after the table", sum, uint64(len(f.body))-table)
+	}
 	at := table
 	for i := uint64(0); i < entries; i++ {
-		n := uint64(le.Uint32(f.body[topKParams+4*(entries+i):]))
-		if at+n > uint64(len(f.body)) {
-			return topK{}, fmt.Errorf("key %d runs past the body", i)
+		key := f.body[at : at+length(i)]
+		count := le.Uint32(f.body[topKParams+4*i:])
+		// Canonical order: count descending, then key bytes ascending, each
+		// entry strictly after the one before it.
+		if i > 0 {
+			prev, prevKey := k.counts[i-1], k.keys[i-1]
+			if count > prev || (count == prev && bytes.Compare(prevKey, key) >= 0) {
+				return topK{}, fmt.Errorf("entry %d is out of canonical order", i)
+			}
 		}
-		k.keys = append(k.keys, f.body[at:at+n])
-		k.counts = append(k.counts, le.Uint32(f.body[topKParams+4*i:]))
-		at += n
+		k.keys = append(k.keys, key)
+		k.counts = append(k.counts, count)
+		at += length(i)
 	}
 	return k, nil
 }
@@ -1467,5 +1491,45 @@ func TestTopK(t *testing.T) {
 	}
 	if !seeded {
 		t.Error("no topk fixture carries a non-zero seed")
+	}
+}
+
+func TestTopKDamaged(t *testing.T) {
+	e := find(t, "topk")
+	counts := headerSize + topKParams
+	lengths := counts + 4*3 // the fixture holds three entries
+
+	stale := frameOf(t, e)
+	stale[len(stale)-trailerSize-1]++
+	if _, err := readFrame(stale); err == nil || !strings.Contains(err.Error(), "CRC") {
+		t.Errorf("altered key byte: want a CRC error, got %v", err)
+	}
+
+	// Resealed, each mutation gets past the trailer and has to be caught by
+	// the type 9 rules alone.
+	cases := []struct {
+		name, want string
+		mutate     func(b []byte)
+	}{
+		{"wrong type", "type", func(b []byte) { b[5] = 8 }},
+		{"padding set", "padding", func(b []byte) { b[headerSize+28] = 1 }},
+		{"lengths over-consume", "consume", func(b []byte) { b[lengths]++ }},
+		{"lengths under-consume", "consume", func(b []byte) { b[lengths]-- }},
+		{"out of canonical order", "canonical", func(b []byte) {
+			first := le.Uint32(b[counts:])
+			le.PutUint32(b[counts:], le.Uint32(b[counts+4:]))
+			le.PutUint32(b[counts+4:], first)
+		}},
+	}
+	for _, c := range cases {
+		b := frameOf(t, e)
+		c.mutate(b)
+		f, err := readFrame(reseal(b))
+		if err != nil {
+			t.Fatalf("%s: resealed frame: %v", c.name, err)
+		}
+		if _, err := parseTopK(f); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: want an error mentioning %q, got %v", c.name, c.want, err)
+		}
 	}
 }
