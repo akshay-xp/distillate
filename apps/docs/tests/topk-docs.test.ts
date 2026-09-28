@@ -23,6 +23,8 @@ test("the Top-K guide covers what a reader needs to choose and use it", () => {
     "When to pick it",
     "What the bound means",
     "It never underestimates",
+    "Keys come back as bytes",
+    "The frame holds your keys",
   ]) {
     section(page, heading);
   }
@@ -41,4 +43,15 @@ test("the Top-K guide covers what a reader needs to choose and use it", () => {
   expect(never).toContain("lowerBound");
   expect(never).toContain("never below");
   expect(never).toContain("TopKOverflowError");
+
+  const bytes = section(page, "Keys come back as bytes");
+  expect(bytes).toContain("Uint8Array");
+  expect(bytes).toContain("TextDecoder");
+
+  // Every other frame is one-way; this one persists user input, which is the
+  // point a reader serialising into a cache or a log must not miss.
+  const frame = section(page, "The frame holds your keys");
+  expect(frame).toContain("verbatim");
+  expect(frame).toContain("Count-Min");
+  expect(frame).toContain("toBytes");
 });
