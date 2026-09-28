@@ -51,8 +51,8 @@ A filter cannot count, and HyperLogLog counts distinct keys without recording
 any of them. Count-Min is the one that attributes a number to a key.
 
 It holds no keys, so it cannot list the most frequent ones: it answers only for
-a key you name. Finding the top keys without naming them needs a heavy-hitters
-structure, which is not shipped yet.
+a key you name. To find the top keys without naming them, use
+[Top-K](/guides/topk/).
 
 ## What the bound means
 

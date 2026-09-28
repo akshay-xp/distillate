@@ -12,6 +12,9 @@ First, which question are you asking?
 - **"How many times have I seen this key?"** A frequency sketch:
   [Count-Min](/guides/countmin/). It attributes a number to a key you name,
   which neither a filter nor HyperLogLog can do.
+- **"Which keys have I seen most?"** A heavy-hitters sketch:
+  [Top-K](/guides/topk/). It lists the heaviest keys without you naming them,
+  which Count-Min cannot do because it holds no keys.
 
 There is no best filter, only a best filter for a workload. Answer three
 questions and the choice is usually forced:
@@ -36,12 +39,13 @@ questions and the choice is usually forced:
 | Migrating from `bloom-filters`            | [Classic Bloom](/guides/bloom/)                                                 |
 | Counting distinct keys, not membership    | [HyperLogLog](/guides/hll/)                                                     |
 | Counting how often each key appears       | [Count-Min](/guides/countmin/)                                                  |
+| Finding the most frequent keys            | [Top-K](/guides/topk/)                                                          |
 
 For the filters, space below is stated as overhead over the
 information-theoretic floor of `log2(1/epsilon)` bits per key: 6.64 bits/key at
 a 1% FPR, 9.97 at 0.1%. A sketch has no per-key cost to state, its size being
 fixed before it sees a key: by precision for HyperLogLog, by the error bound
-for Count-Min.
+for Count-Min and Top-K.
 
 ## What ships today
 
@@ -55,6 +59,17 @@ per-shard rollups combine without double-counting the overlap.
 Reach for it for distinct users, distinct IPs, distinct cache keys, and any
 other "how many different" question. It cannot tell you whether it saw a
 particular key; nothing in a sketch records membership.
+
+### [Top-K](/guides/topk/) (`distillate/topk`)
+
+Not a filter. Lists the keys seen most often, in a table fixed by the error you
+ask for: 512 slots at `epsilon` 0.01, 6 KiB plus the keys it holds, whether the
+stream is a thousand events or a billion. A key it holds never reads below its
+true count, and any key heavier than the error is guaranteed to be held.
+
+Reach for it for the hottest routes, the noisiest clients, the most searched
+terms: any "which ones" question where you cannot name the candidates in
+advance. It keeps the keys themselves, so a serialized sketch holds user input.
 
 ### [Binary Fuse 8 and 16](/guides/fuse/) (`distillate/fuse`)
 
