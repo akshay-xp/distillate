@@ -527,3 +527,38 @@ test("growing the key set leaves the sketch's size alone and widens its bound", 
   expect(after.total).toBe(2000);
   expect(after.bound).toBeGreaterThan(before.bound);
 });
+
+// Each entry carries the bracket the panel shows: the estimate never below the
+// truth the page recorded itself, the lower bound never above it.
+test("the heaviest keys come back as text, each inside its bracket", () => {
+  const pg = built(1000);
+  const recorded = pg.record("key-5", 4);
+  if (!recorded.ok) throw new Error(`record refused: ${recorded.message}`);
+
+  const { entries } = pg.heaviest(10);
+  expect(entries[0]).toMatchObject({ key: "key-5", trueCount: 5 });
+  expect(entries[0]?.estimate).toBeGreaterThanOrEqual(5);
+  expect(entries[0]?.lowerBound).toBeLessThanOrEqual(5);
+  for (const e of entries) {
+    expect(typeof e.key).toBe("string");
+    expect(e.estimate, e.key).toBeGreaterThanOrEqual(e.trueCount);
+    expect(e.lowerBound, e.key).toBeLessThanOrEqual(e.trueCount);
+  }
+
+  pg.record("key-7", 10);
+  expect(pg.heaviest(10).entries[0]?.key).toBe("key-7");
+});
+
+// The #242 bug class: a sketch attached anywhere but the counting seam goes
+// stale when the key set grows.
+test("growing and inserting feed the heaviest keys through the same seam", () => {
+  const pg = built(1000);
+  const before = pg.heaviest(10).total;
+
+  pg.grow(1000);
+  expect(pg.heaviest(10).total).toBe(before + 1000);
+  expect(pg.heaviest(10).total).toBe(pg.countMin().total);
+
+  pg.insert("new-key");
+  expect(pg.heaviest(10).total).toBe(before + 1001);
+});

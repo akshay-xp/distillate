@@ -4,6 +4,7 @@ import { CountMinSketch } from "distillate/countmin";
 import { CuckooFilter, CuckooFullError } from "distillate/cuckoo";
 import { BinaryFuse8, BinaryFuseBuildError } from "distillate/fuse";
 import { ScalableBloomFilter } from "distillate/scalable";
+import { TopK } from "distillate/topk";
 
 import { RATE_MESSAGE, toNumber } from "../../lib/form.js";
 
@@ -53,6 +54,27 @@ export interface CountMinReport {
   epsilon: number;
   /** `epsilon * total`: how far above the truth an estimate may sit now. */
   bound: number;
+}
+
+/** One of the heaviest keys, with the bracket the sketch puts around it. */
+export interface HeavyKey {
+  /** The key as text, decoded from the bytes the sketch returns. */
+  key: string;
+  /** Never below `trueCount`. */
+  estimate: number;
+  /** Never above `trueCount`. */
+  lowerBound: number;
+  /** Occurrences actually recorded, which the page tracks itself. */
+  trueCount: number;
+}
+
+/** The heaviest keys and what bounds them, at the current total. */
+export interface TopKReport {
+  entries: HeavyKey[];
+  /** How far any estimate may sit above the truth right now. */
+  error: number;
+  /** Everything recorded so far. */
+  total: number;
 }
 
 /** What one structure says about one queried key. */
@@ -151,9 +173,13 @@ function probeKeys(): string[] {
   return keys;
 }
 
+// Top-K returns keys as the bytes it stored; the page shows them as text.
+const decoder = new TextDecoder();
+
 interface Filters {
   bloom: BloomFilter;
   countmin: CountMinSketch;
+  topk: TopK;
   blocked: BlockedBloomFilter;
   fuse8: BinaryFuse8;
   scalable: ScalableBloomFilter;
@@ -252,6 +278,7 @@ export class Playground {
         scalable: ScalableBloomFilter.from(keys, epsilon),
         cuckoo: CuckooFilter.from(keys, epsilon),
         countmin: CountMinSketch.from(keys, epsilon, COUNTMIN_DELTA),
+        topk: TopK.from(keys, epsilon),
       };
     } catch (error) {
       return { ok: false, message: toMessage(error) };
@@ -332,6 +359,7 @@ export class Playground {
   // left the sketch's total stale while the filters had moved on.
   #count(key: string, n: number): void {
     this.#filters.countmin.add(key, n);
+    this.#filters.topk.add(key, n);
     this.#counts.set(key, (this.#counts.get(key) ?? 0) + n);
   }
 
@@ -427,6 +455,24 @@ export class Playground {
       estimate,
       overestimate: estimate - trueCount,
       total: this.#filters.countmin.total,
+    };
+  }
+
+  /** The `k` heaviest keys, each beside the count the page recorded. */
+  heaviest(k: number): TopKReport {
+    const topk = this.#filters.topk;
+    return {
+      entries: topk.top(k).map((e) => {
+        const key = decoder.decode(e.key);
+        return {
+          key,
+          estimate: e.count,
+          lowerBound: e.lowerBound,
+          trueCount: this.#counts.get(key) ?? 0,
+        };
+      }),
+      error: topk.error(),
+      total: topk.total,
     };
   }
 
