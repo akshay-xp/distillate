@@ -5,10 +5,13 @@ import {
   assertBodyLength,
   assertMinBodyLength,
   assertParamsPadding,
+  type FilterJSON,
   FORMAT_VERSION,
+  fromJSONEnvelope,
   HASH_MURMUR128,
   readHeader,
   SerializationError,
+  toJSONEnvelope,
   UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
@@ -488,7 +491,7 @@ export class TopK {
    * Entries are written in the order `top` returns them, so the bytes depend
    * only on what the map holds and never on the order it was filled in.
    *
-   * @returns The serialized sketch.
+   * @returns The serialized sketch, readable by {@link TopK.fromBytes}.
    */
   toBytes(): Uint8Array {
     const slots = this.#canonicalSlots();
@@ -514,6 +517,26 @@ export class TopK {
         });
       },
     );
+  }
+
+  /**
+   * Serializes the sketch to a JSON-friendly envelope wrapping the base64 of
+   * {@link TopK.toBytes}.
+   *
+   * @returns The envelope, readable by {@link TopK.fromJSON}.
+   */
+  toJSON(): FilterJSON {
+    return toJSONEnvelope(this.toBytes());
+  }
+
+  /**
+   * Restores a sketch from its {@link TopK.toJSON} envelope.
+   *
+   * @param value - The JSON envelope.
+   * @returns The reconstructed sketch.
+   */
+  static fromJSON(value: unknown): TopK {
+    return TopK.fromBytes(fromJSONEnvelope(value));
   }
 
   /**
