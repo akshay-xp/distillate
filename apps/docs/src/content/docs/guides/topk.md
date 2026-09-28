@@ -130,3 +130,45 @@ purged, and one is no more than the error.
 Stored counts are `u32`. An `add` or a `union` that would carry one past
 `2 ** 32 - 1` throws `TopKOverflowError` and leaves the sketch untouched,
 rather than wrapping to a number that would read below the truth.
+
+## Keys come back as bytes
+
+`top` returns each key as a `Uint8Array`, exactly as it was recorded: a string
+as its UTF-8 bytes, bytes unchanged. Decode a string key with `TextDecoder`, as
+in [Build one](#build-one).
+
+```ts
+import { TopK } from "distillate/topk";
+
+const s = new TopK({ capacity: 16 });
+s.add(Uint8Array.of(0xff, 0x00));
+
+Array.from(s.top(1)[0]?.key ?? []).join(); // "255,0"
+```
+
+One type for every key, lossless whatever you fed in, and byte for byte what
+the frame holds. Returning strings instead would have to guess an encoding for
+keys that were never text.
+
+## The frame holds your keys
+
+Every other distillate frame is one-way: a Bloom filter or a Count-Min sketch
+cannot give back a single key you fed it, only answer about keys you name. A
+Top-K frame is different. Listing keys is the whole job, so `toBytes` stores
+every key the sketch holds **verbatim**:
+
+```ts
+import { TopK } from "distillate/topk";
+
+const s = TopK.from(
+  ["alice@example.com", "alice@example.com", "bob@example.com"],
+  0.01,
+);
+
+new TextDecoder().decode(s.toBytes()).includes("alice@example.com"); // true
+```
+
+Persisting a sketch persists user input. Treat a Top-K frame in a cache, a log
+or a build artifact as you would the raw stream it came from. To keep raw keys
+out, add a keyed digest of each key instead, and `top` will then return
+digests you map back yourself.
