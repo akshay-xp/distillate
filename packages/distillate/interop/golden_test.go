@@ -1296,3 +1296,116 @@ func TestCountMinDamaged(t *testing.T) {
 		t.Errorf("altered counter: want a row sum error, got %v", err)
 	}
 }
+
+// Top-K, frame type 9: counts, then lengths, then the concatenated key bytes.
+// The first type whose body length does not follow from its params, so the
+// reader bounds the table by entries and walks the keys by their lengths.
+type topK struct {
+	capacity, seed uint32
+	offset, total  float64
+	keys           [][]byte
+	counts         []uint32
+}
+
+const topKParams = 32
+
+func parseTopK(f frame) (topK, error) {
+	if len(f.body) < topKParams {
+		return topK{}, fmt.Errorf("body of %d bytes is shorter than the params block", len(f.body))
+	}
+	k := topK{
+		capacity: le.Uint32(f.body),
+		offset:   math.Float64frombits(le.Uint64(f.body[8:])),
+		total:    math.Float64frombits(le.Uint64(f.body[16:])),
+		seed:     le.Uint32(f.body[24:]),
+	}
+	entries := uint64(le.Uint32(f.body[4:]))
+	table := uint64(topKParams) + 8*entries
+	if uint64(len(f.body)) < table {
+		return topK{}, fmt.Errorf("body of %d bytes cannot hold a table of %d entries", len(f.body), entries)
+	}
+	at := table
+	for i := uint64(0); i < entries; i++ {
+		n := uint64(le.Uint32(f.body[topKParams+4*(entries+i):]))
+		if at+n > uint64(len(f.body)) {
+			return topK{}, fmt.Errorf("key %d runs past the body", i)
+		}
+		k.keys = append(k.keys, f.body[at:at+n])
+		k.counts = append(k.counts, le.Uint32(f.body[topKParams+4*i:]))
+		at += n
+	}
+	return k, nil
+}
+
+// count is stored + offset for a held key, and 0 for one the frame does not
+// hold, whose true count the reference bounds by the offset instead.
+func (k topK) count(key string) uint64 {
+	for i, held := range k.keys {
+		if string(held) == key {
+			return uint64(k.counts[i]) + uint64(k.offset)
+		}
+	}
+	return 0
+}
+
+func TestTopK(t *testing.T) {
+	seeded := false
+	for _, e := range golden(t) {
+		if e.Kind != "topk" {
+			continue
+		}
+		f, err := readFrame(frameOf(t, e))
+		if err != nil {
+			t.Fatal(err)
+		}
+		k, err := parseTopK(f)
+		if err != nil {
+			t.Fatalf("%s: %v", e.Name, err)
+		}
+		seeded = seeded || k.seed != 0
+		if want := float64(len(e.Keys)); k.total != want {
+			t.Errorf("%s: total %v, want %v", e.Name, k.total, want)
+		}
+		truth := map[string]uint64{}
+		for _, key := range e.Keys {
+			truth[key]++
+		}
+		held := map[string]uint32{}
+		for i, key := range k.keys {
+			held[string(key)] = k.counts[i]
+		}
+		// The guarantee, as the reference states it: a held key's estimate is
+		// never below its truth and its stored count never above it, and a key
+		// not held is no heavier than the offset.
+		for key, n := range truth {
+			stored, ok := held[key]
+			if !ok {
+				if float64(n) > k.offset {
+					t.Errorf("%s: %q dropped with true count %d above offset %v", e.Name, key, n, k.offset)
+				}
+				continue
+			}
+			if got := k.count(key); got < n {
+				t.Errorf("%s: count(%q) is %d, below the true %d", e.Name, key, got, n)
+			}
+			if uint64(stored) > n {
+				t.Errorf("%s: stored %d for %q, above the true %d", e.Name, stored, key, n)
+			}
+		}
+		if e.Name == "topk" {
+			if k.offset <= 0 {
+				t.Errorf("topk: offset %v, want a fixture that purged", k.offset)
+			}
+			var got []string
+			for i, key := range k.keys {
+				got = append(got, fmt.Sprintf("%s:%d", key, k.counts[i]))
+			}
+			if want := "tk-a:2 z:1 é:1"; strings.Join(got, " ") != want {
+				t.Errorf("topk: entries %q, want %q", strings.Join(got, " "), want)
+			}
+		}
+	}
+	if !seeded {
+		t.Error("no topk fixture carries a non-zero seed")
+	}
+}
