@@ -119,3 +119,13 @@ test("the errors reference documents the Count-Min and Top-K errors", () => {
   expect(capacity).toContain("### `CountMinOverflowError`");
   expect(capacity).toContain("### `TopKOverflowError`");
 });
+
+test("the README shows Top-K in use and links its guide", () => {
+  const readme = read("../../../packages/distillate/README.md");
+  const at = readme.indexOf("### Top-K (`distillate/topk`)");
+
+  expect(at).toBeGreaterThan(-1);
+  expect(readme.slice(at, readme.indexOf("\n## ", at))).toContain(
+    "/guides/topk/",
+  );
+});
