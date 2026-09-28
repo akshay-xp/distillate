@@ -151,8 +151,13 @@ export const MAX_KEYS = 100_000;
 
 const KEY_COUNT_MESSAGE = `Key count must be a whole number between 1 and ${MAX_KEYS.toLocaleString("en-US")}. The playground builds real filters in your browser, so it stops there.`;
 
-const RECORD_MESSAGE =
-  "Occurrences must be a whole number of at least 1. The sketch counts events, and a count below one would let an estimate fall under the truth, which is the one thing it rules out.";
+/**
+ * Most occurrences one record may add. Well inside the `u32` a stored count
+ * holds, so neither sketch can overflow and refuse after the other counted.
+ */
+const MAX_RECORD = 1_000_000;
+
+const RECORD_MESSAGE = `Occurrences must be a whole number from 1 to ${MAX_RECORD.toLocaleString("en-US")}. The sketch counts events, and a count below one would let an estimate fall under the truth, which is the one thing it rules out; the playground stops at a million per record.`;
 
 const GROW_MESSAGE = `Keys to add must be a whole number of at least 1, and the total held must stay at or under ${MAX_KEYS.toLocaleString("en-US")}. The playground builds real filters in your browser, so it stops there.`;
 
@@ -437,7 +442,7 @@ export class Playground {
    */
   record(key: string, count: unknown): RecordResult {
     const n = toNumber(count);
-    if (!Number.isInteger(n) || n < 1) {
+    if (!Number.isInteger(n) || n < 1 || n > MAX_RECORD) {
       return { ok: false, message: RECORD_MESSAGE };
     }
     this.#count(key, n);
