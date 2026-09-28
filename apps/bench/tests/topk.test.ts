@@ -4,8 +4,10 @@ import {
   scoreTopK,
   TOPK_DELTA,
   TOPK_EPSILON,
+  TOPK_EVENT_COUNTS,
   TOPK_K,
   topKAdapters,
+  topKRows,
 } from "../src/topk.js";
 
 test("top-k adapters build at a comparable configuration and read it back", () => {
@@ -65,4 +67,29 @@ test("scoreTopK does not penalise a correct tie-break", () => {
     ["b", 1],
   ]);
   expect(scoreTopK(["a", "b"], small, 3)).toEqual(both(1));
+});
+
+// The cap applied after the incumbent's HLL took about 21 minutes at 10M.
+test("top-k event counts stop at 1M", () => {
+  expect(Math.max(...TOPK_EVENT_COUNTS)).toBe(1_000_000);
+});
+
+test("top-k rows measure space, precision, recall and throughput", () => {
+  const rows = topKRows([1_000, 10_000]);
+
+  expect(rows).toHaveLength(4);
+  for (const r of rows) {
+    expect(r.bytes, r.name).toBeGreaterThan(0);
+    for (const share of [r.precision, r.recall]) {
+      expect(share, r.name).toBeGreaterThanOrEqual(0);
+      expect(share, r.name).toBeLessThanOrEqual(1);
+    }
+    expect(Number.isFinite(r.addOpsPerSec) && r.addOpsPerSec > 0, r.name).toBe(
+      true,
+    );
+  }
+  // A held key never reads below its truth, so no returned key of ours may.
+  for (const r of rows.filter((r) => r.name === "distillate/topk")) {
+    expect(r.underestimates, `${r.name} ${r.events}`).toBe(0);
+  }
 });

@@ -1,6 +1,8 @@
 import { TopK as IncumbentTopK } from "bloom-filters";
 import { TopK } from "distillate/topk";
 
+import { zipfStream } from "./countmin.js";
+
 /** One entry of a top-k answer: the key and the library's estimate of it. */
 export interface TopKEntryOut {
   key: string;
@@ -122,4 +124,73 @@ export function scoreTopK(
   }
   const matched = hitAbove + Math.min(hitTied, kEff - above);
   return { precision: matched / returned.length, recall: matched / kEff };
+}
+
+/**
+ * Events per run, capped at 1M as the incumbent's HLL was after it took about
+ * 21 minutes for 10M.
+ */
+export const TOPK_EVENT_COUNTS = [1_000, 10_000, 100_000, 1_000_000];
+
+/** Distinct keys the stream draws from, as for Count-Min. */
+const DISTINCT = 10_000;
+
+export interface TopKRow {
+  name: string;
+  events: number;
+  /** What the sketch holds, as read back from it. */
+  holds: string;
+  bytes: number;
+  precision: number;
+  recall: number;
+  /** Returned keys estimated below their true count. Must be zero for ours. */
+  underestimates: number;
+  addOpsPerSec: number;
+}
+
+function holds(settings: Record<string, number>): string {
+  const { capacity, width, depth, k } = settings;
+  return capacity === undefined
+    ? `${String(width)} x ${String(depth)} + top ${String(k)}`
+    : `${String(capacity)} slots`;
+}
+
+export function topKRows(
+  eventCounts: number[],
+  adapters: TopKAdapter[] = topKAdapters,
+): TopKRow[] {
+  const rows: TopKRow[] = [];
+  for (const events of eventCounts) {
+    // One stream per event count, shared by both adapters, so both are scored
+    // against the same true top-k.
+    const stream = zipfStream(17, DISTINCT, events);
+    const truth = new Map<string, number>();
+    for (const key of stream) truth.set(key, (truth.get(key) ?? 0) + 1);
+
+    for (const adapter of adapters) {
+      const s = adapter.create(TOPK_EPSILON, TOPK_DELTA, TOPK_K);
+      const started = performance.now();
+      for (const key of stream) s.add(key);
+      const addMs = performance.now() - started;
+
+      const top = s.top(TOPK_K);
+      const { precision, recall } = scoreTopK(
+        top.map((e) => e.key),
+        truth,
+        TOPK_K,
+      );
+      rows.push({
+        name: adapter.name,
+        events,
+        holds: holds(s.settings),
+        bytes: s.bytes(),
+        precision,
+        recall,
+        underestimates: top.filter((e) => e.estimate < (truth.get(e.key) ?? 0))
+          .length,
+        addOpsPerSec: events / (addMs / 1000),
+      });
+    }
+  }
+  return rows;
 }
