@@ -336,3 +336,18 @@ test("an add that would carry the total past the safe integer range is refused",
   s.add("a", 5);
   expect(TopK.fromBytes(s.toBytes()).total).toBe(Number.MAX_SAFE_INTEGER);
 });
+
+test("the JSON envelope round-trips", () => {
+  const s = purged();
+  const restored = TopK.fromJSON(JSON.parse(JSON.stringify(s)) as unknown);
+
+  expect(restored.toBytes()).toEqual(s.toBytes());
+});
+
+test.each<[string, unknown]>([
+  ["a non-object", 7],
+  ["a wrong tag", { $: "other", v: FORMAT_VERSION, data: "" }],
+  ["a wrong version", { $: "distillate", v: 1, data: "" }],
+])("fromJSON rejects %s", (_, value) => {
+  expect(() => TopK.fromJSON(value)).toThrow(SerializationError);
+});
