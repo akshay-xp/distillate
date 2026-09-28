@@ -13,6 +13,7 @@ import (
 	"math"
 	"math/bits"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -1348,6 +1349,61 @@ func (k topK) count(key string) uint64 {
 	return 0
 }
 
+// buildTopK follows the reference's update rule on a plain map. No hash is
+// involved: the frame stores entries in canonical order, so matching the JS
+// bytes proves neither slot placement nor arrival order reaches the frame.
+func buildTopK(capacity, seed uint32, keys []string) []byte {
+	stored := map[string]uint32{}
+	var offset, total uint64
+	limit := int(capacity) * 3 / 4
+	for _, key := range keys {
+		stored[key]++
+		total++
+		if len(stored) <= limit {
+			continue
+		}
+		counts := make([]uint32, 0, len(stored))
+		for _, c := range stored {
+			counts = append(counts, c)
+		}
+		sort.Slice(counts, func(i, j int) bool { return counts[i] < counts[j] })
+		median := counts[len(counts)>>1]
+		for held, c := range stored {
+			if c <= median {
+				delete(stored, held)
+			} else {
+				stored[held] = c - median
+			}
+		}
+		offset += uint64(median)
+	}
+
+	held := make([]string, 0, len(stored))
+	for key := range stored {
+		held = append(held, key)
+	}
+	sort.Slice(held, func(i, j int) bool {
+		if a, b := stored[held[i]], stored[held[j]]; a != b {
+			return a > b
+		}
+		return bytes.Compare([]byte(held[i]), []byte(held[j])) < 0
+	})
+
+	params := make([]byte, topKParams)
+	le.PutUint32(params, capacity)
+	le.PutUint32(params[4:], uint32(len(held)))
+	le.PutUint64(params[8:], math.Float64bits(float64(offset)))
+	le.PutUint64(params[16:], math.Float64bits(float64(total)))
+	le.PutUint32(params[24:], seed)
+	payload := make([]byte, 8*len(held))
+	for i, key := range held {
+		le.PutUint32(payload[4*i:], stored[key])
+		le.PutUint32(payload[4*(len(held)+i):], uint32(len(key)))
+		payload = append(payload, key...)
+	}
+	return writeFrame(9, params, payload)
+}
+
 func TestTopK(t *testing.T) {
 	seeded := false
 	for _, e := range golden(t) {
@@ -1391,6 +1447,10 @@ func TestTopK(t *testing.T) {
 			if uint64(stored) > n {
 				t.Errorf("%s: stored %d for %q, above the true %d", e.Name, stored, key, n)
 			}
+		}
+		rebuilt := buildTopK(k.capacity, k.seed, e.Keys)
+		if golden := frameOf(t, e); !bytes.Equal(rebuilt, golden) {
+			t.Errorf("%s: rebuilt frame differs:\n got %x\nwant %x", e.Name, rebuilt, golden)
 		}
 		if e.Name == "topk" {
 			if k.offset <= 0 {
