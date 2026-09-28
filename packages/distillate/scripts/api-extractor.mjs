@@ -23,6 +23,7 @@ const entries = [
   { name: "scalable", dts: "dist/scalable/index.d.ts" },
   { name: "cuckoo", dts: "dist/cuckoo/index.d.ts" },
   { name: "countmin", dts: "dist/countmin/index.d.ts" },
+  { name: "topk", dts: "dist/topk/index.d.ts" },
 ];
 
 let failed = false;

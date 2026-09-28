@@ -11,7 +11,8 @@
     "src/hll/index.ts",
     "src/frame/index.ts",
     "src/scalable/index.ts",
-    "src/cuckoo/index.ts"
+    "src/cuckoo/index.ts",
+    "src/topk/index.ts"
   ],
   "tsconfig": "./tsconfig.json",
   "readme": "none",
