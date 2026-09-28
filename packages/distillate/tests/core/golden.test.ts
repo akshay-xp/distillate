@@ -10,6 +10,7 @@ import { HyperLogLog } from "../../src/hll/hll.js";
 import { CountMinSketch } from "../../src/countmin/countmin.js";
 import { CuckooFilter } from "../../src/cuckoo/cuckoo.js";
 import { ScalableBloomFilter } from "../../src/scalable/scalable.js";
+import { TopK } from "../../src/topk/topk.js";
 import goldenJson from "../fixtures/golden.json" with { type: "json" };
 
 interface GoldenEntry {
@@ -77,6 +78,12 @@ const build = (entry: GoldenEntry): Serializable => {
       for (const key of keys) sketch.add(key);
       return sketch;
     }
+    case "topk": {
+      const { seed } = entry;
+      const sketch = TopK.create(epsilon, { seed });
+      for (const key of keys) sketch.add(key);
+      return sketch;
+    }
     default:
       throw new Error(`unknown kind ${kind}`);
   }
@@ -100,6 +107,8 @@ const parse = (kind: string, bytes: Uint8Array): Serializable => {
       return CuckooFilter.fromBytes(bytes);
     case "countmin":
       return CountMinSketch.fromBytes(bytes);
+    case "topk":
+      return TopK.fromBytes(bytes);
     default:
       throw new Error(`unknown kind ${kind}`);
   }
@@ -129,6 +138,8 @@ describe.each(structures)("golden fixture $name", (entry) => {
       expect(parsed.equals(build(entry) as HyperLogLog)).toBe(true);
     } else if (parsed instanceof CountMinSketch) {
       expect(parsed.equals(build(entry) as CountMinSketch)).toBe(true);
+    } else if (parsed instanceof TopK) {
+      expect(parsed.equals(build(entry) as TopK)).toBe(true);
     } else {
       // A deleted key may still answer true (a false positive), so only the
       // keys still held are asserted.
