@@ -11,6 +11,7 @@ import { HyperLogLog } from "../src/hll/hll.js";
 import { CountMinSketch } from "../src/countmin/countmin.js";
 import { CuckooFilter } from "../src/cuckoo/cuckoo.js";
 import { ScalableBloomFilter } from "../src/scalable/scalable.js";
+import { TopK } from "../src/topk/topk.js";
 
 interface Entry {
   name: string;
@@ -71,6 +72,14 @@ const bytes = (entry: Entry): Uint8Array => {
       // same bytes, so no separate counts field is needed.
       const { delta = 0.01, seed } = entry;
       const sketch = CountMinSketch.create(epsilon, delta, { seed });
+      for (const key of keys) sketch.add(key);
+      return sketch.toBytes();
+    }
+    case "topk": {
+      // As for Count-Min, repeats in the key list are how a fixture reaches
+      // stored counts above one, and on a small capacity how it purges.
+      const { seed } = entry;
+      const sketch = TopK.create(epsilon, { seed });
       for (const key of keys) sketch.add(key);
       return sketch.toBytes();
     }
