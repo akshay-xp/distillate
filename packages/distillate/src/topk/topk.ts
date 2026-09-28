@@ -2,6 +2,7 @@ import { type BytesLike, normalize } from "../core/bytes.js";
 import { hash32x2Into } from "../core/hasher.js";
 import { assertPositiveInt, assertUint32, ParamError } from "../core/params.js";
 import {
+  assertBodyLength,
   assertMinBodyLength,
   assertParamsPadding,
   FORMAT_VERSION,
@@ -157,6 +158,16 @@ export class TopK {
         `topk: frame holds ${String(entries)} entries, above the load limit ${String(topKLoadLimit(capacity))} for capacity ${String(capacity)}`,
       );
     }
+    // Keys are variable length, so the body length only follows from the
+    // table. Summed as plain numbers so a forged length cannot wrap the sum,
+    // and matched exactly so no byte goes unaccounted for.
+    const tableEnd = PARAMS_SIZE + 8 * entries;
+    assertMinBodyLength(body.length, tableEnd, "topk");
+    let keyBytes = 0;
+    for (let i = 0; i < entries; i++) {
+      keyBytes += view.getUint32(PARAMS_SIZE + 4 * (entries + i), true);
+    }
+    assertBodyLength(body.length, tableEnd + keyBytes, "topk");
     let sketch: TopK;
     try {
       sketch = new TopK({ capacity, seed: view.getUint32(24, true) });
@@ -167,7 +178,7 @@ export class TopK {
       }
       throw err;
     }
-    let keyAt = PARAMS_SIZE + 8 * entries;
+    let keyAt = tableEnd;
     for (let i = 0; i < entries; i++) {
       const count = view.getUint32(PARAMS_SIZE + 4 * i, true);
       const len = view.getUint32(PARAMS_SIZE + 4 * (entries + i), true);

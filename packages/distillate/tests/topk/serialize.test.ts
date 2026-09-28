@@ -238,3 +238,27 @@ test("fromBytes rejects more entries than the load limit allows", () => {
 
   expect(() => TopK.fromBytes(frame)).toThrow(SerializationError);
 });
+
+test.each<[string, Forged]>([
+  [
+    "entries past the table",
+    { counts: [1], lengths: [1], keys: [97], entries: 2 },
+  ],
+  [
+    "keys shorter than their lengths",
+    { counts: [1], lengths: [5], keys: [97, 98, 99] },
+  ],
+  // The case a length check alone would miss: every read stays in bounds, but
+  // bytes are left over that no entry accounts for.
+  [
+    "lengths summing below the bytes left",
+    { counts: [1], lengths: [1], keys: [97, 98, 99] },
+  ],
+  ["a trailing byte", { counts: [1], lengths: [1], keys: [97], extra: [0] }],
+  [
+    "a length no body could hold",
+    { counts: [1], lengths: [0xffffffff], keys: [97] },
+  ],
+])("fromBytes rejects %s", (_, fields) => {
+  expect(() => TopK.fromBytes(forge(fields))).toThrow(SerializationError);
+});
