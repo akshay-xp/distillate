@@ -55,11 +55,11 @@ function compareBytes(a: Uint8Array, b: Uint8Array): number {
 }
 
 /**
- * Thrown when an `add` would carry a stored count past `2^32 - 1`, or the
- * total past `Number.MAX_SAFE_INTEGER`. Counts are `u32`, so a wrapped one
- * would read back below the truth, the one outcome this structure rules out;
- * a total past the safe range is one `fromBytes` refuses. The sketch is left
- * exactly as it was.
+ * Thrown when an `add` or `union` would carry a stored count past
+ * `2^32 - 1`, or the total past `Number.MAX_SAFE_INTEGER`. Counts are `u32`,
+ * so a wrapped one would read back below the truth, the one outcome this
+ * structure rules out; a total past the safe range is one `fromBytes`
+ * refuses. Every sketch involved is left exactly as it was.
  */
 export class TopKOverflowError extends RangeError {
   /** Discriminates this error from other `Error`s. */
@@ -529,6 +529,12 @@ export class TopK {
         `cannot union Top-K sketches with seed ${String(this.#seed)} and ${String(other.#seed)}`,
       );
     }
+    // Past the safe range the total loses precision and fromBytes refuses it.
+    if (this.#total + other.#total > Number.MAX_SAFE_INTEGER) {
+      throw new TopKOverflowError(
+        `union would carry the total past ${String(Number.MAX_SAFE_INTEGER)}`,
+      );
+    }
     const keys: Uint8Array[] = [];
     const counts: number[] = [];
     // Which merged entry each of this sketch's slots became, so a key the
@@ -547,7 +553,15 @@ export class TopK {
       const key = other.#keyAt(slot);
       const at = indexOf[this.#slotFor(key)] ?? -1;
       if (at >= 0) {
-        counts[at] = (counts[at] ?? 0) + stored;
+        const sum = (counts[at] ?? 0) + stored;
+        // A Uint32Array write wraps, so 2^32 would place as an empty slot and
+        // the key would read below its true count.
+        if (sum > 0xffffffff) {
+          throw new TopKOverflowError(
+            `union would carry a stored count to ${String(sum)}, past ${String(0xffffffff)}`,
+          );
+        }
+        counts[at] = sum;
       } else {
         keys.push(key.slice());
         counts.push(stored);
