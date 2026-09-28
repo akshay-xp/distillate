@@ -73,7 +73,16 @@ test("the chooser lists Scalable Bloom as shipped, not as planned", () => {
 
 const errors = (): string => read("../src/content/docs/reference/errors.md");
 
-const NUMBERS = ["ten", "eleven", "twelve", "thirteen", "fourteen"];
+const NUMBERS = [
+  "ten",
+  "eleven",
+  "twelve",
+  "thirteen",
+  "fourteen",
+  "fifteen",
+  "sixteen",
+  "seventeen",
+];
 
 test("the errors reference documents ScalableParamMismatchError", () => {
   const page = errors();
@@ -94,9 +103,17 @@ test("the errors reference says which subpaths export what", () => {
   const page = errors();
   const at = page.indexOf("serialization errors are exported");
   const paragraph = page.slice(at, page.indexOf("\n\n", at));
-  expect(paragraph).toContain("six structure subpaths");
+  expect(paragraph).toContain("eight structure subpaths");
   expect(paragraph).toContain("distillate/scalable");
-  for (const subpath of ["bloom", "blocked", "hll", "scalable", "cuckoo"]) {
+  for (const subpath of [
+    "bloom",
+    "blocked",
+    "hll",
+    "scalable",
+    "cuckoo",
+    "countmin",
+    "topk",
+  ]) {
     expect(paragraph, subpath).toContain(`\`distillate/${subpath}\``);
   }
 });
