@@ -52,9 +52,11 @@ function compareBytes(a: Uint8Array, b: Uint8Array): number {
 }
 
 /**
- * Thrown when an `add` would carry a stored count past `2^32 - 1`. Counts are
- * `u32`, so a wrapped one would read back below the truth, the one outcome
- * this structure rules out. The sketch is left exactly as it was.
+ * Thrown when an `add` would carry a stored count past `2^32 - 1`, or the
+ * total past `Number.MAX_SAFE_INTEGER`. Counts are `u32`, so a wrapped one
+ * would read back below the truth, the one outcome this structure rules out;
+ * a total past the safe range is one `fromBytes` refuses. The sketch is left
+ * exactly as it was.
  */
 export class TopKOverflowError extends RangeError {
   /** Discriminates this error from other `Error`s. */
@@ -412,6 +414,13 @@ export class TopK {
     // A count below 1 would let an estimate fall under the true count, the one
     // thing this structure guarantees cannot happen.
     assertPositiveInt(count, "count");
+    // Past the safe range the total loses precision and fromBytes refuses it,
+    // so the writer could otherwise produce a frame its own reader rejects.
+    if (this.#total + count > Number.MAX_SAFE_INTEGER) {
+      throw new TopKOverflowError(
+        `adding ${String(count)} would carry the total past ${String(Number.MAX_SAFE_INTEGER)}`,
+      );
+    }
     const bytes = normalize(key);
     const slot = this.#slotFor(bytes);
     const stored = this.#counts[slot] ?? 0;
