@@ -92,3 +92,34 @@ export const topKAdapters: TopKAdapter[] = [
   distillateTopKAdapter,
   incumbentTopKAdapter,
 ];
+
+/**
+ * Precision and recall of `returned` against the true top `k` of `truth`.
+ *
+ * Keys tied at the k-th true count are interchangeable: every key above that
+ * count must come back, and any of the tied keys may fill the places left, so
+ * a correct answer scores 1 whichever tied keys it chose. With fewer distinct
+ * keys than `k`, the whole key set is the answer.
+ */
+export function scoreTopK(
+  returned: string[],
+  truth: Map<string, number>,
+  k: number,
+): { precision: number; recall: number } {
+  const counts = [...truth.values()].sort((a, b) => b - a);
+  const kEff = Math.min(k, counts.length);
+  if (kEff === 0 || returned.length === 0) return { precision: 0, recall: 0 };
+  const kth = counts[kEff - 1] ?? 0;
+
+  let above = 0;
+  for (const count of truth.values()) if (count > kth) above++;
+  let hitAbove = 0;
+  let hitTied = 0;
+  for (const key of returned) {
+    const count = truth.get(key) ?? 0;
+    if (count > kth) hitAbove++;
+    else if (count === kth) hitTied++;
+  }
+  const matched = hitAbove + Math.min(hitTied, kEff - above);
+  return { precision: matched / returned.length, recall: matched / kEff };
+}
