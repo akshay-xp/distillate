@@ -11,8 +11,8 @@ Versioned, self-describing, little-endian binary format. Spec'd here so Rust/Go 
 Offset  Size  Field
 0       4     Magic "DSTL" (0x44 53 54 4C)
 4       1     Format version (u8)         # bump on incompatible layout change
-5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog 6=ScalableBloom 7=Cuckoo 8=CountMin
-                                          # (9+ reserved: CountingBloom, TopK, ...)
+5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog 6=ScalableBloom 7=Cuckoo 8=CountMin 9=TopK
+                                          # (10+ reserved: CountingBloom, ...)
 6       1     Flags (u8)                  # bit0-3 hash variant, bit4-7 reserved (must be 0)
 7       1     Reserved (u8)               # must be 0
 8       4     Body length (u32)           # bytes of body, excluding header and CRC
@@ -202,11 +202,53 @@ A key's counters come from its hash words (see [hash variant](#hash-variant-flag
 
 Geometry is stored rather than re-derived, so a reader needs no floating-point sizing. For writers, informatively: `width = ceil(e / epsilon)` and `depth = ceil(ln(1 / delta))`, so an estimate is at most `epsilon` times the total above the truth with probability at least `1 - delta`. A writer refuses a grid whose `width * depth` would exceed `2^32 - 1`, and refuses an add that would carry a counter past `2^32 - 1` rather than wrapping.
 
+Top-K (type 9), little-endian. The keys seen most often, each with a stored count, in a map purged whenever it passes its load limit:
+
+```
+Offset    Size          Field
+0         4             capacity: slots in the map, a power of two in [4, 2^24] (u32)
+4         4             entries: keys held, at most floor(0.75 * capacity) (u32)
+8         8             offset: everything the purges have subtracted (f64), an integer
+16        8             total: every count ever added (f64), an integer
+24        4             seed (u32)
+28        4             padding (0)
+32        4 * entries   counts: each held key's stored count (u32), at least 1
+32 + 4e   4 * entries   lengths: each held key's length in bytes (u32)
+32 + 8e   sum(lengths)  keys: the key bytes, concatenated with no separator or padding
+```
+
+Here `e` is `entries`. The params end at 32, so the counts start at frame offset 48, a multiple of 8, and the lengths at a multiple of 4. Entry `i` is `counts[i]`, `lengths[i]`, and the `lengths[i]` bytes that follow the keys of entries `0` to `i - 1`. This is the first type whose body length does not follow from its params: a reader bounds the table by `entries`, sums the lengths, and requires the body to be exactly `32 + 8 * entries + sum(lengths)`. It rejects a body longer than that as firmly as a shorter one, since bytes no entry accounts for were not written by this format.
+
+**Entries are in canonical order**: `count` descending, then key bytes ascending, comparing bytes as unsigned values and putting a key before any longer key it is a prefix of, so the empty key sorts first among equal counts. The order depends only on which keys are held with which counts, never on the order they arrived or where the in-memory map placed them, which is why two sketches holding the same entries write the same bytes. A reader requires each entry to follow its predecessor strictly in this order.
+
+A reader rejects:
+
+- a `capacity` that is not a power of two, or is outside `[4, 2^24]`;
+- an `entries` above `floor(0.75 * capacity)`;
+- a body length other than `32 + 8 * entries + sum(lengths)`, in either direction;
+- a stored count of 0;
+- entries not in strict canonical order, and a key that appears twice;
+- an `offset` or `total` that is not an integer in `[0, 2^53 - 1]`;
+- nonzero params padding.
+
+For a held key, the estimate is `count + offset`, never below its true count, and `count` alone is a lower bound, never above it. A key not held estimates 0, and its true count is at most `offset`: nothing heavier than the offset can have been dropped.
+
+A writer adds `n` occurrences of a key (`n` at least 1) as follows, and a reader that rebuilds a frame from its keys must follow the same steps:
+
+1. The key's stored count goes up by `n`, entering at `n` if it was not held, and `total` goes up by `n`.
+2. If `entries` is now above `floor(0.75 * capacity)`, purge: sort the stored counts ascending and take `median = sorted[entries >> 1]`, the upper median. Subtract it from every stored count, drop every key whose count reaches 0 or below, and add it to `offset`.
+
+The upper median guarantees at least `(entries >> 1) + 1` keys go, so one purge always makes room. A writer refuses an add that would carry a stored count past `2^32 - 1` or `total` past `2^53 - 1`.
+
+Combining two frames of identical `capacity` and `seed`, informatively: sum each key's stored counts, and the offsets and totals, then purge as above while `entries` is above the load limit. Unlike Count-Min, this is not the frame one sketch fed both streams would hold, since a single sketch purges as it goes; both hold the guarantee.
+
+Keys are stored verbatim, so unlike every other type this frame contains user input as written. Geometry is stored rather than re-derived. For writers, informatively: `capacity` is the smallest power of two with `1 / ((floor(0.75 * capacity) + 2) >> 1) <= epsilon`, that denominator being the fewest keys a purge takes its full median from, which is what bounds `offset` by `epsilon * total`.
+
 ### Hash variant (flags nibble)
 
 Bits 0-3 of the flags byte name the complete scheme that turns a key into stored bits: the hash **and the index mapping** from its output to positions, not the hash alone. A change to any component takes a new variant, even when the hash itself is unchanged, because a reader that recognises the old variant would otherwise read every stored frame at the wrong positions with no error. Version 5 uses one scheme for every structure:
 
-- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog, Scalable, Cuckoo, Count-Min) with the index mapping below
+- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog, Scalable, Cuckoo, Count-Min, Top-K) with the index mapping below
 
 Variant `0` covers:
 
@@ -218,10 +260,11 @@ Variant `0` covers:
 - **Scalable:** a key is hashed once with the frame's seed, and every stage applies the Bloom mapping above to that one hash with its own `m` and `k`.
 - **Cuckoo:** fingerprint `fp = (w1 >>> (32 - f))`, or 1 when that is 0; bucket `i1 = reduce(w0, buckets)`; the other bucket `(fp * 0x5bd1e995 mod 2^32 mod buckets + buckets - i1) mod buckets`; an eviction walk starts from bit 0 of `w2` and draws its victim slots from a xorshift32 seeded with `w3 | 1`. The full rules are in the type 7 section above.
 - **Count-Min:** `a = w0`, `b = w1`, exactly as Bloom; row `r` of `depth` takes probe `g_r = (a + r*b + r*r) mod 2^32` reduced into `[0, width)` by Lemire multiply-shift, addressing counter `r * width + g_r`.
+- **Top-K:** a key's map slot is `w0 & (capacity - 1)`, probing linearly on a collision. This places keys only in memory: the frame stores them in canonical order, so no stored byte depends on the hash, and a reader needs none of it to read or rebuild a frame.
 
 This is the case Guava hit: `MURMUR128_MITZ_32` and `MURMUR128_MITZ_64` use the same hash and differ only in how its 128 bits map to indices, yet the change still needed a new `Strategy` ordinal because the stored bits differ. Guava's ordinal covers the whole strategy, and this nibble does too.
 
-All seven structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header and version 5 only the params padding; neither touched the hash.
+All eight structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header and version 5 only the params padding; neither touched the hash.
 
 That version 3 bump (rather than a flags-only change) was deliberate: the version-2 Fuse reader had no variant check and would silently misread a version-3 frame, so bumping the version made it reject on the version byte instead.
 

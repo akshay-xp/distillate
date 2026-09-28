@@ -48,13 +48,22 @@ function hllSection(): string {
   );
 }
 
-/** The HyperLogLog params table, keyed by the field name each row names. */
-function hllParams(): Map<string, { offset: number; text: string }> {
-  const section = hllSection();
+/**
+ * The params table under `heading`, keyed by the field name each row names.
+ * Each type's table is the first code block after its heading.
+ */
+function paramsTable(
+  heading: string,
+): Map<string, { offset: number; at: string; text: string }> {
+  const section = sectionFrom(
+    heading,
+    "\n### ",
+    `serialization.md has no params block for ${heading}`,
+  );
   const open = section.indexOf("```");
   const close = section.indexOf("```", open + 3);
 
-  const rows = new Map<string, { offset: number; text: string }>();
+  const rows = new Map<string, { offset: number; at: string; text: string }>();
   for (const line of section
     .slice(open + 3, close)
     .trim()
@@ -62,9 +71,21 @@ function hllParams(): Map<string, { offset: number; text: string }> {
     .slice(1)) {
     const [offset, , ...rest] = line.trim().split(/\s{2,}/);
     const text = rest.join(" ");
-    rows.set(text.split(/[:\s(]/)[0] ?? "", { offset: Number(offset), text });
+    rows.set(text.split(/[:\s(]/)[0] ?? "", {
+      offset: Number(offset),
+      at: offset,
+      text,
+    });
   }
   return rows;
+}
+
+/** The HyperLogLog params table. */
+function hllParams(): Map<
+  string,
+  { offset: number; at: string; text: string }
+> {
+  return paramsTable("HyperLogLog (type 5), little-endian:");
 }
 
 /** The offset the params table gives for `field`, relative to the body. */
@@ -124,6 +145,7 @@ const NUMERALS = [
   "five",
   "six",
   "seven",
+  "eight",
 ];
 
 /** The structures the hash-variant section lists, and the count it claims. */
@@ -148,6 +170,7 @@ function hashVariant(): { families: string[]; count: string } {
 interface Fixture {
   name: string;
   p?: number;
+  seed?: number;
   keys: string[];
   frame: string;
 }
@@ -155,6 +178,7 @@ interface Fixture {
 function golden(name: string): {
   frame: Uint8Array;
   p: number;
+  seed: number;
   keys: string[];
 } {
   const all = JSON.parse(readFileSync(GOLDEN, "utf8")) as Fixture[];
@@ -163,6 +187,7 @@ function golden(name: string): {
   return {
     frame: Buffer.from(entry.frame, "base64"),
     p: entry.p ?? 0,
+    seed: entry.seed ?? 0,
     keys: entry.keys,
   };
 }
@@ -423,4 +448,61 @@ test("the count-min section documents every field and the row-sum rule", () => {
   expect(section).toMatch(/reject/i);
   // Same rule Cuckoo learned: geometry comes from the frame.
   expect(section).toContain("must not re-derive");
+});
+
+test("the layout table names type 9 as TopK and reserves from 10", () => {
+  const { types, reserved } = typeRows();
+  const named = new Map(
+    [...types.matchAll(/(\d+)=([A-Za-z0-9]+)/g)].map(([, n, name]) => [
+      Number(n),
+      name,
+    ]),
+  );
+
+  expect(named.get(9)).toBe("TopK");
+  expect(reserved).toContain("10+");
+  expect(reserved).not.toContain("TopK");
+});
+
+// Payload rows give their offset as `A + Be`, e being the entries field, since
+// where the lengths and keys start depends on how many entries there are.
+function topKAt(
+  rows: Map<string, { at: string }>,
+  field: string,
+  entries: number,
+): number {
+  const at = rows.get(field)?.at ?? "";
+  const m = /^(\d+)(?: \+ (\d+)e)?$/.exec(at);
+  if (!m) throw new Error(`Top-K ${field} row has offset "${at}"`);
+  return Number(m[1]) + (m[2] ? Number(m[2]) : 0) * entries;
+}
+
+// Decoded from the page's offsets alone, so a wrong row fails here rather than
+// in the Go reader written from it.
+test("the documented Top-K layout decodes the golden frame", () => {
+  const rows = paramsTable("Top-K (type 9), little-endian");
+  const fixture = golden("topk");
+  const body = frameBody(fixture.frame);
+  const u32 = (field: string): number =>
+    body.getUint32(rows.get(field)?.offset ?? NaN, true);
+
+  const capacity = u32("capacity");
+  const entries = u32("entries");
+  expect(Number.isInteger(Math.log2(capacity))).toBe(true);
+  expect(entries).toBeGreaterThan(0);
+  expect(entries).toBeLessThanOrEqual(Math.floor(0.75 * capacity));
+  expect(u32("seed")).toBe(fixture.seed);
+  expect(body.getFloat64(rows.get("total")?.offset ?? NaN, true)).toBe(
+    fixture.keys.length,
+  );
+
+  const lengthsAt = topKAt(rows, "lengths", entries);
+  let keyBytes = 0;
+  for (let i = 0; i < entries; i++) {
+    expect(
+      body.getUint32(topKAt(rows, "counts", entries) + 4 * i, true),
+    ).toBeGreaterThan(0);
+    keyBytes += body.getUint32(lengthsAt + 4 * i, true);
+  }
+  expect(topKAt(rows, "keys", entries) + keyBytes).toBe(body.byteLength);
 });
