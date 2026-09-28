@@ -4,6 +4,7 @@ import { assertPositiveInt, assertUint32, ParamError } from "../core/params.js";
 import {
   FORMAT_VERSION,
   HASH_MURMUR128,
+  readHeader,
   writeFrame,
 } from "../core/serialize.js";
 import {
@@ -117,6 +118,34 @@ export class TopK {
   ): TopK {
     const sketch = TopK.create(epsilon, options);
     for (const key of keys) sketch.add(key);
+    return sketch;
+  }
+
+  /**
+   * Restores a sketch from its {@link TopK.toBytes} serialization.
+   *
+   * @param bytes - The serialized sketch.
+   * @returns The reconstructed sketch.
+   */
+  static fromBytes(bytes: Uint8Array): TopK {
+    const { body } = readHeader(bytes);
+    const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
+    const capacity = view.getUint32(0, true);
+    const entries = view.getUint32(4, true);
+    const sketch = new TopK({ capacity, seed: view.getUint32(24, true) });
+    let keyAt = PARAMS_SIZE + 8 * entries;
+    for (let i = 0; i < entries; i++) {
+      const count = view.getUint32(PARAMS_SIZE + 4 * i, true);
+      const len = view.getUint32(PARAMS_SIZE + 4 * (entries + i), true);
+      const key = body.subarray(keyAt, keyAt + len);
+      keyAt += len;
+      const slot = sketch.#slotFor(key);
+      sketch.#storeKey(slot, key);
+      sketch.#counts[slot] = count;
+    }
+    sketch.#entries = entries;
+    sketch.#offset = view.getFloat64(8, true);
+    sketch.#total = view.getFloat64(16, true);
     return sketch;
   }
 
