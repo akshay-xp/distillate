@@ -578,3 +578,24 @@ test("renderResults places the top-k section after count-min and states the argu
     expect(section, phrase).toContain(phrase);
   }
 });
+
+test("METHODOLOGY states the top-k configuration, its k and the accuracy inversion", () => {
+  const md = readFileSync(
+    fileURLToPath(new URL("../METHODOLOGY.md", import.meta.url)),
+    "utf8",
+  );
+  const at = md.indexOf("## Configuration for Top-K");
+  expect(at).toBeGreaterThan(-1);
+  const section = md.slice(at, md.indexOf("\n## ", at + 1));
+  for (const phrase of [
+    "k = 100",
+    "accuracy",
+    "one row",
+    "tie",
+    "Zipf",
+    "10,000 distinct",
+    "1M",
+  ]) {
+    expect(section, phrase).toContain(phrase);
+  }
+});
