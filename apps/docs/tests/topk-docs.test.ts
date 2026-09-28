@@ -25,6 +25,9 @@ test("the Top-K guide covers what a reader needs to choose and use it", () => {
     "It never underestimates",
     "Keys come back as bytes",
     "The frame holds your keys",
+    "Union is not the combined stream",
+    "Space",
+    "Persist it",
   ]) {
     section(page, heading);
   }
@@ -54,4 +57,14 @@ test("the Top-K guide covers what a reader needs to choose and use it", () => {
   expect(frame).toContain("verbatim");
   expect(frame).toContain("Count-Min");
   expect(frame).toContain("toBytes");
+
+  // The departure from Count-Min's byte-exact union, with the reason.
+  const union = section(page, "Union is not the combined stream");
+  expect(union).toContain("Count-Min");
+  expect(union).toContain("order");
+  expect(union).toContain("equals");
+
+  const space = section(page, "Space");
+  expect(space).toContain("capacity");
+  expect(space).toMatch(/rather than|not/);
 });

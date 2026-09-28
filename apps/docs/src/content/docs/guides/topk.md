@@ -172,3 +172,84 @@ Persisting a sketch persists user input. Treat a Top-K frame in a cache, a log
 or a build artifact as you would the raw stream it came from. To keep raw keys
 out, add a keyed digest of each key instead, and `top` will then return
 digests you map back yourself.
+
+## Union is not the combined stream
+
+Two sketches with the same `capacity` and seed combine with `union`: each key's
+counts add, the errors add, and the merged map is purged back to size. The
+result holds the same guarantee, with an error at least the sum of the two.
+
+It is **not** the sketch one would hold had it seen both streams, which is
+where it departs from [Count-Min](/guides/countmin/):
+
+```ts
+import { TopK } from "distillate/topk";
+
+const fed = (keys: string[]): TopK => {
+  const s = new TopK({ capacity: 4 });
+  for (const key of keys) s.add(key);
+  return s;
+};
+const a = ["x", "x", "x", "y", "y", "z"];
+const b = ["p", "q", "x", "r"];
+
+const merged = fed(a).union(fed(b));
+const both = fed([...a, ...b]);
+
+merged.equals(both); // false
+merged.count("x"); // 4
+both.count("x"); // 4
+merged.error(); // 1
+both.error(); // 2
+```
+
+A single sketch purges as keys arrive, so what survives depends on their
+order: here `b`'s singletons push out `a`'s lighter keys as they land. A union
+purges only what each side kept. Both answers hold the guarantee, and `x`,
+seen four times, reads 4 either way; they differ in which light keys survived.
+Count-Min's union is exact because its counters only ever add, and addition
+does not care about order.
+
+## Space
+
+The map is 12 bytes a slot, three `u32` arrays sized by `capacity`, plus the
+bytes of the keys it holds. The table is fixed by `epsilon` before a key
+arrives rather than growing with the stream:
+
+```ts
+import { TopK } from "distillate/topk";
+
+TopK.create(0.01).capacity * 12; // 6144
+```
+
+| `epsilon` | `capacity` | Table bytes |
+| --------- | ---------- | ----------- |
+| 0.01      | 512        | 6,144       |
+| 0.001     | 4,096      | 49,152      |
+| 0.0001    | 32,768     | 393,216     |
+
+The frame is sparse: it stores only the keys held, 8 bytes each plus the key's
+length, so an empty sketch serializes small whatever its capacity:
+
+```ts
+import { TopK } from "distillate/topk";
+
+TopK.create(0.01).toBytes().length; // 52
+```
+
+## Persist it
+
+```ts
+import { TopK } from "distillate/topk";
+
+const s = TopK.from(["a", "a", "b"], 0.01);
+
+const restored = TopK.fromBytes(s.toBytes());
+restored.count("a"); // 2
+restored.equals(s); // true
+```
+
+`toJSON` and `fromJSON` wrap the same bytes in a JSON envelope. The binary form
+is [frame type 9](/reference/serialization/), readable from any language, and
+two sketches holding the same keys with the same counts write the same bytes,
+whatever order the keys arrived in.
