@@ -285,3 +285,39 @@ test("fromBytes accepts an offset and total at the edge of the safe range", () =
   expect(s.error()).toBe(7);
   expect(s.total).toBe(Number.MAX_SAFE_INTEGER);
 });
+
+const A = 97;
+const B = 98;
+
+test.each<[string, Forged]>([
+  // A stored 0 marks an empty slot, so the entry would vanish on decode.
+  ["a stored count of 0", { counts: [0], lengths: [1], keys: [A] }],
+  [
+    "counts in ascending order",
+    { counts: [3, 7], lengths: [1, 1], keys: [A, B] },
+  ],
+  [
+    "a tie in descending key order",
+    { counts: [3, 3], lengths: [1, 1], keys: [B, A] },
+  ],
+  [
+    "a duplicate key on a tie",
+    { counts: [3, 3], lengths: [1, 1], keys: [A, A] },
+  ],
+  // Correctly ordered by count, so only the placement check can catch it.
+  [
+    "a duplicate key in count order",
+    { counts: [5, 3], lengths: [1, 1], keys: [A, A] },
+  ],
+])("fromBytes rejects %s", (_, fields) => {
+  expect(() => TopK.fromBytes(forge(fields))).toThrow(SerializationError);
+});
+
+test("the empty key sorts first among a tie", () => {
+  const s = TopK.fromBytes(
+    forge({ counts: [3, 3], lengths: [0, 1], keys: [A] }),
+  );
+
+  expect(s.count("")).toBe(3);
+  expect(s.count("a")).toBe(3);
+});
