@@ -3,7 +3,7 @@ import { expect, test } from "vitest";
 import { hash32x2Into } from "../../src/core/hasher.js";
 import { ParamError } from "../../src/core/params.js";
 import { topKSizing } from "../../src/topk/sizing.js";
-import { TopK } from "../../src/topk/topk.js";
+import { TopK, TopKOverflowError } from "../../src/topk/topk.js";
 
 test("create builds a sketch with the capacity the sizing solved for", () => {
   const sketch = TopK.create(0.01);
@@ -95,6 +95,26 @@ const collidingPair = (capacity: number): [string, string] => {
   }
   throw new Error("no colliding pair found");
 };
+
+test("an add that would wrap a stored count is refused and changes nothing", () => {
+  const fresh = new TopK({ capacity: 16 });
+  expect(() => {
+    fresh.add("a", 2 ** 32);
+  }).toThrow(TopKOverflowError);
+  // No orphan entry: a refused add must not have claimed a slot.
+  expect(fresh.count("a")).toBe(0);
+  expect(fresh.top(1)).toEqual([]);
+  expect(fresh.total).toBe(0);
+
+  const full = new TopK({ capacity: 16 });
+  full.add("a", 2 ** 32 - 1);
+  expect(() => {
+    full.add("a", 1);
+  }).toThrow(TopKOverflowError);
+  expect(full.count("a")).toBe(2 ** 32 - 1);
+  expect(full.total).toBe(2 ** 32 - 1);
+  expect(full.top(5)).toHaveLength(1);
+});
 
 test("two keys sharing a bucket keep their own counts", () => {
   const sketch = new TopK({ capacity: 16 });
