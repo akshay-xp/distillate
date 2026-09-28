@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { expect, test } from "vitest";
 
 import { crc32 } from "../../src/core/crc32.js";
@@ -350,4 +351,70 @@ test.each<[string, unknown]>([
   ["a wrong version", { $: "distillate", v: 1, data: "" }],
 ])("fromJSON rejects %s", (_, value) => {
   expect(() => TopK.fromJSON(value)).toThrow(SerializationError);
+});
+
+// Entries are generated whole and laid out consistently, then tampered with
+// some of the time, so the generator reaches decodable frames and not only
+// rejections. Small alphabets make canonical order, ties and duplicate keys
+// all common: two key bytes, counts to 4, capacities that are and are not
+// powers of two, and offsets and totals on both sides of legal.
+const forged = fc
+  .record({
+    capacity: fc.constantFrom(0, 4, 16, 16, 100),
+    offset: fc.constantFrom(0, 0, 3, -1, 0.5, 2 ** 53),
+    total: fc.constantFrom(0, 0, 3, -1, 0.5, 2 ** 53),
+    pad: fc.constantFrom(0, 0, 0, 1),
+    items: fc.array(
+      fc.record({
+        count: fc.nat({ max: 4 }),
+        key: fc.array(fc.constantFrom(A, B), { maxLength: 2 }),
+      }),
+      { maxLength: 4 },
+    ),
+    surplus: fc.constantFrom(0, 0, 0, 1),
+    extra: fc.constantFrom([], [], [], [0]),
+  })
+  .map(({ items, surplus, ...rest }) =>
+    forge({
+      ...rest,
+      entries: items.length + surplus,
+      counts: items.map((e) => e.count),
+      lengths: items.map((e) => e.key.length),
+      keys: items.flatMap((e) => e.key),
+    }),
+  );
+
+test("a forged frame decodes to itself or throws a typed error (fuzz)", () => {
+  fc.assert(
+    fc.property(forged, (frame) => {
+      let restored: TopK;
+      try {
+        restored = TopK.fromBytes(frame);
+      } catch (err) {
+        expect(err).toBeInstanceOf(SerializationError);
+        return;
+      }
+      // Only canonical frames load, so whatever loads writes back exactly.
+      expect(restored.toBytes()).toEqual(frame);
+    }),
+    { numRuns: 500 },
+  );
+});
+
+test("the forged generator reaches both a working sketch and each rejection", () => {
+  const outcomes = new Set<string>();
+  for (const frame of fc.sample(forged, { numRuns: 3000, seed: 42 })) {
+    try {
+      TopK.fromBytes(frame);
+      outcomes.add("ok");
+    } catch (err) {
+      outcomes.add((err as Error).name);
+    }
+  }
+
+  expect([...outcomes].sort()).toEqual([
+    "SerializationError",
+    "TruncatedError",
+    "ok",
+  ]);
 });
