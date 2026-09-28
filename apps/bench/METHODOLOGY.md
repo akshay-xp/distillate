@@ -130,6 +130,35 @@ rather than assumed absent: that is the one answer neither sketch may give.
 Sizes are not the same encoding. distillate reports its binary frame length and
 `bloom-filters` the length of its JSON, as in the cardinality section.
 
+## Configuration for Top-K
+
+Top-K is compared with both sketches asked for the top k = 100 and both targeting
+an error of 0.001 of the events recorded. The two take `k` differently:
+`bloom-filters`' `TopK(k, errorRate, accuracy)` fixes it at construction and
+keeps only that many candidates, while distillate sizes its map by the error and
+takes `k` per query. So the incumbent is built with k = 100, the same `k`
+distillate is queried with; a smaller one would strawman it.
+
+Its `accuracy` goes straight to its Count-Min sketch, so it inherits the
+inversion recorded above: `accuracy` sizes the rows as the failure probability.
+Measured, `new TopK(10, 0.001)` gets 2,719 columns by one row. It is built as
+`new TopK(100, 0.001, 0.001)`, which gives the seven rows the target calls for;
+a reader following its documentation gets the one-row sketch.
+
+The headline metric is precision and recall of the returned set against the true
+top k, not the error of the counts: a top-k structure is judged on whether the
+right keys came back. Accuracy is measured on the Zipf-skewed stream the
+Count-Min section uses, over 10,000 distinct keys. Keys tied at the k-th true
+count are interchangeable: every key above that count must be returned, and any
+tie may fill the places left, so a correct but arbitrary tie-break scores 1. A
+returned key whose estimate is below its true count is counted rather than
+assumed absent.
+
+Events are capped at 1M, as for the incumbent's HyperLogLog after it took about
+21 minutes for 10M. Sizes are not the same encoding: distillate reports its
+binary frame length, which holds every key its map has kept, and `bloom-filters`
+the length of its JSON.
+
 ## Keys
 
 `hitMissPools(n)` builds two disjoint sets: inserted "hit" keys `0:0 … 0:(n-1)`
@@ -183,4 +212,5 @@ swept at 1k/10k/100k/1M/10M against `p = 14`, with the sketch throughput built a
 20k. Scalable Bloom is swept at 1k/10k/100k/1M/10M keys from an initial size of 1k,
 with `bloom-filters` capped at 100k. Cuckoo is swept at 1k/10k/100k/1M/10M keys
 for both filters. Count-Min is swept at 1k/10k/100k/1M/10M events for both
-sketches.
+sketches. Top-K is swept at 1k/10k/100k/1M events, capped at 1M as the
+incumbent's HyperLogLog was.
