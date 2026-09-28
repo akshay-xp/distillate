@@ -505,6 +505,16 @@ export class TopK {
   /**
    * Combines this sketch with another built with the same parameters.
    *
+   * Each key's stored counts are summed, as are the offsets and totals, and
+   * the merged entries are purged until they fit the load limit. The result
+   * holds the same guarantee as its inputs, with an error of at least the sum
+   * of theirs.
+   *
+   * Unlike Count-Min's union, this is not the sketch one stream fed both
+   * inputs would have produced. Misra-Gries depends on arrival order: a
+   * single sketch purges as it goes, while a union purges only what the two
+   * inputs kept. Both are correct, and their bytes can differ.
+   *
    * @param other - The sketch to combine with.
    * @returns A new sketch; neither input changes.
    */
@@ -519,7 +529,36 @@ export class TopK {
         `cannot union Top-K sketches with seed ${String(this.#seed)} and ${String(other.#seed)}`,
       );
     }
-    return new TopK({ capacity: this.#capacity, seed: this.#seed });
+    const keys: Uint8Array[] = [];
+    const counts: number[] = [];
+    // Which merged entry each of this sketch's slots became, so a key the
+    // other side also holds adds to it rather than appearing twice.
+    const indexOf = new Int32Array(this.#capacity).fill(-1);
+    for (let slot = 0; slot < this.#capacity; slot++) {
+      const stored = this.#counts[slot] ?? 0;
+      if (stored === 0) continue;
+      indexOf[slot] = keys.length;
+      keys.push(this.#keyAt(slot).slice());
+      counts.push(stored);
+    }
+    for (let slot = 0; slot < other.#capacity; slot++) {
+      const stored = other.#counts[slot] ?? 0;
+      if (stored === 0) continue;
+      const key = other.#keyAt(slot);
+      const at = indexOf[this.#slotFor(key)] ?? -1;
+      if (at >= 0) {
+        counts[at] = (counts[at] ?? 0) + stored;
+      } else {
+        keys.push(key.slice());
+        counts.push(stored);
+      }
+    }
+
+    const merged = new TopK({ capacity: this.#capacity, seed: this.#seed });
+    merged.#offset = this.#offset + other.#offset;
+    merged.#total = this.#total + other.#total;
+    merged.#reduceTo(keys, counts);
+    return merged;
   }
 
   /**
