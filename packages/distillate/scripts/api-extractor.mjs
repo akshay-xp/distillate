@@ -4,6 +4,8 @@ import { dirname, resolve } from "node:path";
 
 import { Extractor, ExtractorConfig } from "@microsoft/api-extractor";
 
+import { publishedEntries } from "./entries.mjs";
+
 const projectFolder = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const localBuild = process.argv.includes("--local");
 
@@ -12,19 +14,9 @@ const reportTempFolder = resolve(projectFolder, "temp");
 mkdirSync(reportFolder, { recursive: true });
 mkdirSync(reportTempFolder, { recursive: true });
 
-// One report per published entry point (API Extractor is single-entry).
-const entries = [
-  { name: "distillate", dts: "dist/index.d.ts" },
-  { name: "bloom", dts: "dist/bloom/index.d.ts" },
-  { name: "blocked", dts: "dist/blocked/index.d.ts" },
-  { name: "fuse", dts: "dist/fuse/index.d.ts" },
-  { name: "hll", dts: "dist/hll/index.d.ts" },
-  { name: "frame", dts: "dist/frame/index.d.ts" },
-  { name: "scalable", dts: "dist/scalable/index.d.ts" },
-  { name: "cuckoo", dts: "dist/cuckoo/index.d.ts" },
-  { name: "countmin", dts: "dist/countmin/index.d.ts" },
-  { name: "topk", dts: "dist/topk/index.d.ts" },
-];
+// One report per published entry point (API Extractor is single-entry). A
+// subpath without a committed etc/<name>.api.md fails api:check naming it.
+const entries = publishedEntries();
 
 let failed = false;
 
