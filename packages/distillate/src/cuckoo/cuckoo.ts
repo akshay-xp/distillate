@@ -1,4 +1,5 @@
 import type { BytesLike } from "../core/bytes.js";
+import { DistinctHashes } from "../core/distinct.js";
 import { type Hash128, hash128KeyInto, reduce } from "../core/hasher.js";
 import {
   assertPositiveInt,
@@ -131,21 +132,23 @@ export class CuckooFilter {
     // the table. Deduped on all 128 bits: keys sharing only the bits the filter
     // uses would otherwise collapse into one copy, and deleting either would
     // drop the other.
-    const seen = new Set<string>();
-    const distinct: BytesLike[] = [];
+    const distinct = new DistinctHashes(4);
     for (const key of keys) {
       hash128KeyInto(key, options.seed ?? 0, HASH);
-      const id = `${String(HASH.w0)},${String(HASH.w1)},${String(HASH.w2)},${String(HASH.w3)}`;
-      if (seen.has(id)) continue;
-      seen.add(id);
-      distinct.push(key);
+      distinct.add(HASH);
     }
-    const f = CuckooFilter.create(
-      Math.max(1, distinct.length),
-      epsilon,
-      options,
-    );
-    for (const k of distinct) f.add(k);
+    const f = CuckooFilter.create(Math.max(1, distinct.size), epsilon, options);
+    // Replayed from the kept hashes in first-seen order, which is the order
+    // add would have seen, so the table is the one add builds.
+    const words = distinct.words;
+    for (let at = 0; at < words.length; at += 4) {
+      HASH.w0 = words[at] ?? 0;
+      HASH.w1 = words[at + 1] ?? 0;
+      HASH.w2 = words[at + 2] ?? 0;
+      HASH.w3 = words[at + 3] ?? 0;
+      f.#derive();
+      f.#insert();
+    }
     return f;
   }
 
@@ -277,6 +280,11 @@ export class CuckooFilter {
    */
   add(key: BytesLike): void {
     this.#hash(key);
+    this.#insert();
+  }
+
+  // Places the key whose hash is in HASH and whose fields #derive has set.
+  #insert(): void {
     if (
       this.#replace(this.#i1, 0, this.#fp) ||
       this.#replace(this.#i2, 0, this.#fp)
@@ -423,6 +431,11 @@ export class CuckooFilter {
 
   #hash(key: BytesLike): void {
     hash128KeyInto(key, this.#seed, HASH);
+    this.#derive();
+  }
+
+  // The fingerprint and both buckets of the hash in HASH.
+  #derive(): void {
     // 0 marks an empty slot, so a zero fingerprint is stored as 1.
     this.#fp = HASH.w1 >>> (32 - this.#f) || 1;
     this.#i1 = reduce(HASH.w0, this.#buckets);
