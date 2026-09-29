@@ -283,6 +283,53 @@ test("fromBytes accepts an offset and total at the edge of the safe range", () =
   expect(s.total).toBe(Number.MAX_SAFE_INTEGER);
 });
 
+// add and union both keep sum(stored) + W * offset <= total, W being the
+// fewest keys a purge takes its full median from; it is the bound
+// error() <= epsilon * total itself. A 16-slot map has W = 7.
+test.each<[string, Forged]>([
+  ["a held count with total 0", { counts: [15], lengths: [1], keys: [97] }],
+  [
+    "an offset no total could produce",
+    { counts: [15], lengths: [1], keys: [97], offset: 1e12, total: 99 },
+  ],
+  [
+    "a total one short of the bound",
+    { counts: [15], lengths: [1], keys: [97], offset: 2, total: 28 },
+  ],
+])("fromBytes rejects %s", (_, fields) => {
+  expect(() => TopK.fromBytes(forge(fields))).toThrow(SerializationError);
+});
+
+test("fromBytes accepts a total exactly at the bound", () => {
+  const s = TopK.fromBytes(
+    forge({ counts: [15], lengths: [1], keys: [97], offset: 2, total: 29 }),
+  );
+
+  expect(s.count("a")).toBe(17);
+});
+
+test("every frame add and union produce satisfies the bound (property)", () => {
+  const stream = fc.array(
+    fc.record({
+      key: fc.constantFrom("a", "b", "c", "d", "e", "f", "g"),
+      count: fc.integer({ min: 1, max: 5 }),
+    }),
+    { maxLength: 60 },
+  );
+  const fed = (adds: { key: string; count: number }[]): TopK => {
+    const s = new TopK({ capacity: 4 });
+    for (const { key, count } of adds) s.add(key, count);
+    return s;
+  };
+  fc.assert(
+    fc.property(stream, stream, (a, b) => {
+      for (const s of [fed(a), fed(a).union(fed(b))]) {
+        expect(TopK.fromBytes(s.toBytes()).equals(s)).toBe(true);
+      }
+    }),
+  );
+});
+
 const A = 97;
 const B = 98;
 
@@ -312,7 +359,7 @@ test.each<[string, Forged]>([
 
 test("the empty key sorts first among a tie", () => {
   const s = TopK.fromBytes(
-    forge({ counts: [3, 3], lengths: [0, 1], keys: [A] }),
+    forge({ counts: [3, 3], lengths: [0, 1], keys: [A], total: 6 }),
   );
 
   expect(s.count("")).toBe(3);
@@ -358,7 +405,7 @@ const forged = fc
   .record({
     capacity: fc.constantFrom(0, 4, 16, 16, 100),
     offset: fc.constantFrom(0, 0, 3, -1, 0.5, 2 ** 53),
-    total: fc.constantFrom(0, 0, 3, -1, 0.5, 2 ** 53),
+    total: fc.constantFrom(0, 0, 3, 100, -1, 0.5, 2 ** 53),
     pad: fc.constantFrom(0, 0, 0, 1),
     items: fc.array(
       fc.record({

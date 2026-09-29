@@ -211,6 +211,7 @@ export class TopK {
     // Only the canonical order is accepted, so every frame that loads writes
     // back byte for byte, and no two frames decode to the same sketch.
     let keyAt = tableEnd;
+    let stored = 0;
     let prevCount = Infinity;
     let prevKey: Uint8Array = new Uint8Array(0);
     for (let i = 0; i < entries; i++) {
@@ -242,6 +243,18 @@ export class TopK {
       }
       sketch.#storeKey(slot, key);
       sketch.#counts[slot] = count;
+      stored += count;
+    }
+    // Every purge removes at least W times its median while adding the median
+    // to the offset, and a union adds both sides, so counting cannot produce a
+    // frame past this: it is the bound error() <= epsilon * total itself.
+    // Checked once after the loop so a frame's own defects are named first;
+    // rounding is monotonic, so a sum past 2^53 still compares above any total.
+    const width = topKPurgeWidth(capacity);
+    if (stored + width * offset > total) {
+      throw new SerializationError(
+        `topk: stored counts ${String(stored)} plus ${String(width)} x offset ${String(offset)} exceed total ${String(total)}`,
+      );
     }
     sketch.#entries = entries;
     sketch.#offset = offset;
