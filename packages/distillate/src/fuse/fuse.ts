@@ -1,4 +1,5 @@
 import { type BytesLike } from "../core/bytes.js";
+import { DistinctHashes } from "../core/distinct.js";
 import {
   fmix64,
   type Hash128,
@@ -228,21 +229,17 @@ function buildState(
   keys: Iterable<BytesLike>,
   alloc: (n: number) => Uint8Array | Uint16Array,
 ): FuseState {
-  const hashList: number[] = [];
-  const seen = new Set<string>();
+  // Deduped on the 64-bit lane alone: it is all construction can tell apart,
+  // and peeling fails on two keys that share it.
+  const distinct = new DistinctHashes(2);
   for (const key of keys) {
     hash128KeyInto(key, 0, scratchHash);
-    const lo = scratchHash.w0 >>> 0;
-    const hi = scratchHash.w1 >>> 0;
-    const id = `${String(lo)},${String(hi)}`;
-    if (seen.has(id)) continue;
-    seen.add(id);
-    hashList.push(lo, hi);
+    distinct.add(scratchHash);
   }
-  const size = hashList.length / 2;
+  const size = distinct.size;
   const params = computeParams(size);
   if (size === 0) return { fp: alloc(0), seed: 0, params, size: 0 };
-  const hashes = Uint32Array.from(hashList);
+  const hashes = distinct.words;
   const fp = alloc(params.arrayLength);
   const seed = buildFingerprints(fp, hashes, params);
   return { fp, seed, params, size };
