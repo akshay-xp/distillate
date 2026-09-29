@@ -168,3 +168,9 @@ test("the guide says why untrusted keys are safe and where a Worker builds one",
   expect(runtimes).toContain("Cloudflare Workers");
   expect(runtimes).toContain("/guides/topk/");
 });
+
+test("the Space section describes a table that grows to capacity", () => {
+  const space = section(guide(), "Space");
+  expect(space).toContain("doubles");
+  expect(space).toContain("at most");
+});

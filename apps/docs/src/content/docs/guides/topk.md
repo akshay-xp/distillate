@@ -1,6 +1,6 @@
 ---
 title: Top-K
-description: A heavy-hitters sketch in fixed space. It lists the keys seen most often, never underestimates one it holds, and never loses one heavier than its error.
+description: A heavy-hitters sketch in bounded space. It lists the keys seen most often, never underestimates one it holds, and never loses one heavier than its error.
 ---
 
 `distillate/topk` ships the Frequent Items sketch: Misra and Gries' counters
@@ -12,7 +12,7 @@ the median count from every key and drops the ones that reach zero.
   naming them, which no other structure in the library can.
 - **Never underestimates a key it holds.** A held key's count is at or above the
   truth, and anything heavier than the error is guaranteed to be held.
-- **Fixed size.** Sized by the error you ask for, not by how many keys arrive.
+- **Bounded size.** Capped by the error you ask for, not by how many keys arrive.
 
 Misra and Gries, "Finding repeated elements", 1982. Anderson et al., "A
 High-Performance Algorithm for Identifying Frequent Items in Data Streams",
@@ -231,9 +231,9 @@ does not care about order.
 
 ## Space
 
-The map is 12 bytes a slot, three `u32` arrays sized by `capacity`, plus the
-bytes of the keys it holds. The table is fixed by `epsilon` before a key
-arrives rather than growing with the stream:
+The map is 12 bytes a slot, three `u32` arrays, plus the bytes of the keys it
+holds. It starts at 8 slots and doubles as keys arrive, up to a `capacity` set
+by `epsilon`, so the table is at most:
 
 ```ts
 import { TopK } from "distillate/topk";
@@ -241,11 +241,15 @@ import { TopK } from "distillate/topk";
 TopK.create(0.01).capacity * 12; // 6144
 ```
 
-| `epsilon` | `capacity` | Table bytes |
-| --------- | ---------- | ----------- |
-| 0.01      | 512        | 6,144       |
-| 0.001     | 4,096      | 49,152      |
-| 0.0001    | 32,768     | 393,216     |
+| `epsilon` | `capacity` | Table bytes, at most |
+| --------- | ---------- | -------------------- |
+| 0.01      | 512        | 6,144                |
+| 0.001     | 4,096      | 49,152               |
+| 0.0001    | 32,768     | 393,216              |
+
+However long the stream, the table never passes that ceiling: once full, it
+purges rather than grows. A sketch holding a few keys costs a few slots, and
+so does decoding its frame, whatever the capacity it names.
 
 The frame is sparse: it stores only the keys held, 8 bytes each plus the key's
 length, so an empty sketch serializes small whatever its capacity:

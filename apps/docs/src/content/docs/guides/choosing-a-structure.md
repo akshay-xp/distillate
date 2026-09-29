@@ -62,9 +62,9 @@ particular key; nothing in a sketch records membership.
 
 ### [Top-K](/guides/topk/) (`distillate/topk`)
 
-Not a filter. Lists the keys seen most often, in a table fixed by the error you
-ask for: 512 slots at `epsilon` 0.01, 6 KiB plus the keys it holds, whether the
-stream is a thousand events or a billion. A key it holds never reads below its
+Not a filter. Lists the keys seen most often, in a table capped by the error
+you ask for: at most 512 slots at `epsilon` 0.01, 6 KiB plus the keys it holds,
+whether the stream is a thousand events or a billion. A key it holds never reads below its
 true count, and any key heavier than the error is guaranteed to be held.
 
 Reach for it for the hottest routes, the noisiest clients, the most searched
