@@ -1,9 +1,10 @@
 import { expect, test, vi } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
-import { topKSizing } from "../../src/topk/sizing.js";
+import { topKPurgeWidth, topKSizing } from "../../src/topk/sizing.js";
 import { TopK, TopKOverflowError } from "../../src/topk/topk.js";
 import { zipfStream } from "../helpers/frequency.js";
+import { allocatedBy, HUGE, SMALL } from "../helpers/topk.js";
 
 test("create builds a sketch with the capacity the sizing solved for", () => {
   const sketch = TopK.create(0.01);
@@ -245,4 +246,39 @@ test("from counts repeats rather than deduping them", () => {
 test("from takes an empty stream", () => {
   expect(TopK.from([], 0.01).total).toBe(0);
   expect(TopK.from([], 0.01).top(1)).toEqual([]);
+});
+
+// The table starts small and doubles toward capacity, so what a sketch costs
+// follows what it holds; reserving the full table up front cost 201 MB here.
+test.each<[string, () => TopK]>([
+  ["new", () => new TopK({ capacity: HUGE })],
+  ["create", () => TopK.create(1 / topKPurgeWidth(HUGE))],
+])("%s at the largest capacity allocates what it holds", (_, make) => {
+  const { value, bytes } = allocatedBy(make);
+
+  expect(value.capacity).toBe(HUGE);
+  expect(bytes).toBeLessThan(SMALL);
+});
+
+test("a large sketch grows only as far as its keys need", () => {
+  const { value: sketch, bytes } = allocatedBy(() => {
+    const s = new TopK({ capacity: HUGE });
+    for (let i = 0; i < 1000; i++) s.add(`key:${String(i)}`);
+    return s;
+  });
+
+  expect(bytes).toBeLessThan(SMALL);
+  for (let i = 0; i < 1000; i++)
+    expect(sketch.count(`key:${String(i)}`)).toBe(1);
+});
+
+// Growth happens below the load limit and the purge only at it, so the first
+// purge lands on the same add whatever sizes the table passed through.
+test("the first purge comes at the add past the load limit", () => {
+  const sketch = new TopK({ capacity: 64 });
+  for (let i = 0; i < 48; i++) sketch.add(`key:${String(i)}`);
+  expect(sketch.error()).toBe(0);
+
+  sketch.add("key:48");
+  expect(sketch.error()).toBe(1);
 });

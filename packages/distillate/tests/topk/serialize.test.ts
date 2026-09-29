@@ -12,6 +12,7 @@ import {
 } from "../../src/core/serialize.js";
 import { TopK, TopKOverflowError } from "../../src/topk/topk.js";
 import { zipfStream } from "../helpers/frequency.js";
+import { allocatedBy, HUGE, SMALL } from "../helpers/topk.js";
 
 const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 
@@ -504,4 +505,15 @@ test("sketches at different geometries are unequal rather than throwing", () => 
   expect(new TopK({ capacity: 4 }).equals(new TopK({ capacity: 8 }))).toBe(
     false,
   );
+});
+
+// A 52-byte frame used to reserve the whole 2^24 table on decode, so a frame's
+// cost to read was set by a number in it rather than by its length.
+test("decoding a small frame of the largest capacity allocates what it holds", () => {
+  const frame = new TopK({ capacity: HUGE }).toBytes();
+  const { value, bytes } = allocatedBy(() => TopK.fromBytes(frame));
+
+  expect(frame.length).toBe(52);
+  expect(bytes).toBeLessThan(SMALL);
+  expect(value.toBytes()).toEqual(frame);
 });

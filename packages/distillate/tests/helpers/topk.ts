@@ -1,3 +1,6 @@
+import { setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
+
 import { expect } from "vitest";
 
 import { type TopK, type TopKEntry } from "../../src/topk/topk.js";
@@ -33,4 +36,26 @@ export function expectOneSided(sketch: TopK, truth: Map<string, number>): void {
     expect(sketch.count(key)).toBeGreaterThanOrEqual(actual);
     expect(entry.lowerBound).toBeLessThanOrEqual(actual);
   }
+}
+
+/** The largest capacity the sizing allows, where a full table is 201 MB. */
+export const HUGE = 2 ** 24;
+
+/** The most a sketch holding a handful of keys may allocate, whatever its capacity. */
+export const SMALL = 1024 * 1024;
+
+setFlagsFromString("--expose-gc");
+const gc = runInNewContext("gc") as () => void;
+
+/**
+ * Bytes of `ArrayBuffer` memory `run` leaves allocated. Each test file runs in
+ * its own process, so nothing outside the file moves this figure; collecting
+ * first keeps an earlier test's garbage from being freed mid-measure and
+ * cancelling out what `run` allocates.
+ */
+export function allocatedBy<T>(run: () => T): { value: T; bytes: number } {
+  gc();
+  const before = process.memoryUsage().arrayBuffers;
+  const value = run();
+  return { value, bytes: process.memoryUsage().arrayBuffers - before };
 }
