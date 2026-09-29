@@ -1,18 +1,9 @@
 import { defineConfig } from "tsdown";
 
+import { publishedEntries } from "./scripts/entries.mjs";
+
 export default defineConfig({
-  entry: [
-    "src/index.ts",
-    "src/bloom/index.ts",
-    "src/blocked/index.ts",
-    "src/fuse/index.ts",
-    "src/hll/index.ts",
-    "src/frame/index.ts",
-    "src/scalable/index.ts",
-    "src/cuckoo/index.ts",
-    "src/countmin/index.ts",
-    "src/topk/index.ts",
-  ],
+  entry: publishedEntries().map((e) => e.src),
   format: ["esm", "cjs"],
   fixedExtension: false,
   dts: true,
