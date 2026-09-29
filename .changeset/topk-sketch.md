@@ -2,7 +2,7 @@
 "distillate": minor
 ---
 
-Add the Top-K sketch at `distillate/topk`: a heavy-hitters sketch that lists the keys seen most often, in space fixed by the error you ask for rather than by how many keys arrive.
+Add the Top-K sketch at `distillate/topk`: a heavy-hitters sketch that lists the keys seen most often, in space bounded by the error you ask for rather than by how many keys arrive.
 
 `TopK.create(epsilon)` sizes the map so the error, `error()`, stays at most `epsilon` of the total recorded. `top(k)` takes `k` on each call, so one sketch answers a top 10 and a top 100. It has the same `create`, `from`, `equals`, `union` and binary and JSON serialization (frame type 9) as the other structures, plus `add(key, count)`, `count(key)`, `top(k)`, `total`, `error()` and `topKSizing(epsilon)`.
 
