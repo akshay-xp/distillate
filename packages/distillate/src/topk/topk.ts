@@ -4,7 +4,6 @@ import {
   assertBodyLength,
   assertMinBodyLength,
   assertParamsPadding,
-  bytesEqual,
   type FilterJSON,
   FORMAT_VERSION,
   fromJSONEnvelope,
@@ -672,7 +671,26 @@ export class TopK {
    * @returns `true` if the two sketches are byte-for-byte identical.
    */
   equals(other: TopK): boolean {
-    return bytesEqual(this.toBytes(), other.toBytes());
+    if (
+      this.#capacity !== other.#capacity ||
+      this.#offset !== other.#offset ||
+      this.#total !== other.#total ||
+      this.#entries !== other.#entries
+    ) {
+      return false;
+    }
+    // Same count of entries, and each of ours held by the other at the same
+    // count, means the same entries: the frames would be identical. The
+    // tables may differ in size, so keys are looked up rather than slots
+    // compared.
+    for (let slot = 0; slot < this.#size; slot++) {
+      const stored = this.#counts[slot] ?? 0;
+      if (stored === 0) continue;
+      if (other.#counts[other.#slotFor(this.#keyAt(slot))] !== stored) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
