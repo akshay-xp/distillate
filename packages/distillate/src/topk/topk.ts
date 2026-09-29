@@ -27,6 +27,12 @@ import {
 const TYPE = 9;
 
 /**
+ * Slots a table starts with. It doubles toward `capacity` as keys arrive, so a
+ * sketch costs what it holds rather than what it could hold.
+ */
+const TABLE_START = 8;
+
+/**
  * Params occupy 24 bytes and the block is padded to 32, so the payload starts
  * at frame offset 48 and its counts and lengths can be mapped as `u32`.
  */
@@ -108,13 +114,15 @@ export class TopK {
   #k0 = 0;
   #k1 = 0;
   #keyed = false;
+  // Slots in the table now, a power of two up to capacity.
+  #size = 0;
   // Stored counts, where 0 marks an empty slot. A live entry always holds at
   // least 1, since the purge drops everything reaching zero, so occupancy
   // needs no array of its own.
-  readonly #counts: Uint32Array;
+  #counts = new Uint32Array(0);
   // Where each slot's key sits in the arena.
-  readonly #keyOffsets: Uint32Array;
-  readonly #keyLengths: Uint32Array;
+  #keyOffsets = new Uint32Array(0);
+  #keyLengths = new Uint32Array(0);
   #arena: Uint8Array;
   #arenaLen = 0;
   #entries = 0;
@@ -201,6 +209,9 @@ export class TopK {
     let sketch: TopK;
     try {
       sketch = new TopK({ capacity });
+      // Sized to what the frame holds, so its cost to read follows its length
+      // rather than the capacity it names.
+      sketch.#allocate(sketch.#fit(entries));
     } catch (err) {
       // A caller decoding a frame should see one error family.
       if (err instanceof ParamError) {
@@ -282,9 +293,7 @@ export class TopK {
     }
     this.#capacity = capacity;
     this.#loadLimit = topKLoadLimit(capacity);
-    this.#counts = new Uint32Array(capacity);
-    this.#keyOffsets = new Uint32Array(capacity);
-    this.#keyLengths = new Uint32Array(capacity);
+    this.#allocate(Math.min(TABLE_START, capacity));
     this.#arena = new Uint8Array(256);
   }
 
@@ -330,7 +339,7 @@ export class TopK {
   #purge(): void {
     const keys: Uint8Array[] = [];
     const counts: number[] = [];
-    for (let slot = 0; slot < this.#capacity; slot++) {
+    for (let slot = 0; slot < this.#size; slot++) {
       const stored = this.#counts[slot] ?? 0;
       if (stored === 0) continue;
       keys.push(this.#keyAt(slot).slice());
@@ -366,7 +375,11 @@ export class TopK {
       this.#offset += median;
     }
 
-    this.#counts.fill(0);
+    // Grown to fit a union's survivors, but never shrunk: a table that reached
+    // capacity would only grow back as the stream refills it.
+    const size = this.#fit(keys.length);
+    if (size > this.#size) this.#allocate(size);
+    else this.#counts.fill(0);
     this.#arenaLen = 0;
     this.#entries = keys.length;
     for (let i = 0; i < keys.length; i++) {
@@ -375,6 +388,40 @@ export class TopK {
       this.#storeKey(slot, bytes);
       this.#counts[slot] = counts[i] ?? 0;
     }
+  }
+
+  // Empty slot arrays of `size` slots.
+  #allocate(size: number): void {
+    this.#size = size;
+    this.#counts = new Uint32Array(size);
+    this.#keyOffsets = new Uint32Array(size);
+    this.#keyLengths = new Uint32Array(size);
+  }
+
+  // Moves every live entry into a table of `size` slots. Keys stay where they
+  // are in the arena; only the slots pointing at them move.
+  #resize(size: number): void {
+    const counts = this.#counts;
+    const offsets = this.#keyOffsets;
+    const lengths = this.#keyLengths;
+    this.#allocate(size);
+    for (let old = 0; old < counts.length; old++) {
+      const stored = counts[old] ?? 0;
+      if (stored === 0) continue;
+      const at = offsets[old] ?? 0;
+      const len = lengths[old] ?? 0;
+      const slot = this.#slotFor(this.#arena.subarray(at, at + len));
+      this.#counts[slot] = stored;
+      this.#keyOffsets[slot] = at;
+      this.#keyLengths[slot] = len;
+    }
+  }
+
+  // The smallest table, up to capacity, whose load limit holds `entries`.
+  #fit(entries: number): number {
+    let size = Math.min(TABLE_START, this.#capacity);
+    while (size < this.#capacity && topKLoadLimit(size) < entries) size *= 2;
+    return size;
   }
 
   // True when the key stored at `slot` is exactly `bytes`.
@@ -408,9 +455,9 @@ export class TopK {
   /**
    * The slot holding `bytes`, or the first empty slot on its probe path.
    *
-   * Unbounded by design: the purge keeps live entries at or below the load
-   * limit, which is below capacity, so an empty slot always exists and the
-   * scan always returns from inside.
+   * Unbounded by design: growth and the purge keep live entries at or below
+   * the current table's load limit, which is below its size, so an empty slot
+   * always exists and the scan always returns from inside.
    */
   #slotFor(bytes: Uint8Array): number {
     // Drawn here rather than in the constructor: Cloudflare Workers refuse
@@ -421,7 +468,7 @@ export class TopK {
       this.#k1 = key[1] ?? 0;
       this.#keyed = true;
     }
-    const mask = this.#capacity - 1;
+    const mask = this.#size - 1;
     let slot = halfSipHash13(bytes, this.#k0, this.#k1) & mask;
     for (;;) {
       if ((this.#counts[slot] ?? 0) === 0) return slot;
@@ -462,7 +509,12 @@ export class TopK {
     }
     this.#counts[slot] = stored + count;
     this.#total += count;
-    if (this.#entries > this.#loadLimit) this.#purge();
+    // Below capacity a full table doubles; at capacity its load limit is the
+    // sketch's, and passing it purges exactly where it always did.
+    if (this.#entries > topKLoadLimit(this.#size)) {
+      if (this.#size < this.#capacity) this.#resize(this.#size * 2);
+      else this.#purge();
+    }
   }
 
   /**
@@ -651,7 +703,7 @@ export class TopK {
    */
   #canonicalSlots(): number[] {
     const slots: number[] = [];
-    for (let slot = 0; slot < this.#capacity; slot++) {
+    for (let slot = 0; slot < this.#size; slot++) {
       if ((this.#counts[slot] ?? 0) !== 0) slots.push(slot);
     }
     return slots.sort((a, b) => {
