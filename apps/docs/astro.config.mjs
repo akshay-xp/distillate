@@ -3,6 +3,8 @@ import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
 import starlightTypeDoc, { typeDocSidebarGroup } from "starlight-typedoc";
 
+import { publishedEntries } from "../../packages/distillate/scripts/entries.mjs";
+
 import { site } from "./site.mjs";
 
 export default defineConfig({
@@ -168,24 +170,17 @@ export default defineConfig({
       ],
       plugins: [
         starlightTypeDoc({
-          entryPoints: [
-            "../../packages/distillate/src/index.ts",
-            "../../packages/distillate/src/bloom/index.ts",
-            "../../packages/distillate/src/blocked/index.ts",
-            "../../packages/distillate/src/fuse/index.ts",
-            "../../packages/distillate/src/hll/index.ts",
-            "../../packages/distillate/src/frame/index.ts",
-            "../../packages/distillate/src/scalable/index.ts",
-            "../../packages/distillate/src/cuckoo/index.ts",
-            "../../packages/distillate/src/countmin/index.ts",
-            "../../packages/distillate/src/topk/index.ts",
-          ],
+          // The same list the docs gate validates, derived from exports, so
+          // nothing can be published here without being checked for TSDoc.
+          entryPoints: publishedEntries().map(
+            (e) => `../../packages/distillate/${e.src}`,
+          ),
           tsconfig: "../../packages/distillate/tsconfig.json",
           sidebar: { label: "API reference" },
           // Generation only. starlight-typedoc never calls app.validate(), and
           // typedoc enforces treatWarningsAsErrors only in its CLI, so passing
           // either here does nothing. The undocumented-export gate is
-          // `pnpm docs:check`, configured in packages/distillate/typedoc.json.
+          // `pnpm docs:check`, configured in packages/distillate/typedoc.config.mjs.
           typeDoc: {
             // The plugin deletes every generated `<module>/README.md` while
             // its own index still links to them, so the default name leaves
