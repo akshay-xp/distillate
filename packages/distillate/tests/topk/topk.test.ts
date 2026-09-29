@@ -1,9 +1,9 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 
-import { hash32x2Into } from "../../src/core/hasher.js";
 import { ParamError } from "../../src/core/params.js";
 import { topKSizing } from "../../src/topk/sizing.js";
 import { TopK, TopKOverflowError } from "../../src/topk/topk.js";
+import { zipfStream } from "../helpers/frequency.js";
 
 test("create builds a sketch with the capacity the sizing solved for", () => {
   const sketch = TopK.create(0.01);
@@ -80,22 +80,6 @@ test("a count that could produce an underestimate is refused", () => {
   expect(sketch.count("a")).toBe(2);
 });
 
-// The first two keys landing in the same bucket of a 16-slot map, found rather
-// than hardcoded so the pair survives a change of hash seed or key shape.
-const collidingPair = (capacity: number): [string, string] => {
-  const words = new Uint32Array(2);
-  const seen = new Map<number, string>();
-  for (let i = 0; i < 1000; i++) {
-    const key = `key:${String(i)}`;
-    hash32x2Into(key, 0, words);
-    const bucket = (words[0] ?? 0) & (capacity - 1);
-    const first = seen.get(bucket);
-    if (first !== undefined) return [first, key];
-    seen.set(bucket, key);
-  }
-  throw new Error("no colliding pair found");
-};
-
 test("an add that would wrap a stored count is refused and changes nothing", () => {
   const fresh = new TopK({ capacity: 16 });
   expect(() => {
@@ -116,17 +100,52 @@ test("an add that would wrap a stored count is refused and changes nothing", () 
   expect(full.top(5)).toHaveLength(1);
 });
 
-test("two keys sharing a bucket keep their own counts", () => {
+// Slots are keyed per sketch, so a colliding pair cannot be chosen up front.
+// Twelve keys in sixteen slots, the load limit with no purge, collide with
+// probability above 99%, and each must still read back its own count.
+test("keys sharing a probe chain keep their own counts", () => {
   const sketch = new TopK({ capacity: 16 });
-  const [first, second] = collidingPair(16);
+  for (let i = 0; i < 12; i++) sketch.add(`key:${String(i)}`, i + 1);
 
-  sketch.add(first, 3);
-  sketch.add(second, 5);
-
-  expect(sketch.count(first)).toBe(3);
-  expect(sketch.count(second)).toBe(5);
+  for (let i = 0; i < 12; i++) {
+    expect(sketch.count(`key:${String(i)}`)).toBe(i + 1);
+  }
   expect(sketch.count("never-added")).toBe(0);
-  expect(sketch.total).toBe(8);
+  expect(sketch.error()).toBe(0);
+});
+
+// The key is drawn on the first hash, not at construction: Cloudflare Workers
+// refuse random values at module scope, where a sketch is commonly created.
+test("each sketch draws its hash key once, on its first add", () => {
+  const spy = vi.spyOn(globalThis.crypto, "getRandomValues");
+  try {
+    const a = new TopK({ capacity: 16 });
+    const b = TopK.create(0.01);
+    expect(spy).not.toHaveBeenCalled();
+
+    a.add("x");
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]?.[0]).toHaveProperty("byteLength", 8);
+
+    a.add("y");
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    b.add("x");
+    expect(spy).toHaveBeenCalledTimes(2);
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+test("two sketches fed one stream write the same bytes under their own keys", () => {
+  const stream = zipfStream(3, 500, 5_000, 1.1);
+  const a = new TopK({ capacity: 64 });
+  const b = new TopK({ capacity: 64 });
+  for (const key of stream) a.add(key);
+  for (const key of stream) b.add(key);
+
+  expect(a.error()).toBeGreaterThan(0);
+  expect(b.toBytes()).toEqual(a.toBytes());
 });
 
 test("error is 0 until the load limit is passed", () => {

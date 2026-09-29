@@ -1,5 +1,4 @@
 import { type BytesLike, normalize } from "../core/bytes.js";
-import { hash32x2Into } from "../core/hasher.js";
 import { assertPositiveInt, assertUint32, ParamError } from "../core/params.js";
 import {
   assertBodyLength,
@@ -16,6 +15,7 @@ import {
   UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
+import { halfSipHash13 } from "./halfsip.js";
 import {
   TOPK_MAX_CAPACITY,
   TOPK_MIN_CAPACITY,
@@ -108,8 +108,12 @@ export class TopK {
   readonly #capacity: number;
   readonly #loadLimit: number;
   readonly #seed: number;
-  // Reused across add and count so hashing a key allocates nothing per call.
-  readonly #words = new Uint32Array(2);
+  // The slot hash's secret key, drawn on first use. No stored byte depends on
+  // where a key sits, so the key never reaches the frame and can differ per
+  // sketch; being secret is what keeps crafted keys off a shared chain.
+  #k0 = 0;
+  #k1 = 0;
+  #keyed = false;
   // Stored counts, where 0 marks an empty slot. A live entry always holds at
   // least 1, since the purge drops everything reaching zero, so occupancy
   // needs no array of its own.
@@ -415,9 +419,16 @@ export class TopK {
    * scan always returns from inside.
    */
   #slotFor(bytes: Uint8Array): number {
-    hash32x2Into(bytes, this.#seed, this.#words);
+    // Drawn here rather than in the constructor: Cloudflare Workers refuse
+    // random values at module scope, where a sketch is commonly created.
+    if (!this.#keyed) {
+      const key = crypto.getRandomValues(new Uint32Array(2));
+      this.#k0 = key[0] ?? 0;
+      this.#k1 = key[1] ?? 0;
+      this.#keyed = true;
+    }
     const mask = this.#capacity - 1;
-    let slot = (this.#words[0] ?? 0) & mask;
+    let slot = halfSipHash13(bytes, this.#k0, this.#k1) & mask;
     for (;;) {
       if ((this.#counts[slot] ?? 0) === 0) return slot;
       if (this.#slotHolds(slot, bytes)) return slot;
