@@ -1343,6 +1343,7 @@ func parseTopK(f frame) (topK, error) {
 		return topK{}, fmt.Errorf("lengths consume %d bytes, body has %d after the table", sum, uint64(len(f.body))-table)
 	}
 	at := table
+	stored := uint64(0)
 	for i := uint64(0); i < entries; i++ {
 		key := f.body[at : at+length(i)]
 		count := le.Uint32(f.body[topKParams+4*i:])
@@ -1356,7 +1357,14 @@ func parseTopK(f frame) (topK, error) {
 		}
 		k.keys = append(k.keys, key)
 		k.counts = append(k.counts, count)
+		stored += uint64(count)
 		at += length(i)
+	}
+	// Each purge takes at least w times its median while adding the median to
+	// the offset, and a union adds both sides, so counting never passes this.
+	w := (uint64(k.capacity)*3/4 + 2) >> 1
+	if float64(stored)+float64(w)*k.offset > k.total {
+		return topK{}, fmt.Errorf("stored %d + %d x offset %v exceeds total %v: past the bound", stored, w, k.offset, k.total)
 	}
 	return k, nil
 }
@@ -1509,6 +1517,14 @@ func TestTopKDamaged(t *testing.T) {
 		{"padding set", "padding", func(b []byte) { b[headerSize+28] = 1 }},
 		{"lengths over-consume", "consume", func(b []byte) { b[lengths]++ }},
 		{"lengths under-consume", "consume", func(b []byte) { b[lengths]-- }},
+		// Counting keeps sum(stored) + W*offset <= total, which is the bound
+		// itself; neither frame could have been produced by add or union.
+		{"total below the held counts", "bound", func(b []byte) {
+			le.PutUint64(b[headerSize+16:], math.Float64bits(0))
+		}},
+		{"offset raised to the total", "bound", func(b []byte) {
+			le.PutUint64(b[headerSize+8:], le.Uint64(b[headerSize+16:]))
+		}},
 		{"out of canonical order", "canonical", func(b []byte) {
 			first := le.Uint32(b[counts:])
 			le.PutUint32(b[counts:], le.Uint32(b[counts+4:]))
