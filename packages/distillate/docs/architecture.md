@@ -82,6 +82,7 @@ src/
     bytes.ts        # BytesLike normalization, UTF-8 encode
     hasher.ts       # murmur3_x86_128, KM double hashing, Lemire reduce
     bitset.ts       # typed-array bit storage
+    distinct.ts     # typed-array set of hash tuples: the from dedupe for cuckoo and fuse
     serialize.ts    # DSTL frame read/write, CRC32, shared errors
     crc32.ts        # slice-by-8 CRC32
     base64.ts       # JSON envelope encoding
