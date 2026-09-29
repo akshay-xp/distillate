@@ -1,5 +1,39 @@
 # distillate
 
+## 0.14.0
+
+### Minor Changes
+
+- 60bbd7c: Add the Top-K sketch at `distillate/topk`: a heavy-hitters sketch that lists the keys seen most often, in space bounded by the error you ask for rather than by how many keys arrive.
+
+  `TopK.create(epsilon)` sizes the map so the error, `error()`, stays at most `epsilon` of the total recorded. `top(k)` takes `k` on each call, so one sketch answers a top 10 and a top 100. It has the same `create`, `from`, `equals`, `union` and binary and JSON serialization (frame type 9) as the other structures, plus `add(key, count)`, `count(key)`, `top(k)`, `total`, `error()` and `topKSizing(epsilon)`.
+
+  A key the sketch holds never reads below its true count, each entry of `top` carries a `lowerBound` never above it, and any key heavier than `error()` is guaranteed to be held. An `add` or `union` that would carry a stored count past `2**32 - 1` or the total past `2**53 - 1` throws `TopKOverflowError` and leaves the sketch untouched.
+
+  Four behaviours worth knowing:
+
+  - `top` returns each key as a `Uint8Array`, exactly as recorded. Decode string keys with `TextDecoder`.
+  - A Top-K frame holds the keys it counts verbatim. Every other distillate frame is one-way; this one persists user input, so treat a serialized sketch like the stream it came from.
+  - The map places keys with HalfSipHash under a random key each sketch draws for itself, so crafted keys cannot be made to collide and slow `add`. There is no `seed` option, and the key never reaches the frame. It is drawn on the first hash: on Cloudflare Workers, which refuse random values at module scope, build or decode a Top-K inside a handler.
+  - `union` is sound but, unlike Count-Min's, not byte-identical to one sketch fed both streams: Misra-Gries purges as keys arrive, so what survives depends on their order.
+
+### Patch Changes
+
+- 02f34a1: Every sizing subpath is smaller: a subpath no longer ships the sizing helpers belonging to other structures.
+
+  `hllSizing` and `countMinSizing` lived in one internal module alongside `bloomSizing`, which bundles as a single chunk that each importing subpath downloads whole. So `distillate/bloom` carried the HyperLogLog and Count-Min solves, `distillate/hll` carried the Bloom and Count-Min ones, and so on. Each helper now lives with the structure it sizes, as `cuckooSizing` already did.
+
+  Measured on the built bundles, raw and gzipped:
+
+  ```
+  ./bloom     21942 -> 21246    gzip 6366 -> 6180
+  ./hll       27666 -> 27074    gzip 7849 -> 7684
+  ./scalable  28491 -> 27795    gzip 8080 -> 7885
+  ./countmin  23747 -> 23079    gzip 6727 -> 6538
+  ```
+
+  No public API changed. Every helper is exported from the same subpath under the same name, and the import paths in your code are unaffected.
+
 ## 0.13.0
 
 ### Minor Changes
