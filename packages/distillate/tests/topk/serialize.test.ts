@@ -1,5 +1,5 @@
 import fc from "fast-check";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 
 import { crc32 } from "../../src/core/crc32.js";
 import {
@@ -516,4 +516,31 @@ test("decoding a small frame of the largest capacity allocates what it holds", (
   expect(frame.length).toBe(52);
   expect(bytes).toBeLessThan(SMALL);
   expect(value.toBytes()).toEqual(frame);
+});
+
+// Equal sketches can sit in tables of different sizes: one that grew to
+// capacity keeps its table after a purge, while its decoded copy is sized to
+// the entries it reads. equals compares entries, so both agree without either
+// being serialized.
+test("equals compares entries without serializing either side", () => {
+  // Ten keys at 5 and 39 singles pass the 48-entry load limit of a 64-slot
+  // table; the purge takes the median, 1, leaving ten keys in 64 slots. Ten
+  // fit a 16-slot table, which is what decoding sizes the copy to.
+  const grown = new TopK({ capacity: 64 });
+  for (let i = 0; i < 10; i++) grown.add(`heavy:${String(i)}`, 5);
+  for (let i = 0; i < 39; i++) grown.add(`light:${String(i)}`);
+  expect(grown.error()).toBe(1);
+  expect(grown.top(64)).toHaveLength(10);
+
+  const decoded = TopK.fromBytes(grown.toBytes());
+  const other = filled();
+  const spy = vi.spyOn(TopK.prototype, "toBytes");
+  try {
+    expect(grown.equals(decoded)).toBe(true);
+    expect(decoded.equals(grown)).toBe(true);
+    expect(grown.equals(other)).toBe(false);
+    expect(spy).not.toHaveBeenCalled();
+  } finally {
+    spy.mockRestore();
+  }
 });
