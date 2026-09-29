@@ -13,8 +13,8 @@
     "links:check": "node scripts/check-links.mjs dist ../.."
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.42.1",
-    "astro": "^7.3.3",
+    "@astrojs/starlight": "^0.42.4",
+    "astro": "^7.3.5",
     "distillate": "workspace:*"
   },
   "devDependencies": {
@@ -24,9 +24,9 @@
     "starlight-typedoc": "^0.23.1",
     "tailwindcss": "^4.3.3",
     "typedoc": "^0.28.20",
-    "typedoc-plugin-markdown": "^4.13.0",
+    "typedoc-plugin-markdown": "^4.13.1",
     "typescript": "^5.9.3",
-    "vitest": "^5.0.1",
+    "vitest": "^5.0.2",
     "yaml": "^2.9.1"
   }
 }
