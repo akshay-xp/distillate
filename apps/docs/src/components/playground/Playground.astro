@@ -444,8 +444,10 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     if (!addForm || !current) return;
     const key = String(new FormData(addForm).get("key") ?? "");
     if (key === "") return;
-    const { fuseRefusal } = current.insert(key);
-    if (status) status.textContent = fuseRefusal;
+    const result = current.insert(key);
+    if (status)
+      status.textContent = result.ok ? result.fuseRefusal : result.message;
+    if (!result.ok) return;
     render(current.report());
     renderSketch(current.countMin());
     renderHeaviest(current.heaviest(HEAVIEST));
