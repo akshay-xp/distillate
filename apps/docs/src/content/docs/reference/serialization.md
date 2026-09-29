@@ -210,8 +210,7 @@ Offset    Size          Field
 4         4             entries: keys held, at most floor(0.75 * capacity) (u32)
 8         8             offset: everything the purges have subtracted (f64), an integer
 16        8             total: every count ever added (f64), an integer
-24        4             seed (u32)
-28        4             padding (0)
+24        8             padding (0)
 32        4 * entries   counts: each held key's stored count (u32), at least 1
 32 + 4e   4 * entries   lengths: each held key's length in bytes (u32)
 32 + 8e   sum(lengths)  keys: the key bytes, concatenated with no separator or padding

@@ -153,7 +153,7 @@ const rebuild = ({
       return sketch;
     }
     case "topk": {
-      const sketch = TopK.create(epsilon, { seed });
+      const sketch = TopK.create(epsilon);
       for (const key of keys) sketch.add(key);
       return sketch;
     }

@@ -1302,10 +1302,10 @@ func TestCountMinDamaged(t *testing.T) {
 // The first type whose body length does not follow from its params, so the
 // reader bounds the table by entries and walks the keys by their lengths.
 type topK struct {
-	capacity, seed uint32
-	offset, total  float64
-	keys           [][]byte
-	counts         []uint32
+	capacity      uint32
+	offset, total float64
+	keys          [][]byte
+	counts        []uint32
 }
 
 const topKParams = 32
@@ -1317,7 +1317,7 @@ func parseTopK(f frame) (topK, error) {
 	if len(f.body) < topKParams {
 		return topK{}, fmt.Errorf("body of %d bytes is shorter than the params block", len(f.body))
 	}
-	for at := 28; at < topKParams; at++ {
+	for at := 24; at < topKParams; at++ {
 		if f.body[at] != 0 {
 			return topK{}, fmt.Errorf("params padding at byte %d is not zero", at)
 		}
@@ -1326,7 +1326,6 @@ func parseTopK(f frame) (topK, error) {
 		capacity: le.Uint32(f.body),
 		offset:   math.Float64frombits(le.Uint64(f.body[8:])),
 		total:    math.Float64frombits(le.Uint64(f.body[16:])),
-		seed:     le.Uint32(f.body[24:]),
 	}
 	entries := uint64(le.Uint32(f.body[4:]))
 	table := uint64(topKParams) + 8*entries
@@ -1376,7 +1375,7 @@ func (k topK) count(key string) uint64 {
 // buildTopK follows the reference's update rule on a plain map. No hash is
 // involved: the frame stores entries in canonical order, so matching the JS
 // bytes proves neither slot placement nor arrival order reaches the frame.
-func buildTopK(capacity, seed uint32, keys []string) []byte {
+func buildTopK(capacity uint32, keys []string) []byte {
 	stored := map[string]uint32{}
 	var offset, total uint64
 	limit := int(capacity) * 3 / 4
@@ -1418,7 +1417,6 @@ func buildTopK(capacity, seed uint32, keys []string) []byte {
 	le.PutUint32(params[4:], uint32(len(held)))
 	le.PutUint64(params[8:], math.Float64bits(float64(offset)))
 	le.PutUint64(params[16:], math.Float64bits(float64(total)))
-	le.PutUint32(params[24:], seed)
 	payload := make([]byte, 8*len(held))
 	for i, key := range held {
 		le.PutUint32(payload[4*i:], stored[key])
@@ -1429,7 +1427,6 @@ func buildTopK(capacity, seed uint32, keys []string) []byte {
 }
 
 func TestTopK(t *testing.T) {
-	seeded := false
 	for _, e := range golden(t) {
 		if e.Kind != "topk" {
 			continue
@@ -1442,7 +1439,6 @@ func TestTopK(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", e.Name, err)
 		}
-		seeded = seeded || k.seed != 0
 		if want := float64(len(e.Keys)); k.total != want {
 			t.Errorf("%s: total %v, want %v", e.Name, k.total, want)
 		}
@@ -1472,7 +1468,7 @@ func TestTopK(t *testing.T) {
 				t.Errorf("%s: stored %d for %q, above the true %d", e.Name, stored, key, n)
 			}
 		}
-		rebuilt := buildTopK(k.capacity, k.seed, e.Keys)
+		rebuilt := buildTopK(k.capacity, e.Keys)
 		if golden := frameOf(t, e); !bytes.Equal(rebuilt, golden) {
 			t.Errorf("%s: rebuilt frame differs:\n got %x\nwant %x", e.Name, rebuilt, golden)
 		}
@@ -1488,9 +1484,6 @@ func TestTopK(t *testing.T) {
 				t.Errorf("topk: entries %q, want %q", strings.Join(got, " "), want)
 			}
 		}
-	}
-	if !seeded {
-		t.Error("no topk fixture carries a non-zero seed")
 	}
 }
 
@@ -1512,6 +1505,7 @@ func TestTopKDamaged(t *testing.T) {
 		mutate     func(b []byte)
 	}{
 		{"wrong type", "type", func(b []byte) { b[5] = 8 }},
+		{"padding set where the seed once was", "padding", func(b []byte) { b[headerSize+24] = 1 }},
 		{"padding set", "padding", func(b []byte) { b[headerSize+28] = 1 }},
 		{"lengths over-consume", "consume", func(b []byte) { b[lengths]++ }},
 		{"lengths under-consume", "consume", func(b []byte) { b[lengths]-- }},

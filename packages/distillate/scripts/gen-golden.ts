@@ -78,8 +78,7 @@ const bytes = (entry: Entry): Uint8Array => {
     case "topk": {
       // As for Count-Min, repeats in the key list are how a fixture reaches
       // stored counts above one, and on a small capacity how it purges.
-      const { seed } = entry;
-      const sketch = TopK.create(epsilon, { seed });
+      const sketch = TopK.create(epsilon);
       for (const key of keys) sketch.add(key);
       return sketch.toBytes();
     }

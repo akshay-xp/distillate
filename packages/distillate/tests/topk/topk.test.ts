@@ -12,9 +12,14 @@ test("create builds a sketch with the capacity the sizing solved for", () => {
   expect(sketch.capacity).toBe(topKSizing(0.01).capacity);
 });
 
-test("the seed defaults to 0 and is carried from options", () => {
-  expect(TopK.create(0.01).seed).toBe(0);
-  expect(TopK.create(0.01, { seed: 7 }).seed).toBe(7);
+// Slot placement never reaches the frame, so a seed would configure nothing.
+test("a sketch takes no seed", () => {
+  // @ts-expect-error seed is not a parameter
+  const sketch = new TopK({ capacity: 16, seed: 7 });
+
+  expect(sketch).not.toHaveProperty("seed");
+  // @ts-expect-error create takes no options
+  expect(TopK.create(0.01, { seed: 7 })).not.toHaveProperty("seed");
 });
 
 test("epsilon reports what the purge width delivers, not what was asked", () => {
@@ -237,8 +242,7 @@ test("from counts repeats rather than deduping them", () => {
   expect(sketch.capacity).toBe(topKSizing(0.01).capacity);
 });
 
-test("from carries its options and takes an empty stream", () => {
-  expect(TopK.from([], 0.01, { seed: 7 }).seed).toBe(7);
+test("from takes an empty stream", () => {
   expect(TopK.from([], 0.01).total).toBe(0);
   expect(TopK.from([], 0.01).top(1)).toEqual([]);
 });
