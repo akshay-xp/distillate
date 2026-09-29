@@ -129,3 +129,42 @@ test("the README shows Top-K in use and links its guide", () => {
     "/guides/topk/",
   );
 });
+
+test("no page describes a Top-K seed, which the sketch no longer has", () => {
+  const errors = read("../src/content/docs/reference/errors.md");
+  const row = errors
+    .split("\n")
+    .find((line) => line.includes("`TopKParamMismatchError`"));
+  expect(row).toContain("capacity");
+  expect(row).not.toMatch(/seed/i);
+  const entry = section(errors, "Merge errors").split(
+    "### `TopKParamMismatchError`",
+  )[1];
+  expect(entry.split("\n### ")[0]).not.toMatch(/seed/i);
+
+  expect(guide()).not.toMatch(/seed/i);
+});
+
+test("the type 9 reference names the bound a reader enforces", () => {
+  const reference = read("../src/content/docs/reference/serialization.md");
+  const topK = reference.slice(
+    reference.indexOf("Top-K (type 9), little-endian"),
+  );
+  const rejects = topK.slice(
+    topK.indexOf("A reader rejects:"),
+    topK.indexOf("\n\n", topK.indexOf("A reader rejects:") + 20),
+  );
+  expect(rejects).toContain("sum(counts) + W * offset");
+  expect(topK.split("\n### ")[0]).not.toMatch(/\bseed\b/);
+});
+
+test("the guide says why untrusted keys are safe and where a Worker builds one", () => {
+  const untrusted = section(guide(), "Untrusted keys");
+  expect(untrusted).toContain("HalfSipHash");
+  expect(untrusted).toMatch(/no option/i);
+  expect(untrusted).toContain("Cloudflare Workers");
+
+  const runtimes = read("../src/content/docs/guides/cross-runtime.md");
+  expect(runtimes).toContain("Cloudflare Workers");
+  expect(runtimes).toContain("/guides/topk/");
+});

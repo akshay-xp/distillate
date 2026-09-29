@@ -17,7 +17,7 @@ and a frame that will not decode.
 | [`BlockedBloomParamMismatchError`](/api/blocked/classes/blockedbloomparammismatcherror/) | `BlockedBloomFilter.union`                | Filters disagree on geometry                          |
 | [`ScalableParamMismatchError`](/api/scalable/classes/scalableparammismatcherror/)        | `ScalableBloomFilter.union`               | Filters disagree on settings or stages                |
 | [`CountMinParamMismatchError`](/api/countmin/classes/countminparammismatcherror/)        | `CountMinSketch.union`                    | Sketches disagree on geometry or seed                 |
-| [`TopKParamMismatchError`](/api/topk/classes/topkparammismatcherror/)                    | `TopK.union`                              | Sketches disagree on capacity or seed                 |
+| [`TopKParamMismatchError`](/api/topk/classes/topkparammismatcherror/)                    | `TopK.union`                              | Sketches disagree on capacity                         |
 | [`BinaryFuseBuildError`](/api/fuse/classes/binaryfusebuilderror/)                        | `BinaryFuse8.from`, `BinaryFuse16.from`   | The peel stalled on every seed                        |
 | [`CuckooFullError`](/api/cuckoo/classes/cuckoofullerror/)                                | `CuckooFilter.add`                        | No room for the key after 500 moves                   |
 | [`CountMinOverflowError`](/api/countmin/classes/countminoverflowerror/)                  | `CountMinSketch.add`, `union`             | A counter would pass `2^32 - 1`                       |
@@ -198,11 +198,11 @@ error instanceof CountMinParamMismatchError; // true
 
 [API reference](/api/topk/classes/topkparammismatcherror/).
 
-**Thrown when** `TopK.union` is given a sketch whose `capacity` or `seed`
-differs from the receiver's. The message names both values.
+**Thrown when** `TopK.union` is given a sketch whose `capacity` differs from
+the receiver's. The message names both values.
 
-**What to do:** build both sides with the same `epsilon` and seed. `capacity`
-is a pure function of `epsilon`, so equal arguments to `create` are enough.
+**What to do:** build both sides with the same `epsilon`. `capacity` is a pure
+function of `epsilon`, so equal arguments to `create` are enough.
 
 ```ts
 import { TopK, TopKParamMismatchError } from "distillate/topk";

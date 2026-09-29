@@ -17,7 +17,7 @@ Kirsch and Mitzenmacher, "Less Hashing, Same Performance" (2006); RocksDB issue 
 
 ## Default hasher
 
-One hash for every structure, pinned together with how each structure maps it to positions as flags variant `0` (see [serialization.md](serialization.md)):
+One hash for every structure except Top-K (below), pinned together with how each structure maps it to positions as flags variant `0` (see [serialization.md](serialization.md)):
 
 - **murmur3_x86_128** (flags variant `0`). Pure `Math.imul`, one pass over the key, four 32-bit output words. No emulated 64-bit multiply, so it is fast on V8 for every structure. Bloom and Blocked read two words as the double-hash `a`/`b`; Fuse reads the first 64-bit lane (`h1lo`/`h1hi`) for its fingerprints, retry `mixSeed`, and Lemire `mulhi64` reduction.
 
@@ -31,6 +31,16 @@ Pure-JS, zero-dep, synchronous, universal. Chosen because AMQ keys are usually s
 - Hash once, reuse across all probes. (Incumbent recomputes per op; see bloom-filters issue #60.)
 - String keys are hashed via `hash128Key`, which `TextEncoder.encodeInto`s the key into a reused, grow-on-demand buffer and calls the length-aware `hash128(buf, seed, written)`, so steady-state string hashing allocates nothing (no per-op `Uint8Array`). The bytes hashed are the same UTF-8 as `encode()`, so serialized filters stay cross-language readable; portability is unchanged.
 - Hot paths allocate nothing per call. Bloom/Blocked call `probeInto`/`hash32x2Into`, which encode the key once into the reused buffer and run one murmur3_x86_128 pass, reading two of its output words. Fuse calls `hash128KeyInto(key, seed, out)`, which writes lanes into a caller-owned struct. `hash128`/`hash128Key` keep returning fresh objects for external/test use.
+
+## Keyed slot hash (Top-K)
+
+Top-K places keys with HalfSipHash-1-3 (`src/topk/halfsip.ts`) under 64 random bits per sketch, not murmur.
+
+- Why: murmur3 has multicollisions that hold for every seed (Aumasson and Bernstein 2012; Ahle for x64_128), so a secret seed cannot stop crafted keys from sharing a slot. Keys brute-forced to one murmur slot made linear-probing `add` 174x slower at capacity 32,768. Top-K is the structure most often fed untrusted keys (IPs, URLs, user agents).
+- Possible only for Top-K: its frame stores entries in canonical order, so no stored byte depends on slot placement. The key never reaches the frame, bytes stay deterministic, and Top-K has no `seed`.
+- Cost: HalfSipHash runs at 72 to 78% of murmur's rate on 8 to 64 byte keys; the Zipf `add` rate is unchanged within noise.
+- The key is drawn on the first hash, not in the constructor: Cloudflare Workers refuse `crypto.getRandomValues` at module scope. The only randomness in the package.
+- Verified against the Linux kernel's `test_vectors_hsiphash` (HalfSipHash-1-3 build).
 
 ## Pluggable
 

@@ -228,6 +228,7 @@ A reader rejects:
 - a stored count of 0;
 - entries not in strict canonical order, and a key that appears twice;
 - an `offset` or `total` that is not an integer in `[0, 2^53 - 1]`;
+- `sum(counts) + W * offset` above `total`, where `W = (floor(0.75 * capacity) + 2) >> 1`. Every purge removes at least `W` times its median while adding the median to `offset`, and combining frames adds both sides, so counting cannot produce such a frame. It is the bound `offset <= epsilon * total` itself;
 - nonzero params padding.
 
 For a held key, the estimate is `count + offset`, never below its true count, and `count` alone is a lower bound, never above it. A key not held estimates 0, and its true count is at most `offset`: nothing heavier than the offset can have been dropped.
@@ -239,7 +240,7 @@ A writer adds `n` occurrences of a key (`n` at least 1) as follows, and a reader
 
 The upper median guarantees at least `(entries >> 1) + 1` keys go, so one purge always makes room. A writer refuses an add that would carry a stored count past `2^32 - 1` or `total` past `2^53 - 1`.
 
-Combining two frames of identical `capacity` and `seed`, informatively: sum each key's stored counts, and the offsets and totals, then purge as above while `entries` is above the load limit. Unlike Count-Min, this is not the frame one sketch fed both streams would hold, since a single sketch purges as it goes; both hold the guarantee.
+Combining two frames of identical `capacity`, informatively: sum each key's stored counts, and the offsets and totals, then purge as above while `entries` is above the load limit. Unlike Count-Min, this is not the frame one sketch fed both streams would hold, since a single sketch purges as it goes; both hold the guarantee.
 
 Keys are stored verbatim, so unlike every other type this frame contains user input as written. Geometry is stored rather than re-derived. For writers, informatively: `capacity` is the smallest power of two with `1 / ((floor(0.75 * capacity) + 2) >> 1) <= epsilon`, that denominator being the fewest keys a purge takes its full median from, which is what bounds `offset` by `epsilon * total`.
 
@@ -247,7 +248,7 @@ Keys are stored verbatim, so unlike every other type this frame contains user in
 
 Bits 0-3 of the flags byte name the complete scheme that turns a key into stored bits: the hash **and the index mapping** from its output to positions, not the hash alone. A change to any component takes a new variant, even when the hash itself is unchanged, because a reader that recognises the old variant would otherwise read every stored frame at the wrong positions with no error. Version 5 uses one scheme for every structure:
 
-- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog, Scalable, Cuckoo, Count-Min, Top-K) with the index mapping below
+- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog, Scalable, Cuckoo, Count-Min, Top-K) with the index mapping below. Top-K writes and requires `0`, though no hash reaches its frame
 
 Variant `0` covers:
 
@@ -259,7 +260,7 @@ Variant `0` covers:
 - **Scalable:** a key is hashed once with the frame's seed, and every stage applies the Bloom mapping above to that one hash with its own `m` and `k`.
 - **Cuckoo:** fingerprint `fp = (w1 >>> (32 - f))`, or 1 when that is 0; bucket `i1 = reduce(w0, buckets)`; the other bucket `(fp * 0x5bd1e995 mod 2^32 mod buckets + buckets - i1) mod buckets`; an eviction walk starts from bit 0 of `w2` and draws its victim slots from a xorshift32 seeded with `w3 | 1`. The full rules are in the type 7 section above.
 - **Count-Min:** `a = w0`, `b = w1`, exactly as Bloom; row `r` of `depth` takes probe `g_r = (a + r*b + r*r) mod 2^32` reduced into `[0, width)` by Lemire multiply-shift, addressing counter `r * width + g_r`.
-- **Top-K:** a key's map slot is `w0 & (capacity - 1)`, probing linearly on a collision. This places keys only in memory: the frame stores them in canonical order, so no stored byte depends on the hash, and a reader needs none of it to read or rebuild a frame.
+- **Top-K:** no hash. The frame stores entries in canonical order, so no stored byte depends on where a key sat in memory, and a reader needs no hash to read or rebuild a frame. In memory, `distillate` places a key at `HalfSipHash-1-3(key) & (capacity - 1)` under 64 random bits each sketch draws for itself, probing linearly on a collision, so crafted keys cannot be made to share a slot. A reader in another language may place keys however it likes.
 
 This is the case Guava hit: `MURMUR128_MITZ_32` and `MURMUR128_MITZ_64` use the same hash and differ only in how its 128 bits map to indices, yet the change still needed a new `Strategy` ordinal because the stored bits differ. Guava's ordinal covers the whole strategy, and this nibble does too.
 

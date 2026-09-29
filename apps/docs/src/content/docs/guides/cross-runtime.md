@@ -6,7 +6,7 @@ description: distillate runs unmodified on Node, Bun, Deno, browsers, and Cloudf
 distillate targets **ES2022**, ships zero runtime dependencies, and uses no
 `eval` and no required WASM compile step. That is the whole reason it runs
 everywhere: there is nothing in the package for a restricted runtime to
-refuse.
+refuse, with one exception on Cloudflare Workers, below.
 
 ## Supported runtimes
 
@@ -48,6 +48,11 @@ there at import time, before any of your code runs.
 distillate has no such call, and no dependency that could add one. It also
 does not use decorators or `reflect-metadata`, so nothing needs a metadata
 reflection polyfill installed at module scope. Importing it is inert.
+
+The exception: Cloudflare Workers refuse random values at module scope, and a
+[Top-K](/guides/topk/) draws a random hash key the first time it hashes a key.
+Creating one at module scope is fine, but `add`, `from` or `fromBytes` must run
+inside a handler. No other structure draws random values.
 
 ## Moving filters between runtimes
 

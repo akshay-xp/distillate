@@ -173,9 +173,28 @@ or a build artifact as you would the raw stream it came from. To keep raw keys
 out, add a keyed digest of each key instead, and `top` will then return
 digests you map back yourself.
 
+## Untrusted keys
+
+Heavy hitters is usually fed traffic someone else controls: client IPs, URLs,
+user agents. Every key is placed in the map by a hash, and keys crafted to
+share one slot would each walk the whole chain of the others on every `add`.
+With a known hash that is cheap to arrange, and it made `add` over a hundred
+times slower on a large map.
+
+So the map places keys with HalfSipHash, a keyed hash built to resist exactly
+this, under 64 random bits each sketch draws for itself. Without the key, no
+one can tell which keys would collide. There is no option to set: no stored
+byte depends on where a key sits, so the key never reaches the frame, and two
+sketches fed the same stream still write the same bytes.
+
+The key is drawn the first time the sketch hashes a key, from
+`crypto.getRandomValues`. Cloudflare Workers refuse random values at module
+scope, so on Workers build or decode a Top-K inside a handler. `create` alone
+at module scope is fine; `add`, `from` or `fromBytes` there is not.
+
 ## Union is not the combined stream
 
-Two sketches with the same `capacity` and seed combine with `union`: each key's
+Two sketches with the same `capacity` combine with `union`: each key's
 counts add, the errors add, and the merged map is purged back to size. The
 result holds the same guarantee, with an error at least the sum of the two.
 
