@@ -96,7 +96,8 @@ src/
   cuckoo/           # cuckoo filter with delete: cuckoo.ts, and sizing.ts for
                     # cuckooSizing
   countmin/         # Count-Min sketch: countmin.ts, and sizing.ts for countMinSizing
-  topk/             # Top-K heavy hitters: topk.ts, and sizing.ts for topKSizing
+  topk/             # Top-K heavy hitters: topk.ts, halfsip.ts for the keyed
+                    # slot hash, and sizing.ts for topKSizing
   frame/            # distillate/frame: readFrameAt for walking a stream of frames
   index.ts          # root barrel (VERSION only)
 ```
