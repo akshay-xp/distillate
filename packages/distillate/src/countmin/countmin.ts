@@ -27,7 +27,11 @@ const TYPE = 8;
 const PARAMS_SIZE = 16;
 const PARAMS_FIELDS_END = 12;
 
-/** The counters as bytes, for comparing two sketches without serializing them. */
+/**
+ * The counters as bytes, for comparing two sketches without serializing them.
+ * Cuckoo has the same one-liner; sharing it measured larger either way, +118 B
+ * on every subpath from core/bytes.ts or +100 B each from a chunk of its own.
+ */
 const counterBytes = (counters: Uint32Array): Uint8Array =>
   new Uint8Array(counters.buffer, counters.byteOffset, counters.byteLength);
 
