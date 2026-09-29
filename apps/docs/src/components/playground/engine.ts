@@ -151,13 +151,18 @@ export const MAX_KEYS = 100_000;
 
 const KEY_COUNT_MESSAGE = `Key count must be a whole number between 1 and ${MAX_KEYS.toLocaleString("en-US")}. The playground builds real filters in your browser, so it stops there.`;
 
-/**
- * Most occurrences one record may add. Well inside the `u32` a stored count
- * holds, so neither sketch can overflow and refuse after the other counted.
- */
+/** Most occurrences one record may add, which keeps a single record sensible. */
 const MAX_RECORD = 1_000_000;
 
-const RECORD_MESSAGE = `Occurrences must be a whole number from 1 to ${MAX_RECORD.toLocaleString("en-US")}. The sketch counts events, and a count below one would let an estimate fall under the truth, which is the one thing it rules out; the playground stops at a million per record.`;
+/**
+ * Most occurrences the playground records in all. Every counter in either
+ * sketch is at or below the total, so this, not the per-record limit, is what
+ * keeps them inside the `u32` they hold. The gap up to `2^32 - 1` covers the one
+ * occurrence each key adds, at most `MAX_KEYS` of them.
+ */
+const MAX_TOTAL = 4_000_000_000;
+
+const RECORD_MESSAGE = `Occurrences must be a whole number from 1 to ${MAX_RECORD.toLocaleString("en-US")}, and the playground stops at ${MAX_TOTAL.toLocaleString("en-US")} recorded in all. The sketch counts events, and a count below one would let an estimate fall under the truth, which is the one thing it rules out; the cap in all keeps every counter inside the 32 bits it holds.`;
 
 const GROW_MESSAGE = `Keys to add must be a whole number of at least 1, and the total held must stay at or under ${MAX_KEYS.toLocaleString("en-US")}. The playground builds real filters in your browser, so it stops there.`;
 
@@ -442,7 +447,12 @@ export class Playground {
    */
   record(key: string, count: unknown): RecordResult {
     const n = toNumber(count);
-    if (!Number.isInteger(n) || n < 1 || n > MAX_RECORD) {
+    if (
+      !Number.isInteger(n) ||
+      n < 1 ||
+      n > MAX_RECORD ||
+      this.#filters.countmin.total + n > MAX_TOTAL
+    ) {
       return { ok: false, message: RECORD_MESSAGE };
     }
     this.#count(key, n);

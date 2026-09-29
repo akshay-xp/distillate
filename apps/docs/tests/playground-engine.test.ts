@@ -578,3 +578,29 @@ test("a record count past 1,000,000 is refused and changes neither sketch", () =
 
   expect(pg.record("key-5", 1_000_000).ok).toBe(true);
 });
+
+// Every counter in either sketch is at or below the total, so capping the
+// total is what rules out an overflow. A per-record limit alone let 4,295
+// records of a million carry Count-Min past 2^32 - 1.
+test("recording past the playground's total is refused and changes nothing", () => {
+  const pg = built(100);
+  while (pg.countMin().total + 1_000_000 <= 4_000_000_000) {
+    pg.record("hot", 1_000_000);
+  }
+  const total = pg.countMin().total;
+  const estimate = pg.estimate("hot");
+  const heaviest = pg.heaviest(10);
+
+  const refused = pg.record("hot", 1_000_000);
+
+  expect(refused.ok).toBe(false);
+  if (!refused.ok) expect(refused.message).toContain("4,000,000,000");
+  expect(pg.countMin().total).toBe(total);
+  expect(pg.estimate("hot")).toEqual(estimate);
+  expect(pg.heaviest(10)).toEqual(heaviest);
+
+  // The headroom above the cap is for the one occurrence each key brings.
+  pg.insert("after-cap");
+  expect(pg.grow(1000).ok).toBe(true);
+  expect(pg.estimate("after-cap").trueCount).toBe(1);
+});
