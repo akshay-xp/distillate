@@ -34,6 +34,7 @@ const PARAMS_FIELDS_END = 28;
 
 const padded8 = (length: number): number => Math.ceil(length / 8) * 8;
 
+// Duplicates Count-Min's counterBytes on purpose: see the note there.
 const wordBytes = (words: Uint32Array): Uint8Array =>
   new Uint8Array(words.buffer, words.byteOffset, words.byteLength);
 
