@@ -592,15 +592,15 @@ export class TopK {
     const counts: number[] = [];
     // Which merged entry each of this sketch's slots became, so a key the
     // other side also holds adds to it rather than appearing twice.
-    const indexOf = new Int32Array(this.#capacity).fill(-1);
-    for (let slot = 0; slot < this.#capacity; slot++) {
+    const indexOf = new Int32Array(this.#size).fill(-1);
+    for (let slot = 0; slot < this.#size; slot++) {
       const stored = this.#counts[slot] ?? 0;
       if (stored === 0) continue;
       indexOf[slot] = keys.length;
       keys.push(this.#keyAt(slot).slice());
       counts.push(stored);
     }
-    for (let slot = 0; slot < other.#capacity; slot++) {
+    for (let slot = 0; slot < other.#size; slot++) {
       const stored = other.#counts[slot] ?? 0;
       if (stored === 0) continue;
       const key = other.#keyAt(slot);
