@@ -7,7 +7,12 @@ import {
   TopKParamMismatchError,
 } from "../../src/topk/topk.js";
 import { truthOf, zipfStream } from "../helpers/frequency.js";
-import { expectOneSided } from "../helpers/topk.js";
+import {
+  expectOneSided,
+  HUGE,
+  SMALL,
+  typedArrayBytesDuring,
+} from "../helpers/topk.js";
 
 // The error names both capacities, which says which side to rebuild.
 test("a union across a differing capacity is refused", () => {
@@ -158,4 +163,20 @@ test("a union is not the sketch the combined stream would have produced", () => 
   const truth = truthOf([...streamA, ...streamB]);
   expectOneSided(u, truth);
   expectOneSided(both, truth);
+});
+
+// Its key index was an Int32Array of capacity, 64 MB here for six keys, and
+// dropped before union returned, so it is counted as constructed.
+test("a union of small sketches at the largest capacity allocates what they hold", () => {
+  const a = new TopK({ capacity: HUGE });
+  const b = new TopK({ capacity: HUGE });
+  for (const key of ["x", "y", "z"]) a.add(key, 2);
+  for (const key of ["x", "p", "q"]) b.add(key, 3);
+
+  const { value: u, bytes } = typedArrayBytesDuring(() => a.union(b));
+
+  expect(bytes).toBeLessThan(SMALL);
+  expect(u.count("x")).toBe(5);
+  expect(u.count("q")).toBe(3);
+  expect(u.total).toBe(15);
 });
