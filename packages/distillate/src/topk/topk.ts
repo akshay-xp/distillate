@@ -27,11 +27,11 @@ import {
 const TYPE = 9;
 
 /**
- * Params occupy 28 bytes and the block is padded to 32, so the payload starts
+ * Params occupy 24 bytes and the block is padded to 32, so the payload starts
  * at frame offset 48 and its counts and lengths can be mapped as `u32`.
  */
 const PARAMS_SIZE = 32;
-const PARAMS_FIELDS_END = 28;
+const PARAMS_FIELDS_END = 24;
 
 /**
  * Rejects a frame's `offset` or `total` unless counting could have produced
@@ -73,9 +73,6 @@ export class TopKParamMismatchError extends Error {
   override readonly name = "TopKParamMismatchError";
 }
 
-/** Options accepted alongside a sizing solve: everything but the geometry. */
-export type TopKOptions = Omit<TopKParams, "capacity">;
-
 /** One of the heaviest keys, with the bracket its stored count implies. */
 export interface TopKEntry {
   /** The key exactly as it was recorded. A copy, safe to keep or mutate. */
@@ -90,8 +87,6 @@ export interface TopKEntry {
 export interface TopKParams {
   /** Slots in the counter map; must be a power of two. */
   capacity: number;
-  /** Hash seed; defaults to `0`. */
-  seed?: number;
 }
 
 /**
@@ -107,7 +102,6 @@ export interface TopKParams {
 export class TopK {
   readonly #capacity: number;
   readonly #loadLimit: number;
-  readonly #seed: number;
   // The slot hash's secret key, drawn on first use. No stored byte depends on
   // where a key sits, so the key never reaches the frame and can differ per
   // sketch; being secret is what keeps crafted keys off a shared chain.
@@ -135,11 +129,10 @@ export class TopK {
    * by the k you will ask for: `top(k)` takes k per call.
    *
    * @param epsilon - Error factor relative to the total recorded, e.g. `0.001`.
-   * @param options - Optional seed.
    * @returns A new, empty sketch.
    */
-  static create(epsilon: number, options: TopKOptions = {}): TopK {
-    return new TopK({ ...options, ...topKSizing(epsilon) });
+  static create(epsilon: number): TopK {
+    return new TopK(topKSizing(epsilon));
   }
 
   /**
@@ -152,15 +145,10 @@ export class TopK {
    *
    * @param keys - The keys to record, repeats included.
    * @param epsilon - Error factor relative to the total recorded.
-   * @param options - Optional seed.
    * @returns A new sketch holding every occurrence.
    */
-  static from(
-    keys: Iterable<BytesLike>,
-    epsilon: number,
-    options: TopKOptions = {},
-  ): TopK {
-    const sketch = TopK.create(epsilon, options);
+  static from(keys: Iterable<BytesLike>, epsilon: number): TopK {
+    const sketch = TopK.create(epsilon);
     for (const key of keys) sketch.add(key);
     return sketch;
   }
@@ -212,7 +200,7 @@ export class TopK {
     assertCount(total, "total");
     let sketch: TopK;
     try {
-      sketch = new TopK({ capacity, seed: view.getUint32(24, true) });
+      sketch = new TopK({ capacity });
     } catch (err) {
       // A caller decoding a frame should see one error family.
       if (err instanceof ParamError) {
@@ -265,9 +253,8 @@ export class TopK {
    * Constructs a sketch from low-level {@link TopKParams}. Prefer
    * {@link TopK.create} unless restoring a specific geometry.
    */
-  constructor({ capacity, seed = 0 }: TopKParams) {
+  constructor({ capacity }: TopKParams) {
     assertUint32(capacity, "capacity");
-    assertUint32(seed, "seed");
     // A power of two is what lets the probe mask instead of divide, and what
     // keeps a rebuilt map addressable by the same mask.
     if (!Number.isInteger(Math.log2(capacity))) {
@@ -282,7 +269,6 @@ export class TopK {
     }
     this.#capacity = capacity;
     this.#loadLimit = topKLoadLimit(capacity);
-    this.#seed = seed;
     this.#counts = new Uint32Array(capacity);
     this.#keyOffsets = new Uint32Array(capacity);
     this.#keyLengths = new Uint32Array(capacity);
@@ -292,11 +278,6 @@ export class TopK {
   /** Slots in the counter map. */
   get capacity(): number {
     return this.#capacity;
-  }
-
-  /** Hash seed. */
-  get seed(): number {
-    return this.#seed;
   }
 
   /**
@@ -536,11 +517,6 @@ export class TopK {
         `cannot union Top-K sketches with capacity ${String(this.#capacity)} and ${String(other.#capacity)}`,
       );
     }
-    if (this.#seed !== other.#seed) {
-      throw new TopKParamMismatchError(
-        `cannot union Top-K sketches with seed ${String(this.#seed)} and ${String(other.#seed)}`,
-      );
-    }
     // Past the safe range the total loses precision and fromBytes refuses it.
     if (this.#total + other.#total > Number.MAX_SAFE_INTEGER) {
       throw new TopKOverflowError(
@@ -580,7 +556,7 @@ export class TopK {
       }
     }
 
-    const merged = new TopK({ capacity: this.#capacity, seed: this.#seed });
+    const merged = new TopK({ capacity: this.#capacity });
     merged.#offset = this.#offset + other.#offset;
     merged.#total = this.#total + other.#total;
     merged.#reduceTo(keys, counts);
@@ -607,7 +583,6 @@ export class TopK {
         view.setUint32(4, slots.length, true);
         view.setFloat64(8, this.#offset, true);
         view.setFloat64(16, this.#total, true);
-        view.setUint32(24, this.#seed, true);
         let keyAt = tableEnd;
         slots.forEach((slot, i) => {
           const at = this.#keyOffsets[slot] ?? 0;
@@ -623,7 +598,7 @@ export class TopK {
 
   /**
    * Tests structural equality: `true` when `other` serializes to identical
-   * bytes, meaning identical geometry, seed, offset, total and entries.
+   * bytes, meaning identical geometry, offset, total and entries.
    *
    * Entries are written in canonical order, so equal bytes mean the same
    * entries are held, whatever order they arrived in.

@@ -42,14 +42,13 @@ export class TopK {
     add(key: BytesLike, count?: number): void;
     get capacity(): number;
     count(key: BytesLike): number;
-    static create(epsilon: number, options?: TopKOptions): TopK;
+    static create(epsilon: number): TopK;
     get epsilon(): number;
     equals(other: TopK): boolean;
     error(): number;
-    static from(keys: Iterable<BytesLike>, epsilon: number, options?: TopKOptions): TopK;
+    static from(keys: Iterable<BytesLike>, epsilon: number): TopK;
     static fromBytes(bytes: Uint8Array): TopK;
     static fromJSON(value: unknown): TopK;
-    get seed(): number;
     toBytes(): Uint8Array;
     toJSON(): FilterJSON;
     top(k: number): TopKEntry[];
@@ -65,9 +64,6 @@ export interface TopKEntry {
 }
 
 // @public
-export type TopKOptions = Omit<TopKParams, "capacity">;
-
-// @public
 export class TopKOverflowError extends RangeError {
     override readonly name = "TopKOverflowError";
 }
@@ -80,7 +76,6 @@ export class TopKParamMismatchError extends Error {
 // @public
 export interface TopKParams {
     capacity: number;
-    seed?: number;
 }
 
 // @public

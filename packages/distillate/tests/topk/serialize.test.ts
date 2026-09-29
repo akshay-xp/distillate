@@ -16,7 +16,7 @@ import { zipfStream } from "../helpers/frequency.js";
 const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 
 test("the frame follows the documented layout", () => {
-  const s = new TopK({ capacity: 16, seed: 5 });
+  const s = new TopK({ capacity: 16 });
   s.add("b", 3);
   s.add("a", 3);
   s.add("c", 7);
@@ -31,8 +31,7 @@ test("the frame follows the documented layout", () => {
   expect(view.getUint32(20, true)).toBe(3);
   expect(view.getFloat64(24, true)).toBe(0);
   expect(view.getFloat64(32, true)).toBe(13);
-  expect(view.getUint32(40, true)).toBe(5);
-  expect([...frame.subarray(44, 48)]).toEqual([0, 0, 0, 0]);
+  expect([...frame.subarray(40, 48)]).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
 
   // Counts then lengths, both on 4-byte boundaries so a foreign reader can map
   // them as u32 slices; then the keys, heaviest first, ties by key bytes.
@@ -68,7 +67,7 @@ test("the same entries produce the same bytes whatever order they arrived in", (
 });
 
 const filled = (): TopK => {
-  const s = new TopK({ capacity: 256, seed: 3 });
+  const s = new TopK({ capacity: 256 });
   for (let i = 0; i < 100; i++) s.add(`key:${String(i)}`, (i % 7) + 1);
   return s;
 };
@@ -98,7 +97,6 @@ test.each(examples)("a %s sketch round-trips byte-identically", (_, make) => {
   const restored = TopK.fromBytes(s.toBytes());
 
   expect(restored.capacity).toBe(s.capacity);
-  expect(restored.seed).toBe(s.seed);
   expect(restored.total).toBe(s.total);
   expect(restored.error()).toBe(s.error());
   expect(restored.top(s.capacity)).toEqual(s.top(s.capacity));
@@ -152,7 +150,6 @@ interface Forged {
   entries?: number;
   offset?: number;
   total?: number;
-  seed?: number;
   pad?: number;
   counts?: number[];
   lengths?: number[];
@@ -171,7 +168,6 @@ const forge = ({
   entries = counts.length,
   offset = 0,
   total = 0,
-  seed = 0,
   pad = 0,
   lengths = [],
   keys = [],
@@ -184,7 +180,6 @@ const forge = ({
   view.setUint32(4, entries, true);
   view.setFloat64(8, offset, true);
   view.setFloat64(16, total, true);
-  view.setUint32(24, seed, true);
   body[28] = pad;
   [...counts, ...lengths].forEach((v, i) => {
     view.setUint32(32 + 4 * i, v, true);
@@ -201,7 +196,7 @@ type Mutation = (frame: Uint8Array) => void;
 const lies: [string, Mutation, new (...args: never[]) => Error][] = [
   ["type 1", (f) => (f[5] = 1), SerializationError],
   ["hash variant 1", (f) => (f[6] = 1), UnknownHashVariantError],
-  ...[44, 45, 46, 47].map(
+  ...[40, 41, 42, 43, 44, 45, 46, 47].map(
     (at): [string, Mutation, typeof SerializationError] => [
       `params padding byte ${String(at - 16)} set`,
       (f) => (f[at] = 1),

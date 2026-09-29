@@ -1,5 +1,5 @@
 export { TopK, TopKOverflowError, TopKParamMismatchError } from "./topk.js";
-export type { TopKEntry, TopKOptions, TopKParams } from "./topk.js";
+export type { TopKEntry, TopKParams } from "./topk.js";
 export type { FilterJSON } from "../core/serialize.js";
 export { ParamError } from "../core/params.js";
 export { topKSizing } from "./sizing.js";

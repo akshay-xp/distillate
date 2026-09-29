@@ -491,7 +491,13 @@ test("the documented Top-K layout decodes the golden frame", () => {
   expect(Number.isInteger(Math.log2(capacity))).toBe(true);
   expect(entries).toBeGreaterThan(0);
   expect(entries).toBeLessThanOrEqual(Math.floor(0.75 * capacity));
-  expect(u32("seed")).toBe(fixture.seed);
+  // The seed once sat at 24; slot placement never reached the frame, so the
+  // whole tail of the params block is padding a reader requires to be zero.
+  const padding = rows.get("padding")?.offset ?? NaN;
+  expect(padding).toBe(24);
+  expect([
+    ...new Uint8Array(body.buffer, body.byteOffset + padding, 8),
+  ]).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
   expect(body.getFloat64(rows.get("total")?.offset ?? NaN, true)).toBe(
     fixture.keys.length,
   );

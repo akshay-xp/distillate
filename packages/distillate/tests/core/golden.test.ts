@@ -79,8 +79,7 @@ const build = (entry: GoldenEntry): Serializable => {
       return sketch;
     }
     case "topk": {
-      const { seed } = entry;
-      const sketch = TopK.create(epsilon, { seed });
+      const sketch = TopK.create(epsilon);
       for (const key of keys) sketch.add(key);
       return sketch;
     }
