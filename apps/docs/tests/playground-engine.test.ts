@@ -258,6 +258,7 @@ test("a late key is taken by every bloom filter and refused by fuse", () => {
 
   const insert = playground.insert("late-key");
 
+  if (!insert.ok) throw new Error(`insert refused: ${insert.message}`);
   expect(insert.key).toBe("late-key");
   expect(insert.keyCount).toBe(KEYS + 1);
   expect(insert.fuseRefusal).toContain("Binary Fuse");
@@ -603,4 +604,30 @@ test("recording past the playground's total is refused and changes nothing", () 
   pg.insert("after-cap");
   expect(pg.grow(1000).ok).toBe(true);
   expect(pg.estimate("after-cap").trueCount).toBe(1);
+});
+
+// The headroom above the recorded total is exact only while keys are bounded,
+// so a key past MAX_KEYS is refused before any filter or sketch takes it.
+test("a new key past the playground's bound is refused and changes nothing", () => {
+  const pg = built(MAX_KEYS);
+  const before = pg.report();
+  const estimate = pg.estimate("brand-new");
+  const heaviest = pg.heaviest(10);
+
+  const refused = pg.insert("brand-new");
+
+  expect(refused.ok).toBe(false);
+  if (!refused.ok) expect(refused.message).toContain("at most 100,000 keys");
+  const after = pg.report();
+  expect(after.keyCount).toBe(MAX_KEYS);
+  expect(after.structures.cuckoo.heldKeys).toBe(
+    before.structures.cuckoo.heldKeys,
+  );
+  expect(pg.lookup("brand-new").inserted).toBe(false);
+  expect(pg.estimate("brand-new")).toEqual(estimate);
+  expect(pg.heaviest(10)).toEqual(heaviest);
+
+  // A key already held costs nothing, so it is still taken.
+  expect(pg.insert("key-5").ok).toBe(true);
+  expect(pg.report().keyCount).toBe(MAX_KEYS);
 });

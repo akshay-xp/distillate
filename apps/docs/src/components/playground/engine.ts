@@ -90,11 +90,14 @@ export interface Lookup {
 
 /** What happened to one key added after the build. */
 export interface InsertReport {
+  ok: true;
   key: string;
   keyCount: number;
   /** Why Binary Fuse could not take it. Always set: it is static. */
   fuseRefusal: string;
 }
+
+export type InsertResult = InsertReport | { ok: false; message: string };
 
 /** A snapshot of the whole playground, enough to render it. */
 export interface PlaygroundReport {
@@ -163,6 +166,8 @@ const MAX_RECORD = 1_000_000;
 const MAX_TOTAL = 4_000_000_000;
 
 const RECORD_MESSAGE = `Occurrences must be a whole number from 1 to ${MAX_RECORD.toLocaleString("en-US")}, and the playground stops at ${MAX_TOTAL.toLocaleString("en-US")} recorded in all. The sketch counts events, and a count below one would let an estimate fall under the truth, which is the one thing it rules out; the cap in all keeps every counter inside the 32 bits it holds.`;
+
+const INSERT_MESSAGE = `The playground holds at most ${MAX_KEYS.toLocaleString("en-US")} keys, and this one would be past that. It builds real filters in your browser, so rebuild with fewer keys to add more.`;
 
 const GROW_MESSAGE = `Keys to add must be a whole number of at least 1, and the total held must stay at or under ${MAX_KEYS.toLocaleString("en-US")}. The playground builds real filters in your browser, so it stops there.`;
 
@@ -300,9 +305,15 @@ export class Playground {
    * Adds one key. The Bloom filters take it; Binary Fuse is static and cannot,
    * so the reason comes back rather than being thrown.
    */
-  insert(key: string): InsertReport {
+  insert(key: string): InsertResult {
+    // Refused before any filter takes it: the recorded total's headroom is
+    // for one occurrence per key, which holds only while keys are bounded.
+    if (!this.#inserted.has(key) && this.#keys.length >= MAX_KEYS) {
+      return { ok: false, message: INSERT_MESSAGE };
+    }
     this.#add(key);
     return {
+      ok: true,
       key,
       keyCount: this.#keys.length,
       fuseRefusal: `Binary Fuse is static: it was built from ${this.#built.length.toLocaleString("en-US")} keys in one pass and has no add. To include this key you rebuild the whole filter. Classic, Blocked, Scalable Bloom and Cuckoo took it.`,

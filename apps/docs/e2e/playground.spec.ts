@@ -215,6 +215,24 @@ test("growing past the bound is refused in the page", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test("a key past the key bound is refused in the page", async ({ page }) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+  await page.fill("#pg-keys", "100000");
+  await page.getByRole("button", { name: "Build" }).click();
+  const held = page.locator("[data-row='bloom'] [data-cell='held']");
+  await expect(held).toHaveText("100,000");
+
+  await add(page, "late-key");
+
+  // The Binary Fuse note also names 100,000, so match the refusal's wording.
+  await expect(page.locator("[data-pg-status]")).toContainText(
+    "at most 100,000 keys",
+  );
+  await expect(held).toHaveText("100,000");
+  expect(errors).toEqual([]);
+});
+
 async function remove(page: Page, key: string): Promise<void> {
   await page.fill("#pg-delete", key);
   await page.getByRole("button", { name: "Delete" }).click();
