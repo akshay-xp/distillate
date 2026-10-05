@@ -1,9 +1,12 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { adapters as bloomAdapters } from "./adapters.js";
 import { cardinalityAdapters, cardinalityRows } from "./cardinality.js";
 import { countMinAdapters, countMinRows } from "./countmin.js";
 import { cuckooAdapters, cuckooRows } from "./cuckoo.js";
+import { keyLengthRows } from "./keylength.js";
+import type { Alphabet } from "./keylength.js";
 import { scalableAdapters, scalableRows } from "./scalable.js";
 import { measureThroughput } from "./throughput.js";
 import { topKAdapters, topKRows } from "./topk.js";
@@ -38,6 +41,13 @@ type Job = (adapter: string, args: never) => unknown[] | Promise<unknown[]>;
 const JOBS: Record<string, Job> = {
   cardinality: (name, [p, ns]: [number, number[]]) =>
     cardinalityRows(p, ns, only(cardinalityAdapters, name, "cardinality")),
+  keylength: (name, [lengths, alphabets, n]: [number[], Alphabet[], number]) =>
+    keyLengthRows(
+      lengths,
+      alphabets,
+      n,
+      only(bloomAdapters, name, "keylength"),
+    ),
   scalable: (name, [initial, ns]: [number, number[]]) =>
     scalableRows(initial, ns, only(scalableAdapters, name, "scalable")),
   cuckoo: (name, [ns]: [number[]]) =>
