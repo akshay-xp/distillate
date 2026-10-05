@@ -111,6 +111,8 @@ The gate is `tests/hll/allocation.test.ts` over `countCollections`, which warms 
 
 Replacing `encodeInto` with a hand-rolled UTF-8 encoder was considered and rejected. It does not deliver zero allocation below TurboFan: byte keys never reach `encodeInto` and still cost 221 GCs against string keys' 279, so the encoder is about a fifth of the sub-TurboFan garbage and the rest is number boxing TurboFan also removes. That buys a fifth of the garbage in a tier shipped code does not sit in, against owning UTF-8 correctness (surrogate pairs, lone surrogates to U+FFFD) in the hashing path, where an error silently changes every hash and every serialized filter.
 
+The short-ASCII copy in `encodeKey` is not that encoder. It owns no UTF-8 rules: it copies only strings of up to 12 chars whose every char is below 0x80, where the UTF-8 byte is the char code, and hands anything else to `encodeInto`. It was taken for speed, not allocation (see `docs/hashing.md`), and a differential test against `TextEncoder` (`tests/core/bytes.test.ts`) covers ASCII, non-ASCII, surrogate pairs and lone surrogates.
+
 The hash path is shared, so this is a library-wide property rather than an HLL one: under Maglev, bloom 200, blocked 141, fuse 230.
 
 ## Documentation site
