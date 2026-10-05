@@ -663,3 +663,14 @@ test("renderResults places the key-length section after throughput and says the 
   expect(at).toBeGreaterThan(md.indexOf("## Throughput"));
   expect(md.slice(at)).toContain("flat strings");
 });
+
+test("METHODOLOGY states the isolation rule and bloomfilter's real hashing", () => {
+  const md = readFileSync(
+    fileURLToPath(new URL("../METHODOLOGY.md", import.meta.url)),
+    "utf8",
+  );
+  expect(md).toContain("UTF-16 code units");
+  expect(md).toContain("own process");
+  expect(md).toContain("flat strings");
+  expect(md).not.toContain("ASCII-lossy");
+});

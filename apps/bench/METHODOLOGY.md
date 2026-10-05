@@ -165,6 +165,14 @@ the length of its JSON.
 and never-inserted "miss" keys `1:0 … 1:(n-1)`. The prefixes guarantee the miss
 set shares no member with the hit set.
 
+The key-length sweep builds its own keys (`keyLengthKeys`): a unique base-36
+index padded to the exact length, with `k` for ASCII keys and `é漢` for keys
+that carry non-ASCII characters. They are flattened through a JSON round trip
+so every key is one of the flat strings a parser, the network or a database
+returns. V8 keeps a concatenation of 13 or more characters as a rope, where
+`charCodeAt` costs more per character, which would skew the longer rows against
+a library that reads characters one at a time.
+
 ## Measured FPR
 
 After inserting the hit set, `measureFpr` queries a disjoint miss set of
@@ -183,6 +191,16 @@ To keep the numbers honest against dead-code elimination:
 
 Reported as ops/sec (`1e9 / avg_ns`).
 
+## Isolation
+
+Every timed figure, in every section, comes from a library run in its
+own process (`src/isolate.ts`), one process after another so none compete for the
+CPU. Timing libraries in one process biases the result: V8 shapes a shared call
+site, such as the lookup loop, around the first library through it, and every
+library after it is measured on code tuned for another. Run together with
+distillate first, `bloomfilter` 1.1.0 read 14 M lookups/s; on its own, about 45 M.
+Space and FPR time nothing, so they are measured in one process.
+
 ## Structures
 
 - **Classic Bloom** is a head-to-head: `distillate/bloom` vs `bloom-filters` vs
@@ -196,13 +214,19 @@ Reported as ops/sec (`1e9 / avg_ns`).
 - **blocked**, **fuse8**, **fuse16** are distillate-only and shown standalone; no
   audited incumbent offers an equivalent, so there is nothing fair to compare them
   to. fuse8 targets 2⁻⁸, fuse16 targets 2⁻¹⁶.
+- **Key length** reruns the Classic Bloom head-to-head at 100k keys for each key
+  length, ASCII and non-ASCII, timing `add` and `has` over the whole key set.
 
 ## Portability caveat
 
-`bloomfilter` hashes strings via `charCodeAt`: fast, but ASCII-lossy (it ignores
-the high bytes of non-ASCII characters) and not reproducible in another language.
-distillate hashes the UTF-8 bytes with murmur3_x86_128, so its filters
-serialize and re-read across languages. The throughput gap is that tradeoff.
+`bloomfilter` hashes strings over UTF-16 code units: a 64-bit FNV-1a variant
+that takes a whole unit per step, read with `charCodeAt`. Nothing is lost: each full
+16-bit unit goes into the hash.
+But no other language hashes strings that way, so its filters can't be rebuilt
+or read outside JavaScript. distillate hashes the UTF-8 bytes with
+murmur3_x86_128, so its filters serialize and re-read across languages. The
+throughput difference depends on key length: FNV is cheaper per call on short
+keys, murmur3 per character on long ones. The key-length section shows both.
 
 ## Scope
 
@@ -213,4 +237,5 @@ swept at 1k/10k/100k/1M/10M against `p = 14`, with the sketch throughput built a
 with `bloom-filters` capped at 100k. Cuckoo is swept at 1k/10k/100k/1M/10M keys
 for both filters. Count-Min is swept at 1k/10k/100k/1M/10M events for both
 sketches. Top-K is swept at 1k/10k/100k/1M events, capped at 1M as the
-incumbent's HyperLogLog was.
+incumbent's HyperLogLog was. Key length is swept at 8/16/32/128/512 characters
+for the three Classic Bloom filters.
