@@ -315,6 +315,19 @@ function main(): void {
   const spaceTable = spaceAccuracyTable(comparisonRows(CAPACITIES));
   const names = (adapters: { name: string }[]): string[] =>
     adapters.map((a) => a.name);
+  // The short per-call benches run first: the long sections that follow keep a
+  // core busy for minutes, and a laptop that throttles under that sustained load
+  // would report these at a fraction of their rate.
+  const tput = throughputTable(
+    new Map(isolatedThroughput(THROUGHPUT_CAPACITY)),
+  );
+  const klTable = keyLengthTable(
+    isolatedRows<KeyLengthRow>("keylength", names(adapters), [
+      KEYLENGTH_LENGTHS,
+      KEYLENGTH_ALPHABETS,
+      KEYLENGTH_N,
+    ]),
+  );
   const cardTable = cardinalityTable(
     isolatedRows<CardinalityRow>("cardinality", names(cardinalityAdapters), [
       HLL_PRECISION,
@@ -339,16 +352,6 @@ function main(): void {
   );
   const tkTable = topKTable(
     isolatedRows<TopKRow>("topk", names(topKAdapters), [TOPK_EVENT_COUNTS]),
-  );
-  const tput = throughputTable(
-    new Map(isolatedThroughput(THROUGHPUT_CAPACITY)),
-  );
-  const klTable = keyLengthTable(
-    isolatedRows<KeyLengthRow>("keylength", names(adapters), [
-      KEYLENGTH_LENGTHS,
-      KEYLENGTH_ALPHABETS,
-      KEYLENGTH_N,
-    ]),
   );
 
   console.log(banner);
