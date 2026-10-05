@@ -1,5 +1,6 @@
 import { adapters as bloomAdapters } from "./adapters.js";
 import type { Adapter } from "./adapters.js";
+import { shuffled } from "./harness.js";
 
 export type Alphabet = "ascii" | "non-ascii";
 
@@ -33,7 +34,7 @@ function digits(i: number): string {
  * in three digits, so even 4-character non-ASCII keys hold one. The keys are
  * flattened through JSON: V8 keeps a concatenation of 13+ chars as a rope,
  * where `charCodeAt` costs more, and keys from a parser, network or database
- * arrive flat.
+ * arrive flat. They come back in a fixed shuffled order (see {@link shuffled}).
  */
 export function keyLengthKeys(
   length: number,
@@ -44,7 +45,7 @@ export function keyLengthKeys(
   for (let i = 0; i < n; i++) {
     keys[i] = (PREFIX[alphabet] + digits(i)).padEnd(length, FILLER[alphabet]);
   }
-  return JSON.parse(JSON.stringify(keys)) as string[];
+  return shuffled(JSON.parse(JSON.stringify(keys)) as string[]);
 }
 
 export interface KeyLengthRow {

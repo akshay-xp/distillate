@@ -165,6 +165,14 @@ the length of its JSON.
 and never-inserted "miss" keys `1:0 … 1:(n-1)`. The prefixes guarantee the miss
 set shares no member with the hit set.
 
+Both pools, and the key-length keys, are served in a fixed shuffled order
+(`shuffled`), not index order. A hash with weak avalanche sends keys that differ
+only in their last characters to nearby bits: walked in index order, `bloomfilter`'s
+FNV-1a stays in a few cache lines and read up to 1.6 times faster than shuffled,
+where distillate's murmur3 moved by about 10%. A workload that really inserts or
+queries sequential IDs in sequence gets that locality too; a benchmark should not
+assume it.
+
 The key-length sweep builds its own keys (`keyLengthKeys`): a unique base-64
 index padded to the exact length with `.` for ASCII keys, or prefixed with `é`
 and padded with `漢` for keys that carry non-ASCII characters. Base 64 fits 100k
