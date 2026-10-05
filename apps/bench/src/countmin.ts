@@ -1,5 +1,8 @@
-import { CountMinSketch as IncumbentCountMin } from "bloom-filters";
+// bloom-filters is CommonJS; Node before 24.14 sees none of its named exports.
+import bloomFilters from "bloom-filters";
 import { CountMinSketch } from "distillate/countmin";
+
+const { CountMinSketch: IncumbentCountMin } = bloomFilters;
 
 /** The geometry a sketch actually holds, read back from the library. */
 export interface CountMinSettings {
