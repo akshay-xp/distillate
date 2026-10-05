@@ -3,17 +3,33 @@ import type { Adapter } from "./adapters.js";
 
 export type Alphabet = "ascii" | "non-ascii";
 
-export const KEYLENGTH_LENGTHS = [8, 16, 32, 128, 512];
+export const KEYLENGTH_LENGTHS = [4, 8, 12, 13, 16, 32, 128, 512];
 export const KEYLENGTH_ALPHABETS: Alphabet[] = ["ascii", "non-ascii"];
 export const KEYLENGTH_N = 100_000;
 
-const FILLER: Record<Alphabet, string> = { ascii: "k", "non-ascii": "é漢" };
+// The index's digits. Neither prefix nor filler uses them, so the index is the
+// only run of digits in a key and keys never collide.
+const DIGITS =
+  "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/";
+const PREFIX: Record<Alphabet, string> = { ascii: "", "non-ascii": "é" };
+const FILLER: Record<Alphabet, string> = { ascii: ".", "non-ascii": "漢" };
+
+function digits(i: number): string {
+  let out = "";
+  do {
+    out = DIGITS[i % 64]! + out;
+    i = Math.floor(i / 64);
+  } while (i > 0);
+  return out;
+}
 
 /**
- * `n` distinct keys of exactly `length` UTF-16 units. Each is a unique index
- * padded with the alphabet's filler, then flattened through JSON: V8 keeps a
- * concatenation of 13+ chars as a rope, where `charCodeAt` costs more, and
- * keys from a parser, network or database arrive flat.
+ * `n` distinct keys of exactly `length` UTF-16 units: a prefix (`é` for
+ * non-ASCII keys), a unique base-64 index, then filler. Base 64 fits 100k keys
+ * in three digits, so even 4-character non-ASCII keys hold one. The keys are
+ * flattened through JSON: V8 keeps a concatenation of 13+ chars as a rope,
+ * where `charCodeAt` costs more, and keys from a parser, network or database
+ * arrive flat.
  */
 export function keyLengthKeys(
   length: number,
@@ -22,7 +38,7 @@ export function keyLengthKeys(
 ): string[] {
   const keys = new Array<string>(n);
   for (let i = 0; i < n; i++) {
-    keys[i] = `${i.toString(36)}:`.padEnd(length, FILLER[alphabet]);
+    keys[i] = (PREFIX[alphabet] + digits(i)).padEnd(length, FILLER[alphabet]);
   }
   return JSON.parse(JSON.stringify(keys)) as string[];
 }
