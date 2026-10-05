@@ -1,7 +1,10 @@
-import { TopK as IncumbentTopK } from "bloom-filters";
+// bloom-filters is CommonJS; Node before 24.14 sees none of its named exports.
+import bloomFilters from "bloom-filters";
 import { TopK } from "distillate/topk";
 
 import { zipfStream } from "./countmin.js";
+
+const { TopK: IncumbentTopK } = bloomFilters;
 
 /** One entry of a top-k answer: the key and the library's estimate of it. */
 export interface TopKEntryOut {

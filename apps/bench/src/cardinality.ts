@@ -1,7 +1,10 @@
-import { HyperLogLog as IncumbentHll } from "bloom-filters";
+// bloom-filters is CommonJS; Node before 24.14 sees none of its named exports.
+import bloomFilters from "bloom-filters";
 import { HyperLogLog } from "distillate/hll";
 
 import { hitKeys } from "./harness.js";
+
+const { HyperLogLog: IncumbentHll } = bloomFilters;
 
 export type SketchFormat = "binary" | "json";
 
