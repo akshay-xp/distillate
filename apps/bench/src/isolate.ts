@@ -5,6 +5,7 @@ import { cardinalityAdapters, cardinalityRows } from "./cardinality.js";
 import { countMinAdapters, countMinRows } from "./countmin.js";
 import { cuckooAdapters, cuckooRows } from "./cuckoo.js";
 import { scalableAdapters, scalableRows } from "./scalable.js";
+import { measureThroughput } from "./throughput.js";
 import { topKAdapters, topKRows } from "./topk.js";
 
 /**
@@ -32,7 +33,7 @@ function only<A extends { name: string }>(
   return picked;
 }
 
-type Job = (adapter: string, args: never) => unknown[];
+type Job = (adapter: string, args: never) => unknown[] | Promise<unknown[]>;
 
 const JOBS: Record<string, Job> = {
   cardinality: (name, [p, ns]: [number, number[]]) =>
@@ -43,6 +44,7 @@ const JOBS: Record<string, Job> = {
     cuckooRows(ns, only(cuckooAdapters, name, "cuckoo")),
   countmin: (name, [ns]: [number[]]) =>
     countMinRows(ns, only(countMinAdapters, name, "countmin")),
+  throughput: (name, [n]: [number]) => measureThroughput(name, n),
   topk: (name, [ns]: [number[]]) =>
     topKRows(ns, only(topKAdapters, name, "topk")),
 };
@@ -87,6 +89,6 @@ if (
   const [job = "", adapter = "", args = "[]"] = process.argv.slice(2);
   const run = JOBS[job];
   if (!run) throw new Error(`unknown job ${job}`);
-  const rows = run(adapter, JSON.parse(args) as never);
+  const rows = await run(adapter, JSON.parse(args) as never);
   process.stdout.write(JSON.stringify({ pid: process.pid, rows }));
 }
