@@ -68,6 +68,18 @@ export function runIsolated<T>(
   return JSON.parse(r.stdout) as { pid: number; rows: T[] };
 }
 
+/**
+ * A section's rows with every adapter measured in its own process. The runs
+ * are sequential: parallel children would compete for the CPU they time.
+ */
+export function isolatedRows<T>(
+  job: string,
+  adapters: string[],
+  args: unknown[],
+): T[] {
+  return interleave(adapters.map((a) => runIsolated<T>(job, a, args).rows));
+}
+
 if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
