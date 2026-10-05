@@ -6,6 +6,10 @@ export type Alphabet = "ascii" | "non-ascii";
 export const KEYLENGTH_LENGTHS = [4, 8, 12, 13, 16, 32, 128, 512];
 export const KEYLENGTH_ALPHABETS: Alphabet[] = ["ascii", "non-ascii"];
 export const KEYLENGTH_N = 100_000;
+// One pass over 100k keys takes a few milliseconds, so a single pass is noisy
+// and the first one in a process runs before the JIT has settled.
+export const KEYLENGTH_WARM_PASSES = 2;
+export const KEYLENGTH_TIMED_PASSES = 5;
 
 // The index's digits. Neither prefix nor filler uses them, so the index is the
 // only run of digits in a key and keys never collide.
@@ -53,6 +57,29 @@ export interface KeyLengthRow {
 
 const rate = (n: number, ms: number): number => n / (ms / 1000);
 
+export function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)]!;
+}
+
+/** Time one pass of `add` over the keys into a fresh filter, then `has`. */
+function timePass(
+  adapter: Adapter,
+  keys: string[],
+): { addMs: number; hasMs: number } {
+  const f = adapter.create(keys.length);
+  let started = performance.now();
+  for (const key of keys) f.add(key);
+  const addMs = performance.now() - started;
+
+  let held = 0;
+  started = performance.now();
+  for (const key of keys) if (f.has(key)) held++;
+  const hasMs = performance.now() - started;
+  if (held !== keys.length) throw new Error(`${adapter.name} lost keys`);
+  return { addMs, hasMs };
+}
+
 export function keyLengthRows(
   lengths: number[],
   alphabets: Alphabet[],
@@ -64,28 +91,16 @@ export function keyLengthRows(
     for (const length of lengths) {
       const keys = keyLengthKeys(length, alphabet, n);
       for (const adapter of adapters) {
-        // One untimed pass, so the first row isn't charged for JIT warm-up.
-        const warm = adapter.create(n);
-        for (const key of keys) warm.add(key);
-        for (const key of keys) warm.has(key);
-
-        const f = adapter.create(n);
-        let started = performance.now();
-        for (const key of keys) f.add(key);
-        const addMs = performance.now() - started;
-
-        let held = 0;
-        started = performance.now();
-        for (const key of keys) if (f.has(key)) held++;
-        const hasMs = performance.now() - started;
-        if (held !== n) throw new Error(`${adapter.name} lost keys`);
-
+        for (let p = 0; p < KEYLENGTH_WARM_PASSES; p++) timePass(adapter, keys);
+        const passes = Array.from({ length: KEYLENGTH_TIMED_PASSES }, () =>
+          timePass(adapter, keys),
+        );
         rows.push({
           name: adapter.name,
           length,
           alphabet,
-          addOpsPerSec: rate(n, addMs),
-          hasOpsPerSec: rate(n, hasMs),
+          addOpsPerSec: rate(n, median(passes.map((t) => t.addMs))),
+          hasOpsPerSec: rate(n, median(passes.map((t) => t.hasMs))),
         });
       }
     }

@@ -5,8 +5,11 @@ import {
   KEYLENGTH_ALPHABETS,
   KEYLENGTH_LENGTHS,
   KEYLENGTH_N,
+  KEYLENGTH_TIMED_PASSES,
+  KEYLENGTH_WARM_PASSES,
   keyLengthKeys,
   keyLengthRows,
+  median,
 } from "../src/keylength.js";
 
 test("ascii keys are distinct, exactly the length asked for, and all ASCII", () => {
@@ -55,4 +58,28 @@ test("the sweep covers short keys and both sides of the 12-character cap and 13-
   for (const length of [4, 12, 13]) {
     expect(KEYLENGTH_LENGTHS).toContain(length);
   }
+});
+
+test("median picks the middle pass, so one slow pass can't move a row", () => {
+  expect(median([9, 1, 5, 7, 3])).toBe(5);
+  expect(median([100, 10, 11])).toBe(11);
+});
+
+test("each row warms up and then times several passes over the keys", () => {
+  let adds = 0;
+  const counting = {
+    ...distillateBloomAdapter,
+    create(n: number) {
+      const f = distillateBloomAdapter.create(n);
+      return {
+        add(key: string) {
+          adds++;
+          f.add(key);
+        },
+        has: (key: string) => f.has(key),
+      };
+    },
+  };
+  keyLengthRows([8], ["ascii"], 100, [counting]);
+  expect(adds).toBe((KEYLENGTH_WARM_PASSES + KEYLENGTH_TIMED_PASSES) * 100);
 });
