@@ -21,8 +21,14 @@ import { COUNTMIN_KEY_COUNTS, countMinAdapters } from "./countmin.js";
 import type { CountMinRow } from "./countmin.js";
 import { TOPK_EVENT_COUNTS, topKAdapters } from "./topk.js";
 import type { TopKRow } from "./topk.js";
+import {
+  KEYLENGTH_ALPHABETS,
+  KEYLENGTH_LENGTHS,
+  KEYLENGTH_N,
+} from "./keylength.js";
+import type { KeyLengthRow } from "./keylength.js";
 import type { ComparisonRow } from "./compare.js";
-import { TARGET_FPR } from "./adapters.js";
+import { adapters, TARGET_FPR } from "./adapters.js";
 import { envBanner } from "./harness.js";
 import { isolatedRows } from "./isolate.js";
 import { throughputNames } from "./throughput.js";
@@ -133,6 +139,7 @@ export interface ResultsOptions {
   cuckooTable?: string;
   countMinTable?: string;
   topKTable?: string;
+  keyLengthTable?: string;
 }
 
 function cardinalitySection(table: string): string[] {
@@ -234,6 +241,31 @@ export function topKSection(table: string): string[] {
   ];
 }
 
+export function keyLengthTable(rows: KeyLengthRow[]): string {
+  const header =
+    "| Filter | key length | keys | add | has |\n| --- | --- | --- | --- | --- |";
+  const body = rows.map(
+    (r) =>
+      `| ${r.name} | ${String(r.length)} | ${r.alphabet} | ${ops(r.addOpsPerSec)} | ${ops(r.hasOpsPerSec)} |`,
+  );
+  return [header, ...body].join("\n");
+}
+
+export function keyLengthSection(table: string): string[] {
+  return [
+    "## Key length",
+    "",
+    "The Classic Bloom filters at 100k keys, timed again at each key length in characters, for ASCII keys and for keys that carry non-ASCII characters.",
+    "The libraries do different work per character: `bloomfilter` runs FNV-1a over each UTF-16 code unit, and distillate encodes the key to UTF-8 and runs murmur3 over the bytes, so which is faster depends on the length.",
+    "",
+    "The keys are flat strings, flattened through a JSON round trip, the way keys from a parser, the network or a database arrive.",
+    "V8 keeps a concatenation of 13 or more characters as a rope, where reading each character costs more, so keys built with `+` or a template literal would skew the longer rows.",
+    "",
+    table,
+    "",
+  ];
+}
+
 export function renderResults(opts: ResultsOptions): string {
   return [
     "# distillate-bench results",
@@ -261,6 +293,7 @@ export function renderResults(opts: ResultsOptions): string {
     "",
     opts.throughputTable,
     "",
+    ...(opts.keyLengthTable ? keyLengthSection(opts.keyLengthTable) : []),
   ].join("\n");
 }
 
@@ -314,6 +347,13 @@ function main(): void {
     isolatedRows<TopKRow>("topk", names(topKAdapters), [TOPK_EVENT_COUNTS]),
   );
   const tput = throughputTable(collectThroughput(THROUGHPUT_CAPACITY));
+  const klTable = keyLengthTable(
+    isolatedRows<KeyLengthRow>("keylength", names(adapters), [
+      KEYLENGTH_LENGTHS,
+      KEYLENGTH_ALPHABETS,
+      KEYLENGTH_N,
+    ]),
+  );
 
   console.log(banner);
   console.log("\n" + spaceTable);
@@ -323,6 +363,7 @@ function main(): void {
   console.log("\n" + cmTable);
   console.log("\n" + tkTable);
   console.log("\n" + tput);
+  console.log("\n" + klTable);
 
   const md = renderResults({
     banner,
@@ -337,6 +378,7 @@ function main(): void {
     countMinTable: cmTable,
     topKTable: tkTable,
     throughputTable: tput,
+    keyLengthTable: klTable,
   });
   writeFileSync(new URL("../RESULTS.md", import.meta.url), md);
 }

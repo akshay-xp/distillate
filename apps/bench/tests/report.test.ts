@@ -7,12 +7,14 @@ import type { CardinalityRow } from "../src/cardinality.js";
 import type { ComparisonRow } from "../src/compare.js";
 import type { CountMinRow } from "../src/countmin.js";
 import type { CuckooRow } from "../src/cuckoo.js";
+import type { KeyLengthRow } from "../src/keylength.js";
 import type { ScalableRow } from "../src/scalable.js";
 import type { TopKRow } from "../src/topk.js";
 import {
   cardinalityTable,
   countMinTable,
   cuckooTable,
+  keyLengthTable,
   renderResults,
   topKTable,
   scalableTable,
@@ -625,4 +627,39 @@ test("RESULTS carries the measured top-k section for both sketches", () => {
   }
   // The header note says which build the section was measured on.
   expect(md.slice(0, md.indexOf("## Space"))).toContain("Top-K");
+});
+
+const keyLengthRowsFixture: KeyLengthRow[] = [
+  {
+    name: "bloomfilter",
+    length: 32,
+    alphabet: "non-ascii",
+    addOpsPerSec: 12_500_000,
+    hasOpsPerSec: 12_600_000,
+  },
+];
+
+test("keyLengthTable renders length, alphabet and both throughputs", () => {
+  const table = keyLengthTable(keyLengthRowsFixture);
+  expect(table).toContain("| Filter | key length | keys | add | has |");
+  expect(table).toContain(
+    "| bloomfilter | 32 | non-ascii | 12.50 M ops/s | 12.60 M ops/s |",
+  );
+});
+
+test("renderResults places the key-length section after throughput and says the keys are flat", () => {
+  const md = renderResults({
+    banner: "distillate-bench | node v24 | arm64 | Apple M1 | 8 cores",
+    version: "0.1.1",
+    date: "2026-07-31",
+    targetFpr: 0.01,
+    throughputCapacity: 100000,
+    spaceTable: "SPACE_TBL",
+    throughputTable: "TPUT_TBL",
+    keyLengthTable: "KEYLEN_TBL",
+  });
+  expect(md).toContain("KEYLEN_TBL");
+  const at = md.indexOf("## Key length");
+  expect(at).toBeGreaterThan(md.indexOf("## Throughput"));
+  expect(md.slice(at)).toContain("flat strings");
 });
