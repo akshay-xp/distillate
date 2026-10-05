@@ -76,10 +76,11 @@ export interface CardinalityRow {
 export function cardinalityRows(
   p: number,
   cardinalities: number[],
+  adapters: CardinalityAdapter[] = cardinalityAdapters,
 ): CardinalityRow[] {
   const rows: CardinalityRow[] = [];
   for (const n of cardinalities) {
-    for (const adapter of cardinalityAdapters) {
+    for (const adapter of adapters) {
       const sketch = adapter.create(p);
       const started = performance.now();
       for (const key of hitKeys(n)) sketch.add(key);
