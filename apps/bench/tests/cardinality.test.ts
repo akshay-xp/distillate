@@ -4,8 +4,15 @@ import {
   cardinalityAdapters,
   cardinalityBenchLabels,
   cardinalityRows,
+  incumbentHllAdapter,
 } from "../src/cardinality.js";
+import type { MeasuredCardinalityRow } from "../src/cardinality.js";
 import { hitMissPools } from "../src/harness.js";
+
+const measured = (p: number, ns: number[]): MeasuredCardinalityRow[] =>
+  cardinalityRows(p, ns).filter(
+    (r): r is MeasuredCardinalityRow => !("notRun" in r),
+  );
 
 test("cardinality adapters build at a matched register count", () => {
   expect(cardinalityAdapters.map((a) => a.name)).toEqual([
@@ -25,7 +32,7 @@ test("cardinality adapters build at a matched register count", () => {
 
 test("cardinality rows carry the measured relative error", () => {
   const p = 12;
-  const rows = cardinalityRows(p, [1_000, 20_000]);
+  const rows = measured(p, [1_000, 20_000]);
   expect(rows).toHaveLength(4);
 
   for (const r of rows) {
@@ -42,7 +49,7 @@ test("cardinality rows carry the measured relative error", () => {
 });
 
 test("cardinality rows carry serialized bytes and name the format", () => {
-  const rows = cardinalityRows(12, [20_000]);
+  const rows = measured(12, [20_000]);
   const distillate = rows.find((r) => r.name === "distillate/hll")!;
   const incumbent = rows.find((r) => r.name === "bloom-filters")!;
 
@@ -67,7 +74,7 @@ test("cardinality bench labels distinguish the sketch from the filter benches", 
 });
 
 test("cardinality rows carry the time taken to build the sketch", () => {
-  const rows = cardinalityRows(12, [20_000]);
+  const rows = measured(12, [20_000]);
   for (const r of rows) {
     expect(r.buildMs).toBeGreaterThan(0);
     expect(r.addOpsPerSec).toBeCloseTo(r.n / (r.buildMs / 1000), 6);
@@ -76,4 +83,23 @@ test("cardinality rows carry the time taken to build the sketch", () => {
   const distillate = rows.find((r) => r.name === "distillate/hll")!;
   const incumbent = rows.find((r) => r.name === "bloom-filters")!;
   expect(distillate.buildMs).toBeLessThan(incumbent.buildMs);
+});
+
+test("the incumbent is capped at 1M, and a row past its cap projects its build", () => {
+  expect(incumbentHllAdapter.maxKeys).toBe(1_000_000);
+
+  const capped = { ...incumbentHllAdapter, maxKeys: 1_000 };
+  const [measured, skipped] = cardinalityRows(10, [1_000, 4_000], [capped]);
+  if (!measured || "notRun" in measured) {
+    throw new Error("the first row should be measured");
+  }
+  expect(skipped).toMatchObject({
+    name: "bloom-filters",
+    n: 4_000,
+    notRun: true,
+  });
+  // Its add rate is flat, so the build scales linearly with n.
+  expect(
+    skipped && "projectedBuildMs" in skipped && skipped.projectedBuildMs,
+  ).toBeCloseTo(measured.buildMs * 4, 6);
 });
