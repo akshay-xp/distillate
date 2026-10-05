@@ -57,5 +57,13 @@ test("hitKeys streams the hit pool without materializing it", () => {
   expect(huge.next().value).toBe("0:0");
   expect(huge.next().value).toBe("0:1");
 
-  expect([...hitKeys(5)]).toEqual(hitMissPools(5).hit);
+  expect(new Set(hitKeys(5))).toEqual(new Set(hitMissPools(5).hit));
+});
+
+test("hitMissPools serves keys in a fixed shuffled order, not index order", () => {
+  const { hit, miss } = hitMissPools(1000);
+  expect(hit).toEqual(hitMissPools(1000).hit);
+  expect(new Set(hit)).toEqual(new Set(hitKeys(1000)));
+  expect(hit.slice(0, 5)).not.toEqual(["0:0", "0:1", "0:2", "0:3", "0:4"]);
+  expect(miss.slice(0, 5)).not.toEqual(["1:0", "1:1", "1:2", "1:3", "1:4"]);
 });

@@ -83,3 +83,9 @@ test("each row warms up and then times several passes over the keys", () => {
   keyLengthRows([8], ["ascii"], 100, [counting]);
   expect(adds).toBe((KEYLENGTH_WARM_PASSES + KEYLENGTH_TIMED_PASSES) * 100);
 });
+
+test("keyLengthKeys serves keys in a fixed shuffled order, not index order", () => {
+  const keys = keyLengthKeys(8, "ascii", 1000);
+  expect(keys).toEqual(keyLengthKeys(8, "ascii", 1000));
+  expect(keys.slice(0, 3)).not.toEqual(["0.......", "1.......", "2......."]);
+});
