@@ -195,11 +195,16 @@ Reported as ops/sec (`1e9 / avg_ns`).
 
 Every timed figure, in every section, comes from a library run in its
 own process (`src/isolate.ts`), one process after another so none compete for the
-CPU. Timing libraries in one process biases the result: V8 shapes a shared call
-site, such as the lookup loop, around the first library through it, and every
-library after it is measured on code tuned for another. Run together with
-distillate first, `bloomfilter` 1.1.0 read 14 M lookups/s; on its own, about 45 M.
-Space and FPR time nothing, so they are measured in one process.
+CPU. Timing libraries in one process can bias the result: V8 shapes a shared
+call site, such as the lookup loop, around the libraries that reach it first. In
+one check `bloomfilter`'s `has` read 23 M lookups/s sharing a process with
+distillate and 50 M on its own. Space and FPR time nothing, so they are measured
+in one process.
+
+A laptop throttles under minutes of sustained load: in one full run every
+structure's throughput, distillate's included, read about half its rested rate.
+So the short per-call benches run first, before the long sections. If the
+Throughput table reads far below the previous run, rerun on a rested machine.
 
 ## Structures
 
