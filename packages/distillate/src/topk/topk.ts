@@ -1,9 +1,4 @@
-import {
-  type BytesLike,
-  encodedBytes,
-  encodedLength,
-  encodeKey,
-} from "../core/bytes.js";
+import { type BytesLike, encodedBytes, encodeKey } from "../core/bytes.js";
 import { assertPositiveInt, assertUint32, ParamError } from "../core/params.js";
 import {
   assertBodyLength,
@@ -502,8 +497,9 @@ export class TopK {
         `adding ${String(count)} would carry the total past ${String(Number.MAX_SAFE_INTEGER)}`,
       );
     }
-    encodeKey(key);
-    const slot = this.#slotFor(encodedBytes, encodedLength);
+    const len = encodeKey(key);
+    const bytes = encodedBytes();
+    const slot = this.#slotFor(bytes, len);
     const stored = this.#counts[slot] ?? 0;
     // Checked before the key is stored, so a refused add leaves no entry.
     if (stored + count > 0xffffffff) {
@@ -512,7 +508,7 @@ export class TopK {
       );
     }
     if (stored === 0) {
-      this.#storeKey(slot, encodedBytes, encodedLength);
+      this.#storeKey(slot, bytes, len);
       this.#entries++;
     }
     this.#counts[slot] = stored + count;
@@ -536,9 +532,8 @@ export class TopK {
    * @returns The estimated count, `0` for a key the map does not hold.
    */
   count(key: BytesLike): number {
-    encodeKey(key);
-    const stored =
-      this.#counts[this.#slotFor(encodedBytes, encodedLength)] ?? 0;
+    const len = encodeKey(key);
+    const stored = this.#counts[this.#slotFor(encodedBytes(), len)] ?? 0;
     return stored === 0 ? 0 : stored + this.#offset;
   }
 
