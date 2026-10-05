@@ -1,7 +1,12 @@
 import { expect, test } from "vitest";
 
 import type { CuckooRow } from "../src/cuckoo.js";
-import { interleave, isolatedRows, runIsolated } from "../src/isolate.js";
+import {
+  interleave,
+  isolatedRows,
+  isolatedThroughput,
+  runIsolated,
+} from "../src/isolate.js";
 import { throughputNames } from "../src/throughput.js";
 
 test("interleave merges per-adapter rows by key count, then adapter order", () => {
@@ -69,5 +74,18 @@ test("throughputNames lists every library in the table's order", () => {
     "fuse16",
     "distillate/hll",
     "bloom-filters hll",
+  ]);
+});
+
+test("isolatedThroughput lists each library's labels in turn, whatever their count", () => {
+  const labels = isolatedThroughput(1000, ["bloomfilter", "blocked"]).map(
+    ([label]) => label,
+  );
+  expect(labels).toEqual([
+    "bloomfilter add",
+    "bloomfilter has (hit)",
+    "bloomfilter has (miss)",
+    "blocked has (hit)",
+    "blocked has (miss)",
   ]);
 });
