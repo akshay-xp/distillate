@@ -165,9 +165,11 @@ the length of its JSON.
 and never-inserted "miss" keys `1:0 … 1:(n-1)`. The prefixes guarantee the miss
 set shares no member with the hit set.
 
-The key-length sweep builds its own keys (`keyLengthKeys`): a unique base-36
-index padded to the exact length, with `k` for ASCII keys and `é漢` for keys
-that carry non-ASCII characters. They are flattened through a JSON round trip
+The key-length sweep builds its own keys (`keyLengthKeys`): a unique base-64
+index padded to the exact length with `.` for ASCII keys, or prefixed with `é`
+and padded with `漢` for keys that carry non-ASCII characters. Base 64 fits 100k
+keys in three digits, so even 4-character non-ASCII keys are unique and hold one.
+They are flattened through a JSON round trip
 so every key is one of the flat strings a parser, the network or a database
 returns. V8 keeps a concatenation of 13 or more characters as a rope, where
 `charCodeAt` costs more per character, which would skew the longer rows against
@@ -225,13 +227,15 @@ Throughput table reads far below the previous run, rerun on a rested machine.
 ## Portability caveat
 
 `bloomfilter` hashes strings over UTF-16 code units: a 64-bit FNV-1a variant
-that takes a whole unit per step, read with `charCodeAt`. Nothing is lost: each full
-16-bit unit goes into the hash.
-But no other language hashes strings that way, so its filters can't be rebuilt
-or read outside JavaScript. distillate hashes the UTF-8 bytes with
-murmur3_x86_128, so its filters serialize and re-read across languages. The
-throughput difference depends on key length: FNV is cheaper per call on short
-keys, murmur3 per character on long ones. The key-length section shows both.
+that takes a whole unit per step, read with `charCodeAt`. Nothing is lost: each
+full 16-bit unit goes into the hash. No library outside JavaScript implements
+it. Java, C# and Dart strings are UTF-16 too, so a port of the short hash would
+read its filters there, but a language with UTF-8 strings has to transcode each
+key to UTF-16 first. distillate hashes the UTF-8 bytes with murmur3_x86_128, so
+its frames re-read wherever the bytes of a key are the same, which a Go reader
+in this repo checks. The throughput difference depends on key length: FNV is
+cheaper per call on short keys, murmur3 per character on long ones. The
+key-length section shows both.
 
 ## Scope
 
@@ -243,5 +247,6 @@ and its 10M build projected from its 1M run; the sketch throughput is built at
 with `bloom-filters` capped at 100k. Cuckoo is swept at 1k/10k/100k/1M/10M keys
 for both filters. Count-Min is swept at 1k/10k/100k/1M/10M events for both
 sketches. Top-K is swept at 1k/10k/100k/1M events, capped at 1M as the
-incumbent's HyperLogLog was. Key length is swept at 8/16/32/128/512 characters
-for the three Classic Bloom filters.
+incumbent's HyperLogLog was. Key length is swept at 4/8/12/13/16/32/128/512
+characters for the three Classic Bloom filters, each row the median of five
+timed passes after two untimed ones.
