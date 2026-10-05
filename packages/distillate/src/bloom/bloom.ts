@@ -1,6 +1,6 @@
 import { BitSet } from "../core/bitset.js";
 import type { BytesLike } from "../core/bytes.js";
-import { probeInto } from "../core/hasher.js";
+import { hash32x2Into, probeAt, probeInto } from "../core/hasher.js";
 import {
   assertBodyLength,
   assertMinBodyLength,
@@ -154,7 +154,8 @@ export class BloomFilter {
     this.#m = m;
     this.#k = k;
     this.#seed = seed;
-    this.#scratch = new Uint32Array(k);
+    // At least two: has reads both hash words into it, even when k is 1.
+    this.#scratch = new Uint32Array(Math.max(k, 2));
     // A geometry with far more probes than bits derives a capacity of zero,
     // and m / 0 is Infinity. One key is the smallest honest answer.
     this.#n = n ?? Math.max(1, Math.round((m * Math.LN2) / k));
@@ -304,9 +305,12 @@ export class BloomFilter {
    * @returns `true` if present (possibly a false positive); `false` guarantees absence.
    */
   has(key: BytesLike): boolean {
-    probeInto(key, this.#k, this.#m, this.#seed, this.#scratch);
+    // Probes are derived one at a time, so a miss stops at its first unset bit.
+    hash32x2Into(key, this.#seed, this.#scratch);
+    const a = this.#scratch[0] ?? 0;
+    const b = this.#scratch[1] ?? 0;
     for (let i = 0; i < this.#k; i++) {
-      if (!this.#bits.get(this.#scratch[i] ?? 0)) return false;
+      if (!this.#bits.get(probeAt(a, b, i, this.#m))) return false;
     }
     return true;
   }
