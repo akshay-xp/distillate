@@ -7,6 +7,7 @@ import type { CardinalityRow } from "../src/cardinality.js";
 import type { ComparisonRow } from "../src/compare.js";
 import type { CountMinRow } from "../src/countmin.js";
 import type { CuckooRow } from "../src/cuckoo.js";
+import { KEYLENGTH_ALPHABETS, KEYLENGTH_LENGTHS } from "../src/keylength.js";
 import type { KeyLengthRow } from "../src/keylength.js";
 import type { ScalableRow } from "../src/scalable.js";
 import type { TopKRow } from "../src/topk.js";
@@ -301,8 +302,6 @@ test("RESULTS carries the measured scalable section for both filters", () => {
   for (const keys of ["1M", "10M"]) {
     expect(row("bloom-filters", keys), keys).toContain("not run");
   }
-  // The header note says which build the section was measured on.
-  expect(md.slice(0, md.indexOf("## Space"))).toContain("Scalable Bloom");
 });
 
 const cuckooRowsFixture: CuckooRow[] = [
@@ -423,8 +422,6 @@ test("RESULTS carries the measured cuckoo section for both filters", () => {
   for (const r of rows.filter((r) => cells(r)[1] === "distillate/cuckoo")) {
     expect(cells(r).slice(5, 8)).toEqual(["0 (0.00%)", "0 (0.00%)", "0"]);
   }
-  // The header note says which build the section was measured on.
-  expect(md.slice(0, md.indexOf("## Space"))).toContain("Cuckoo");
 });
 
 const countMinRowsFixture: CountMinRow[] = [
@@ -640,8 +637,6 @@ test("RESULTS carries the measured top-k section for both sketches", () => {
       }
     }
   }
-  // The header note says which build the section was measured on.
-  expect(md.slice(0, md.indexOf("## Space"))).toContain("Top-K");
 });
 
 const keyLengthRowsFixture: KeyLengthRow[] = [
@@ -688,4 +683,34 @@ test("METHODOLOGY states the isolation rule and bloomfilter's real hashing", () 
   expect(md).toContain("own process");
   expect(md).toContain("flat strings");
   expect(md).not.toContain("ASCII-lossy");
+});
+
+test("RESULTS is one isolated run, with the key-length section for every Bloom filter", () => {
+  const md = readFileSync(
+    fileURLToPath(new URL("../RESULTS.md", import.meta.url)),
+    "utf8",
+  );
+  const header = md.slice(0, md.indexOf("## Space"));
+  expect(header).toContain("bloomfilter@1.1.2");
+  expect(header).toContain("Every section was measured in this run");
+
+  expect(md).toContain("## Key length");
+  const cells = (r: string): string[] => r.split("|").map((c) => c.trim());
+  const rows = resultsSection(md, "Key length")
+    .split("\n")
+    .filter((l) => /^\| (distillate\/bloom|bloom-filters|bloomfilter) /.test(l))
+    .map(cells);
+  for (const name of ["distillate/bloom", "bloom-filters", "bloomfilter"]) {
+    for (const length of KEYLENGTH_LENGTHS) {
+      for (const alphabet of KEYLENGTH_ALPHABETS) {
+        expect(
+          rows.some(
+            (r) =>
+              r[1] === name && r[2] === String(length) && r[3] === alphabet,
+          ),
+          `${name} ${String(length)} ${alphabet}`,
+        ).toBe(true);
+      }
+    }
+  }
 });
