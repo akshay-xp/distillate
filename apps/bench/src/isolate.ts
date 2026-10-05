@@ -8,7 +8,7 @@ import { cuckooAdapters, cuckooRows } from "./cuckoo.js";
 import { keyLengthRows } from "./keylength.js";
 import type { Alphabet } from "./keylength.js";
 import { scalableAdapters, scalableRows } from "./scalable.js";
-import { measureThroughput } from "./throughput.js";
+import { measureThroughput, throughputNames } from "./throughput.js";
 import { topKAdapters, topKRows } from "./topk.js";
 
 /**
@@ -90,6 +90,20 @@ export function isolatedRows<T>(
   args: unknown[],
 ): T[] {
   return interleave(adapters.map((a) => runIsolated<T>(job, a, args).rows));
+}
+
+/**
+ * Throughput pairs with each library benched in its own process. Libraries
+ * have different bench counts, so their pairs are listed in turn rather than
+ * interleaved.
+ */
+export function isolatedThroughput(
+  n: number,
+  names: string[] = throughputNames(),
+): [string, number][] {
+  return names.flatMap(
+    (name) => runIsolated<[string, number]>("throughput", name, [n]).rows,
+  );
 }
 
 if (

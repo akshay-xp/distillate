@@ -30,8 +30,7 @@ import type { KeyLengthRow } from "./keylength.js";
 import type { ComparisonRow } from "./compare.js";
 import { adapters, TARGET_FPR } from "./adapters.js";
 import { envBanner } from "./harness.js";
-import { isolatedRows } from "./isolate.js";
-import { throughputNames } from "./throughput.js";
+import { isolatedRows, isolatedThroughput } from "./isolate.js";
 
 function capacityLabel(n: number): string {
   if (n >= 1_000_000) return `${String(n / 1_000_000)}M`;
@@ -306,12 +305,6 @@ export function throughputTable(opsByLabel: Map<string, number>): string {
 const CAPACITIES = [100_000, 1_000_000];
 const THROUGHPUT_CAPACITY = 100_000;
 
-function collectThroughput(n: number): Map<string, number> {
-  return new Map(
-    isolatedRows<[string, number]>("throughput", throughputNames(), [n]),
-  );
-}
-
 function main(): void {
   const require = createRequire(import.meta.url);
   const version = (require("distillate/package.json") as { version: string })
@@ -346,7 +339,9 @@ function main(): void {
   const tkTable = topKTable(
     isolatedRows<TopKRow>("topk", names(topKAdapters), [TOPK_EVENT_COUNTS]),
   );
-  const tput = throughputTable(collectThroughput(THROUGHPUT_CAPACITY));
+  const tput = throughputTable(
+    new Map(isolatedThroughput(THROUGHPUT_CAPACITY)),
+  );
   const klTable = keyLengthTable(
     isolatedRows<KeyLengthRow>("keylength", names(adapters), [
       KEYLENGTH_LENGTHS,
