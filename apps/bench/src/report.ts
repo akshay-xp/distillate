@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { run } from "mitata";
 
 import {
-  cardinalityRows,
+  cardinalityAdapters,
   HLL_CARDINALITIES,
   HLL_PRECISION,
 } from "./cardinality.js";
@@ -14,18 +14,19 @@ import { comparisonRows } from "./compare.js";
 import {
   SCALABLE_INITIAL,
   SCALABLE_KEY_COUNTS,
-  scalableRows,
+  scalableAdapters,
 } from "./scalable.js";
 import type { ScalableRow } from "./scalable.js";
-import { CUCKOO_KEY_COUNTS, cuckooRows } from "./cuckoo.js";
+import { CUCKOO_KEY_COUNTS, cuckooAdapters } from "./cuckoo.js";
 import type { CuckooRow } from "./cuckoo.js";
-import { COUNTMIN_KEY_COUNTS, countMinRows } from "./countmin.js";
+import { COUNTMIN_KEY_COUNTS, countMinAdapters } from "./countmin.js";
 import type { CountMinRow } from "./countmin.js";
-import { TOPK_EVENT_COUNTS, topKRows } from "./topk.js";
+import { TOPK_EVENT_COUNTS, topKAdapters } from "./topk.js";
 import type { TopKRow } from "./topk.js";
 import type { ComparisonRow } from "./compare.js";
 import { TARGET_FPR } from "./adapters.js";
 import { envBanner } from "./harness.js";
+import { isolatedRows } from "./isolate.js";
 import { registerThroughputBenches } from "./throughput.js";
 
 function capacityLabel(n: number): string {
@@ -301,15 +302,33 @@ async function main(): Promise<void> {
   const banner = envBanner();
 
   const spaceTable = spaceAccuracyTable(comparisonRows(CAPACITIES));
+  const names = (adapters: { name: string }[]): string[] =>
+    adapters.map((a) => a.name);
   const cardTable = cardinalityTable(
-    cardinalityRows(HLL_PRECISION, HLL_CARDINALITIES),
+    isolatedRows<CardinalityRow>("cardinality", names(cardinalityAdapters), [
+      HLL_PRECISION,
+      HLL_CARDINALITIES,
+    ]),
   );
   const scalTable = scalableTable(
-    scalableRows(SCALABLE_INITIAL, SCALABLE_KEY_COUNTS),
+    isolatedRows<ScalableRow>("scalable", names(scalableAdapters), [
+      SCALABLE_INITIAL,
+      SCALABLE_KEY_COUNTS,
+    ]),
   );
-  const cuckTable = cuckooTable(cuckooRows(CUCKOO_KEY_COUNTS));
-  const cmTable = countMinTable(countMinRows(COUNTMIN_KEY_COUNTS));
-  const tkTable = topKTable(topKRows(TOPK_EVENT_COUNTS));
+  const cuckTable = cuckooTable(
+    isolatedRows<CuckooRow>("cuckoo", names(cuckooAdapters), [
+      CUCKOO_KEY_COUNTS,
+    ]),
+  );
+  const cmTable = countMinTable(
+    isolatedRows<CountMinRow>("countmin", names(countMinAdapters), [
+      COUNTMIN_KEY_COUNTS,
+    ]),
+  );
+  const tkTable = topKTable(
+    isolatedRows<TopKRow>("topk", names(topKAdapters), [TOPK_EVENT_COUNTS]),
+  );
   const tput = throughputTable(await collectThroughput(THROUGHPUT_CAPACITY));
 
   console.log(banner);

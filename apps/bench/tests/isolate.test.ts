@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 
 import type { CuckooRow } from "../src/cuckoo.js";
-import { interleave, runIsolated } from "../src/isolate.js";
+import { interleave, isolatedRows, runIsolated } from "../src/isolate.js";
 
 test("interleave merges per-adapter rows by key count, then adapter order", () => {
   expect(
@@ -26,4 +26,18 @@ test("runIsolated names an adapter the section does not have", () => {
   expect(() => runIsolated("cuckoo", "no-such-filter", [[1000]])).toThrow(
     /no-such-filter/,
   );
+});
+
+test("isolatedRows runs each adapter in turn and keeps the sweep order", () => {
+  const rows = isolatedRows<CuckooRow>(
+    "cuckoo",
+    ["distillate/cuckoo", "bloom-filters"],
+    [[1000, 2000]],
+  );
+  expect(rows.map((r) => [r.name, r.keys])).toEqual([
+    ["distillate/cuckoo", 1000],
+    ["bloom-filters", 1000],
+    ["distillate/cuckoo", 2000],
+    ["bloom-filters", 2000],
+  ]);
 });
