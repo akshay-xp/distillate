@@ -1,4 +1,9 @@
-import { normalize, type BytesLike } from "./bytes.js";
+import {
+  type BytesLike,
+  encodedBytes,
+  encodedLength,
+  encodeKey,
+} from "./bytes.js";
 
 export interface Hash128 {
   w0: number;
@@ -238,31 +243,9 @@ export function hash128(
   return { ...LANES };
 }
 
-const keyEncoder = new TextEncoder();
-let keyBuf = new Uint8Array(256);
-
-// Reused view of the encoded key, set by encodeKey; zero per-call allocation.
-let encBytes: Uint8Array = keyBuf;
-let encLen = 0;
-
-// Encode a key to bytes with zero per-call allocation: strings encode into a
-// reused buffer (grown on demand); byte inputs are used directly. Result is
-// exposed via the module-scope encBytes/encLen, read immediately by callers.
-function encodeKey(key: BytesLike): void {
-  if (typeof key === "string") {
-    const cap = key.length * 3;
-    if (keyBuf.length < cap) keyBuf = new Uint8Array(cap);
-    encLen = keyEncoder.encodeInto(key, keyBuf).written;
-    encBytes = keyBuf;
-    return;
-  }
-  encBytes = normalize(key);
-  encLen = encBytes.length;
-}
-
 function keyToLanes(key: BytesLike, seed: number): void {
   encodeKey(key);
-  computeLanes(encBytes, seed, encLen);
+  computeLanes(encodedBytes, seed, encodedLength);
 }
 
 export function hash128Key(key: BytesLike, seed = 0): Hash128 {
