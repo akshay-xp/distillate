@@ -32,10 +32,11 @@ export function* hitKeys(n: number): Generator<string> {
 }
 
 /**
- * The same keys in a fixed pseudo-random order. Walking keys in index order
- * flatters a hash with weak avalanche: FNV-1a sends keys that differ only in
- * their last characters to nearby bits, so a sequential walk stays in a few
- * cache lines. Shuffling keeps the comparison about hashing, not about order.
+ * The same keys in a fixed pseudo-random order. bloomfilter takes its probe
+ * positions straight from FNV-1a's state, with no finaliser, so keys that
+ * differ only in their last characters probe nearby bits and an index-order
+ * walk stays in a few cache lines. Shuffling keeps the comparison about
+ * hashing, not about order.
  */
 export function shuffled<T>(items: readonly T[]): T[] {
   const out = [...items];

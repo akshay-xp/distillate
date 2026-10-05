@@ -1,11 +1,8 @@
-// bloom-filters is CommonJS; Node before 24.14 sees none of its named exports.
-import bloomFilters from "bloom-filters";
 import { ScalableBloomFilter } from "distillate/scalable";
 
+import { ScalableBloomFilter as IncumbentScalable } from "./incumbent.js";
 import { TARGET_FPR } from "./adapters.js";
 import { hitKeys } from "./harness.js";
-
-const { ScalableBloomFilter: IncumbentScalable } = bloomFilters;
 
 /** The settings a filter actually holds, read back from the library. */
 export interface ScalableSettings {

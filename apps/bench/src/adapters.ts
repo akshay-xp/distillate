@@ -1,11 +1,8 @@
-// bloom-filters is CommonJS; Node before 24.14 sees none of its named exports.
-import bloomFilters from "bloom-filters";
 import { BloomFilter as JasonBloom } from "bloomfilter";
 import { BloomFilter } from "distillate/bloom";
 
+import { BloomFilter as BloomFiltersBloom } from "./incumbent.js";
 import type { Insertable } from "./harness.js";
-
-const { BloomFilter: BloomFiltersBloom } = bloomFilters;
 
 export const TARGET_FPR = 0.01;
 

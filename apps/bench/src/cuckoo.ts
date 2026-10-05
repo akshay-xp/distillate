@@ -1,11 +1,8 @@
-// bloom-filters is CommonJS; Node before 24.14 sees none of its named exports.
-import bloomFilters from "bloom-filters";
 import { CuckooFilter, CuckooFullError } from "distillate/cuckoo";
 
+import { CuckooFilter as IncumbentCuckoo } from "./incumbent.js";
 import { TARGET_FPR } from "./adapters.js";
 import { hitKeys, hitMissPools, measureFpr } from "./harness.js";
-
-const { CuckooFilter: IncumbentCuckoo } = bloomFilters;
 
 /** The settings a filter actually holds, read back from the library. */
 export interface CuckooSettings {
