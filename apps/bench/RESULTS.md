@@ -15,8 +15,9 @@ sections run first, before the long sections can heat the machine.
 The previous results put `bloomfilter` at 13.4 M adds/s. The old in-process
 harness, rerun on a rested machine, reads about 50 M, so that figure came from
 the conditions of that run. Much of the 50 M is key order: walked in index order
-`bloomfilter` reads about 50 M, shuffled about 25 M, because FNV-1a maps
-consecutive keys to nearby bits and an in-order walk stays in cache. distillate
+`bloomfilter` reads about 50 M, shuffled about 25 M: it takes its probe
+positions straight from FNV-1a's state, so consecutive keys probe nearby bits
+and an in-order walk stays in cache. Its false positive rate is unaffected. distillate
 reads about 22 M either way.
 
 ## Space and accuracy

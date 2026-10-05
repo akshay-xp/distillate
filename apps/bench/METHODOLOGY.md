@@ -166,11 +166,13 @@ and never-inserted "miss" keys `1:0 … 1:(n-1)`. The prefixes guarantee the mis
 set shares no member with the hit set.
 
 Both pools, and the key-length keys, are served in a fixed shuffled order
-(`shuffled`), not index order. A hash with weak avalanche sends keys that differ
-only in their last characters to nearby bits: walked in index order, `bloomfilter`'s
-FNV-1a stays in a few cache lines and read up to 1.6 times faster than shuffled,
-where distillate's murmur3 moved by about 10%. A workload that really inserts or
-queries sequential IDs in sequence gets that locality too; a benchmark should not
+(`shuffled`), not index order. `bloomfilter` takes its probe positions straight
+from FNV-1a's state, with no finaliser, so keys that differ only in their last
+characters probe nearby bits. Its false positive rate is unaffected, 0.96% to
+1.06% on such keys against a 1% target; only cache locality changes. Walked in
+index order it read up to 1.6 times faster than shuffled, where distillate's
+murmur3 moved by about 10%. A workload that really inserts or queries
+sequential IDs in sequence gets that locality too; a benchmark should not
 assume it.
 
 The key-length sweep builds its own keys (`keyLengthKeys`): a unique base-64
