@@ -10,18 +10,19 @@
  * @param bytes - The message.
  * @param k0 - Low 32 bits of the key.
  * @param k1 - High 32 bits of the key.
+ * @param len - How many leading bytes of `bytes` to hash.
  * @returns The 32-bit hash.
  */
 export function halfSipHash13(
   bytes: Uint8Array,
   k0: number,
   k1: number,
+  len: number = bytes.length,
 ): number {
   let v0 = k0 | 0;
   let v1 = k1 | 0;
   let v2 = (0x6c796765 ^ k0) | 0;
   let v3 = (0x74656462 ^ k1) | 0;
-  const len = bytes.length;
   const end = len & ~3;
 
   for (let i = 0; i < end; i += 4) {

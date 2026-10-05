@@ -282,3 +282,23 @@ test("the first purge comes at the add past the load limit", () => {
   sketch.add("key:48");
   expect(sketch.error()).toBe(1);
 });
+
+test("add and count encode string keys without allocating, and a stored key keeps its bytes", () => {
+  const spy = vi.spyOn(TextEncoder.prototype, "encode");
+  const sketch = new TopK({ capacity: 16 });
+  sketch.add("alpha");
+  sketch.add("alpha");
+  sketch.add("beta");
+  sketch.count("alpha");
+  sketch.count("gamma");
+  expect(spy).not.toHaveBeenCalled();
+  spy.mockRestore();
+
+  expect(sketch.count("alpha")).toBe(2);
+  expect(sketch.count("beta")).toBe(1);
+  const decoder = new TextDecoder();
+  expect(sketch.top(2).map((e) => decoder.decode(e.key))).toEqual([
+    "alpha",
+    "beta",
+  ]);
+});

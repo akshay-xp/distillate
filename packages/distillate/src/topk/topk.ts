@@ -1,4 +1,9 @@
-import { type BytesLike, normalize } from "../core/bytes.js";
+import {
+  type BytesLike,
+  encodedBytes,
+  encodedLength,
+  encodeKey,
+} from "../core/bytes.js";
 import { assertPositiveInt, assertUint32, ParamError } from "../core/params.js";
 import {
   assertBodyLength,
@@ -423,10 +428,9 @@ export class TopK {
     return size;
   }
 
-  // True when the key stored at `slot` is exactly `bytes`.
-  #slotHolds(slot: number, bytes: Uint8Array): boolean {
-    const len = this.#keyLengths[slot] ?? 0;
-    if (len !== bytes.length) return false;
+  // True when the key stored at `slot` is exactly the first `len` of `bytes`.
+  #slotHolds(slot: number, bytes: Uint8Array, len: number): boolean {
+    if ((this.#keyLengths[slot] ?? 0) !== len) return false;
     const at = this.#keyOffsets[slot] ?? 0;
     for (let i = 0; i < len; i++) {
       if (this.#arena[at + i] !== bytes[i]) return false;
@@ -434,31 +438,36 @@ export class TopK {
     return true;
   }
 
-  // Copy `bytes` into the arena and record where they landed for `slot`.
-  #storeKey(slot: number, bytes: Uint8Array): void {
+  // Copy the first `len` of `bytes` into the arena and record where they
+  // landed for `slot`. The copy is what lets add hash from a reused buffer.
+  #storeKey(slot: number, bytes: Uint8Array, len = bytes.length): void {
     let arena = this.#arena;
-    if (this.#arenaLen + bytes.length > arena.length) {
+    if (this.#arenaLen + len > arena.length) {
       let size = arena.length;
-      while (size < this.#arenaLen + bytes.length) size *= 2;
+      while (size < this.#arenaLen + len) size *= 2;
       const grown = new Uint8Array(size);
       grown.set(arena.subarray(0, this.#arenaLen));
       arena = grown;
       this.#arena = grown;
     }
-    arena.set(bytes, this.#arenaLen);
+    arena.set(
+      len === bytes.length ? bytes : bytes.subarray(0, len),
+      this.#arenaLen,
+    );
     this.#keyOffsets[slot] = this.#arenaLen;
-    this.#keyLengths[slot] = bytes.length;
-    this.#arenaLen += bytes.length;
+    this.#keyLengths[slot] = len;
+    this.#arenaLen += len;
   }
 
   /**
-   * The slot holding `bytes`, or the first empty slot on its probe path.
+   * The slot holding the first `len` of `bytes`, or the first empty slot on
+   * its probe path.
    *
    * Unbounded by design: growth and the purge keep live entries at or below
    * the current table's load limit, which is below its size, so an empty slot
    * always exists and the scan always returns from inside.
    */
-  #slotFor(bytes: Uint8Array): number {
+  #slotFor(bytes: Uint8Array, len = bytes.length): number {
     // Drawn here rather than in the constructor: Cloudflare Workers refuse
     // random values at module scope, where a sketch is commonly created.
     if (!this.#keyed) {
@@ -468,10 +477,10 @@ export class TopK {
       this.#keyed = true;
     }
     const mask = this.#size - 1;
-    let slot = halfSipHash13(bytes, this.#k0, this.#k1) & mask;
+    let slot = halfSipHash13(bytes, this.#k0, this.#k1, len) & mask;
     for (;;) {
       if ((this.#counts[slot] ?? 0) === 0) return slot;
-      if (this.#slotHolds(slot, bytes)) return slot;
+      if (this.#slotHolds(slot, bytes, len)) return slot;
       slot = (slot + 1) & mask;
     }
   }
@@ -493,8 +502,8 @@ export class TopK {
         `adding ${String(count)} would carry the total past ${String(Number.MAX_SAFE_INTEGER)}`,
       );
     }
-    const bytes = normalize(key);
-    const slot = this.#slotFor(bytes);
+    encodeKey(key);
+    const slot = this.#slotFor(encodedBytes, encodedLength);
     const stored = this.#counts[slot] ?? 0;
     // Checked before the key is stored, so a refused add leaves no entry.
     if (stored + count > 0xffffffff) {
@@ -503,7 +512,7 @@ export class TopK {
       );
     }
     if (stored === 0) {
-      this.#storeKey(slot, bytes);
+      this.#storeKey(slot, encodedBytes, encodedLength);
       this.#entries++;
     }
     this.#counts[slot] = stored + count;
@@ -527,8 +536,9 @@ export class TopK {
    * @returns The estimated count, `0` for a key the map does not hold.
    */
   count(key: BytesLike): number {
-    const bytes = normalize(key);
-    const stored = this.#counts[this.#slotFor(bytes)] ?? 0;
+    encodeKey(key);
+    const stored =
+      this.#counts[this.#slotFor(encodedBytes, encodedLength)] ?? 0;
     return stored === 0 ? 0 : stored + this.#offset;
   }
 
