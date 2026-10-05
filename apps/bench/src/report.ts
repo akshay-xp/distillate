@@ -2,8 +2,6 @@ import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 
-import { run } from "mitata";
-
 import {
   cardinalityAdapters,
   HLL_CARDINALITIES,
@@ -27,7 +25,7 @@ import type { ComparisonRow } from "./compare.js";
 import { TARGET_FPR } from "./adapters.js";
 import { envBanner } from "./harness.js";
 import { isolatedRows } from "./isolate.js";
-import { registerThroughputBenches } from "./throughput.js";
+import { throughputNames } from "./throughput.js";
 
 function capacityLabel(n: number): string {
   if (n >= 1_000_000) return `${String(n / 1_000_000)}M`;
@@ -275,27 +273,13 @@ export function throughputTable(opsByLabel: Map<string, number>): string {
 const CAPACITIES = [100_000, 1_000_000];
 const THROUGHPUT_CAPACITY = 100_000;
 
-interface MitataResult {
-  benchmarks: { alias: string; runs: { stats: { avg: number } }[] }[];
-}
-
-async function collectThroughput(n: number): Promise<Map<string, number>> {
-  registerThroughputBenches(n);
-  // Silence mitata's own rendering by overriding its print hook with a no-op;
-  // the benchmark data is still returned for our own table.
-  const opts = { print: () => undefined } as unknown as Parameters<
-    typeof run
-  >[0];
-  const result = (await run(opts)) as unknown as MitataResult;
+function collectThroughput(n: number): Map<string, number> {
   return new Map(
-    result.benchmarks.map((b) => [
-      b.alias,
-      1e9 / (b.runs[0]?.stats.avg ?? NaN),
-    ]),
+    isolatedRows<[string, number]>("throughput", throughputNames(), [n]),
   );
 }
 
-async function main(): Promise<void> {
+function main(): void {
   const require = createRequire(import.meta.url);
   const version = (require("distillate/package.json") as { version: string })
     .version;
@@ -329,7 +313,7 @@ async function main(): Promise<void> {
   const tkTable = topKTable(
     isolatedRows<TopKRow>("topk", names(topKAdapters), [TOPK_EVENT_COUNTS]),
   );
-  const tput = throughputTable(await collectThroughput(THROUGHPUT_CAPACITY));
+  const tput = throughputTable(collectThroughput(THROUGHPUT_CAPACITY));
 
   console.log(banner);
   console.log("\n" + spaceTable);
@@ -361,5 +345,5 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
-  await main();
+  main();
 }

@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 
 import type { CuckooRow } from "../src/cuckoo.js";
 import { interleave, isolatedRows, runIsolated } from "../src/isolate.js";
+import { throughputNames } from "../src/throughput.js";
 
 test("interleave merges per-adapter rows by key count, then adapter order", () => {
   expect(
@@ -39,5 +40,34 @@ test("isolatedRows runs each adapter in turn and keeps the sweep order", () => {
     ["bloom-filters", 1000],
     ["distillate/cuckoo", 2000],
     ["bloom-filters", 2000],
+  ]);
+});
+
+test("the throughput job runs only the named library's benches", () => {
+  const { rows } = runIsolated<[string, number]>(
+    "throughput",
+    "bloomfilter",
+    [1000],
+  );
+  expect(rows.map(([label]) => label)).toEqual([
+    "bloomfilter add",
+    "bloomfilter has (hit)",
+    "bloomfilter has (miss)",
+  ]);
+  for (const [, ops] of rows) {
+    expect(Number.isFinite(ops) && ops > 0).toBe(true);
+  }
+});
+
+test("throughputNames lists every library in the table's order", () => {
+  expect(throughputNames()).toEqual([
+    "distillate/bloom",
+    "bloom-filters",
+    "bloomfilter",
+    "blocked",
+    "fuse8",
+    "fuse16",
+    "distillate/hll",
+    "bloom-filters hll",
   ]);
 });
