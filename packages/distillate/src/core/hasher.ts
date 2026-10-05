@@ -1,9 +1,4 @@
-import {
-  type BytesLike,
-  encodedBytes,
-  encodedLength,
-  encodeKey,
-} from "./bytes.js";
+import { type BytesLike, encodedBytes, encodeKey } from "./bytes.js";
 
 export interface Hash128 {
   w0: number;
@@ -244,8 +239,8 @@ export function hash128(
 }
 
 function keyToLanes(key: BytesLike, seed: number): void {
-  encodeKey(key);
-  computeLanes(encodedBytes, seed, encodedLength);
+  const len = encodeKey(key);
+  computeLanes(encodedBytes(), seed, len);
 }
 
 export function hash128Key(key: BytesLike, seed = 0): Hash128 {

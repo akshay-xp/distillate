@@ -1,11 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest";
 
-import {
-  encodedBytes,
-  encodedLength,
-  encodeKey,
-  normalize,
-} from "../../src/core/bytes.js";
+import { encodedBytes, encodeKey, normalize } from "../../src/core/bytes.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -50,8 +45,8 @@ test("encodeKey writes the same UTF-8 bytes as TextEncoder for any string", () =
   }
   const reference = new TextEncoder();
   for (const s of strings) {
-    encodeKey(s);
-    expect(encodedBytes.subarray(0, encodedLength), JSON.stringify(s)).toEqual(
+    const len = encodeKey(s);
+    expect(encodedBytes().subarray(0, len), JSON.stringify(s)).toEqual(
       reference.encode(s),
     );
   }
