@@ -232,7 +232,8 @@ keys, murmur3 per character on long ones. The key-length section shows both.
 
 Node only, single machine (disclosed in the banner). No Bun/Deno, no CI runs, no
 charts. Capacities: 100k and 1M for space/accuracy, 100k for throughput. Cardinality is
-swept at 1k/10k/100k/1M/10M against `p = 14`, with the sketch throughput built at
+swept at 1k/10k/100k/1M/10M against `p = 14`, with `bloom-filters` capped at 1M
+and its 10M build projected from its 1M run; the sketch throughput is built at
 20k. Scalable Bloom is swept at 1k/10k/100k/1M/10M keys from an initial size of 1k,
 with `bloom-filters` capped at 100k. Cuckoo is swept at 1k/10k/100k/1M/10M keys
 for both filters. Count-Min is swept at 1k/10k/100k/1M/10M events for both

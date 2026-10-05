@@ -142,6 +142,21 @@ test("cardinalityTable leads with accuracy and space, size carrying its format",
   expect(table).toContain("17.24 M ops/s");
 });
 
+test("cardinalityTable marks a row past the incumbent's cap with its projected build", () => {
+  const table = cardinalityTable([
+    {
+      name: "bloom-filters",
+      n: 10_000_000,
+      registers: 16384,
+      notRun: true,
+      projectedBuildMs: 1_290_000,
+    },
+  ]);
+  expect(table).toContain(
+    "| bloom-filters | 10M | 16384 | not run | - | - | ~22 min projected build |",
+  );
+});
+
 test("cardinalityTable switches build time from ms to s past a second", () => {
   expect(cardinalityTable([{ ...cardinalityRow, buildMs: 42.5 }])).toContain(
     "43 ms",

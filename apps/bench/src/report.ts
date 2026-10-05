@@ -63,9 +63,10 @@ export function cardinalityTable(rows: CardinalityRow[]): string {
   const header =
     "| Sketch | n | registers | estimate | rel. error | size | build |\n" +
     "| --- | --- | --- | --- | --- | --- | --- |";
-  const body = rows.map(
-    (r) =>
-      `| ${r.name} | ${capacityLabel(r.n)} | ${String(r.registers)} | ${String(Math.round(r.estimate))} | ${(r.relativeError * 100).toFixed(2)}% | ${String(r.bytes)} B ${r.format} | ${duration(r.buildMs)} (${ops(r.addOpsPerSec)}) |`,
+  const body = rows.map((r) =>
+    "notRun" in r
+      ? `| ${r.name} | ${capacityLabel(r.n)} | ${String(r.registers)} | not run | - | - | ${projected(r.projectedBuildMs)} projected build |`
+      : `| ${r.name} | ${capacityLabel(r.n)} | ${String(r.registers)} | ${String(Math.round(r.estimate))} | ${(r.relativeError * 100).toFixed(2)}% | ${String(r.bytes)} B ${r.format} | ${duration(r.buildMs)} (${ops(r.addOpsPerSec)}) |`,
   );
   return [header, ...body].join("\n");
 }

@@ -17,6 +17,8 @@ export interface CardinalityAdapter {
   /** Prefix for throughput rows, kept distinct from the filter benches of the same library. */
   benchLabel: string;
   format: SketchFormat;
+  /** Largest n actually built; past it a row projects the build instead. */
+  maxKeys?: number;
   create(p: number): CountableSketch;
 }
 
@@ -41,6 +43,8 @@ export const incumbentHllAdapter: CardinalityAdapter = {
   name: "bloom-filters",
   benchLabel: "bloom-filters hll",
   format: "json",
+  // It adds at about 8k ops/s, so 10M would cost it over 20 minutes.
+  maxKeys: 1_000_000,
   create(p) {
     const sketch = new IncumbentHll(2 ** p);
     return {
@@ -59,7 +63,7 @@ export const cardinalityAdapters: CardinalityAdapter[] = [
   incumbentHllAdapter,
 ];
 
-export interface CardinalityRow {
+export interface MeasuredCardinalityRow {
   name: string;
   p: number;
   registers: number;
@@ -73,18 +77,43 @@ export interface CardinalityRow {
   addOpsPerSec: number;
 }
 
+/** An n past the adapter's cap, with its build time projected. */
+export interface NotRunCardinalityRow {
+  name: string;
+  n: number;
+  registers: number;
+  notRun: true;
+  projectedBuildMs: number;
+}
+
+export type CardinalityRow = MeasuredCardinalityRow | NotRunCardinalityRow;
+
 export function cardinalityRows(
   p: number,
   cardinalities: number[],
   adapters: CardinalityAdapter[] = cardinalityAdapters,
 ): CardinalityRow[] {
   const rows: CardinalityRow[] = [];
+  // Each adapter's largest measured build, the base a projection scales from.
+  const largest = new Map<string, { n: number; buildMs: number }>();
   for (const n of cardinalities) {
     for (const adapter of adapters) {
+      if (adapter.maxKeys !== undefined && n > adapter.maxKeys) {
+        const base = largest.get(adapter.name);
+        rows.push({
+          name: adapter.name,
+          n,
+          registers: 2 ** p,
+          notRun: true,
+          projectedBuildMs: base ? base.buildMs * (n / base.n) : Number.NaN,
+        });
+        continue;
+      }
       const sketch = adapter.create(p);
       const started = performance.now();
       for (const key of hitKeys(n)) sketch.add(key);
       const buildMs = performance.now() - started;
+      largest.set(adapter.name, { n, buildMs });
       const estimate = sketch.count();
       rows.push({
         name: adapter.name,
