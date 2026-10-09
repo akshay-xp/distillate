@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import { DDSketch } from "../../src/ddsketch/ddsketch.js";
 import {
+  bitwiseMapping,
   cubicMapping,
   type IndexMapping,
   linearMapping,
@@ -21,12 +22,13 @@ import {
 // The promise: every quantile, tails included, within relativeAccuracy of the
 // exact value at rank floor(q * (n - 1)). Zero tolerance beyond float slack.
 // The promise is the unbounded one, so the store is dense: the default
-// collapses at 2048 bins, which 0.001 outgrows, and what collapsing gives up
+// collapses at 4096 bins, which 0.001 outgrows, and what collapsing gives up
 // is tested in ddsketch.test.ts.
 const N = 100_000;
 const QS = [0, 0.001, 0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99, 0.999, 1];
 const ACCURACIES = [0.05, 0.01, 0.001];
 const MAPPINGS: [string, (relativeAccuracy: number) => IndexMapping][] = [
+  ["bitwise", bitwiseMapping],
   ["log", logMapping],
   ["linear", linearMapping],
   ["quadratic", quadraticMapping],

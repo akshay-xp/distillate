@@ -42,6 +42,7 @@ test("the DDSketch guide covers what a reader needs to choose and use it", () =>
 
   const mappings = section(page, "Choosing a mapping");
   for (const name of [
+    "bitwiseMapping",
     "logMapping",
     "linearMapping",
     "quadraticMapping",

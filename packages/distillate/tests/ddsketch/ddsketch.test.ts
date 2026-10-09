@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
 import { DDSketch } from "../../src/ddsketch/ddsketch.js";
-import { cubicMapping } from "../../src/ddsketch/mapping.js";
+import { bitwiseMapping, cubicMapping } from "../../src/ddsketch/mapping.js";
 import {
   collapsingHighestStore,
   collapsingLowestStore,
@@ -18,10 +18,15 @@ import {
 const QS = [0.01, 0.1, 0.5, 0.9, 0.99];
 
 describe("create", () => {
-  test("reports the accuracy it was built for and the log mapping by default", () => {
+  // The default is the fastest mapping, as sketches-java's fast sketch is:
+  // its bin is integer arithmetic on the float's bits.
+  test("reports the accuracy it was built for and the bitwise mapping by default", () => {
     const sketch = DDSketch.create(0.01);
     expect(sketch.relativeAccuracy).toBe(0.01);
-    expect(sketch.mapping.kind).toBe("log");
+    expect([sketch.mapping.kind, sketch.mapping.gamma]).toEqual([
+      "linear",
+      bitwiseMapping(0.01).gamma,
+    ]);
   });
 
   test("takes a mapping factory", () => {
@@ -184,9 +189,11 @@ describe("bounded memory", () => {
   const values = lognormalValues(23, 100_000).map((v) => v ** 4);
   const exact = exactQuantiles(values, ALL_QS);
 
-  test("defaults to collapsing-lowest at 2048 bins", () => {
+  // 4096 bitwise bins span 64 powers of two at 1%, about 19 orders of
+  // magnitude, the range 2048 log bins covered.
+  test("defaults to collapsing-lowest at 4096 bins", () => {
     const { store } = DDSketch.create(0.01);
-    expect([store.kind, store.maxBins]).toEqual(["collapsingLowest", 2048]);
+    expect([store.kind, store.maxBins]).toEqual(["collapsingLowest", 4096]);
   });
 
   test("collapsing-lowest keeps the bound above the collapsed range", () => {

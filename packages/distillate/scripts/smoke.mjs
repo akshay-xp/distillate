@@ -19,7 +19,11 @@ import { ScalableBloomFilter } from "../dist/scalable/index.js";
 import { CuckooFilter } from "../dist/cuckoo/index.js";
 import { CountMinSketch, countMinSizing } from "../dist/countmin/index.js";
 import { TopK, topKSizing } from "../dist/topk/index.js";
-import { collapsingLowestStore, DDSketch } from "../dist/ddsketch/index.js";
+import {
+  collapsingLowestStore,
+  DDSketch,
+  logMapping,
+} from "../dist/ddsketch/index.js";
 import { fromProtobuf, toProtobuf } from "../dist/ddsketch/protobuf/index.js";
 
 if (typeof VERSION !== "string") {
@@ -121,6 +125,7 @@ const rebuild = ({
   deletes = [],
   values = [],
   maxBins,
+  mapping,
 }) => {
   switch (kind) {
     case "bloom":
@@ -162,11 +167,10 @@ const rebuild = ({
       return sketch;
     }
     case "ddsketch":
-      return DDSketch.from(
-        values,
-        epsilon,
-        maxBins ? { store: collapsingLowestStore(maxBins) } : {},
-      );
+      return DDSketch.from(values, epsilon, {
+        ...(maxBins ? { store: collapsingLowestStore(maxBins) } : {}),
+        ...(mapping === "log" ? { mapping: logMapping } : {}),
+      });
     default:
       console.error(`smoke: unknown golden kind ${kind}`);
       process.exit(1);

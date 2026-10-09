@@ -10,6 +10,7 @@ import { HyperLogLog } from "../../src/hll/hll.js";
 import { CountMinSketch } from "../../src/countmin/countmin.js";
 import { CuckooFilter } from "../../src/cuckoo/cuckoo.js";
 import { DDSketch } from "../../src/ddsketch/ddsketch.js";
+import { logMapping } from "../../src/ddsketch/mapping.js";
 import { collapsingLowestStore } from "../../src/ddsketch/store.js";
 import { ScalableBloomFilter } from "../../src/scalable/scalable.js";
 import { TopK } from "../../src/topk/topk.js";
@@ -29,6 +30,7 @@ interface GoldenEntry {
   deletes?: string[];
   values?: number[];
   maxBins?: number;
+  mapping?: string;
   frame?: string;
 }
 
@@ -88,12 +90,11 @@ const build = (entry: GoldenEntry): Serializable => {
       return sketch;
     }
     case "ddsketch": {
-      const { values = [], maxBins } = entry;
-      return DDSketch.from(
-        values,
-        epsilon,
-        maxBins ? { store: collapsingLowestStore(maxBins) } : {},
-      );
+      const { values = [], maxBins, mapping } = entry;
+      return DDSketch.from(values, epsilon, {
+        ...(maxBins ? { store: collapsingLowestStore(maxBins) } : {}),
+        ...(mapping === "log" ? { mapping: logMapping } : {}),
+      });
     }
     default:
       throw new Error(`unknown kind ${kind}`);

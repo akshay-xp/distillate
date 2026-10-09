@@ -11,6 +11,7 @@ import { HyperLogLog } from "../src/hll/hll.js";
 import { CountMinSketch } from "../src/countmin/countmin.js";
 import { CuckooFilter } from "../src/cuckoo/cuckoo.js";
 import { DDSketch } from "../src/ddsketch/ddsketch.js";
+import { logMapping } from "../src/ddsketch/mapping.js";
 import { collapsingLowestStore } from "../src/ddsketch/store.js";
 import { ScalableBloomFilter } from "../src/scalable/scalable.js";
 import { TopK } from "../src/topk/topk.js";
@@ -29,6 +30,7 @@ interface Entry {
   deletes?: string[];
   values?: number[];
   maxBins?: number;
+  mapping?: string;
   frame?: string;
 }
 
@@ -89,12 +91,11 @@ const bytes = (entry: Entry): Uint8Array => {
     case "ddsketch": {
       // Values, not keys: maxBins picks a collapsing store small enough that
       // the frame records a fold, and its absence the default store.
-      const { values = [], maxBins } = entry;
-      return DDSketch.from(
-        values,
-        epsilon,
-        maxBins ? { store: collapsingLowestStore(maxBins) } : {},
-      ).toBytes();
+      const { values = [], maxBins, mapping } = entry;
+      return DDSketch.from(values, epsilon, {
+        ...(maxBins ? { store: collapsingLowestStore(maxBins) } : {}),
+        ...(mapping === "log" ? { mapping: logMapping } : {}),
+      }).toBytes();
     }
     case "v2": {
       // A well-formed current-version Bloom frame with the version byte forced
