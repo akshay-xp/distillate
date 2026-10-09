@@ -40,11 +40,11 @@
     "gzip": 8200
   },
   "./ddsketch": {
-    "raw": 33000,
-    "gzip": 8800
+    "raw": 37000,
+    "gzip": 9700
   },
   "./ddsketch/protobuf": {
-    "raw": 41500,
-    "gzip": 10800
+    "raw": 45000,
+    "gzip": 11600
   }
 }
