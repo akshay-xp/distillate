@@ -10,6 +10,8 @@ import { BinaryFuse8, BinaryFuse16 } from "../src/fuse/index.js";
 import { HyperLogLog } from "../src/hll/hll.js";
 import { CountMinSketch } from "../src/countmin/countmin.js";
 import { CuckooFilter } from "../src/cuckoo/cuckoo.js";
+import { DDSketch } from "../src/ddsketch/ddsketch.js";
+import { collapsingLowestStore } from "../src/ddsketch/store.js";
 import { ScalableBloomFilter } from "../src/scalable/scalable.js";
 import { TopK } from "../src/topk/topk.js";
 
@@ -25,6 +27,8 @@ interface Entry {
   tightening?: number;
   seed?: number;
   deletes?: string[];
+  values?: number[];
+  maxBins?: number;
   frame?: string;
 }
 
@@ -81,6 +85,16 @@ const bytes = (entry: Entry): Uint8Array => {
       const sketch = TopK.create(epsilon);
       for (const key of keys) sketch.add(key);
       return sketch.toBytes();
+    }
+    case "ddsketch": {
+      // Values, not keys: maxBins picks a collapsing store small enough that
+      // the frame records a fold, and its absence the default store.
+      const { values = [], maxBins } = entry;
+      return DDSketch.from(
+        values,
+        epsilon,
+        maxBins ? { store: collapsingLowestStore(maxBins) } : {},
+      ).toBytes();
     }
     case "v2": {
       // A well-formed current-version Bloom frame with the version byte forced
