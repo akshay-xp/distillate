@@ -34,31 +34,35 @@ const MIN_NORMAL = 2 ** -1022;
 // The argument past which the reference's exp overflows.
 const EXP_OVERFLOW = 709.4361393031;
 
-// Reinterprets a float's bits, big-endian so word 0 is the sign, exponent and
-// top of the significand.
-const bits = new DataView(new ArrayBuffer(8));
+// A float's bits, read through two views of one buffer: a Float64Array to
+// write the value and a Uint32Array to read its halves. Typed-array element
+// access compiles to plain loads in V8, where DataView calls cost enough to
+// make the interpolated mappings slower than Math.log.
+const word = new Float64Array(1);
+const halves = new Uint32Array(word.buffer);
+// The index of the half holding the sign, exponent and top of the
+// significand: 1 on a little-endian platform, 0 on a big-endian one.
+const HIGH = new Uint8Array(Float64Array.of(1).buffer)[7] === 0x3f ? 1 : 0;
 
 // The unbiased binary exponent of a positive normal float.
 function exponentOf(value: number): number {
-  bits.setFloat64(0, value);
-  return ((bits.getUint32(0) >>> 20) & 0x7ff) - 1023;
+  word[0] = value;
+  return (((halves[HIGH] ?? 0) >>> 20) & 0x7ff) - 1023;
 }
 
 // The significand of a positive normal float, as a value in [1, 2).
 function significandPlusOne(value: number): number {
-  bits.setFloat64(0, value);
-  bits.setUint32(0, (bits.getUint32(0) & 0x000fffff) | 0x3ff00000);
-  return bits.getFloat64(0);
+  word[0] = value;
+  halves[HIGH] = ((halves[HIGH] ?? 0) & 0x000fffff) | 0x3ff00000;
+  return word[0];
 }
 
 // 2^exponent times a significand in [1, 2), assembled from bits.
 function buildFloat(exponent: number, significandPlusOne: number): number {
-  bits.setFloat64(0, significandPlusOne);
-  bits.setUint32(
-    0,
-    (bits.getUint32(0) & 0x000fffff) | (((exponent + 1023) & 0x7ff) << 20),
-  );
-  return bits.getFloat64(0);
+  word[0] = significandPlusOne;
+  halves[HIGH] =
+    ((halves[HIGH] ?? 0) & 0x000fffff) | (((exponent + 1023) & 0x7ff) << 20);
+  return word[0];
 }
 
 // Go's math.Log2, which the Go mappings derive their multiplier from. It
@@ -130,6 +134,14 @@ class LogMapping extends LogLikeMapping {
 
   protected log(value: number): number {
     return Math.log(value);
+  }
+
+  // The base class's expression with Math.log written in, so the default
+  // mapping's hot path calls no method: the same operations in the same
+  // order, so the same bins.
+  override index(value: number): number {
+    const index = Math.log(value) * this.multiplier + this.indexOffset;
+    return index >= 0 ? Math.trunc(index) : Math.trunc(index) - 1;
   }
 
   protected logInverse(index: number): number {
