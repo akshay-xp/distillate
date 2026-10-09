@@ -1,5 +1,5 @@
 /** How a store lays out its bins and what it gives up to bound memory. */
-export type StoreKind = "dense";
+export type StoreKind = "dense" | "sparse";
 
 /** Counts per bin index for one sign of a sketch. */
 export interface Store {
@@ -96,4 +96,50 @@ class DenseStore implements Store {
  */
 export function denseStore(): StoreFactory {
   return { kind: "dense", maxBins: 0, create: () => new DenseStore() };
+}
+
+class SparseStore implements Store {
+  readonly #bins = new Map<number, number>();
+  // Bin indices in ascending order, rebuilt only after a new index arrives.
+  #sorted: number[] | null = [];
+  #total = 0;
+
+  get total(): number {
+    return this.#total;
+  }
+
+  add(index: number, count: number): void {
+    const held = this.#bins.get(index);
+    if (held === undefined) this.#sorted = null;
+    this.#bins.set(index, (held ?? 0) + count);
+    this.#total += count;
+  }
+
+  keyAtRank(rank: number): number {
+    let running = 0;
+    let last = 0;
+    for (const index of this.#keys()) {
+      running += this.#bins.get(index) ?? 0;
+      last = index;
+      if (running > rank) break;
+    }
+    return last;
+  }
+
+  forEach(fn: (index: number, count: number) => void): void {
+    for (const index of this.#keys()) fn(index, this.#bins.get(index) ?? 0);
+  }
+
+  #keys(): number[] {
+    this.#sorted ??= [...this.#bins.keys()].sort((a, b) => a - b);
+    return this.#sorted;
+  }
+}
+
+/**
+ * Bins only where values landed, so memory follows the number of distinct
+ * bins rather than the range between the smallest and largest.
+ */
+export function sparseStore(): StoreFactory {
+  return { kind: "sparse", maxBins: 0, create: () => new SparseStore() };
 }
