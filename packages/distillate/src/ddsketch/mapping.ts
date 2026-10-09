@@ -1,7 +1,7 @@
 import { assertProbability } from "../core/params.js";
 
 /** Which approximation of the logarithm a mapping bins values by. */
-export type MappingKind = "log";
+export type MappingKind = "log" | "linear";
 
 /**
  * Maps a positive value to the integer index of the bin holding it, and an
@@ -33,6 +33,43 @@ const MAX_INT32 = 2 ** 31 - 1;
 const MIN_NORMAL = 2 ** -1022;
 // The argument past which the reference's exp overflows.
 const EXP_OVERFLOW = 709.4361393031;
+
+// Reinterprets a float's bits, big-endian so word 0 is the sign, exponent and
+// top of the significand.
+const bits = new DataView(new ArrayBuffer(8));
+
+// The unbiased binary exponent of a positive normal float.
+function exponentOf(value: number): number {
+  bits.setFloat64(0, value);
+  return ((bits.getUint32(0) >>> 20) & 0x7ff) - 1023;
+}
+
+// The significand of a positive normal float, as a value in [1, 2).
+function significandPlusOne(value: number): number {
+  bits.setFloat64(0, value);
+  bits.setUint32(0, (bits.getUint32(0) & 0x000fffff) | 0x3ff00000);
+  return bits.getFloat64(0);
+}
+
+// 2^exponent times a significand in [1, 2), assembled from bits.
+function buildFloat(exponent: number, significandPlusOne: number): number {
+  bits.setFloat64(0, significandPlusOne);
+  bits.setUint32(
+    0,
+    (bits.getUint32(0) & 0x000fffff) | (((exponent + 1023) & 0x7ff) << 20),
+  );
+  return bits.getFloat64(0);
+}
+
+// Go's math.Log2, which the Go mappings derive their multiplier from. It
+// rounds differently from Math.log2, and the multiplier must match the
+// reference's to the bit. Only ever called on gamma, a normal float above 1.
+function goLog2(value: number): number {
+  const exponent = exponentOf(value) + 1;
+  const fraction = significandPlusOne(value) / 2;
+  if (fraction === 0.5) return exponent - 1;
+  return Math.log(fraction) * Math.LOG2E + exponent;
+}
 
 // The arithmetic every mapping shares. Subclasses supply the logarithm they
 // approximate and its inverse; index() and lowerBound() reproduce the
@@ -100,6 +137,40 @@ class LogMapping extends LogLikeMapping {
   }
 }
 
+// sketches-go LinearlyInterpolatedMapping: log2 approximated by linear
+// interpolation between powers of two, read straight off the float's bits.
+class LinearMapping extends LogLikeMapping {
+  readonly kind = "linear";
+
+  constructor(gamma: number, indexOffset: number) {
+    const multiplier = 1 / goLog2(gamma);
+    const adjustedGamma = gamma ** Math.LOG2E;
+    super(
+      gamma,
+      indexOffset,
+      multiplier,
+      1 - 2 / (1 + Math.exp(goLog2(gamma))),
+      Math.max(
+        2 ** ((MIN_INT32 - indexOffset) / multiplier + 1),
+        MIN_NORMAL * adjustedGamma,
+      ),
+      Math.min(
+        2 ** ((MAX_INT32 - indexOffset) / multiplier - 1),
+        (Math.exp(EXP_OVERFLOW) / (2 * adjustedGamma)) * (adjustedGamma + 1),
+      ),
+    );
+  }
+
+  protected log(value: number): number {
+    return exponentOf(value) + significandPlusOne(value) - 1;
+  }
+
+  protected logInverse(index: number): number {
+    const exponent = Math.floor(index);
+    return buildFloat(exponent, index - exponent + 1);
+  }
+}
+
 function exactLogGamma(relativeAccuracy: number): number {
   assertProbability(relativeAccuracy, "relativeAccuracy");
   return (1 + relativeAccuracy) / (1 - relativeAccuracy);
@@ -116,8 +187,24 @@ export function logMapping(relativeAccuracy: number): IndexMapping {
   return new LogMapping(exactLogGamma(relativeAccuracy), 0);
 }
 
+/**
+ * A mapping that interpolates log2 linearly from the float's bits instead of
+ * calling `Math.log`: faster per value, at about 44% more bins than
+ * {@link logMapping} for the same accuracy.
+ *
+ * @param relativeAccuracy - Relative error bound, in `(0, 1)`.
+ * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`.
+ */
+export function linearMapping(relativeAccuracy: number): IndexMapping {
+  const gamma = exactLogGamma(relativeAccuracy) ** Math.LN2;
+  // sketches-go keeps this offset for backward compatibility; matching it
+  // keeps bins aligned with sketches built there.
+  return new LinearMapping(gamma, 1 / goLog2(gamma));
+}
+
 const MAPPINGS = {
   log: LogMapping,
+  linear: LinearMapping,
 } satisfies Record<
   MappingKind,
   new (gamma: number, indexOffset: number) => IndexMapping
