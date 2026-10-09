@@ -5,6 +5,7 @@ import { ParamError } from "../../src/core/params.js";
 import {
   type IndexMapping,
   type MappingKind,
+  linearMapping,
   logMapping,
   mappingWithGamma,
 } from "../../src/ddsketch/mapping.js";
@@ -27,7 +28,10 @@ const kinds: [
   MappingKind,
   (relativeAccuracy: number) => IndexMapping,
   FixtureEntry[],
-][] = [["log", logMapping, goFixture.mappings]];
+][] = [
+  ["log", logMapping, goFixture.mappings],
+  ["linear", linearMapping, goFixture.mappings],
+];
 
 describe.each(kinds)("%s mapping", (kind, factory, fixture) => {
   const entries = fixture.filter((e) => e.kind === kind);
