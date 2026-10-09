@@ -64,12 +64,19 @@ class DenseStore implements Store {
   add(index: number, count: number): void {
     // Most adds land inside the range already held: no bound moves, nothing
     // grows or folds, so the bin is incremented and nothing else is touched.
+    // The rest is out of line so this stays small enough for V8 to inline.
     if (index >= this.#min && index <= this.#max) {
       const at = index - this.#offset;
       this.#bins[at] = (this.#bins[at] ?? 0) + count;
       this.#total += count;
       return;
     }
+    this.#extend(index, count);
+  }
+
+  // An add outside the held range: widen it, growing the array or folding
+  // the far end into the kept range when the store is bounded.
+  #extend(index: number, count: number): void {
     let min = Math.min(this.#min, index);
     let max = Math.max(this.#max, index);
     const collapses = this.#collapse !== null && max - min + 1 > this.#maxBins;

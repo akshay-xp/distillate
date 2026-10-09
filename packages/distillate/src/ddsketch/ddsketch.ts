@@ -603,27 +603,33 @@ export class DDSketch {
    */
   add(value: number, count = 1): void {
     if (count !== 1) assertPositiveFinite(count, "count");
-    // Each range check sits in its own sign's branch, and NaN, which compares
-    // false both ways, falls through to the zero branch and is refused there;
-    // so the common path compares once. Nothing is recorded before a throw.
+    // The sign picks the store; one range check then covers both, and NaN,
+    // which compares false both ways, falls to the zero branch and is refused
+    // there. Nothing is recorded before a throw.
     const min = this.#minIndexable;
-    if (value > min) {
-      if (!(value <= this.#maxIndexable)) throw this.#unindexable(value);
-      this.#positive.add(this.#mapping.index(value), count);
-    } else if (value < -min) {
-      if (!(value >= -this.#maxIndexable)) throw this.#unindexable(value);
-      this.#negative.add(this.#mapping.index(-value), count);
+    const store =
+      value > min ? this.#positive : value < -min ? this.#negative : undefined;
+    if (store === undefined) {
+      value = this.#addZero(value, count);
     } else {
-      if (Number.isNaN(value)) throw this.#unindexable(value);
-      // -0 becomes +0 here, the only branch it reaches. Without this, [0, -0]
-      // and [-0, 0] would leave different min bits and serialize differently.
-      if (value === 0) value = 0;
-      this.#zeroCount += count;
+      const magnitude = Math.abs(value);
+      if (!(magnitude <= this.#maxIndexable)) throw this.#unindexable(value);
+      store.add(this.#mapping.index(magnitude), count);
     }
     this.#count += count;
     this.#sum += value * count;
     if (value < this.#min) this.#min = value;
     if (value > this.#max) this.#max = value;
+  }
+
+  // The zero branch, out of line since it is rare: values too small to index,
+  // zero itself, and NaN, which compares false both ways and lands here.
+  // Returns the value add should record, -0 made +0: without that, [0, -0]
+  // and [-0, 0] would leave different min bits and serialize differently.
+  #addZero(value: number, count: number): number {
+    if (Number.isNaN(value)) throw this.#unindexable(value);
+    this.#zeroCount += count;
+    return value === 0 ? 0 : value;
   }
 
   #unindexable(value: number): ParamError {
