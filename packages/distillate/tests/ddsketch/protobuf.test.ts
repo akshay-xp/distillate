@@ -1,8 +1,24 @@
 import { describe, expect, test } from "vitest";
 
-import type { DDSketch } from "../../src/ddsketch/ddsketch.js";
-import type { MappingKind } from "../../src/ddsketch/mapping.js";
-import { fromProtobuf } from "../../src/ddsketch/protobuf/protobuf.js";
+import { DDSketch } from "../../src/ddsketch/ddsketch.js";
+import {
+  cubicMapping,
+  linearMapping,
+  logMapping,
+  type MappingKind,
+  mappingWithGamma,
+  quadraticMapping,
+} from "../../src/ddsketch/mapping.js";
+import {
+  fromProtobuf,
+  toProtobuf,
+} from "../../src/ddsketch/protobuf/protobuf.js";
+import {
+  collapsingHighestStore,
+  collapsingLowestStore,
+  denseStore,
+  sparseStore,
+} from "../../src/ddsketch/store.js";
 import { fromBase64 } from "../helpers/base64.js";
 import { expectWithin } from "../helpers/quantile.js";
 import fixture from "../fixtures/ddsketch/protobuf.go.json" with { type: "json" };
@@ -80,5 +96,60 @@ describe.each(cases)("sketches-go's $name message", (c) => {
     }
     expectWithin(sketch.min, Math.min(...c.values), c.relativeAccuracy);
     expectWithin(sketch.max, Math.max(...c.values), c.relativeAccuracy);
+  });
+});
+
+// The same inputs, binned here on the gamma Go used, so any byte difference
+// is the encoding and not the binning.
+function rebuilt(c: ProtoCase, store = denseStore()): DDSketch {
+  const kind = KINDS[c.interpolation] ?? "log";
+  const sketch = DDSketch.create(c.relativeAccuracy, {
+    mapping: () => mappingWithGamma(kind, c.gamma, c.indexOffset),
+    store,
+  });
+  for (const v of c.values) sketch.add(v, c.weight ?? 1);
+  return sketch;
+}
+
+describe("toProtobuf", () => {
+  test.each(cases.filter((c) => c.store === "dense"))(
+    "writes sketches-go's exact bytes for $name",
+    (c) => {
+      expect(toProtobuf(rebuilt(c))).toEqual(fromBase64(c.message));
+    },
+  );
+
+  // sketches-go writes a sparse store as a map, whose entry order protobuf
+  // leaves open, so the comparison is on what the message decodes to.
+  test("writes the bins sketches-go holds for a sparse store", () => {
+    const c = cases.find((x) => x.store === "sparse");
+    if (!c) throw new Error("no sparse protobuf fixture");
+    const back = fromProtobuf(toProtobuf(rebuilt(c, sparseStore())));
+    expect(binsOf(back)).toEqual({
+      positive: c.positive,
+      negative: c.negative,
+      zeroCount: c.zeroCount,
+    });
+  });
+
+  const values = [3.7, -12.25, 0, 1500.3, 0.0062, -7777.7, 42.42, 0];
+  test.each([
+    ["log", logMapping],
+    ["linear", linearMapping],
+    ["quadratic", quadraticMapping],
+    ["cubic", cubicMapping],
+  ] as const)("round-trips the %s mapping on every store", (_, mapping) => {
+    for (const store of [
+      denseStore(),
+      sparseStore(),
+      collapsingLowestStore(2048),
+      collapsingHighestStore(2048),
+    ]) {
+      const sketch = DDSketch.from(values, 0.01, { mapping, store });
+      const back = fromProtobuf(toProtobuf(sketch), { store });
+      expect(back.mapping.kind).toBe(sketch.mapping.kind);
+      expect(back.mapping.gamma).toBe(sketch.mapping.gamma);
+      expect(binsOf(back)).toEqual(binsOf(sketch));
+    }
   });
 });

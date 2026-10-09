@@ -182,11 +182,34 @@ function withinTolerance(x: number, y: number): boolean {
   return Math.abs(x - y) <= 1e-12 * Math.max(Math.abs(x), Math.abs(y));
 }
 
+/** A sketch's bins: each sign's store, and the count of zeros. */
+export interface SketchBins {
+  positive: Store;
+  negative: Store;
+  zeroCount: number;
+}
+
+/**
+ * Reads a sketch's bins. For codecs in this package that write formats other
+ * than DSTL; exported from this module but not from the subpath, so it is no
+ * part of the public API. Assigned in DDSketch's static block, the one place
+ * outside an instance method that can reach its private fields.
+ */
+export let sketchBins!: (sketch: DDSketch) => SketchBins;
+
 /**
  * A quantile sketch whose every answer is within a relative error of the true
  * value at that quantile, tails included.
  */
 export class DDSketch {
+  static {
+    sketchBins = (sketch) => ({
+      positive: sketch.#positive,
+      negative: sketch.#negative,
+      zeroCount: sketch.#zeroCount,
+    });
+  }
+
   readonly #relativeAccuracy: number;
   readonly #mapping: IndexMapping;
   readonly #store: StoreFactory;
