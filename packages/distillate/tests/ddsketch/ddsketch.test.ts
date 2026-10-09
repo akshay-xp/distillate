@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { ParamError } from "../../src/core/params.js";
 import { DDSketch } from "../../src/ddsketch/ddsketch.js";
 import { cubicMapping } from "../../src/ddsketch/mapping.js";
+import { rng } from "../helpers/frequency.js";
 import {
   exactQuantile,
   expectWithin,
@@ -96,5 +97,28 @@ describe("quantile", () => {
     for (const bad of [-0.1, 1.1, Number.NaN]) {
       expect(() => sketch.quantile(bad)).toThrow(ParamError);
     }
+  });
+});
+
+describe("negative values and zero", () => {
+  test("a mixed-sign stream keeps the guarantee", () => {
+    const sign = rng(3);
+    const values = lognormalValues(4, 1000).map((v) => (sign() < 0.5 ? -v : v));
+    for (let i = 0; i < 50; i++) values.push(0);
+    const sketch = DDSketch.create(0.01);
+    for (const v of values) sketch.add(v);
+    for (const q of QS) {
+      expectWithin(sketch.quantile(q), exactQuantile(values, q), 0.01);
+    }
+    expect(sketch.min).toBe(Math.min(...values));
+    expect(sketch.max).toBe(Math.max(...values));
+  });
+
+  test("magnitudes too small to index count as zero", () => {
+    const sketch = DDSketch.create(0.01);
+    const tiny = sketch.mapping.minIndexableValue / 2;
+    for (const v of [tiny, -tiny, 0]) sketch.add(v);
+    expect(sketch.count).toBe(3);
+    expect(sketch.quantile(0.5)).toBe(0);
   });
 });

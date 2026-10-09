@@ -19,6 +19,9 @@ export class DDSketch {
   readonly #relativeAccuracy: number;
   readonly #mapping: IndexMapping;
   readonly #positive = new DenseStore();
+  // Negative values, binned by magnitude.
+  readonly #negative = new DenseStore();
+  #zeroCount = 0;
   #count = 0;
   #sum = 0;
   #min = Number.NaN;
@@ -91,8 +94,22 @@ export class DDSketch {
     if (this.#count === 0) return Number.NaN;
     if (q === 0) return this.#min;
     if (q === 1) return this.#max;
+    // Ranks run through the negatives from most negative, then the zero
+    // bin, then the positives, as sketches-go walks them.
     const rank = q * (this.#count - 1);
-    const value = this.#mapping.value(this.#positive.keyAtRank(rank));
+    const negatives = this.#negative.total;
+    let value: number;
+    if (rank < negatives) {
+      value = -this.#mapping.value(
+        this.#negative.keyAtRank(negatives - 1 - rank),
+      );
+    } else if (rank < negatives + this.#zeroCount) {
+      value = 0;
+    } else {
+      value = this.#mapping.value(
+        this.#positive.keyAtRank(rank - negatives - this.#zeroCount),
+      );
+    }
     // A bin reads back as one value for everything in it; clamping to what
     // was actually seen can only move the answer closer to the truth.
     return Math.min(Math.max(value, this.#min), this.#max);
@@ -114,8 +131,13 @@ export class DDSketch {
       );
     }
     assertPositiveFinite(count, "count");
-    if (value > this.#mapping.minIndexableValue) {
+    const min = this.#mapping.minIndexableValue;
+    if (value > min) {
       this.#positive.add(this.#mapping.index(value), 1);
+    } else if (value < -min) {
+      this.#negative.add(this.#mapping.index(-value), 1);
+    } else {
+      this.#zeroCount += 1;
     }
     this.#count += 1;
     this.#sum += value;

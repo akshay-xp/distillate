@@ -7,6 +7,12 @@ export class DenseStore {
   #bins = new Float64Array(0);
   // The bin index that #bins[0] holds.
   #offset = 0;
+  #total = 0;
+
+  /** The sum of every count added. */
+  get total(): number {
+    return this.#total;
+  }
 
   /** Adds `count` to the bin at `index`. */
   add(index: number, count: number): void {
@@ -15,6 +21,7 @@ export class DenseStore {
     }
     const at = index - this.#offset;
     this.#bins[at] = (this.#bins[at] ?? 0) + count;
+    this.#total += count;
   }
 
   /**
