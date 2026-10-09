@@ -1,7 +1,7 @@
 import { SerializationError } from "../../core/serialize.js";
-import { DDSketch } from "../ddsketch.js";
+import { DDSketch, sketchBins } from "../ddsketch.js";
 import { type MappingKind, mappingWithGamma } from "../mapping.js";
-import { denseStore, type StoreFactory } from "../store.js";
+import { denseStore, type Store, type StoreFactory } from "../store.js";
 
 /** Options for {@link fromProtobuf}. */
 export interface ProtobufOptions {
@@ -243,4 +243,124 @@ export function fromProtobuf(
     sketch.add(-mapping.value(index), count);
   if (zeroCount > 0) sketch.add(0, zeroCount);
   return sketch;
+}
+
+// Appends protobuf's wire encodings to a growing byte list.
+class Writer {
+  readonly bytes: number[] = [];
+  readonly #word = new DataView(new ArrayBuffer(8));
+
+  tag(field: number, wire: number): void {
+    this.varint(field * 8 + wire);
+  }
+
+  varint(value: number): void {
+    while (value >= 0x80) {
+      this.bytes.push((value % 0x80) | 0x80);
+      value = Math.floor(value / 0x80);
+    }
+    this.bytes.push(value);
+  }
+
+  sint32(value: number): void {
+    this.varint(((value << 1) ^ (value >> 31)) >>> 0);
+  }
+
+  double(value: number): void {
+    this.#word.setFloat64(0, value, true);
+    for (let i = 0; i < 8; i++) this.bytes.push(this.#word.getUint8(i));
+  }
+
+  // A length-delimited field whose contents `write` produces.
+  message(field: number, write: (w: Writer) => void): void {
+    const inner = new Writer();
+    write(inner);
+    this.tag(field, LENGTH);
+    this.varint(inner.bytes.length);
+    for (const byte of inner.bytes) this.bytes.push(byte);
+  }
+}
+
+// proto3 leaves a field at its default out of the message; -0 is not the
+// default, as sketches-go's marshaller also judges it.
+function present(value: number): boolean {
+  return value !== 0 || Object.is(value, -0);
+}
+
+// As sketches-go writes each store: a sparse one as the binCounts map, in
+// ascending index order; any other as one contiguous run from the lowest bin
+// to the highest, empty bins written as 0.
+function writeStore(w: Writer, store: Store, sparse: boolean): void {
+  const indices: number[] = [];
+  const counts: number[] = [];
+  store.forEach((index, count) => {
+    indices.push(index);
+    counts.push(count);
+  });
+  if (sparse) {
+    indices.forEach((index, i) => {
+      w.message(1, (entry) => {
+        entry.tag(1, VARINT);
+        entry.sint32(index);
+        entry.tag(2, FIXED64);
+        entry.double(counts[i] ?? 0);
+      });
+    });
+    return;
+  }
+  const first = indices[0];
+  if (first === undefined) return;
+  const run = new Array<number>((indices.at(-1) ?? first) - first + 1).fill(0);
+  indices.forEach((index, i) => (run[index - first] = counts[i] ?? 0));
+  w.message(2, (packed) => {
+    for (const count of run) packed.double(count);
+  });
+  if (first !== 0) {
+    w.tag(3, VARINT);
+    w.sint32(first);
+  }
+}
+
+/**
+ * Encodes a sketch as Datadog's `DDSketch` protobuf message, the form the
+ * Datadog API and sketches-go read. For a dense or collapsing store the bytes
+ * are exactly those sketches-go writes for the same bins.
+ *
+ * The message has no fields for sum, min or max, so those do not survive the
+ * trip; {@link fromProtobuf} derives them from the bins.
+ *
+ * @param sketch - The sketch to encode.
+ * @returns The serialized message.
+ */
+export function toProtobuf(sketch: DDSketch): Uint8Array {
+  const { mapping } = sketch;
+  const { positive, negative, zeroCount } = sketchBins(sketch);
+  const sparse = sketch.store.kind === "sparse";
+  const w = new Writer();
+  w.message(1, (m) => {
+    if (present(mapping.gamma)) {
+      m.tag(1, FIXED64);
+      m.double(mapping.gamma);
+    }
+    if (present(mapping.indexOffset)) {
+      m.tag(2, FIXED64);
+      m.double(mapping.indexOffset);
+    }
+    const interpolation = KINDS.indexOf(mapping.kind);
+    if (interpolation !== 0) {
+      m.tag(3, VARINT);
+      m.varint(interpolation);
+    }
+  });
+  w.message(2, (s) => {
+    writeStore(s, positive, sparse);
+  });
+  w.message(3, (s) => {
+    writeStore(s, negative, sparse);
+  });
+  if (present(zeroCount)) {
+    w.tag(4, FIXED64);
+    w.double(zeroCount);
+  }
+  return Uint8Array.from(w.bytes);
 }
