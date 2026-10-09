@@ -1,5 +1,8 @@
-// Writes the sketches-java golden mapping fixture for the quadratic mapping,
-// which sketches-go does not have. Run through ../gen.sh.
+// Writes the sketches-java golden mapping fixture for the mappings sketches-go
+// does not have: quadratic, and the bitwise linear mapping that Datadog's
+// DDSketch.fast() builds on. Run through ../gen.sh.
+import com.datadoghq.sketch.ddsketch.mapping.BitwiseLinearlyInterpolatedMapping;
+import com.datadoghq.sketch.ddsketch.mapping.IndexMapping;
 import com.datadoghq.sketch.ddsketch.mapping.QuadraticallyInterpolatedMapping;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -26,12 +29,34 @@ public class Gen {
     return f.getDouble(m);
   }
 
+  // The bitwise mapping keeps its multiplier as an int and computes gamma as
+  // 2^(1 / multiplier), with no index offset.
+  static double bitwiseGamma(BitwiseLinearlyInterpolatedMapping m) throws Exception {
+    Field f = m.getClass().getDeclaredField("multiplier");
+    f.setAccessible(true);
+    return Math.pow(2, 1.0 / f.getInt(m));
+  }
+
   public static void main(String[] args) throws Exception {
     StringBuilder s = new StringBuilder();
     s.append("{\n \"reference\": \"com.datadoghq:sketches-java 0.8.3\",\n \"arch\": \"jvm\",\n \"mappings\": [");
     double[] accs = {0.05, 0.01, 0.001};
+    int written = 0;
+    for (String kind : new String[] {"quadratic", "bitwise"})
     for (int a = 0; a < accs.length; a++) {
-      QuadraticallyInterpolatedMapping m = new QuadraticallyInterpolatedMapping(accs[a]);
+      IndexMapping m;
+      double gamma;
+      double indexOffset;
+      if (kind.equals("quadratic")) {
+        m = new QuadraticallyInterpolatedMapping(accs[a]);
+        gamma = field(m, "gamma");
+        indexOffset = field(m, "indexOffset");
+      } else {
+        BitwiseLinearlyInterpolatedMapping b = new BitwiseLinearlyInterpolatedMapping(accs[a]);
+        m = b;
+        gamma = bitwiseGamma(b);
+        indexOffset = 0;
+      }
       List<Double> vals = samples();
       int lo = m.index(m.minIndexableValue()), hi = m.index(m.maxIndexableValue());
       List<Integer> idx = new ArrayList<>();
@@ -43,10 +68,10 @@ public class Gen {
         vals.add(Math.nextDown(b));
         vals.add(Math.nextUp(b));
       }
-      s.append(a == 0 ? "\n" : ",\n")
-          .append("  {\n   \"kind\": \"quadratic\",\n   \"relativeAccuracy\": ").append(accs[a])
-          .append(",\n   \"gamma\": ").append(field(m, "gamma"))
-          .append(",\n   \"indexOffset\": ").append(field(m, "indexOffset"))
+      s.append(written++ == 0 ? "\n" : ",\n")
+          .append("  {\n   \"kind\": \"").append(kind).append("\",\n   \"relativeAccuracy\": ").append(accs[a])
+          .append(",\n   \"gamma\": ").append(gamma)
+          .append(",\n   \"indexOffset\": ").append(indexOffset)
           .append(",\n   \"minIndexableValue\": ").append(m.minIndexableValue())
           .append(",\n   \"maxIndexableValue\": ").append(m.maxIndexableValue())
           .append(",\n   \"cases\": [");
