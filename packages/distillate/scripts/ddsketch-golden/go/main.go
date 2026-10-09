@@ -62,6 +62,10 @@ func cases(m mapping.IndexMapping) [][2]float64 {
 func num(v float64) string { return strconv.FormatFloat(v, 'g', -1, 64) }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "protobuf" {
+		writeProtobuf()
+		return
+	}
 	var es []entry
 	for _, acc := range []float64{0.05, 0.01, 0.001} {
 		lg, _ := mapping.NewLogarithmicMapping(acc)

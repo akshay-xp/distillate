@@ -1,5 +1,6 @@
 #!/bin/sh
-# Regenerates the DDSketch golden mapping fixtures in tests/fixtures/ddsketch/
+# Regenerates the DDSketch golden mapping and protobuf fixtures in
+# tests/fixtures/ddsketch/
 # from pinned reference implementations. CI never runs this.
 #
 # sketches-go runs as amd64 on purpose. On arm64 the Go compiler fuses
@@ -14,6 +15,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 (cd "$here/go" && GOARCH=amd64 go run .) > "$out/mappings.go.json"
+(cd "$here/go" && GOARCH=amd64 go run . protobuf) > "$out/protobuf.go.json"
 
 jar="$tmp/sketches-java.jar"
 curl -fsSL -o "$jar" https://repo1.maven.org/maven2/com/datadoghq/sketches-java/0.8.3/sketches-java-0.8.3.jar
