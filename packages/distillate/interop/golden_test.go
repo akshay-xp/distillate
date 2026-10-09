@@ -1640,6 +1640,36 @@ func logIndex(v, gamma, offset float64) int32 {
 	return int32(x) - 1
 }
 
+// bitwiseBits is k when gamma is 2^(1/2^k) and there is no offset: the
+// linear mapping whose multiplier is a power of two, which bins by the float's
+// bits alone, as sketches-java's BitwiseLinearlyInterpolatedMapping does.
+func bitwiseBits(gamma, offset float64) (int, bool) {
+	if offset != 0 {
+		return 0, false
+	}
+	for k := 0; k <= 52; k++ {
+		if math.Pow(2, 1/math.Pow(2, float64(k))) == gamma {
+			return k, true
+		}
+	}
+	return 0, false
+}
+
+// bitwiseIndex is a positive normal float's exponent and top k significand
+// bits, read as one integer.
+func bitwiseIndex(v float64, k int) int32 {
+	return int32(int64(math.Float64bits(v)>>(52-k)) - int64(1023)<<k)
+}
+
+// index bins a positive value under d's mapping: the log mapping, or a
+// linear one that is bitwise. The golden fixtures use no other.
+func index(d ddSketch, v float64) int32 {
+	if k, ok := bitwiseBits(d.gamma, d.indexOffset); ok && d.mapping == 1 {
+		return bitwiseIndex(v, k)
+	}
+	return logIndex(v, d.gamma, d.indexOffset)
+}
+
 // binValues is the sketch d's recipe implies: its params, with bins, zero
 // count and summaries computed here from the values. The golden values all
 // sit far above the smallest indexable value and away from bin boundaries.
@@ -1653,9 +1683,9 @@ func binValues(d ddSketch, values []float64) ddSketch {
 	for _, v := range values {
 		switch {
 		case v > 0:
-			pos[logIndex(v, d.gamma, d.indexOffset)]++
+			pos[index(d, v)]++
 		case v < 0:
-			neg[logIndex(-v, d.gamma, d.indexOffset)]++
+			neg[index(d, -v)]++
 		default:
 			want.zeroCount++
 		}
@@ -1734,7 +1764,7 @@ func TestDDSketch(t *testing.T) {
 		if d.relativeAccuracy != e.Epsilon {
 			t.Errorf("%s: relativeAccuracy %v, want %v", e.Name, d.relativeAccuracy, e.Epsilon)
 		}
-		if d.maxBins != e.MaxBins && !(e.MaxBins == 0 && d.maxBins == 2048) {
+		if d.maxBins != e.MaxBins && !(e.MaxBins == 0 && d.maxBins == 4096) {
 			t.Errorf("%s: maxBins %d, want %d", e.Name, d.maxBins, e.MaxBins)
 		}
 		got := fmt.Sprint(d.pos, d.neg, d.zeroCount, d.sum, d.min, d.max)

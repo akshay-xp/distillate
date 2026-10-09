@@ -12,8 +12,8 @@ numeric.
   within `relativeAccuracy` of the true value at that quantile, tails included.
 - **Exact merges.** Two sketches combine into exactly the sketch one stream
   would have built, so per-host or per-shard sketches roll up without error.
-- **Bounded memory.** By default it keeps at most 2048 bins per sign, enough for
-  about 17 orders of magnitude at 1%.
+- **Bounded memory.** By default it keeps at most 4096 bins per sign, enough for
+  about 19 orders of magnitude at 1%.
 
 ## Build one
 
@@ -24,15 +24,15 @@ const latency = DDSketch.create(0.01); // within 1% of the truth
 for (let ms = 1; ms <= 1000; ms++) latency.add(ms);
 
 latency.count; // 1000
-latency.quantile(0.5); // ~498
-latency.quantile(0.99); // ~983
+latency.quantile(0.5); // ~504
+latency.quantile(0.99); // ~992
 latency.quantiles([0.5, 0.9, 0.99]); // three at once
 latency.min; // 1
 latency.max; // 1000
 ```
 
-The true median of 1 to 1000 at rank `floor(0.5 * 999)` is 500, and 498 is
-within 1% of it; the true p99 is 990, and 983 is within 1% of that.
+The true median of 1 to 1000 at rank `floor(0.5 * 999)` is 500, and 504 is
+within 1% of it; the true p99 is 990, and 992 is within 1% of that.
 `quantile(0)` and `quantile(1)` return `min` and `max` exactly, and `count`,
 `sum`, `min` and `max` are kept exactly beside the bins. `add(value, count)`
 records a value `count` times in one call, for data that arrives already
@@ -72,36 +72,42 @@ many places from the smallest.
 
 ## Choosing a mapping
 
-The mapping turns a value into a bin index. All four meet the same bound; they
-differ in how many bins that takes.
+The mapping turns a value into a bin index. All five meet the same bound; they
+differ in how fast they find a bin and how many bins that takes.
 
-| Mapping            | How it finds the bin             | Bins, relative to log |
-| ------------------ | -------------------------------- | --------------------- |
-| `logMapping`       | `Math.log`, exactly              | 1x (the default)      |
-| `cubicMapping`     | a cubic in the float's bits      | about 1.01x           |
-| `quadraticMapping` | a quadratic in the float's bits  | about 1.08x           |
-| `linearMapping`    | linear interpolation of the bits | about 1.44x           |
+| Mapping            | How it finds the bin                              | Adds, relative            | Bins, relative to log |
+| ------------------ | ------------------------------------------------- | ------------------------- | --------------------- |
+| `bitwiseMapping`   | the float's exponent and top bits, as one integer | about 1.75x (the default) | about 1.85x           |
+| `logMapping`       | `Math.log2`                                       | 1x                        | 1x                    |
+| `linearMapping`    | linear interpolation of the bits                  | about 1.1x                | about 1.44x           |
+| `quadraticMapping` | a quadratic in the float's bits                   | about 0.95x               | about 1.08x           |
+| `cubicMapping`     | a cubic in the float's bits                       | about 0.9x                | about 1.01x           |
 
 ```ts
-import { cubicMapping, DDSketch } from "distillate/ddsketch";
+import { DDSketch, logMapping } from "distillate/ddsketch";
 
-const sketch = DDSketch.create(0.01, { mapping: cubicMapping });
-sketch.mapping.kind; // "cubic"
+const compact = DDSketch.create(0.01, { mapping: logMapping });
+compact.mapping.kind; // "log"
 ```
 
-Keep the default unless you are matching another sketch. The interpolated
-mappings were designed to avoid a logarithm per value, but `Math.log` is cheap
-in V8: measured warm, linear adds about 7% faster than log for 44% more bins,
-quadratic about as fast, and cubic about 10% slower. They are here so a sketch
-built with one of them by Datadog's libraries can be read and merged, bin for
-bin.
+The default, `bitwiseMapping`, is the one sketches-java's `DDSketch.fast()` uses:
+finding a bin takes no logarithm and no floating-point arithmetic at all, which
+is what makes it about 1.75 times as fast as the log mapping. Its bins come in powers of two,
+so it takes the finest that meets the accuracy you ask for: at 0.01 it delivers
+0.78%. Choose `logMapping` when memory or serialized size matters more than
+`add`: it needs the fewest bins for the bound.
+
+The interpolated mappings were designed to avoid a logarithm per value, but
+`Math.log` is cheap in V8, so they are here so a sketch built with one of them
+by Datadog's libraries can be read and merged, bin for bin. The bitwise mapping
+travels as a linear one, so Datadog's decoders read it too.
 
 ## Choosing a store
 
 The store holds the bins, one per sign. Bins are spent only where values land,
 so the store decides what happens when the range of values grows.
 
-- `collapsingLowestStore(maxBins)`, the default at 2048: past `maxBins` bins it
+- `collapsingLowestStore(maxBins)`, the default at 4096: past `maxBins` bins it
   folds the smallest magnitudes into one bin, so values nearest zero lose
   accuracy while both tails keep it.
 - `collapsingHighestStore(maxBins)`: the mirror, giving up the largest
@@ -110,10 +116,10 @@ so the store decides what happens when the range of values grows.
 - `sparseStore()`: unbounded, and pays only for the bins used, for a few values
   far apart.
 
-`maxBins` is sized for the default accuracy of 1%, where 2048 bins span about
-17 orders of magnitude. A tighter accuracy needs proportionally more bins for
-the same range: at `0.001`, a typical latency distribution needs around 4,500,
-so the default store collapses its low end. Raise the bound when you tighten the
+`maxBins` is sized for the default accuracy of 1%, where 4096 of the default
+mapping's bins span about 19 orders of magnitude. A tighter accuracy needs
+proportionally more bins for the same range: at `0.001`, a typical latency
+distribution needs around 6,600, so the default store collapses its low end. Raise the bound when you tighten the
 accuracy:
 
 ```ts
@@ -177,9 +183,9 @@ for (let ms = 1; ms <= 1000; ms++) sketch.add(ms);
 
 const message = toProtobuf(sketch); // Uint8Array, as sketches-go writes it
 const back = fromProtobuf(message);
-back.quantile(0.99); // ~983
+back.quantile(0.99); // ~992
 back.min; // ~1.01
-back.sum; // ~500504
+back.sum; // ~502237
 ```
 
 The message carries the mapping and the bins but no sum, min or max. On decode they

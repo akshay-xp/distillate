@@ -226,13 +226,13 @@ import { DDSketch } from "distillate/ddsketch";
 const latency = DDSketch.create(0.01); // within 1%
 for (let ms = 1; ms <= 1000; ms++) latency.add(ms);
 
-latency.quantile(0.99); // ~983
+latency.quantile(0.99); // ~992
 latency.max; // 1000
 ```
 
-By default it keeps at most 2048 bins per sign, enough for about 17 orders of magnitude at 1%; at a tighter accuracy, raise `maxBins` through `collapsingLowestStore`. `distillate/ddsketch/protobuf` converts to and from the protobuf message Datadog's libraries exchange.
+By default it bins with the bitwise mapping Datadog's `DDSketch.fast()` uses, about 1.75 times as fast as the log mapping, and keeps at most 4096 bins per sign, enough for about 19 orders of magnitude at 1%; at a tighter accuracy, raise `maxBins` through `collapsingLowestStore`. `distillate/ddsketch/protobuf` converts to and from the protobuf message Datadog's libraries exchange.
 
-Also: `add(value, count)`, `quantiles`, `count`, `sum`, `min`, `union`, `equals`, `toBytes` / `fromBytes`, `toJSON` / `fromJSON`, and the `logMapping`, `linearMapping`, `quadraticMapping`, `cubicMapping`, `denseStore`, `sparseStore`, `collapsingLowestStore` and `collapsingHighestStore` factories.
+Also: `add(value, count)`, `quantiles`, `count`, `sum`, `min`, `union`, `equals`, `toBytes` / `fromBytes`, `toJSON` / `fromJSON`, and the `bitwiseMapping`, `logMapping`, `linearMapping`, `quadraticMapping`, `cubicMapping`, `denseStore`, `sparseStore`, `collapsingLowestStore` and `collapsingHighestStore` factories.
 
 ## Performance
 

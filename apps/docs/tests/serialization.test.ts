@@ -558,11 +558,13 @@ test("the documented DDSketch layout decodes the golden frame", () => {
   const at = (field: string): number => rows.get(field)?.offset ?? NaN;
   const f64 = (field: string): number => body.getFloat64(at(field), true);
 
-  expect(body.getUint8(at("mapping"))).toBe(0);
+  // The default mapping: bitwise, which travels as linear with gamma
+  // 2^(1/64) at 1% and no offset.
+  expect(body.getUint8(at("mapping"))).toBe(1);
   expect(body.getUint8(at("store"))).toBe(1);
   expect(body.getUint16(at("reserved"), true)).toBe(0);
-  expect(body.getUint32(at("maxBins"), true)).toBe(2048);
-  expect(f64("gamma")).toBeCloseTo(1.01 / 0.99, 12);
+  expect(body.getUint32(at("maxBins"), true)).toBe(4096);
+  expect(f64("gamma")).toBe(2 ** (1 / 64));
   expect(f64("relativeAccuracy")).toBe(fixture.epsilon);
   expect(f64("zeroCount")).toBe(2);
   const values = fixture.values ?? [];

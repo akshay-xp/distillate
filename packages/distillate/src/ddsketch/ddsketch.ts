@@ -14,7 +14,7 @@ import {
 } from "../core/serialize.js";
 import {
   type IndexMapping,
-  logMapping,
+  bitwiseMapping,
   type MappingKind,
   mappingWithGamma,
 } from "./mapping.js";
@@ -158,16 +158,18 @@ function binsOf(store: Store): { indices: number[]; counts: number[] } {
 /** Options for {@link DDSketch.create}. */
 export interface DDSketchOptions {
   /**
-   * The mapping factory that bins values. Defaults to {@link logMapping}, the
-   * most compact and, in V8, within a few percent of the fastest; the
-   * interpolated mappings exist to match sketches built with them by Datadog's
-   * libraries.
+   * The mapping factory that bins values. Defaults to {@link bitwiseMapping},
+   * the fastest, about 1.75 times the log mapping's rate, as sketches-java's
+   * fast sketch is; take
+   * {@link logMapping} for the fewest bins. The interpolated mappings exist to
+   * match sketches built with them by Datadog's libraries.
    */
   mapping?: (relativeAccuracy: number) => IndexMapping;
   /**
    * The store factory that holds each sign's bins. Defaults to
-   * {@link collapsingLowestStore} at 2048 bins, which bounds memory while
-   * keeping the tails accurate.
+   * {@link collapsingLowestStore} at 4096 bins, about 19 orders of magnitude
+   * at 1% with the default mapping, which bounds memory while keeping the
+   * tails accurate.
    */
   store?: StoreFactory;
 }
@@ -380,7 +382,7 @@ export class DDSketch {
 
   /** See {@link DDSketch.create}. */
   constructor(relativeAccuracy: number, options: DDSketchOptions = {}) {
-    const { mapping = logMapping, store = collapsingLowestStore(2048) } =
+    const { mapping = bitwiseMapping, store = collapsingLowestStore(4096) } =
       options;
     this.#mapping = mapping(relativeAccuracy);
     this.#minIndexable = this.#mapping.minIndexableValue;
