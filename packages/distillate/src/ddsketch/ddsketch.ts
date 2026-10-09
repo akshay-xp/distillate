@@ -392,6 +392,9 @@ export class DDSketch {
       );
     }
     assertPositiveFinite(count, "count");
+    // -0 + 0 is +0. Without this, [0, -0] and [-0, 0] would leave different
+    // min bits and the same data would serialize to different bytes.
+    value += 0;
     const min = this.#mapping.minIndexableValue;
     if (value > min) {
       this.#positive.add(this.#mapping.index(value), count);
