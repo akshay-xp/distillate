@@ -1,8 +1,11 @@
 import { assertPositiveFinite, ParamError } from "../core/params.js";
 import {
+  assertBodyLength,
+  assertMinBodyLength,
   FORMAT_VERSION,
   readHeader,
   SerializationError,
+  UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
 import {
@@ -153,24 +156,50 @@ export class DDSketch {
    * DDSketch.
    */
   static fromBytes(bytes: Uint8Array): DDSketch {
-    const { type, body } = readHeader(bytes);
+    const { type, flags, body } = readHeader(bytes);
     if (type !== TYPE) {
       throw new SerializationError(
         `expected DSTL type ${String(TYPE)}, got ${String(type)}`,
       );
     }
+    if ((flags & 0x0f) !== NO_HASH) {
+      throw new UnknownHashVariantError(
+        `ddsketch hashes nothing, so its hash variant must be 0, got ${String(flags & 0x0f)}`,
+      );
+    }
+    assertMinBodyLength(body.length, PARAMS_SIZE + COUNTS_SIZE, "ddsketch");
     const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
-    const kind = MAPPING_CODES[view.getUint8(0)] ?? "log";
-    const storeKind = STORE_CODES[view.getUint8(1)] ?? "dense";
+    const kind = MAPPING_CODES[view.getUint8(0)];
+    const storeKind = STORE_CODES[view.getUint8(1)];
+    if (kind === undefined || storeKind === undefined) {
+      throw new SerializationError(
+        `ddsketch: unknown mapping ${String(view.getUint8(0))} or store ${String(view.getUint8(1))}`,
+      );
+    }
+    if (view.getUint16(2, true) !== 0) {
+      throw new SerializationError("ddsketch: reserved bytes are not zero");
+    }
     const maxBins = view.getUint32(4, true);
+    const bounded =
+      storeKind === "collapsingLowest" || storeKind === "collapsingHighest";
+    if (bounded !== maxBins > 0) {
+      throw new SerializationError(
+        `ddsketch: a ${storeKind} store cannot have maxBins ${String(maxBins)}`,
+      );
+    }
+    const posBins = view.getUint32(PARAMS_SIZE, true);
+    const negBins = view.getUint32(PARAMS_SIZE + 4, true);
+    assertBodyLength(
+      body.length,
+      PARAMS_SIZE + COUNTS_SIZE + 12 * (posBins + negBins),
+      "ddsketch",
+    );
     const gamma = view.getFloat64(8, true);
     const indexOffset = view.getFloat64(16, true);
     const sketch = new DDSketch(view.getFloat64(24, true), {
       mapping: () => mappingWithGamma(kind, gamma, indexOffset),
       store: storeOf(storeKind, maxBins),
     });
-    const posBins = view.getUint32(PARAMS_SIZE, true);
-    const negBins = view.getUint32(PARAMS_SIZE + 4, true);
     const counts = PARAMS_SIZE + COUNTS_SIZE;
     const indices = counts + 8 * (posBins + negBins);
     const zeroCount = view.getFloat64(56, true);
