@@ -9,6 +9,8 @@ import { BinaryFuse8, BinaryFuse16 } from "../../src/fuse/index.js";
 import { HyperLogLog } from "../../src/hll/hll.js";
 import { CountMinSketch } from "../../src/countmin/countmin.js";
 import { CuckooFilter } from "../../src/cuckoo/cuckoo.js";
+import { DDSketch } from "../../src/ddsketch/ddsketch.js";
+import { collapsingLowestStore } from "../../src/ddsketch/store.js";
 import { ScalableBloomFilter } from "../../src/scalable/scalable.js";
 import { TopK } from "../../src/topk/topk.js";
 import goldenJson from "../fixtures/golden.json" with { type: "json" };
@@ -25,6 +27,8 @@ interface GoldenEntry {
   tightening?: number;
   seed?: number;
   deletes?: string[];
+  values?: number[];
+  maxBins?: number;
   frame?: string;
 }
 
@@ -83,6 +87,14 @@ const build = (entry: GoldenEntry): Serializable => {
       for (const key of keys) sketch.add(key);
       return sketch;
     }
+    case "ddsketch": {
+      const { values = [], maxBins } = entry;
+      return DDSketch.from(
+        values,
+        epsilon,
+        maxBins ? { store: collapsingLowestStore(maxBins) } : {},
+      );
+    }
     default:
       throw new Error(`unknown kind ${kind}`);
   }
@@ -108,6 +120,8 @@ const parse = (kind: string, bytes: Uint8Array): Serializable => {
       return CountMinSketch.fromBytes(bytes);
     case "topk":
       return TopK.fromBytes(bytes);
+    case "ddsketch":
+      return DDSketch.fromBytes(bytes);
     default:
       throw new Error(`unknown kind ${kind}`);
   }
@@ -139,6 +153,8 @@ describe.each(structures)("golden fixture $name", (entry) => {
       expect(parsed.equals(build(entry) as CountMinSketch)).toBe(true);
     } else if (parsed instanceof TopK) {
       expect(parsed.equals(build(entry) as TopK)).toBe(true);
+    } else if (parsed instanceof DDSketch) {
+      expect(parsed.equals(build(entry) as DDSketch)).toBe(true);
     } else {
       // A deleted key may still answer true (a false positive), so only the
       // keys still held are asserted.
