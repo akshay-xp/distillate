@@ -800,3 +800,43 @@ test("METHODOLOGY states the DDSketch configuration and how bundles are measured
     expect(section, phrase).toContain(phrase);
   }
 });
+
+test("RESULTS carries the measured DDSketch section for both libraries", () => {
+  const md = readFileSync(
+    fileURLToPath(new URL("../RESULTS.md", import.meta.url)),
+    "utf8",
+  );
+  expect(md).toContain("## DDSketch");
+  // The section was added to an existing run, so the header says which build.
+  expect(md).toContain("The DDSketch section was measured on");
+  const section = resultsSection(md, "DDSketch");
+  const cells = (r: string): string[] => r.split("|").map((c) => c.trim());
+  const rows = section
+    .split("\n")
+    .filter((l) =>
+      /^\| (distillate\/ddsketch( \(log\))?|@datadog\/sketches-js) /.test(l),
+    );
+  const measured = rows.filter((r) => cells(r).length === 8);
+  const bundles = rows.filter((r) => cells(r).length === 5);
+  expect(measured).toHaveLength(12);
+  expect(bundles).toHaveLength(2);
+  for (const values of ["1k", "10k", "100k", "1M"]) {
+    for (const name of [
+      "distillate/ddsketch",
+      "distillate/ddsketch (log)",
+      "@datadog/sketches-js",
+    ]) {
+      const row = measured.find(
+        (r) => cells(r)[1] === name && cells(r)[2] === values,
+      );
+      expect(row, `${name} ${values}`).toBeDefined();
+      // The bound is the promise; every published row of ours keeps it.
+      if (name.startsWith("distillate/ddsketch")) {
+        expect(
+          Number.parseFloat(cells(row ?? "")[3] ?? ""),
+          `${name} ${values} error`,
+        ).toBeLessThanOrEqual(1);
+      }
+    }
+  }
+});
