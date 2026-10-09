@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { describe, expect, test } from "vitest";
 
 import { DDSketch, type DDSketchOptions } from "../../src/ddsketch/ddsketch.js";
@@ -99,4 +100,48 @@ test("the frame follows the documented layout", () => {
   expect(view.getFloat64(BODY + 56, true)).toBe(1);
   expect(view.getUint32(BODY + 64, true)).toBe(1);
   expect(view.getUint32(BODY + 68, true)).toBe(1);
+});
+
+describe("canonical bytes", () => {
+  // Integers keep sum exact, so any byte difference is ordering, not rounding.
+  test("insertion order does not change the bytes", () => {
+    fc.assert(
+      fc.property(
+        fc
+          .array(fc.integer({ min: -1e6, max: 1e6 }), { maxLength: 100 })
+          .chain((values) =>
+            fc.tuple(
+              fc.constant(values),
+              fc.shuffledSubarray(values, {
+                minLength: values.length,
+                maxLength: values.length,
+              }),
+            ),
+          ),
+        ([values, shuffled]) => {
+          expect(DDSketch.from(shuffled, 0.01).toBytes()).toEqual(
+            DDSketch.from(values, 0.01).toBytes(),
+          );
+        },
+      ),
+    );
+  });
+
+  test("dense and sparse stores write the same bins", () => {
+    const values = mixed(51, 300);
+    const payload = (frame: Uint8Array): Uint8Array =>
+      frame.subarray(BODY + 64, frame.length - 4);
+    expect(
+      payload(DDSketch.from(values, 0.01, { store: sparseStore() }).toBytes()),
+    ).toEqual(
+      payload(DDSketch.from(values, 0.01, { store: denseStore() }).toBytes()),
+    );
+  });
+
+  test("-0 is recorded as 0", () => {
+    const a = DDSketch.from([0, -0], 0.01);
+    const b = DDSketch.from([-0, 0], 0.01);
+    expect(a.toBytes()).toEqual(b.toBytes());
+    expect(Object.is(b.min, 0)).toBe(true);
+  });
 });
