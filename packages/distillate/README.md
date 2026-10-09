@@ -52,6 +52,7 @@ Each structure ships as its own subpath, so you only bundle what you import.
 | `distillate/hll`      | HyperLogLog    | how many distinct?  | Counting distinct users, IPs, or keys in fixed space     |
 | `distillate/countmin` | Count-Min      | how many times?     | Counting events per key in fixed space                   |
 | `distillate/topk`     | Top-K          | which are heaviest? | Finding the most frequent keys in fixed space            |
+| `distillate/ddsketch` | DDSketch       | what is the p99?    | Latency and size percentiles, mergeable, in fixed space  |
 
 The filters are mutable except Binary Fuse, which is built once from the whole
 key set. HyperLogLog, Count-Min and Top-K are sketches rather than filters:
