@@ -79,7 +79,7 @@ export const countMinAdapters: CountMinAdapter[] = [
 ];
 
 // xorshift32, so a surprising row reproduces exactly.
-function rng(seed: number): () => number {
+export function rng(seed: number): () => number {
   let x = seed | 0 || 1;
   return () => {
     x ^= x << 13;
