@@ -260,3 +260,23 @@ sketches. Top-K is swept at 1k/10k/100k/1M events, capped at 1M as the
 incumbent's HyperLogLog was. Key length is swept at 4/8/12/13/16/32/128/512
 characters for the three Classic Bloom filters, each row the median of five
 timed passes after two untimed ones.
+
+## Configuration for DDSketch
+
+DDSketch is compared with `@datadog/sketches-js`, Datadog's own JavaScript
+port, both at their defaults and a `relativeAccuracy` of 0.01: the log mapping
+in both, with distillate's store collapsing the lowest bins past 2048 and
+sketches-js's an unbounded dense store. The stream is lognormal around 100, the
+shape latencies take, and at 0.01 it never spans 2048 bins, so the two hold the
+same bins and the store difference never comes into play.
+
+The headline is the largest relative error over 11 quantiles from 0 to 1, each
+against the exact value at rank `floor(q * (n - 1))`, which both libraries
+promise to keep within 1%. Sizes are each library's own serialization, and
+Datadog's protobuf message from each for a like-for-like figure; sketches-js
+writes protobuf only, through `protobufjs`, which the bench installs because
+sketches-js leaves it to the caller.
+
+Bundle sizes are measured by bundling each import with esbuild for the browser,
+minified, then gzipped. Each library is run in its own process, as every other
+section is, at 1k, 10k, 100k and 1M values.

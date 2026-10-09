@@ -11,6 +11,8 @@ import { KEYLENGTH_ALPHABETS, KEYLENGTH_LENGTHS } from "../src/keylength.js";
 import type { KeyLengthRow } from "../src/keylength.js";
 import type { ScalableRow } from "../src/scalable.js";
 import type { TopKRow } from "../src/topk.js";
+import type { BundleRow } from "../src/bundle.js";
+import type { DDSketchRow } from "../src/ddsketch.js";
 import {
   cardinalityTable,
   countMinTable,
@@ -18,6 +20,8 @@ import {
   keyLengthTable,
   renderResults,
   topKTable,
+  ddSketchTable,
+  ddSketchBundleTable,
   scalableTable,
   spaceAccuracyTable,
   throughputTable,
@@ -712,5 +716,86 @@ test("RESULTS is one isolated run, with the key-length section for every Bloom f
         ).toBe(true);
       }
     }
+  }
+});
+
+const ddSketchRowsFixture: DDSketchRow[] = [
+  {
+    name: "distillate/ddsketch",
+    events: 1_000_000,
+    maxRelError: 0.0097,
+    bytes: 2492,
+    protoBytes: 3115,
+    addOpsPerSec: 31_200_000,
+  },
+];
+
+test("ddSketchTable renders the error, both sizes and the add rate", () => {
+  expect(ddSketchTable(ddSketchRowsFixture).split("\n")).toEqual([
+    "| Sketch | values | max rel. error | size | protobuf | add |",
+    "| --- | --- | --- | --- | --- | --- |",
+    "| distillate/ddsketch | 1M | 0.97% | 2492 B | 3115 B | 31.20 M ops/s |",
+  ]);
+});
+
+test("ddSketchBundleTable renders each library alone and with protobuf", () => {
+  const rows: BundleRow[] = [
+    { name: "distillate/ddsketch", sketch: 5631, withProtobuf: 6121 },
+  ];
+  expect(ddSketchBundleTable(rows).split("\n")).toEqual([
+    "| Library | sketch | with protobuf |",
+    "| --- | --- | --- |",
+    "| distillate/ddsketch | 5.5 KB | 6.0 KB |",
+  ]);
+});
+
+test("renderResults places the DDSketch section after top-k and states what is compared", () => {
+  const md = renderResults({
+    banner: "distillate-bench | node v24 | arm64 | Apple M1 | 8 cores",
+    version: "0.1.1",
+    date: "2026-07-31",
+    targetFpr: 0.01,
+    throughputCapacity: 100000,
+    spaceTable: "SPACE_TBL",
+    throughputTable: "TPUT_TBL",
+    topKTable: "TOPK_TBL",
+    ddSketchTable: "DD_TBL",
+    ddSketchBundleTable: "DD_BUNDLE_TBL",
+  });
+  const at = md.indexOf("## DDSketch");
+  expect(at).toBeGreaterThan(md.indexOf("## Top-K"));
+  expect(at).toBeLessThan(md.indexOf("## Throughput"));
+  const section = md.slice(at, md.indexOf("## Throughput"));
+  for (const phrase of [
+    "DD_TBL",
+    "DD_BUNDLE_TBL",
+    "0.01",
+    "lognormal",
+    "floor(q * (n - 1))",
+    "same bins",
+    "protobufjs",
+  ]) {
+    expect(section, phrase).toContain(phrase);
+  }
+});
+
+test("METHODOLOGY states the DDSketch configuration and how bundles are measured", () => {
+  const md = readFileSync(
+    fileURLToPath(new URL("../METHODOLOGY.md", import.meta.url)),
+    "utf8",
+  );
+  const at = md.indexOf("## Configuration for DDSketch");
+  expect(at).toBeGreaterThan(-1);
+  const end = md.indexOf("\n## ", at + 1);
+  const section = md.slice(at, end === -1 ? undefined : end);
+  for (const phrase of [
+    "0.01",
+    "2048",
+    "dense",
+    "lognormal",
+    "protobufjs",
+    "esbuild",
+  ]) {
+    expect(section, phrase).toContain(phrase);
   }
 });

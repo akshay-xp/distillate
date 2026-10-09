@@ -21,6 +21,10 @@ import { COUNTMIN_KEY_COUNTS, countMinAdapters } from "./countmin.js";
 import type { CountMinRow } from "./countmin.js";
 import { TOPK_EVENT_COUNTS, topKAdapters } from "./topk.js";
 import type { TopKRow } from "./topk.js";
+import { ddSketchBundles } from "./bundle.js";
+import type { BundleRow } from "./bundle.js";
+import { DDSKETCH_EVENT_COUNTS, ddSketchAdapters } from "./ddsketch.js";
+import type { DDSketchRow } from "./ddsketch.js";
 import {
   KEYLENGTH_ALPHABETS,
   KEYLENGTH_LENGTHS,
@@ -126,6 +130,26 @@ export function topKTable(rows: TopKRow[]): string {
   return [header, ...body].join("\n");
 }
 
+export function ddSketchTable(rows: DDSketchRow[]): string {
+  const header =
+    "| Sketch | values | max rel. error | size | protobuf | add |\n" +
+    "| --- | --- | --- | --- | --- | --- |";
+  const body = rows.map(
+    (r) =>
+      `| ${r.name} | ${capacityLabel(r.events)} | ${(r.maxRelError * 100).toFixed(2)}% | ${String(r.bytes)} B | ${String(r.protoBytes)} B | ${ops(r.addOpsPerSec)} |`,
+  );
+  return [header, ...body].join("\n");
+}
+
+export function ddSketchBundleTable(rows: BundleRow[]): string {
+  const kb = (bytes: number): string => `${(bytes / 1024).toFixed(1)} KB`;
+  const header = "| Library | sketch | with protobuf |\n| --- | --- | --- |";
+  const body = rows.map(
+    (r) => `| ${r.name} | ${kb(r.sketch)} | ${kb(r.withProtobuf)} |`,
+  );
+  return [header, ...body].join("\n");
+}
+
 export interface ResultsOptions {
   banner: string;
   version: string;
@@ -139,6 +163,8 @@ export interface ResultsOptions {
   cuckooTable?: string;
   countMinTable?: string;
   topKTable?: string;
+  ddSketchTable?: string;
+  ddSketchBundleTable?: string;
   keyLengthTable?: string;
 }
 
@@ -241,6 +267,25 @@ export function topKSection(table: string): string[] {
   ];
 }
 
+export function ddSketchSection(table: string, bundles: string): string[] {
+  return [
+    "## DDSketch",
+    "",
+    "Compared with `@datadog/sketches-js`, Datadog's own JavaScript port. Both are built at their defaults with a `relativeAccuracy` of 0.01: the log mapping, with distillate's store collapsing the lowest bins past 2048 and sketches-js's store unbounded.",
+    "A lognormal stream at 0.01 never reaches 2048 bins, so the two hold the same bins and the comparison is like for like.",
+    "",
+    "`max rel. error` is the largest relative error over 11 quantiles from 0 to 1, each against the exact value at rank `floor(q * (n - 1))`, on one seeded lognormal stream around 100 shared by both. Both promise at most 1%.",
+    "`size` is each library's own serialization: distillate's DSTL frame, and sketches-js's protobuf message, its only one. `protobuf` is Datadog's message from each, the like-for-like size.",
+    "",
+    table,
+    "",
+    "Bundle sizes are measured, not quoted: each import bundled by esbuild for the browser, minified and gzipped. sketches-js serializes through `protobufjs`, which it bundles whether or not a caller serializes; distillate keeps its codec on the `distillate/ddsketch/protobuf` subpath.",
+    "",
+    bundles,
+    "",
+  ];
+}
+
 export function keyLengthTable(rows: KeyLengthRow[]): string {
   const header =
     "| Filter | key length | keys | add | has |\n| --- | --- | --- | --- | --- |";
@@ -286,6 +331,9 @@ export function renderResults(opts: ResultsOptions): string {
     ...(opts.cuckooTable ? cuckooSection(opts.cuckooTable) : []),
     ...(opts.countMinTable ? countMinSection(opts.countMinTable) : []),
     ...(opts.topKTable ? topKSection(opts.topKTable) : []),
+    ...(opts.ddSketchTable
+      ? ddSketchSection(opts.ddSketchTable, opts.ddSketchBundleTable ?? "")
+      : []),
     `## Throughput (n = ${capacityLabel(opts.throughputCapacity)})`,
     "",
     "Absolute throughput is machine-relative: it depends on the CPU, the runtime, and the load on the box at measurement time.",
@@ -306,7 +354,7 @@ export function throughputTable(opsByLabel: Map<string, number>): string {
 const CAPACITIES = [100_000, 1_000_000];
 const THROUGHPUT_CAPACITY = 100_000;
 
-function main(): void {
+async function main(): Promise<void> {
   const require = createRequire(import.meta.url);
   const version = (require("distillate/package.json") as { version: string })
     .version;
@@ -354,6 +402,13 @@ function main(): void {
     isolatedRows<TopKRow>("topk", names(topKAdapters), [TOPK_EVENT_COUNTS]),
   );
 
+  const ddTable = ddSketchTable(
+    isolatedRows<DDSketchRow>("ddsketch", names(ddSketchAdapters), [
+      DDSKETCH_EVENT_COUNTS,
+    ]),
+  );
+  const ddBundles = ddSketchBundleTable(await ddSketchBundles());
+
   console.log(banner);
   console.log("\n" + spaceTable);
   console.log("\n" + cardTable);
@@ -361,6 +416,8 @@ function main(): void {
   console.log("\n" + cuckTable);
   console.log("\n" + cmTable);
   console.log("\n" + tkTable);
+  console.log("\n" + ddTable);
+  console.log("\n" + ddBundles);
   console.log("\n" + tput);
   console.log("\n" + klTable);
 
@@ -376,6 +433,8 @@ function main(): void {
     cuckooTable: cuckTable,
     countMinTable: cmTable,
     topKTable: tkTable,
+    ddSketchTable: ddTable,
+    ddSketchBundleTable: ddBundles,
     throughputTable: tput,
     keyLengthTable: klTable,
   });
@@ -386,5 +445,5 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
-  main();
+  await main();
 }
