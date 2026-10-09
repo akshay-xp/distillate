@@ -110,9 +110,15 @@ abstract class LogLikeMapping implements IndexMapping {
   }
 }
 
-// sketches-go LogarithmicMapping.
+// sketches-go LogarithmicMapping, its index taken through Math.log2 as
+// sketches-js takes it: about 5% faster in V8 than Math.log. The two round
+// differently, so a value lying on a bin boundary to within an ulp may land
+// one bin over from sketches-go's, as it already can through V8's and Go's
+// logs disagreeing there. Every value stays within the accuracy either way.
 class LogMapping extends LogLikeMapping {
   readonly kind = "log";
+  // Bins per unit of log2.
+  readonly #perLog2: number;
 
   constructor(gamma: number, indexOffset: number) {
     const multiplier = 1 / Math.log(gamma);
@@ -130,17 +136,17 @@ class LogMapping extends LogLikeMapping {
         (Math.exp(EXP_OVERFLOW) / (2 * gamma)) * (gamma + 1),
       ),
     );
+    this.#perLog2 = Math.LN2 * multiplier;
   }
 
   protected log(value: number): number {
     return Math.log(value);
   }
 
-  // The base class's expression with Math.log written in, so the default
-  // mapping's hot path calls no method: the same operations in the same
-  // order, so the same bins.
+  // Written out rather than through the base class's log(), so the default
+  // mapping's hot path calls no method.
   override index(value: number): number {
-    const index = Math.log(value) * this.multiplier + this.indexOffset;
+    const index = Math.log2(value) * this.#perLog2 + this.indexOffset;
     return index >= 0 ? Math.trunc(index) : Math.trunc(index) - 1;
   }
 
