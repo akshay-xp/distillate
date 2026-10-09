@@ -114,8 +114,11 @@ export class DDSketch {
     if (q === 0) return this.#min;
     if (q === 1) return this.#max;
     // Ranks run through the negatives from most negative, then the zero
-    // bin, then the positives, as sketches-go walks them.
-    const rank = q * (this.#count - 1);
+    // bin, then the positives, as sketches-go walks them. The rank is floored
+    // first, where sketches-go keeps it fractional: the negatives are indexed
+    // from the far end as total - 1 - rank, which rounds a fractional rank up
+    // to the next value and, on a dense stream, past the error bound.
+    const rank = Math.floor(q * (this.#count - 1));
     const negatives = this.#negative.total;
     let value: number;
     if (rank < negatives) {

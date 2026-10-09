@@ -114,6 +114,13 @@ describe("negative values and zero", () => {
     expect(sketch.max).toBe(Math.max(...values));
   });
 
+  test("a fractional rank among negatives rounds down, like positives", () => {
+    // Rank 1.2 is the second value, -2. Indexing the negatives from the far
+    // end as count - 1 - rank would round it up to the third, -1.
+    const sketch = DDSketch.from([-3, -2, -1], 0.01);
+    expectWithin(sketch.quantile(0.6), -2, 0.01);
+  });
+
   test("magnitudes too small to index count as zero", () => {
     const sketch = DDSketch.create(0.01);
     const tiny = sketch.mapping.minIndexableValue / 2;
