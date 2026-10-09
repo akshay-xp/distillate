@@ -1,7 +1,7 @@
 import { assertProbability } from "../core/params.js";
 
 /** Which approximation of the logarithm a mapping bins values by. */
-export type MappingKind = "log" | "linear" | "cubic";
+export type MappingKind = "log" | "linear" | "quadratic" | "cubic";
 
 /**
  * Maps a positive value to the integer index of the bin holding it, and an
@@ -64,11 +64,11 @@ function buildFloat(exponent: number, significandPlusOne: number): number {
 // Go's math.Log2, which the Go mappings derive their multiplier from. It
 // rounds differently from Math.log2, and the multiplier must match the
 // reference's to the bit. Only ever called on gamma, a normal float above 1.
+// Go special-cases a fraction of exactly 0.5; in JS the general expression
+// already gives exactly exponent - 1 there.
 function goLog2(value: number): number {
-  const exponent = exponentOf(value) + 1;
   const fraction = significandPlusOne(value) / 2;
-  if (fraction === 0.5) return exponent - 1;
-  return Math.log(fraction) * Math.LOG2E + exponent;
+  return Math.log(fraction) * Math.LOG2E + (exponentOf(value) + 1);
 }
 
 // The arithmetic every mapping shares. Subclasses supply the logarithm they
@@ -137,6 +137,26 @@ class LogMapping extends LogLikeMapping {
   }
 }
 
+// The indexable range of sketches-go's interpolated mappings: wide enough
+// that every index fits an int32, narrow enough that the bins' values stay
+// finite. adjustedGamma is gamma raised to the mapping's correction.
+function goIndexableRange(
+  indexOffset: number,
+  multiplier: number,
+  adjustedGamma: number,
+): [min: number, max: number] {
+  return [
+    Math.max(
+      2 ** ((MIN_INT32 - indexOffset) / multiplier + 1),
+      MIN_NORMAL * adjustedGamma,
+    ),
+    Math.min(
+      2 ** ((MAX_INT32 - indexOffset) / multiplier - 1),
+      (Math.exp(EXP_OVERFLOW) / (2 * adjustedGamma)) * (adjustedGamma + 1),
+    ),
+  ];
+}
+
 // sketches-go LinearlyInterpolatedMapping: log2 approximated by linear
 // interpolation between powers of two, read straight off the float's bits.
 class LinearMapping extends LogLikeMapping {
@@ -144,20 +164,12 @@ class LinearMapping extends LogLikeMapping {
 
   constructor(gamma: number, indexOffset: number) {
     const multiplier = 1 / goLog2(gamma);
-    const adjustedGamma = gamma ** Math.LOG2E;
     super(
       gamma,
       indexOffset,
       multiplier,
       1 - 2 / (1 + Math.exp(goLog2(gamma))),
-      Math.max(
-        2 ** ((MIN_INT32 - indexOffset) / multiplier + 1),
-        MIN_NORMAL * adjustedGamma,
-      ),
-      Math.min(
-        2 ** ((MAX_INT32 - indexOffset) / multiplier - 1),
-        (Math.exp(EXP_OVERFLOW) / (2 * adjustedGamma)) * (adjustedGamma + 1),
-      ),
+      ...goIndexableRange(indexOffset, multiplier, gamma ** Math.LOG2E),
     );
   }
 
@@ -190,19 +202,15 @@ class CubicMapping extends LogLikeMapping {
 
   constructor(gamma: number, indexOffset: number) {
     const multiplier = 1 / goLog2(gamma);
-    const adjustedGamma = gamma ** (7 / (10 * Math.LN2));
     super(
       gamma,
       indexOffset,
       multiplier,
       1 - 2 / (1 + Math.exp(0.7 * goLog2(gamma))),
-      Math.max(
-        2 ** ((MIN_INT32 - indexOffset) / multiplier + 1),
-        MIN_NORMAL * adjustedGamma,
-      ),
-      Math.min(
-        2 ** ((MAX_INT32 - indexOffset) / multiplier - 1),
-        (Math.exp(EXP_OVERFLOW) / (2 * adjustedGamma)) * (adjustedGamma + 1),
+      ...goIndexableRange(
+        indexOffset,
+        multiplier,
+        gamma ** (7 / (10 * Math.LN2)),
       ),
     );
   }
@@ -217,6 +225,46 @@ class CubicMapping extends LogLikeMapping {
     const d1 = D1 - A2_27 * (index - exponent);
     const p = Math.cbrt((d1 - Math.sqrt(d1 * d1 - 4 * D0 * D0 * D0)) / 2);
     return buildFloat(exponent, -(B + p + D0 / p) / A_3 + 1);
+  }
+}
+
+// How many more bins than the exact logarithm the quadratic needs; also the
+// exponent relating its gamma to the exact one.
+const QUADRATIC_CORRECTION = 3 / (4 * Math.LN2);
+
+// sketches-java QuadraticallyInterpolatedMapping, which sketches-go lacks.
+// Its multiplier and range follow Java's LogLikeIndexMapping, not Go's.
+class QuadraticMapping extends LogLikeMapping {
+  readonly kind = "quadratic";
+
+  constructor(gamma: number, indexOffset: number) {
+    const multiplier = Math.LN2 / Math.log1p(gamma - 1);
+    const exact = gamma ** QUADRATIC_CORRECTION;
+    const relativeAccuracy = (exact - 1) / (exact + 1);
+    super(
+      gamma,
+      indexOffset,
+      multiplier,
+      relativeAccuracy,
+      Math.max(
+        2 ** ((MIN_INT32 - indexOffset) / multiplier + 1),
+        (MIN_NORMAL * (1 + relativeAccuracy)) / (1 - relativeAccuracy),
+      ),
+      Math.min(
+        2 ** ((MAX_INT32 - indexOffset) / multiplier - 1),
+        Number.MAX_VALUE / (1 + relativeAccuracy),
+      ),
+    );
+  }
+
+  protected log(value: number): number {
+    const s = significandPlusOne(value);
+    return exponentOf(value) - (s - 5) * (s - 1) * (1 / 3);
+  }
+
+  protected logInverse(index: number): number {
+    const exponent = Math.floor(index);
+    return buildFloat(exponent, 3 - Math.sqrt(4 - 3 * (index - exponent)));
   }
 }
 
@@ -252,6 +300,21 @@ export function linearMapping(relativeAccuracy: number): IndexMapping {
 }
 
 /**
+ * A mapping that approximates log2 with a quadratic in the float's
+ * significand: between {@link linearMapping} and {@link cubicMapping} in
+ * bins per accuracy. Matches sketches-java, the reference that has it.
+ *
+ * @param relativeAccuracy - Relative error bound, in `(0, 1)`.
+ * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`.
+ */
+export function quadraticMapping(relativeAccuracy: number): IndexMapping {
+  return new QuadraticMapping(
+    exactLogGamma(relativeAccuracy) ** (1 / QUADRATIC_CORRECTION),
+    0,
+  );
+}
+
+/**
  * A mapping that approximates log2 with a cubic in the float's significand:
  * nearly as compact as {@link logMapping} without calling `Math.log`.
  *
@@ -268,6 +331,7 @@ export function cubicMapping(relativeAccuracy: number): IndexMapping {
 const MAPPINGS = {
   log: LogMapping,
   linear: LinearMapping,
+  quadratic: QuadraticMapping,
   cubic: CubicMapping,
 } satisfies Record<
   MappingKind,
