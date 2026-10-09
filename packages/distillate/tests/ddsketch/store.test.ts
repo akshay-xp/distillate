@@ -1,7 +1,9 @@
 import { describe, expect, test } from "vitest";
 
+import { ParamError } from "../../src/core/params.js";
 import { DDSketch } from "../../src/ddsketch/ddsketch.js";
 import {
+  collapsingLowestStore,
   denseStore,
   sparseStore,
   type Store,
@@ -72,6 +74,39 @@ describe("sparse store", () => {
     }
     for (let rank = 0; rank < dense.total; rank++) {
       expect(sparse.keyAtRank(rank)).toBe(dense.keyAtRank(rank));
+    }
+  });
+});
+
+describe("collapsing-lowest store", () => {
+  test("reports its kind and bound", () => {
+    const factory = collapsingLowestStore(64);
+    expect([factory.kind, factory.maxBins]).toEqual(["collapsingLowest", 64]);
+  });
+
+  test("never spans more than maxBins, folding the lowest into the floor", () => {
+    const store = collapsingLowestStore(64).create();
+    for (let i = 0; i < 1000; i++) store.add(i, 1);
+    const bins = binsOf(store);
+    expect(bins[0]).toEqual([936, 937]);
+    expect(bins.at(-1)).toEqual([999, 1]);
+    expect(bins).toHaveLength(64);
+    expect(store.total).toBe(1000);
+  });
+
+  test("holds the same bins as a dense store until it collapses", () => {
+    const collapsing = collapsingLowestStore(64).create();
+    const dense = denseStore().create();
+    for (const i of [3, 40, -7, 12, 40, 55, 0, -2, 9, 33]) {
+      collapsing.add(i, 1);
+      dense.add(i, 1);
+    }
+    expect(binsOf(collapsing)).toEqual(binsOf(dense));
+  });
+
+  test("rejects a maxBins that is not a positive integer", () => {
+    for (const bad of [0, -1, 1.5, Number.NaN]) {
+      expect(() => collapsingLowestStore(bad)).toThrow(ParamError);
     }
   });
 });
