@@ -42,3 +42,21 @@ describe("summaries", () => {
     expect(sketch.max).toBeNaN();
   });
 });
+
+describe("add", () => {
+  test("rejects values and counts it cannot hold, recording nothing", () => {
+    const sketch = DDSketch.create(0.01);
+    const tooBig = sketch.mapping.maxIndexableValue * 2;
+    for (const bad of [Number.NaN, Infinity, -Infinity, tooBig, -tooBig]) {
+      expect(() => {
+        sketch.add(bad);
+      }).toThrow(ParamError);
+    }
+    for (const bad of [0, -1, Number.NaN, Infinity]) {
+      expect(() => {
+        sketch.add(1, bad);
+      }).toThrow(ParamError);
+    }
+    expect(sketch.count).toBe(0);
+  });
+});
