@@ -42,5 +42,9 @@
   "./ddsketch": {
     "raw": 33000,
     "gzip": 8800
+  },
+  "./ddsketch/protobuf": {
+    "raw": 41500,
+    "gzip": 10800
   }
 }
