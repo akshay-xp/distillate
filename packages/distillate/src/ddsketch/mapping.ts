@@ -43,6 +43,7 @@ const halves = new Uint32Array(word.buffer);
 // The index of the half holding the sign, exponent and top of the
 // significand: 1 on a little-endian platform, 0 on a big-endian one.
 const HIGH = new Uint8Array(Float64Array.of(1).buffer)[7] === 0x3f ? 1 : 0;
+const LOW = 1 - HIGH;
 
 // The unbiased binary exponent of a positive normal float.
 function exponentOf(value: number): number {
@@ -286,6 +287,83 @@ class QuadraticMapping extends LogLikeMapping {
   }
 }
 
+// sketches-java's BitwiseLinearlyInterpolatedMapping, which its
+// DDSketch.fast() builds on: the bin is the float's exponent and its top
+// `bits` significand bits read as one integer, so finding it takes integer
+// arithmetic and no floating-point operation. It is a linear mapping whose
+// multiplier is exactly 2^bits, and travels as one: kind "linear", gamma
+// 2^(1 / 2^bits), offset 0.
+class BitwiseMapping extends LogLikeMapping {
+  readonly kind = "linear";
+  // Up to 20 bits, every bit the index needs is in the float's high word.
+  readonly #shift: number;
+  readonly #bias: number;
+  readonly #bits: number;
+
+  constructor(bits: number) {
+    const multiplier = 2 ** bits;
+    const relativeAccuracy = 1 - 2 / (1 + Math.exp(1 / multiplier));
+    super(
+      2 ** (1 / multiplier),
+      0,
+      multiplier,
+      relativeAccuracy,
+      Math.max(
+        2 ** (Math.trunc(MIN_INT32 / multiplier) + 1),
+        (MIN_NORMAL * (1 + relativeAccuracy)) / (1 - relativeAccuracy),
+      ),
+      Math.min(
+        2 ** Math.trunc(MAX_INT32 / multiplier),
+        Number.MAX_VALUE / (1 + relativeAccuracy),
+      ),
+    );
+    this.#bits = bits;
+    this.#shift = 20 - bits;
+    this.#bias = 1023 * multiplier;
+  }
+
+  override index(value: number): number {
+    word[0] = value;
+    const high = halves[HIGH] ?? 0;
+    if (this.#shift >= 0) return (high >>> this.#shift) - this.#bias;
+    // More bits than the high word holds: the same integer, assembled from
+    // both halves with exact float arithmetic, which holds up to 2^53.
+    const significand = (high & 0x000fffff) * 2 ** 32 + (halves[LOW] ?? 0);
+    const exponent = ((high >>> 20) & 0x7ff) - 1023;
+    return (
+      exponent * this.multiplier +
+      Math.floor(significand / 2 ** (52 - this.#bits))
+    );
+  }
+
+  protected log(value: number): number {
+    return exponentOf(value) + significandPlusOne(value) - 1;
+  }
+
+  protected logInverse(index: number): number {
+    const exponent = Math.floor(index);
+    return buildFloat(exponent, index - exponent + 1);
+  }
+}
+
+// The bits a bitwise mapping needs for an accuracy, as sketches-java takes
+// them: enough that its bins are no wider than the log mapping's would be.
+function bitwiseBits(relativeAccuracy: number): number {
+  const multiplier =
+    1 / Math.log1p((2 * relativeAccuracy) / (1 - relativeAccuracy));
+  return Math.max(Math.ceil(Math.log(multiplier) / Math.log(2)), 0);
+}
+
+// The bitwise mapping a linear mapping's parameters describe, if they do:
+// offset 0 and gamma exactly 2^(1 / 2^bits).
+function asBitwise(gamma: number, indexOffset: number): number | undefined {
+  if (indexOffset !== 0) return undefined;
+  for (let bits = 0; bits <= 52; bits++) {
+    if (2 ** (1 / 2 ** bits) === gamma) return bits;
+  }
+  return undefined;
+}
+
 function exactLogGamma(relativeAccuracy: number): number {
   assertProbability(relativeAccuracy, "relativeAccuracy");
   return (1 + relativeAccuracy) / (1 - relativeAccuracy);
@@ -316,6 +394,22 @@ export function linearMapping(relativeAccuracy: number): IndexMapping {
   // sketches-go keeps this offset for backward compatibility; matching it
   // keeps bins aligned with sketches built there.
   return new LinearMapping(gamma, 1 / goLog2(gamma));
+}
+
+/**
+ * The fastest mapping: a value's bin is its float's exponent and top
+ * significand bits read as one integer, with no logarithm or other floating
+ * point arithmetic, as in sketches-java's `DDSketch.fast()`. It spends about
+ * 1.85 times the bins of {@link logMapping} at 1%, and is at least as accurate
+ * as asked: its bins come in powers of two, so it takes the finest that meets
+ * `relativeAccuracy`. Datadog's protobuf carries it as a linear mapping.
+ *
+ * @param relativeAccuracy - Relative error bound, in `(0, 1)`.
+ * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`.
+ */
+export function bitwiseMapping(relativeAccuracy: number): IndexMapping {
+  assertProbability(relativeAccuracy, "relativeAccuracy");
+  return new BitwiseMapping(bitwiseBits(relativeAccuracy));
 }
 
 /**
@@ -364,5 +458,10 @@ export function mappingWithGamma(
   gamma: number,
   indexOffset: number,
 ): IndexMapping {
+  // A linear mapping with a power-of-two multiplier is a bitwise one, and
+  // must bin as one: the general formula's float rounding puts some values
+  // on a bin boundary one bin over from where it wrote them.
+  const bits = kind === "linear" ? asBitwise(gamma, indexOffset) : undefined;
+  if (bits !== undefined) return new BitwiseMapping(bits);
   return new MAPPINGS[kind](gamma, indexOffset);
 }

@@ -10,6 +10,9 @@ export class BadMagicError extends SerializationError {
 }
 
 // @public
+export function bitwiseMapping(relativeAccuracy: number): IndexMapping;
+
+// @public
 export class ChecksumError extends SerializationError {
     override readonly name = "ChecksumError";
 }
