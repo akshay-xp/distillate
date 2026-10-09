@@ -22,6 +22,7 @@ test("the barrel exports the sketch, its factories, its error, and the shared er
     "TruncatedError",
     "UnknownHashVariantError",
     "UnknownVersionError",
+    "bitwiseMapping",
     "collapsingHighestStore",
     "collapsingLowestStore",
     "cubicMapping",

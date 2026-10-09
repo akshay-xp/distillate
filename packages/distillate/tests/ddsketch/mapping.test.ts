@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
 import {
+  bitwiseMapping,
   cubicMapping,
   type IndexMapping,
   type MappingKind,
@@ -97,6 +98,67 @@ describe.each(kinds)("%s mapping", (kind, factory, fixture) => {
   test("rejects an accuracy outside (0, 1)", () => {
     for (const bad of [0, 1, -0.1, Number.NaN]) {
       expect(() => factory(bad)).toThrow(ParamError);
+    }
+  });
+});
+
+// sketches-java's BitwiseLinearlyInterpolatedMapping: the bin is the float's
+// exponent and top significand bits, read as one integer. It travels as a
+// linear mapping with offset 0, which is how Datadog's protobuf carries it.
+describe("bitwise mapping", () => {
+  const entries = (javaFixture.mappings as FixtureEntry[]).filter(
+    (e) => e.kind === "bitwise",
+  );
+
+  test("the fixture covers three accuracies", () => {
+    expect(entries.map((e) => e.relativeAccuracy)).toEqual([0.05, 0.01, 0.001]);
+  });
+
+  test.each(entries)(
+    "bins as sketches-java at $relativeAccuracy, exactly",
+    (e) => {
+      const m = bitwiseMapping(e.relativeAccuracy);
+      expect([m.kind, m.gamma, m.indexOffset]).toEqual(["linear", e.gamma, 0]);
+      for (const [v, want] of e.cases as [number, number][]) {
+        expect(m.index(v)).toBe(want);
+      }
+    },
+  );
+
+  // A decoder sees only a linear mapping's gamma and offset; given the
+  // bitwise ones it must bin as the bitwise mapping does, or a sketch read
+  // back would place boundary values in other bins than the one written.
+  test.each(entries)("is what a decoder rebuilds at $relativeAccuracy", (e) => {
+    const m = mappingWithGamma("linear", e.gamma, 0);
+    for (const [v, want] of e.cases as [number, number][]) {
+      expect(m.index(v)).toBe(want);
+    }
+  });
+
+  test.each([0.05, 0.01, 0.001])(
+    "value(index(v)) is within %s of v across the indexable range",
+    (relativeAccuracy) => {
+      const m = bitwiseMapping(relativeAccuracy);
+      const lo = Math.log(m.minIndexableValue);
+      const hi = Math.log(m.maxIndexableValue);
+      fc.assert(
+        fc.property(fc.double({ min: 0, max: 1, noNaN: true }), (t) => {
+          const v = Math.min(
+            m.maxIndexableValue,
+            Math.max(m.minIndexableValue, Math.exp(lo + t * (hi - lo))),
+          );
+          expect(Math.abs(m.value(m.index(v)) - v) / v).toBeLessThanOrEqual(
+            relativeAccuracy * (1 + 1e-12),
+          );
+        }),
+        { numRuns: 1000 },
+      );
+    },
+  );
+
+  test("rejects an accuracy outside (0, 1)", () => {
+    for (const bad of [0, 1, -0.1, Number.NaN]) {
+      expect(() => bitwiseMapping(bad)).toThrow(ParamError);
     }
   });
 });

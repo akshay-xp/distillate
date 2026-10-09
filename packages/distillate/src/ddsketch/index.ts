@@ -1,6 +1,7 @@
 export { DDSketch, DDSketchParamMismatchError } from "./ddsketch.js";
 export type { DDSketchOptions } from "./ddsketch.js";
 export {
+  bitwiseMapping,
   cubicMapping,
   linearMapping,
   logMapping,
