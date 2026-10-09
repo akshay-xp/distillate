@@ -55,10 +55,10 @@ Each structure ships as its own subpath, so you only bundle what you import.
 | `distillate/ddsketch` | DDSketch       | what is the p99?    | Latency and size percentiles, mergeable, in fixed space  |
 
 The filters are mutable except Binary Fuse, which is built once from the whole
-key set. HyperLogLog, Count-Min and Top-K are sketches rather than filters:
-none reports whether it saw any particular key. HyperLogLog counts distinct
-keys, Count-Min counts how often each key appeared, and Top-K reports which
-keys appeared most.
+key set. HyperLogLog, Count-Min, Top-K and DDSketch are sketches rather than
+filters: none reports whether it saw any particular key. HyperLogLog counts
+distinct keys, Count-Min counts how often each key appeared, Top-K reports which
+keys appeared most, and DDSketch reports quantiles of numbers rather than keys.
 
 ### Classic Bloom (`distillate/bloom`)
 
@@ -215,6 +215,24 @@ routes.count("/login"); // 5
 Keys come back as `Uint8Array`, exactly as recorded, so a serialized Top-K sketch holds your keys verbatim, unlike every other frame here. `union` combines sketches soundly but, unlike Count-Min's, not byte for byte as one sketch fed both streams.
 
 Also: `equals`, `toBytes` / `fromBytes`, `toJSON` / `fromJSON`, `total`, `error()`, `epsilon`, `capacity`, `topKSizing(epsilon)`, and a low-level `new TopK({ capacity, seed })`.
+
+### DDSketch (`distillate/ddsketch`)
+
+A **sketch** of numbers rather than keys: every quantile it reports is within a relative error of the true value, tails included, and two sketches merge exactly. Full API, mappings, stores and the bound: [DDSketch guide](https://distillate.akxp.net/guides/ddsketch/).
+
+```ts
+import { DDSketch } from "distillate/ddsketch";
+
+const latency = DDSketch.create(0.01); // within 1%
+for (let ms = 1; ms <= 1000; ms++) latency.add(ms);
+
+latency.quantile(0.99); // ~983
+latency.max; // 1000
+```
+
+By default it keeps at most 2048 bins per sign, enough for about 17 orders of magnitude at 1%; at a tighter accuracy, raise `maxBins` through `collapsingLowestStore`. `distillate/ddsketch/protobuf` converts to and from the protobuf message Datadog's libraries exchange.
+
+Also: `add(value, count)`, `quantiles`, `count`, `sum`, `min`, `union`, `equals`, `toBytes` / `fromBytes`, `toJSON` / `fromJSON`, and the `logMapping`, `linearMapping`, `quadraticMapping`, `cubicMapping`, `denseStore`, `sparseStore`, `collapsingLowestStore` and `collapsingHighestStore` factories.
 
 ## Performance
 
