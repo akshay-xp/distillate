@@ -55,6 +55,11 @@ describe("every mapping keeps the bound", () => {
   test("on a Pareto stream", () => {
     expectBound(paretoValues(12, N));
   });
+
+  test("on a mixed-sign stream", () => {
+    const sign = rng(13);
+    expectBound(lognormalValues(15, N).map((v) => (sign() < 0.4 ? -v : v)));
+  });
 });
 
 test("weighted adds give the quantiles of the repeated values", () => {
