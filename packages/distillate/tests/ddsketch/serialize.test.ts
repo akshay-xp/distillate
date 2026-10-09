@@ -8,6 +8,7 @@ import {
   UnknownHashVariantError,
   writeHeader,
 } from "../../src/core/serialize.js";
+import { CountMinSketch } from "../../src/countmin/countmin.js";
 import { DDSketch, type DDSketchOptions } from "../../src/ddsketch/ddsketch.js";
 import {
   cubicMapping,
@@ -159,8 +160,9 @@ const VALID = DDSketch.from([1, 2, -3, 0], 0.01, { store: denseStore() });
 function forge(
   mutate: (body: Uint8Array, view: DataView) => Uint8Array | undefined,
   flags = 0,
+  base: DDSketch = VALID,
 ): Uint8Array {
-  const frame = VALID.toBytes();
+  const frame = base.toBytes();
   const body = frame.slice(BODY, frame.length - 4);
   const edited =
     mutate(body, new DataView(body.buffer, body.byteOffset, body.byteLength)) ??
@@ -176,6 +178,11 @@ describe("a structurally broken frame is rejected", () => {
         SerializationError,
       );
     }
+  });
+
+  test("another structure's frame", () => {
+    const frame = CountMinSketch.create(0.01, 0.01).toBytes();
+    expect(() => DDSketch.fromBytes(frame)).toThrow(SerializationError);
   });
 
   test("a body shorter than the params block", () => {
@@ -243,4 +250,245 @@ describe("a structurally broken frame is rejected", () => {
       ),
     ).toThrow(SerializationError);
   });
+});
+
+// VALID holds bins for 1 and 2 (positive), 3 (negative) and one zero, so its
+// payload is: counts at 72, 80, 88; indices at 96, 100, 104.
+const COUNT0 = 72;
+const INDEX0 = 96;
+const INDEX1 = 100;
+
+describe("a frame whose contents cannot be true is rejected", () => {
+  const edits: [string, (view: DataView) => void][] = [
+    [
+      "unsorted indices",
+      (v) => {
+        v.setInt32(INDEX0, v.getInt32(INDEX1, true) + 1, true);
+      },
+    ],
+    [
+      "a duplicate index",
+      (v) => {
+        v.setInt32(INDEX0, v.getInt32(INDEX1, true), true);
+      },
+    ],
+    [
+      "a zero count",
+      (v) => {
+        v.setFloat64(COUNT0, 0, true);
+      },
+    ],
+    [
+      "a negative count",
+      (v) => {
+        v.setFloat64(COUNT0, -1, true);
+      },
+    ],
+    [
+      "a NaN count",
+      (v) => {
+        v.setFloat64(COUNT0, Number.NaN, true);
+      },
+    ],
+    [
+      "an infinite count",
+      (v) => {
+        v.setFloat64(COUNT0, Infinity, true);
+      },
+    ],
+    [
+      "an index outside the mapping's range",
+      (v) => {
+        v.setInt32(INDEX0, -(2 ** 31), true);
+      },
+    ],
+    [
+      "a collapsing frame wider than maxBins",
+      (v) => {
+        v.setUint8(1, 1);
+        v.setUint32(4, 1, true);
+      },
+    ],
+    [
+      "gamma of 1",
+      (v) => {
+        v.setFloat64(8, 1, true);
+      },
+    ],
+    [
+      "a NaN gamma",
+      (v) => {
+        v.setFloat64(8, Number.NaN, true);
+      },
+    ],
+    [
+      "an infinite indexOffset",
+      (v) => {
+        v.setFloat64(16, Infinity, true);
+      },
+    ],
+    [
+      "relativeAccuracy of 0",
+      (v) => {
+        v.setFloat64(24, 0, true);
+      },
+    ],
+    [
+      "relativeAccuracy of 1",
+      (v) => {
+        v.setFloat64(24, 1, true);
+      },
+    ],
+    [
+      "a negative zeroCount",
+      (v) => {
+        v.setFloat64(56, -1, true);
+      },
+    ],
+    [
+      "a NaN zeroCount",
+      (v) => {
+        v.setFloat64(56, Number.NaN, true);
+      },
+    ],
+    [
+      "min above max",
+      (v) => {
+        v.setFloat64(40, 5, true);
+      },
+    ],
+    [
+      "a NaN max",
+      (v) => {
+        v.setFloat64(48, Number.NaN, true);
+      },
+    ],
+    [
+      "an infinite sum",
+      (v) => {
+        v.setFloat64(32, Infinity, true);
+      },
+    ],
+    [
+      "a max below the highest bin",
+      (v) => {
+        v.setFloat64(48, 1, true);
+      },
+    ],
+    [
+      "a min above the most negative bin",
+      (v) => {
+        v.setFloat64(40, -1, true);
+      },
+    ],
+  ];
+
+  test.each(edits)("%s", (_, edit) => {
+    expect(() =>
+      DDSketch.fromBytes(
+        forge((__, view) => {
+          edit(view);
+          return undefined;
+        }),
+      ),
+    ).toThrow(SerializationError);
+  });
+
+  test.each<[string, (view: DataView) => void]>([
+    [
+      "a min on an empty sketch",
+      (v) => {
+        v.setFloat64(40, 0, true);
+      },
+    ],
+    [
+      "a sum on an empty sketch",
+      (v) => {
+        v.setFloat64(32, 1, true);
+      },
+    ],
+  ])("%s", (_, edit) => {
+    const empty = DDSketch.create(0.01, { store: denseStore() });
+    expect(() =>
+      DDSketch.fromBytes(
+        forge(
+          (__, view) => {
+            edit(view);
+            return undefined;
+          },
+          0,
+          empty,
+        ),
+      ),
+    ).toThrow(SerializationError);
+  });
+
+  test("a zero bin with a min above the indexable range", () => {
+    const zeros = DDSketch.from([0, 5], 0.01, { store: denseStore() });
+    expect(() =>
+      DDSketch.fromBytes(
+        forge(
+          (__, view) => {
+            view.setFloat64(40, 1, true);
+            return undefined;
+          },
+          0,
+          zeros,
+        ),
+      ),
+    ).toThrow(SerializationError);
+  });
+});
+
+// One body byte overwritten in a valid frame of a random small sketch. Every
+// outcome is either a typed rejection or a sketch that answers finitely and
+// re-encodes to exactly the bytes it was read from.
+const corrupted = fc
+  .tuple(
+    fc.array(fc.integer({ min: -1000, max: 1000 }), {
+      minLength: 1,
+      maxLength: 20,
+    }),
+    fc.nat(),
+    fc.nat({ max: 255 }),
+  )
+  .map(([values, at, byte]) => {
+    const base = DDSketch.from(values, 0.01, { store: denseStore() });
+    return forge(
+      (body) => {
+        body[at % body.length] = byte;
+        return undefined;
+      },
+      0,
+      base,
+    );
+  });
+
+function outcome(frame: Uint8Array): "rejected" | "accepted" {
+  let sketch: DDSketch;
+  try {
+    sketch = DDSketch.fromBytes(frame);
+  } catch (err) {
+    expect(err).toBeInstanceOf(SerializationError);
+    return "rejected";
+  }
+  for (const v of sketch.quantiles(QS)) expect(Number.isFinite(v)).toBe(true);
+  expect(sketch.toBytes()).toEqual(frame);
+  return "accepted";
+}
+
+test("a corrupted frame is rejected or decodes faithfully (fuzz)", () => {
+  fc.assert(
+    fc.property(corrupted, (frame) => {
+      outcome(frame);
+    }),
+    { numRuns: 500 },
+  );
+});
+
+test("the corruption reaches both outcomes", () => {
+  const seen = new Set(
+    fc.sample(corrupted, { numRuns: 500, seed: 7 }).map(outcome),
+  );
+  expect([...seen].sort()).toEqual(["accepted", "rejected"]);
 });
