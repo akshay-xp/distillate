@@ -1,7 +1,8 @@
 import { assertPositiveInt } from "../core/params.js";
 
 /** How a store lays out its bins and what it gives up to bound memory. */
-export type StoreKind = "dense" | "sparse" | "collapsingLowest";
+export type StoreKind =
+  "dense" | "sparse" | "collapsingLowest" | "collapsingHighest";
 
 /** Counts per bin index for one sign of a sketch. */
 export interface Store {
@@ -220,5 +221,22 @@ export function collapsingLowestStore(maxBins: number): StoreFactory {
     kind: "collapsingLowest",
     maxBins,
     create: () => new DenseStore(maxBins, "lowest"),
+  };
+}
+
+/**
+ * A dense store that never spans more than `maxBins` bins. Past that it folds
+ * the highest bins into the highest one it keeps, giving up accuracy on the
+ * largest magnitudes and keeping it for the smallest.
+ *
+ * @param maxBins - The most bins kept per sign; a positive integer.
+ * @throws {@link ParamError} when `maxBins` is not a positive integer.
+ */
+export function collapsingHighestStore(maxBins: number): StoreFactory {
+  assertPositiveInt(maxBins, "maxBins");
+  return {
+    kind: "collapsingHighest",
+    maxBins,
+    create: () => new DenseStore(maxBins, "highest"),
   };
 }
