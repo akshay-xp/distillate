@@ -286,8 +286,9 @@ export function logMapping(relativeAccuracy: number): IndexMapping {
 
 /**
  * A mapping that interpolates log2 linearly from the float's bits instead of
- * calling `Math.log`: faster per value, at about 44% more bins than
- * {@link logMapping} for the same accuracy.
+ * calling `Math.log`, at about 44% more bins than {@link logMapping} for the
+ * same accuracy. For matching sketches built with it elsewhere; in V8 it adds
+ * only slightly faster than the log mapping.
  *
  * @param relativeAccuracy - Relative error bound, in `(0, 1)`.
  * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`.
@@ -316,7 +317,8 @@ export function quadraticMapping(relativeAccuracy: number): IndexMapping {
 
 /**
  * A mapping that approximates log2 with a cubic in the float's significand:
- * nearly as compact as {@link logMapping} without calling `Math.log`.
+ * nearly as compact as {@link logMapping}. For matching sketches built with it
+ * elsewhere; in V8 it adds slower than the log mapping, `Math.log` being cheap.
  *
  * @param relativeAccuracy - Relative error bound, in `(0, 1)`.
  * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`.

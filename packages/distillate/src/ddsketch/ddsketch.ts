@@ -159,7 +159,9 @@ function binsOf(store: Store): { indices: number[]; counts: number[] } {
 export interface DDSketchOptions {
   /**
    * The mapping factory that bins values. Defaults to {@link logMapping}, the
-   * most compact; the interpolated mappings trade bins for speed.
+   * most compact and, in V8, within a few percent of the fastest; the
+   * interpolated mappings exist to match sketches built with them by Datadog's
+   * libraries.
    */
   mapping?: (relativeAccuracy: number) => IndexMapping;
   /**
