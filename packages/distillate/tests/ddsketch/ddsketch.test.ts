@@ -122,3 +122,23 @@ describe("negative values and zero", () => {
     expect(sketch.quantile(0.5)).toBe(0);
   });
 });
+
+describe("weighted add", () => {
+  test("add(v, 3) is three unit adds", () => {
+    const values = lognormalValues(5, 200);
+    const weighted = DDSketch.create(0.01);
+    const repeated = DDSketch.create(0.01);
+    for (const v of values) {
+      weighted.add(v, 3);
+      for (let i = 0; i < 3; i++) repeated.add(v);
+    }
+    expect(weighted.count).toBe(600);
+    expect(weighted.count).toBe(repeated.count);
+    expect(weighted.min).toBe(repeated.min);
+    expect(weighted.max).toBe(repeated.max);
+    expectWithin(weighted.sum, repeated.sum, 1e-12);
+    for (let q = 0; q <= 1; q += 0.1) {
+      expect(weighted.quantile(q)).toBe(repeated.quantile(q));
+    }
+  });
+});
