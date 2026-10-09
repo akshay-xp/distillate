@@ -324,6 +324,13 @@ export class DDSketch {
       );
     }
     const mapping = mappingWithGamma(kind, gamma, indexOffset);
+    // An offset far enough out leaves no value a bin, min above max; no
+    // sketch was built that way, and every index read below would be garbage.
+    if (!(mapping.minIndexableValue <= mapping.maxIndexableValue)) {
+      throw new SerializationError(
+        "ddsketch: the mapping leaves no value indexable",
+      );
+    }
     const countsAt = PARAMS_SIZE + COUNTS_SIZE;
     const indicesAt = countsAt + 8 * (posBins + negBins);
     const pos = readBins(view, countsAt, indicesAt, posBins, mapping, maxBins);

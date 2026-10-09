@@ -247,6 +247,11 @@ export function fromProtobuf(
     );
   }
   const mapping = mappingWithGamma(kind, gamma, indexOffset);
+  if (!(mapping.minIndexableValue <= mapping.maxIndexableValue)) {
+    throw new SerializationError(
+      "protobuf: the mapping leaves no value indexable",
+    );
+  }
   const lo = mapping.index(mapping.minIndexableValue);
   const hi = mapping.index(mapping.maxIndexableValue);
   for (const bins of [positive, negative]) {
