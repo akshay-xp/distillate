@@ -8,7 +8,7 @@ Static and mutable filters have honestly different lifecycles, and sketches answ
 
 - Mutable: `add` (and sometimes `delete`) after construction. Bloom, Blocked Bloom, Counting Bloom, Scalable Bloom, Cuckoo.
 - Static: `build(keys)` once, then immutable and queried. Binary Fuse, XOR. Smaller and faster; can fail-and-retry on build.
-- Sketches: `add` then ask an aggregate question rather than a membership one. HyperLogLog (cardinality), Count-Min (frequency of a named key) and Top-K (heavy hitters); t-digest/KLL (quantiles) and MinHash (similarity) are the same family, not yet shipped.
+- Sketches: `add` then ask an aggregate question rather than a membership one. HyperLogLog (cardinality), Count-Min (frequency of a named key), Top-K (heavy hitters) and DDSketch (quantiles of numbers, not keys); MinHash (similarity) is the same family, not yet shipped.
 
 ### Why a sketch is not a `Filter`
 
@@ -50,6 +50,13 @@ interface Sketch<T> {
 interface CardinalitySketch extends Sketch<CardinalitySketch> {
   count(): number;
   readonly standardError: number; // analytic, for reporting
+}
+
+// Values, not keys: DDSketch takes numbers and hashes nothing, so add differs
+interface QuantileSketch extends Omit<Sketch<QuantileSketch>, "add"> {
+  add(value: number, count?: number): void;
+  quantile(q: number): number; // within relativeAccuracy of the true value
+  readonly relativeAccuracy: number;
 }
 ```
 
@@ -99,6 +106,10 @@ src/
   countmin/         # Count-Min sketch: countmin.ts, and sizing.ts for countMinSizing
   topk/             # Top-K heavy hitters: topk.ts, halfsip.ts for the keyed
                     # slot hash, and sizing.ts for topKSizing
+  ddsketch/         # DDSketch: ddsketch.ts (frame type 10), mapping.ts for the four
+                    # index mappings, store.ts for the four stores
+    protobuf/       # distillate/ddsketch/protobuf: Datadog's message, its own
+                    # subpath so the sketch alone never bundles the codec
   frame/            # distillate/frame: readFrameAt for walking a stream of frames
   index.ts          # root barrel (VERSION only)
 ```
