@@ -229,8 +229,39 @@ export function fromProtobuf(
     }
   }
 
-  const kind = KINDS[mapped.interpolation] ?? "log";
-  const mapping = mappingWithGamma(kind, mapped.gamma, mapped.indexOffset);
+  const kind = KINDS[mapped.interpolation];
+  if (kind === undefined) {
+    throw new SerializationError(
+      `protobuf: unknown interpolation ${String(mapped.interpolation)}`,
+    );
+  }
+  const { gamma, indexOffset } = mapped;
+  if (!(gamma > 1 && gamma < Infinity) || !Number.isFinite(indexOffset)) {
+    throw new SerializationError(
+      "protobuf: gamma must be finite and above 1, and indexOffset finite",
+    );
+  }
+  if (!(zeroCount >= 0 && zeroCount < Infinity)) {
+    throw new SerializationError(
+      `protobuf: zeroCount must be finite and not negative, got ${String(zeroCount)}`,
+    );
+  }
+  const mapping = mappingWithGamma(kind, gamma, indexOffset);
+  const lo = mapping.index(mapping.minIndexableValue);
+  const hi = mapping.index(mapping.maxIndexableValue);
+  for (const bins of [positive, negative]) {
+    for (const [index, count] of bins) {
+      // A zero count adds nothing, as in sketches-go's merge; anything else
+      // must be a count a store could hold, at an index the mapping has.
+      if (count === 0) {
+        bins.delete(index);
+      } else if (!(count > 0 && count < Infinity) || index < lo || index > hi) {
+        throw new SerializationError(
+          `protobuf: bin ${String(index)} with count ${String(count)} is not one a sketch could hold`,
+        );
+      }
+    }
+  }
   // Each bin is added at its own value, which the mapping indexes back to
   // the same bin, so the bins land exactly and sum, min and max follow.
   const sketch = new DDSketch(mapping.relativeAccuracy, {
