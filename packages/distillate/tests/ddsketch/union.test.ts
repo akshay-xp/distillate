@@ -1,7 +1,16 @@
 import fc from "fast-check";
 import { describe, expect, test } from "vitest";
 
-import { DDSketch } from "../../src/ddsketch/ddsketch.js";
+import {
+  DDSketch,
+  DDSketchParamMismatchError,
+} from "../../src/ddsketch/ddsketch.js";
+import {
+  cubicMapping,
+  type IndexMapping,
+  logMapping,
+  mappingWithGamma,
+} from "../../src/ddsketch/mapping.js";
 import {
   collapsingHighestStore,
   collapsingLowestStore,
@@ -101,4 +110,34 @@ test("the receiver's store holds the union", () => {
   const dense = DDSketch.from([1, 2], 0.01, { store: denseStore() });
   const sparse = DDSketch.from([3], 0.01, { store: sparseStore() });
   expect(dense.union(sparse).store.kind).toBe("dense");
+});
+
+describe("a union across mappings", () => {
+  const g = logMapping(0.01).gamma;
+  const on = (mapping: IndexMapping): DDSketch =>
+    DDSketch.from([1, 2, 3], 0.01, { mapping: () => mapping });
+
+  test.each<[string, IndexMapping]>([
+    ["kind", cubicMapping(0.01)],
+    ["gamma", logMapping(0.02)],
+    ["gamma, 1e-9 apart", mappingWithGamma("log", g * (1 + 1e-9), 0)],
+    ["indexOffset", mappingWithGamma("log", g, 1)],
+  ])("refuses a differing %s", (_, mapping) => {
+    const a = on(logMapping(0.01));
+    expect(() => a.union(on(mapping))).toThrow(DDSketchParamMismatchError);
+  });
+
+  // Math.pow and Go's Pow can land an ulp apart for the same accuracy, so a
+  // sketch decoded from Go must still merge with one built here.
+  test("merges gammas an ulp apart", () => {
+    const a = on(logMapping(0.01));
+    const b = on(mappingWithGamma("log", g * (1 + 1e-15), 0));
+    expect(a.union(b).count).toBe(6);
+  });
+
+  test("names its error", () => {
+    expect(new DDSketchParamMismatchError("x").name).toBe(
+      "DDSketchParamMismatchError",
+    );
+  });
 });
