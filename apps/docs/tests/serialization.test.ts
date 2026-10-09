@@ -146,6 +146,7 @@ const NUMERALS = [
   "six",
   "seven",
   "eight",
+  "nine",
 ];
 
 /** The structures the hash-variant section lists, and the count it claims. */
@@ -450,7 +451,7 @@ test("the count-min section documents every field and the row-sum rule", () => {
   expect(section).toContain("must not re-derive");
 });
 
-test("the layout table names type 9 as TopK and reserves from 10", () => {
+test("the layout table names type 9 as TopK", () => {
   const { types, reserved } = typeRows();
   const named = new Map(
     [...types.matchAll(/(\d+)=([A-Za-z0-9]+)/g)].map(([, n, name]) => [
@@ -460,7 +461,6 @@ test("the layout table names type 9 as TopK and reserves from 10", () => {
   );
 
   expect(named.get(9)).toBe("TopK");
-  expect(reserved).toContain("10+");
   expect(reserved).not.toContain("TopK");
 });
 
@@ -511,4 +511,76 @@ test("the documented Top-K layout decodes the golden frame", () => {
     keyBytes += body.getUint32(lengthsAt + 4 * i, true);
   }
   expect(topKAt(rows, "keys", entries) + keyBytes).toBe(body.byteLength);
+});
+
+test("the layout table names type 10 as DDSketch and reserves from 11", () => {
+  const { types, reserved } = typeRows();
+  const named = new Map(
+    [...types.matchAll(/(\d+)=([A-Za-z0-9]+)/g)].map(([, n, name]) => [
+      Number(n),
+      name,
+    ]),
+  );
+
+  expect(named.get(10)).toBe("DDSketch");
+  expect(reserved).toContain("11+");
+  expect(reserved).not.toContain("DDSketch");
+});
+
+test("the hash variant section lists DDSketch among the variant 0 writers", () => {
+  expect(hashVariant().families).toContain("DDSketch");
+});
+
+// Payload rows give their offset as `A + Bb`, b being posBins + negBins, since
+// where the indices start depends on how many bins there are.
+function ddAt(
+  rows: Map<string, { at: string }>,
+  field: string,
+  bins: number,
+): number {
+  const at = rows.get(field)?.at ?? "";
+  const m = /^(\d+)(?: \+ (\d+)b)?$/.exec(at);
+  if (!m) throw new Error(`DDSketch ${field} row has offset "${at}"`);
+  return Number(m[1]) + (m[2] ? Number(m[2]) : 0) * bins;
+}
+
+// Decoded from the page's offsets alone, as for Top-K, so a wrong row fails
+// here rather than in the Go reader written from it.
+test("the documented DDSketch layout decodes the golden frame", () => {
+  const rows = paramsTable("DDSketch (type 10), little-endian");
+  const all = JSON.parse(readFileSync(GOLDEN, "utf8")) as (Fixture & {
+    values?: number[];
+    epsilon?: number;
+  })[];
+  const fixture = all.find((g) => g.name === "ddsketch");
+  if (!fixture) throw new Error("golden.json has no ddsketch fixture");
+  const body = frameBody(Buffer.from(fixture.frame, "base64"));
+  const at = (field: string): number => rows.get(field)?.offset ?? NaN;
+  const f64 = (field: string): number => body.getFloat64(at(field), true);
+
+  expect(body.getUint8(at("mapping"))).toBe(0);
+  expect(body.getUint8(at("store"))).toBe(1);
+  expect(body.getUint16(at("reserved"), true)).toBe(0);
+  expect(body.getUint32(at("maxBins"), true)).toBe(2048);
+  expect(f64("gamma")).toBeCloseTo(1.01 / 0.99, 12);
+  expect(f64("relativeAccuracy")).toBe(fixture.epsilon);
+  expect(f64("zeroCount")).toBe(2);
+  const values = fixture.values ?? [];
+  expect(f64("min")).toBe(Math.min(...values));
+  expect(f64("max")).toBe(Math.max(...values));
+
+  const pos = body.getUint32(at("posBins"), true);
+  const neg = body.getUint32(at("negBins"), true);
+  const bins = pos + neg;
+  expect(ddAt(rows, "indices", bins) + 4 * bins).toBe(body.byteLength);
+  let total = f64("zeroCount");
+  for (let i = 0; i < bins; i++) {
+    total += body.getFloat64(ddAt(rows, "counts", bins) + 8 * i, true);
+    if (i > 0 && i !== pos) {
+      const index = (j: number): number =>
+        body.getInt32(ddAt(rows, "indices", bins) + 4 * j, true);
+      expect(index(i)).toBeGreaterThan(index(i - 1));
+    }
+  }
+  expect(total).toBe(values.length);
 });

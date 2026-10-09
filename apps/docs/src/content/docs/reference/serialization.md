@@ -11,8 +11,8 @@ Versioned, self-describing, little-endian binary format. Spec'd here so Rust/Go 
 Offset  Size  Field
 0       4     Magic "DSTL" (0x44 53 54 4C)
 4       1     Format version (u8)         # bump on incompatible layout change
-5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog 6=ScalableBloom 7=Cuckoo 8=CountMin 9=TopK
-                                          # (10+ reserved: CountingBloom, ...)
+5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog 6=ScalableBloom 7=Cuckoo 8=CountMin 9=TopK 10=DDSketch
+                                          # (11+ reserved: CountingBloom, ...)
 6       1     Flags (u8)                  # bit0-3 hash variant, bit4-7 reserved (must be 0)
 7       1     Reserved (u8)               # must be 0
 8       4     Body length (u32)           # bytes of body, excluding header and CRC
@@ -244,11 +244,51 @@ Combining two frames of identical `capacity`, informatively: sum each key's stor
 
 Keys are stored verbatim, so unlike every other type this frame contains user input as written. Geometry is stored rather than re-derived. For writers, informatively: `capacity` is the smallest power of two with `1 / ((floor(0.75 * capacity) + 2) >> 1) <= epsilon`, that denominator being the fewest keys a purge takes its full median from, which is what bounds `offset` by `epsilon * total`.
 
+DDSketch (type 10), little-endian. A quantile sketch: values, not keys, binned by a logarithmic mapping so every bin spans the same relative width. Nothing is hashed.
+
+```
+Offset    Size      Field
+0         1         mapping: 0 = log, 1 = linear, 2 = quadratic, 3 = cubic (u8), Datadog's Interpolation values
+1         1         store: 0 = dense, 1 = collapsing-lowest, 2 = collapsing-highest, 3 = sparse (u8)
+2         2         reserved (0)
+4         4         maxBins: bins kept per sign (u32), at least 1 for a collapsing store and 0 otherwise
+8         8         gamma: the base each bin grows by (f64), above 1
+16        8         indexOffset: added to every index (f64), finite
+24        8         relativeAccuracy: the bound the sketch was built for (f64), in (0, 1)
+32        8         sum: every value added, weighted by its count (f64)
+40        8         min: the smallest value added (f64), NaN when empty
+48        8         max: the largest value added (f64), NaN when empty
+56        8         zeroCount: values counted as zero (f64), finite and at least 0
+64        4         posBins: non-empty positive bins (u32)
+68        4         negBins: non-empty negative bins (u32)
+72        8 * b     counts: every bin's count (f64), positive bins first
+72 + 8b   4 * b     indices: every bin's index (i32), in the same order
+```
+
+Here `b` is `posBins + negBins`. The counts start at frame offset 88 and the indices follow them, so every `f64` is 8-byte aligned. Bin `i` is `counts[i]` at index `indices[i]`; the first `posBins` bins hold positive values and the rest hold negative values by magnitude. Within each sign the indices are strictly ascending and only non-empty bins are written, so the bytes depend on the bins alone, not on which store held them.
+
+A positive value `v` lands in bin `x = log(v) * multiplier + indexOffset` under the log mapping, where `multiplier = 1 / ln(gamma)`, taking `x` truncated toward zero and then one lower when `x` is negative, as sketches-go computes it (this differs from `floor` only at an exact negative integer); the interpolated mappings replace `log` with an approximation computed from the float's exponent and significand, as sketches-go and sketches-java define them. Values whose magnitude is at most the mapping's smallest indexable value count in `zeroCount`. A bin reads back as its lower bound times `1 + a`, where `a` is the accuracy `gamma` implies, which keeps it within `a` of every value in the bin.
+
+There is no count field. The count is `zeroCount` plus every bin's count, derived on read: a running total of fractional weights rounds differently from the bins summed in index order, so a stored count could disagree with its own bins. `sum` is stored because it cannot be derived, and since it is a float accumulation it depends on the order values arrived; the bins never do. A writer records `-0` as `0`, so `min` and `max` do not depend on which zero came first.
+
+A reader rejects:
+
+- a mapping or store code above 3, or nonzero reserved bytes;
+- a `maxBins` of 0 on a collapsing store, or above 0 on any other;
+- a body length other than `72 + 12 * (posBins + negBins)`;
+- a `gamma` that is not finite and above 1, a non-finite `indexOffset`, or a `relativeAccuracy` outside `(0, 1)`;
+- a bin count that is not finite and positive, indices out of strictly ascending order within a sign, or an index outside the mapping's indexable range;
+- a collapsing store's bins spanning more than `maxBins` indices within a sign;
+- a negative or non-finite `zeroCount`;
+- an empty frame whose `min` and `max` are not NaN or whose `sum` is not 0, and a non-empty frame whose `sum`, `min` or `max` is not finite, whose `min` is above its `max`, or whose extreme bins lie outside `[min, max]` by more than the mapping's accuracy.
+
+Combining two frames, informatively: their mappings must agree on kind exactly and on `gamma` and `indexOffset` within 1e-12 relative, sketches-go's tolerance; then add every bin's count into one store, which folds a collapsing store exactly as one stream would have, and add `zeroCount` and `sum`, keeping the smaller `min` and larger `max`. This is the frame one sketch fed both streams would hold, `sum` aside.
+
 ### Hash variant (flags nibble)
 
 Bits 0-3 of the flags byte name the complete scheme that turns a key into stored bits: the hash **and the index mapping** from its output to positions, not the hash alone. A change to any component takes a new variant, even when the hash itself is unchanged, because a reader that recognises the old variant would otherwise read every stored frame at the wrong positions with no error. Version 5 uses one scheme for every structure:
 
-- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog, Scalable, Cuckoo, Count-Min, Top-K) with the index mapping below. Top-K writes and requires `0`, though no hash reaches its frame
+- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog, Scalable, Cuckoo, Count-Min, Top-K, DDSketch) with the index mapping below. Top-K and DDSketch write and require `0`, though no hash reaches their frames
 
 Variant `0` covers:
 
@@ -262,9 +302,11 @@ Variant `0` covers:
 - **Count-Min:** `a = w0`, `b = w1`, exactly as Bloom; row `r` of `depth` takes probe `g_r = (a + r*b + r*r) mod 2^32` reduced into `[0, width)` by Lemire multiply-shift, addressing counter `r * width + g_r`.
 - **Top-K:** no hash. The frame stores entries in canonical order, so no stored byte depends on where a key sat in memory, and a reader needs no hash to read or rebuild a frame. In memory, `distillate` places a key at `HalfSipHash-1-3(key) & (capacity - 1)` under 64 random bits each sketch draws for itself, probing linearly on a collision, so crafted keys cannot be made to share a slot. A reader in another language may place keys however it likes.
 
+- **DDSketch:** no hash. It records values, not keys, and the mapping that bins them is named by the frame's own `mapping` byte and `gamma`, so a change to it is a new mapping code rather than a new variant.
+
 This is the case Guava hit: `MURMUR128_MITZ_32` and `MURMUR128_MITZ_64` use the same hash and differ only in how its 128 bits map to indices, yet the change still needed a new `Strategy` ordinal because the stored bits differ. Guava's ordinal covers the whole strategy, and this nibble does too.
 
-All eight structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header and version 5 only the params padding; neither touched the hash.
+All nine structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header and version 5 only the params padding; neither touched the hash.
 
 That version 3 bump (rather than a flags-only change) was deliberate: the version-2 Fuse reader had no variant check and would silently misread a version-3 frame, so bumping the version made it reject on the version byte instead.
 
