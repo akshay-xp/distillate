@@ -6,13 +6,15 @@ Modern probabilistic data structures for JavaScript. Successor to aging Bloom fi
 
 Probabilistic structures trade a bounded, tunable error for a fraction of the space an exact answer would need. `distillate` ships the right structure per workload (not just a Bloom filter), TS-first, dependency-free, universal.
 
-Three questions so far, each with its own family:
+Four questions so far, each with its own family:
 
 - **Have I seen this key?** Approximate-membership filters: a tunable false-positive rate and zero false negatives. Bloom, Blocked Bloom, Scalable Bloom, Binary Fuse, Cuckoo.
 - **How many distinct keys have I seen?** Cardinality sketches: a count in space fixed by precision rather than by the answer. HyperLogLog, in 12 KiB at about 0.8% relative error whether the true count is a thousand or a billion.
 - **How often have I seen a key, and which keys most?** Frequency sketches: estimates that never fall below the truth, in space fixed by the error bound. Count-Min answers for a key you name; Top-K lists the heaviest keys without naming them, and is the one structure whose frame holds the keys themselves.
 
-Quantiles and similarity are the same shape of question and are not shipped yet. See [architecture.md](architecture.md) for why a sketch cannot satisfy the filter interface.
+- **What is the p99 of these values?** Quantile sketches: every quantile within a relative error of the true value, tails included, in space fixed by the accuracy and the range of values. DDSketch takes numbers rather than keys, merges exactly, and reads and writes Datadog's protobuf on its own subpath.
+
+Similarity is the same shape of question and is not shipped yet. See [architecture.md](architecture.md) for why a sketch cannot satisfy the filter interface.
 
 ## Why (market gap, 2026)
 
