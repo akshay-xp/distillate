@@ -103,6 +103,14 @@
       "import": "./dist/topk/index.js",
       "require": "./dist/topk/index.cjs"
     },
+    "./ddsketch": {
+      "types": {
+        "import": "./dist/ddsketch/index.d.ts",
+        "require": "./dist/ddsketch/index.d.cts"
+      },
+      "import": "./dist/ddsketch/index.js",
+      "require": "./dist/ddsketch/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",

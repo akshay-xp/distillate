@@ -19,6 +19,7 @@ import { ScalableBloomFilter } from "../dist/scalable/index.js";
 import { CuckooFilter } from "../dist/cuckoo/index.js";
 import { CountMinSketch, countMinSizing } from "../dist/countmin/index.js";
 import { TopK, topKSizing } from "../dist/topk/index.js";
+import { collapsingLowestStore, DDSketch } from "../dist/ddsketch/index.js";
 
 if (typeof VERSION !== "string") {
   console.error(
@@ -117,6 +118,8 @@ const rebuild = ({
   tightening,
   seed,
   deletes = [],
+  values = [],
+  maxBins,
 }) => {
   switch (kind) {
     case "bloom":
@@ -157,6 +160,12 @@ const rebuild = ({
       for (const key of keys) sketch.add(key);
       return sketch;
     }
+    case "ddsketch":
+      return DDSketch.from(
+        values,
+        epsilon,
+        maxBins ? { store: collapsingLowestStore(maxBins) } : {},
+      );
     default:
       console.error(`smoke: unknown golden kind ${kind}`);
       process.exit(1);
@@ -256,6 +265,26 @@ if (!TopK.fromBytes(tk.toBytes()).equals(tk)) {
   process.exit(1);
 }
 
+const dd = DDSketch.create(0.01);
+for (let v = 1; v <= 100; v++) dd.add(v);
+const median = dd.quantile(0.5);
+if (dd.count !== 100 || Math.abs(median - 50) > 0.5) {
+  console.error(
+    `smoke: DDSketch counted ${dd.count} of 100, or put the median at ${median}, not within 1% of 50`,
+  );
+  process.exit(1);
+}
+
+if (!DDSketch.fromBytes(dd.toBytes()).equals(dd)) {
+  console.error("smoke: DDSketch did not survive a byte round-trip");
+  process.exit(1);
+}
+
+if (dd.union(DDSketch.from([1000], 0.01)).max !== 1000) {
+  console.error("smoke: DDSketch union lost the other sketch's max");
+  process.exit(1);
+}
+
 // A log of concatenated frames must walk by declared length alone.
 const log = [
   golden.find((g) => g.name === "bloom"),
@@ -279,5 +308,5 @@ if (walked.join() !== "1,5" || at !== stream.length) {
 }
 
 console.log(
-  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo + distillate/countmin + distillate/topk work (filters, sketches, sizing helpers, frame walk, growth, delete, counting, heavy hitters), toBytes byte-identical to golden`,
+  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo + distillate/countmin + distillate/topk + distillate/ddsketch work (filters, sketches, sizing helpers, frame walk, growth, delete, counting, heavy hitters, quantiles), toBytes byte-identical to golden`,
 );
