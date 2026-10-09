@@ -275,7 +275,7 @@ export function ddSketchSection(table: string, bundles: string): string[] {
     "`distillate/ddsketch` is distillate at its defaults: the bitwise mapping sketches-java's `DDSketch.fast()` uses, which finds a bin with integer arithmetic on the float's bits, and a store collapsing the lowest bins past 4096.",
     "`distillate/ddsketch (log)` takes the log mapping, sketches-js's default, so it and sketches-js hold the same bins and that comparison is like for like. The stream never reaches either store's bound.",
     "",
-    "`max rel. error` is the largest relative error over 11 quantiles from 0 to 1, each against the exact value at rank `floor(q * (n - 1))`, on one seeded lognormal stream around 100 shared by both. Both promise at most 1%.",
+    "`max rel. error` is the largest relative error over 11 quantiles from 0 to 1, each against the exact value at rank `floor(q * (n - 1))`, on one seeded lognormal stream around 100 shared by all three. Each promises at most 1%.",
     "`add` is the median of 5 timed passes after 2 untimed ones, each on a fresh sketch, so it is the steady rate rather than how fast V8 optimises the first pass.",
     "`size` is each library's own serialization: distillate's DSTL frame, and sketches-js's protobuf message, its only one. `protobuf` is Datadog's message from each, the like-for-like size.",
     "",

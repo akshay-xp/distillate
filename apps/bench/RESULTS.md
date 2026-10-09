@@ -4,6 +4,11 @@
 - Package: distillate@0.14.1
 - Date: 2026-10-05
 
+The DDSketch section was measured on 2026-10-09, on the same machine, from the
+unreleased build that adds `distillate/ddsketch` on top of 0.14.2, against
+`@datadog/sketches-js@2.1.1`. Every other section keeps the numbers it was
+published with.
+
 All filters are configured at the same target FPR (1%) and measured by identical code.
 See [METHODOLOGY.md](./METHODOLOGY.md) for how these benches are run.
 
@@ -209,6 +214,41 @@ Keys tied at the k-th true count are interchangeable: every key above it must co
 | bloom-filters   | 100k   | 2719 x 7 + top 100 | 53589 B | 0.990     | 0.990  | 0     | 124 k ops/s   |
 | distillate/topk | 1M     | 4096 slots         | 40333 B | 1.000     | 1.000  | 0     | 10.09 M ops/s |
 | bloom-filters   | 1M     | 2719 x 7 + top 100 | 71733 B | 0.980     | 0.980  | 0     | 130 k ops/s   |
+
+## DDSketch
+
+Compared with `@datadog/sketches-js`, Datadog's own JavaScript port, all at a `relativeAccuracy` of 0.01.
+`distillate/ddsketch` is distillate at its defaults: the bitwise mapping sketches-java's `DDSketch.fast()` uses, which finds a bin with integer arithmetic on the float's bits, and a store collapsing the lowest bins past 4096.
+`distillate/ddsketch (log)` takes the log mapping, sketches-js's default, so it and sketches-js hold the same bins and that comparison is like for like. The stream never reaches either store's bound.
+
+`max rel. error` is the largest relative error over 11 quantiles from 0 to 1, each against the exact value at rank `floor(q * (n - 1))`, on one seeded lognormal stream around 100 shared by all three. Each promises at most 1%.
+`add` is the median of 5 timed passes after 2 untimed ones, each on a fresh sketch, so it is the steady rate rather than how fast V8 optimises the first pass.
+`size` is each library's own serialization: distillate's DSTL frame, and sketches-js's protobuf message, its only one. `protobuf` is Datadog's message from each, the like-for-like size.
+
+| Sketch                    | values | max rel. error | size   | protobuf | add            |
+| ------------------------- | ------ | -------------- | ------ | -------- | -------------- |
+| distillate/ddsketch       | 1k     | 0.72%          | 2252 B | 4288 B   | 25.03 M ops/s  |
+| distillate/ddsketch (log) | 1k     | 0.88%          | 1268 B | 2326 B   | 19.61 M ops/s  |
+| @datadog/sketches-js      | 1k     | 0.88%          | 3115 B | 3115 B   | 22.84 M ops/s  |
+| distillate/ddsketch       | 10k    | 0.62%          | 3076 B | 5944 B   | 73.26 M ops/s  |
+| distillate/ddsketch (log) | 10k    | 0.78%          | 1716 B | 3213 B   | 47.44 M ops/s  |
+| @datadog/sketches-js      | 10k    | 0.78%          | 4139 B | 4139 B   | 41.00 M ops/s  |
+| distillate/ddsketch       | 100k   | 0.73%          | 3364 B | 6519 B   | 139.58 M ops/s |
+| distillate/ddsketch (log) | 100k   | 0.85%          | 1868 B | 3525 B   | 59.71 M ops/s  |
+| @datadog/sketches-js      | 100k   | 0.85%          | 4139 B | 4139 B   | 62.55 M ops/s  |
+| distillate/ddsketch       | 1M     | 0.62%          | 3652 B | 7087 B   | 140.69 M ops/s |
+| distillate/ddsketch (log) | 1M     | 0.92%          | 2036 B | 3853 B   | 60.72 M ops/s  |
+| @datadog/sketches-js      | 1M     | 0.92%          | 4139 B | 4139 B   | 64.66 M ops/s  |
+
+At its defaults distillate adds about 2.2 times as fast as sketches-js from 100k values up and 1.8 times at 10k, with a tighter error, since the bitwise mapping takes the finest power-of-two bins that meet 1%, and a smaller frame. Those finer bins cost protobuf size: its message is larger than sketches-js's at the defaults.
+On the log mapping, holding the same bins as sketches-js, distillate's frame is about half the size of sketches-js's message and its own message is smaller too; its `add` is level at 100k, ahead at 10k and about 6% behind at 1M values.
+
+Bundle sizes are measured, not quoted: each import bundled by esbuild for the browser, minified and gzipped. sketches-js serializes through `protobufjs`, which it bundles whether or not a caller serializes; distillate keeps its codec on the `distillate/ddsketch/protobuf` subpath.
+
+| Library              | sketch  | with protobuf |
+| -------------------- | ------- | ------------- |
+| distillate/ddsketch  | 6.4 KB  | 6.9 KB        |
+| @datadog/sketches-js | 18.3 KB | 18.3 KB       |
 
 ## Throughput (n = 100k)
 
