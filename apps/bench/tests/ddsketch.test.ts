@@ -27,6 +27,7 @@ test("rows measure accuracy, both sizes and throughput for each library", () => 
   const rows = ddSketchRows([1000]);
   expect(rows.map((r) => r.name)).toEqual([
     "distillate/ddsketch",
+    "distillate/ddsketch (log)",
     "@datadog/sketches-js",
   ]);
   for (const r of rows) {

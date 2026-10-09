@@ -1,5 +1,5 @@
 import { DDSketch as DatadogSketch } from "@datadog/sketches-js";
-import { DDSketch } from "distillate/ddsketch";
+import { DDSketch, logMapping } from "distillate/ddsketch";
 import { toProtobuf } from "distillate/ddsketch/protobuf";
 
 import { rng } from "./countmin.js";
@@ -38,26 +38,44 @@ export const DDSKETCH_TIMED_PASSES = 5;
 /** Every quantile the error is measured at, the ends included. */
 const QS = [0, 0.001, 0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99, 0.999, 1];
 
+function distillateAdapter(
+  name: string,
+  options: Parameters<typeof DDSketch.create>[1],
+): DDSketchAdapter {
+  return {
+    name,
+    create(relativeAccuracy) {
+      const s = DDSketch.create(relativeAccuracy, options);
+      return {
+        relativeAccuracy: s.relativeAccuracy,
+        add: (v) => {
+          s.add(v);
+        },
+        quantile: (q) => s.quantile(q),
+        bytes: () => s.toBytes().length,
+        protoBytes: () => toProtobuf(s).length,
+      };
+    },
+  };
+}
+
 /**
- * At defaults: the log mapping and a store collapsing the lowest bins at 2048.
- * The stream never spans that many bins at 0.01, so it holds exactly what an
- * unbounded store would, which is what sketches-js's default keeps.
+ * At defaults: the bitwise mapping and a store collapsing the lowest bins at
+ * 4096, which the stream never reaches at 0.01.
  */
-export const distillateDDSketchAdapter: DDSketchAdapter = {
-  name: "distillate/ddsketch",
-  create(relativeAccuracy) {
-    const s = DDSketch.create(relativeAccuracy);
-    return {
-      relativeAccuracy: s.relativeAccuracy,
-      add: (v) => {
-        s.add(v);
-      },
-      quantile: (q) => s.quantile(q),
-      bytes: () => s.toBytes().length,
-      protoBytes: () => toProtobuf(s).length,
-    };
-  },
-};
+export const distillateDDSketchAdapter = distillateAdapter(
+  "distillate/ddsketch",
+  {},
+);
+
+/**
+ * On the log mapping, sketches-js's default, so the two hold the same bins
+ * and the comparison is like for like.
+ */
+export const distillateLogDDSketchAdapter = distillateAdapter(
+  "distillate/ddsketch (log)",
+  { mapping: logMapping },
+);
 
 /** At defaults: the log mapping and an unbounded dense store. */
 export const datadogDDSketchAdapter: DDSketchAdapter = {
@@ -79,6 +97,7 @@ export const datadogDDSketchAdapter: DDSketchAdapter = {
 
 export const ddSketchAdapters: DDSketchAdapter[] = [
   distillateDDSketchAdapter,
+  distillateLogDDSketchAdapter,
   datadogDDSketchAdapter,
 ];
 

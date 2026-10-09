@@ -773,6 +773,7 @@ test("renderResults places the DDSketch section after top-k and states what is c
     "lognormal",
     "floor(q * (n - 1))",
     "same bins",
+    "bitwise",
     "protobufjs",
   ]) {
     expect(section, phrase).toContain(phrase);
@@ -790,8 +791,8 @@ test("METHODOLOGY states the DDSketch configuration and how bundles are measured
   const section = md.slice(at, end === -1 ? undefined : end);
   for (const phrase of [
     "0.01",
-    "2048",
-    "dense",
+    "4096",
+    "bitwise",
     "lognormal",
     "protobufjs",
     "esbuild",

@@ -264,11 +264,12 @@ timed passes after two untimed ones.
 ## Configuration for DDSketch
 
 DDSketch is compared with `@datadog/sketches-js`, Datadog's own JavaScript
-port, both at their defaults and a `relativeAccuracy` of 0.01: the log mapping
-in both, with distillate's store collapsing the lowest bins past 2048 and
-sketches-js's an unbounded dense store. The stream is lognormal around 100, the
-shape latencies take, and at 0.01 it never spans 2048 bins, so the two hold the
-same bins and the store difference never comes into play.
+port, at a `relativeAccuracy` of 0.01, with distillate measured twice: at its
+defaults, the bitwise mapping of sketches-java's `DDSketch.fast()` and a store
+collapsing the lowest bins past 4096, and on
+the log mapping, sketches-js's default, so that pair holds the same bins and
+compares like for like. The stream is lognormal around 100, the shape latencies
+take, and never reaches either store's bound.
 
 The headline is the largest relative error over 11 quantiles from 0 to 1, each
 against the exact value at rank `floor(q * (n - 1))`, which both libraries
