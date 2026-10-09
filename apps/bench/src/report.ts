@@ -271,8 +271,9 @@ export function ddSketchSection(table: string, bundles: string): string[] {
   return [
     "## DDSketch",
     "",
-    "Compared with `@datadog/sketches-js`, Datadog's own JavaScript port. Both are built at their defaults with a `relativeAccuracy` of 0.01: the log mapping, with distillate's store collapsing the lowest bins past 2048 and sketches-js's store unbounded.",
-    "A lognormal stream at 0.01 never reaches 2048 bins, so the two hold the same bins and the comparison is like for like.",
+    "Compared with `@datadog/sketches-js`, Datadog's own JavaScript port, all at a `relativeAccuracy` of 0.01.",
+    "`distillate/ddsketch` is distillate at its defaults: the bitwise mapping sketches-java's `DDSketch.fast()` uses, which finds a bin with integer arithmetic on the float's bits, and a store collapsing the lowest bins past 4096.",
+    "`distillate/ddsketch (log)` takes the log mapping, sketches-js's default, so it and sketches-js hold the same bins and that comparison is like for like. The stream never reaches either store's bound.",
     "",
     "`max rel. error` is the largest relative error over 11 quantiles from 0 to 1, each against the exact value at rank `floor(q * (n - 1))`, on one seeded lognormal stream around 100 shared by both. Both promise at most 1%.",
     "`add` is the median of 5 timed passes after 2 untimed ones, each on a fresh sketch, so it is the steady rate rather than how fast V8 optimises the first pass.",
