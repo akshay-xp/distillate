@@ -60,6 +60,87 @@ function storeOf(kind: StoreKind, maxBins: number): StoreFactory {
   }
 }
 
+interface Bins {
+  indices: number[];
+  counts: number[];
+  total: number;
+}
+
+// Reads one sign's bins, refusing any a store could not have written: counts
+// that are not finite and positive, indices out of order or outside the
+// mapping's range, or a span wider than a collapsing store keeps.
+function readBins(
+  view: DataView,
+  countsAt: number,
+  indicesAt: number,
+  n: number,
+  mapping: IndexMapping,
+  maxBins: number,
+): Bins {
+  const lo = mapping.index(mapping.minIndexableValue);
+  const hi = mapping.index(mapping.maxIndexableValue);
+  const bins: Bins = { indices: [], counts: [], total: 0 };
+  let previous = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const count = view.getFloat64(countsAt + 8 * i, true);
+    const index = view.getInt32(indicesAt + 4 * i, true);
+    if (!(count > 0 && count < Infinity)) {
+      throw new SerializationError(
+        `ddsketch: bin count must be finite and positive, got ${String(count)}`,
+      );
+    }
+    if (index <= previous || index < lo || index > hi) {
+      throw new SerializationError(
+        `ddsketch: bin index ${String(index)} is out of order or outside [${String(lo)}, ${String(hi)}]`,
+      );
+    }
+    previous = index;
+    bins.indices.push(index);
+    bins.counts.push(count);
+    bins.total += count;
+  }
+  const first = bins.indices[0] ?? 0;
+  if (maxBins > 0 && previous - first + 1 > maxBins) {
+    throw new SerializationError(
+      `ddsketch: bins span more than maxBins ${String(maxBins)}`,
+    );
+  }
+  return bins;
+}
+
+// Whether sum, min and max could have come from these bins. Bins carry the
+// mapping's relative error, so the extremes are checked against bin bounds
+// with that much slack: the highest positive bin must not start above max,
+// the lowest must not end below min, and the mirror for the negatives.
+function summariesHold(
+  mapping: IndexMapping,
+  pos: Bins,
+  neg: Bins,
+  zeroCount: number,
+  count: number,
+  sum: number,
+  min: number,
+  max: number,
+): boolean {
+  if (count === 0) return Number.isNaN(min) && Number.isNaN(max) && sum === 0;
+  if (![sum, min, max].every(Number.isFinite) || min > max) return false;
+  const slack = 1 + mapping.relativeAccuracy;
+  const posFirst = pos.indices[0];
+  if (posFirst !== undefined) {
+    const posLast = pos.indices.at(-1) ?? posFirst;
+    if (max * slack < mapping.lowerBound(posLast)) return false;
+    if (min > mapping.lowerBound(posFirst + 1) * slack) return false;
+  }
+  const negFirst = neg.indices[0];
+  if (negFirst !== undefined) {
+    const negLast = neg.indices.at(-1) ?? negFirst;
+    if (-min * slack < mapping.lowerBound(negLast)) return false;
+    if (-max > mapping.lowerBound(negFirst + 1) * slack) return false;
+  }
+  const tiny = mapping.minIndexableValue;
+  return zeroCount === 0 || (min <= tiny && max >= -tiny);
+}
+
 function binsOf(store: Store): { indices: number[]; counts: number[] } {
   const indices: number[] = [];
   const counts: number[] = [];
@@ -196,25 +277,60 @@ export class DDSketch {
     );
     const gamma = view.getFloat64(8, true);
     const indexOffset = view.getFloat64(16, true);
-    const sketch = new DDSketch(view.getFloat64(24, true), {
-      mapping: () => mappingWithGamma(kind, gamma, indexOffset),
+    const relativeAccuracy = view.getFloat64(24, true);
+    if (!(gamma > 1 && gamma < Infinity) || !Number.isFinite(indexOffset)) {
+      throw new SerializationError(
+        "ddsketch: gamma must be finite and above 1, and indexOffset finite",
+      );
+    }
+    if (!(relativeAccuracy > 0 && relativeAccuracy < 1)) {
+      throw new SerializationError(
+        `ddsketch: relativeAccuracy must be in (0, 1), got ${String(relativeAccuracy)}`,
+      );
+    }
+    const mapping = mappingWithGamma(kind, gamma, indexOffset);
+    const countsAt = PARAMS_SIZE + COUNTS_SIZE;
+    const indicesAt = countsAt + 8 * (posBins + negBins);
+    const pos = readBins(view, countsAt, indicesAt, posBins, mapping, maxBins);
+    const neg = readBins(
+      view,
+      countsAt + 8 * posBins,
+      indicesAt + 4 * posBins,
+      negBins,
+      mapping,
+      maxBins,
+    );
+    const zeroCount = view.getFloat64(56, true);
+    if (!(zeroCount >= 0 && zeroCount < Infinity)) {
+      throw new SerializationError(
+        `ddsketch: zeroCount must be finite and not negative, got ${String(zeroCount)}`,
+      );
+    }
+    const sum = view.getFloat64(32, true);
+    const min = view.getFloat64(40, true);
+    const max = view.getFloat64(48, true);
+    const count = zeroCount + pos.total + neg.total;
+    if (!summariesHold(mapping, pos, neg, zeroCount, count, sum, min, max)) {
+      throw new SerializationError(
+        "ddsketch: sum, min and max do not agree with the bins",
+      );
+    }
+
+    const sketch = new DDSketch(relativeAccuracy, {
+      mapping: () => mapping,
       store: storeOf(storeKind, maxBins),
     });
-    const counts = PARAMS_SIZE + COUNTS_SIZE;
-    const indices = counts + 8 * (posBins + negBins);
-    const zeroCount = view.getFloat64(56, true);
-    let total = zeroCount;
-    for (let i = 0; i < posBins + negBins; i++) {
-      const count = view.getFloat64(counts + 8 * i, true);
-      const index = view.getInt32(indices + 4 * i, true);
-      (i < posBins ? sketch.#positive : sketch.#negative).add(index, count);
-      total += count;
-    }
+    pos.indices.forEach((index, i) => {
+      sketch.#positive.add(index, pos.counts[i] ?? 0);
+    });
+    neg.indices.forEach((index, i) => {
+      sketch.#negative.add(index, neg.counts[i] ?? 0);
+    });
     sketch.#zeroCount = zeroCount;
-    sketch.#count = total;
-    sketch.#sum = view.getFloat64(32, true);
-    sketch.#min = view.getFloat64(40, true);
-    sketch.#max = view.getFloat64(48, true);
+    sketch.#count = count;
+    sketch.#sum = sum;
+    sketch.#min = min;
+    sketch.#max = max;
     return sketch;
   }
 
