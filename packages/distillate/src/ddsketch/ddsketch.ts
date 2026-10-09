@@ -76,6 +76,29 @@ export class DDSketch {
   }
 
   /**
+   * The value at quantile `q`, within `relativeAccuracy` of the exact value at
+   * rank `floor(q * (count - 1))`. `q = 0` and `q = 1` give `min` and `max`
+   * exactly.
+   *
+   * @param q - The quantile, in `[0, 1]`.
+   * @returns The estimate, or `NaN` when the sketch is empty.
+   * @throws {@link ParamError} when `q` is outside `[0, 1]`.
+   */
+  quantile(q: number): number {
+    if (!(q >= 0 && q <= 1)) {
+      throw new ParamError(`q must be in [0, 1], got ${String(q)}`);
+    }
+    if (this.#count === 0) return Number.NaN;
+    if (q === 0) return this.#min;
+    if (q === 1) return this.#max;
+    const rank = q * (this.#count - 1);
+    const value = this.#mapping.value(this.#positive.keyAtRank(rank));
+    // A bin reads back as one value for everything in it; clamping to what
+    // was actually seen can only move the answer closer to the truth.
+    return Math.min(Math.max(value, this.#min), this.#max);
+  }
+
+  /**
    * Records a value.
    *
    * @param value - Any finite number within the mapping's indexable range.

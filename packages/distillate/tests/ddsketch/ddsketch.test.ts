@@ -3,6 +3,13 @@ import { describe, expect, test } from "vitest";
 import { ParamError } from "../../src/core/params.js";
 import { DDSketch } from "../../src/ddsketch/ddsketch.js";
 import { cubicMapping } from "../../src/ddsketch/mapping.js";
+import {
+  exactQuantile,
+  expectWithin,
+  lognormalValues,
+} from "../helpers/quantile.js";
+
+const QS = [0.01, 0.1, 0.5, 0.9, 0.99];
 
 describe("create", () => {
   test("reports the accuracy it was built for and the log mapping by default", () => {
@@ -58,5 +65,36 @@ describe("add", () => {
       }).toThrow(ParamError);
     }
     expect(sketch.count).toBe(0);
+  });
+});
+
+describe("quantile", () => {
+  test("is within the relative accuracy of the exact value", () => {
+    const values = lognormalValues(1, 1000);
+    const sketch = DDSketch.create(0.01);
+    for (const v of values) sketch.add(v);
+    for (const q of QS) {
+      expectWithin(sketch.quantile(q), exactQuantile(values, q), 0.01);
+    }
+  });
+
+  test("returns min and max exactly at the ends", () => {
+    const values = lognormalValues(2, 100);
+    const sketch = DDSketch.create(0.01);
+    for (const v of values) sketch.add(v);
+    expect(sketch.quantile(0)).toBe(sketch.min);
+    expect(sketch.quantile(1)).toBe(sketch.max);
+  });
+
+  test("is NaN on an empty sketch", () => {
+    expect(DDSketch.create(0.01).quantile(0.5)).toBeNaN();
+  });
+
+  test("rejects a q outside [0, 1]", () => {
+    const sketch = DDSketch.create(0.01);
+    sketch.add(1);
+    for (const bad of [-0.1, 1.1, Number.NaN]) {
+      expect(() => sketch.quantile(bad)).toThrow(ParamError);
+    }
   });
 });

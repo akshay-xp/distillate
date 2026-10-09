@@ -17,6 +17,23 @@ export class DenseStore {
     this.#bins[at] = (this.#bins[at] ?? 0) + count;
   }
 
+  /**
+   * The index of the bin holding the value at `rank`, counting from 0 in
+   * ascending index order: the first bin whose running total exceeds `rank`.
+   */
+  keyAtRank(rank: number): number {
+    let running = 0;
+    let last = this.#offset;
+    for (let i = 0; i < this.#bins.length; i++) {
+      const count = this.#bins[i] ?? 0;
+      if (count === 0) continue;
+      running += count;
+      last = i + this.#offset;
+      if (running > rank) break;
+    }
+    return last;
+  }
+
   #grow(index: number): void {
     const old = this.#bins;
     const empty = old.length === 0;

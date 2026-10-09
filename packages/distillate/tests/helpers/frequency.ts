@@ -11,7 +11,7 @@ export function truthOf(stream: readonly string[]): Map<string, number> {
 }
 
 // xorshift32: a seeded generator, so a failing accuracy run reproduces exactly.
-function rng(seed: number): () => number {
+export function rng(seed: number): () => number {
   let x = seed | 0 || 1;
   return () => {
     x ^= x << 13;
