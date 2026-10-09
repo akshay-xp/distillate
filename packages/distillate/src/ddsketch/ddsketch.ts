@@ -1,6 +1,6 @@
 import { assertPositiveFinite, ParamError } from "../core/params.js";
 import { type IndexMapping, logMapping } from "./mapping.js";
-import { DenseStore } from "./store.js";
+import { denseStore, type Store, type StoreFactory } from "./store.js";
 
 /** Options for {@link DDSketch.create}. */
 export interface DDSketchOptions {
@@ -9,6 +9,8 @@ export interface DDSketchOptions {
    * most compact; the interpolated mappings trade bins for speed.
    */
   mapping?: (relativeAccuracy: number) => IndexMapping;
+  /** The store factory that holds each sign's bins. */
+  store?: StoreFactory;
 }
 
 /**
@@ -18,9 +20,9 @@ export interface DDSketchOptions {
 export class DDSketch {
   readonly #relativeAccuracy: number;
   readonly #mapping: IndexMapping;
-  readonly #positive = new DenseStore();
+  readonly #positive: Store;
   // Negative values, binned by magnitude.
-  readonly #negative = new DenseStore();
+  readonly #negative: Store;
   #zeroCount = 0;
   #count = 0;
   #sum = 0;
@@ -31,7 +33,7 @@ export class DDSketch {
    * Builds an empty sketch.
    *
    * @param relativeAccuracy - Relative error bound on every quantile, in `(0, 1)`.
-   * @param options - Optional mapping factory.
+   * @param options - Optional mapping and store factories.
    * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`.
    */
   static create(
@@ -46,7 +48,7 @@ export class DDSketch {
    *
    * @param values - Finite numbers within the mapping's indexable range.
    * @param relativeAccuracy - Relative error bound on every quantile, in `(0, 1)`.
-   * @param options - Optional mapping factory.
+   * @param options - Optional mapping and store factories.
    * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)` or a
    * value cannot be recorded.
    */
@@ -62,8 +64,10 @@ export class DDSketch {
 
   /** See {@link DDSketch.create}. */
   constructor(relativeAccuracy: number, options: DDSketchOptions = {}) {
-    const { mapping = logMapping } = options;
+    const { mapping = logMapping, store = denseStore() } = options;
     this.#mapping = mapping(relativeAccuracy);
+    this.#positive = store.create();
+    this.#negative = store.create();
     this.#relativeAccuracy = relativeAccuracy;
   }
 
