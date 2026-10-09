@@ -64,3 +64,13 @@ test("the DDSketch guide covers what a reader needs to choose and use it", () =>
   expect(datadog).toContain("distillate/ddsketch/protobuf");
   expect(datadog).toContain("derived");
 });
+
+test("the errors page lists the union error with a sample that reproduces it", () => {
+  const page = read("../src/content/docs/reference/errors.md");
+  expect(page).toContain("(/api/ddsketch/classes/ddsketchparammismatcherror/)");
+  const at = page.indexOf("\n### `DDSketchParamMismatchError`\n");
+  if (at === -1) throw new Error('no "### DDSketchParamMismatchError" section');
+  const body = page.slice(at, page.indexOf("\n## ", at));
+  expect(body).toContain("DDSketch.union");
+  expect(body).toContain("instanceof DDSketchParamMismatchError; // true");
+});
