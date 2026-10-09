@@ -132,6 +132,7 @@ export default defineConfig({
             { label: "HyperLogLog", link: "/guides/hll/" },
             { label: "Count-Min", link: "/guides/countmin/" },
             { label: "Top-K", link: "/guides/topk/" },
+            { label: "DDSketch", link: "/guides/ddsketch/" },
             { label: "Sizing and tuning FPR", link: "/guides/sizing/" },
             {
               label: "Sizing calculator",
