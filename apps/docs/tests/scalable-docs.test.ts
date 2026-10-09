@@ -82,6 +82,7 @@ const NUMBERS = [
   "fifteen",
   "sixteen",
   "seventeen",
+  "eighteen",
 ];
 
 test("the errors reference documents ScalableParamMismatchError", () => {

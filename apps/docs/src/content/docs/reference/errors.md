@@ -3,32 +3,33 @@ title: Errors
 description: Every error class distillate exports, when it is thrown, and what to do about it.
 ---
 
-distillate exports seventeen error classes. Each has a `name` that discriminates it
+distillate exports eighteen error classes. Each has a `name` that discriminates it
 from a plain `Error`, so you can narrow with `instanceof` or switch on `name`.
 
 They fall into five groups by cause: bad parameters, an operation two structures
 cannot support, a build that could not finish, a structure with no room left,
 and a frame that will not decode.
 
-| Error                                                                                    | Thrown by                                 | Cause                                                 |
-| ---------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------- |
-| [`ParamError`](/api/bloom/classes/paramerror/)                                           | constructors, `create`, sizing            | A parameter is out of range                           |
-| [`BloomParamMismatchError`](/api/bloom/classes/bloomparammismatcherror/)                 | `BloomFilter.union`                       | Filters disagree on geometry                          |
-| [`BlockedBloomParamMismatchError`](/api/blocked/classes/blockedbloomparammismatcherror/) | `BlockedBloomFilter.union`                | Filters disagree on geometry                          |
-| [`ScalableParamMismatchError`](/api/scalable/classes/scalableparammismatcherror/)        | `ScalableBloomFilter.union`               | Filters disagree on settings or stages                |
-| [`CountMinParamMismatchError`](/api/countmin/classes/countminparammismatcherror/)        | `CountMinSketch.union`                    | Sketches disagree on geometry or seed                 |
-| [`TopKParamMismatchError`](/api/topk/classes/topkparammismatcherror/)                    | `TopK.union`                              | Sketches disagree on capacity                         |
-| [`BinaryFuseBuildError`](/api/fuse/classes/binaryfusebuilderror/)                        | `BinaryFuse8.from`, `BinaryFuse16.from`   | The peel stalled on every seed                        |
-| [`CuckooFullError`](/api/cuckoo/classes/cuckoofullerror/)                                | `CuckooFilter.add`                        | No room for the key after 500 moves                   |
-| [`CountMinOverflowError`](/api/countmin/classes/countminoverflowerror/)                  | `CountMinSketch.add`, `union`             | A counter would pass `2^32 - 1`                       |
-| [`TopKOverflowError`](/api/topk/classes/topkoverflowerror/)                              | `TopK.add`, `union`                       | A count would pass `2^32 - 1` or the total `2^53 - 1` |
-| [`SerializationError`](/api/bloom/classes/serializationerror/)                           | `fromJSON`, and the base of the six below | The envelope is malformed                             |
-| [`TruncatedError`](/api/bloom/classes/truncatederror/)                                   | `fromBytes`                               | The frame is short                                    |
-| [`BadMagicError`](/api/bloom/classes/badmagicerror/)                                     | `fromBytes`                               | Not a DSTL frame                                      |
-| [`UnknownVersionError`](/api/bloom/classes/unknownversionerror/)                         | `fromBytes`, `fromJSON`                   | A format version this build cannot read               |
-| [`UnknownHashVariantError`](/api/bloom/classes/unknownhashvarianterror/)                 | `fromBytes`                               | A hash scheme this build cannot reproduce             |
-| [`ReservedBitsError`](/api/bloom/classes/reservedbitserror/)                             | `fromBytes`                               | A newer frame sets reserved header bits               |
-| [`ChecksumError`](/api/bloom/classes/checksumerror/)                                     | `fromBytes`                               | CRC32 does not match                                  |
+| Error                                                                                    | Thrown by                                                 | Cause                                                 |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------- |
+| [`ParamError`](/api/bloom/classes/paramerror/)                                           | constructors, `create`, sizing                            | A parameter is out of range                           |
+| [`BloomParamMismatchError`](/api/bloom/classes/bloomparammismatcherror/)                 | `BloomFilter.union`                                       | Filters disagree on geometry                          |
+| [`BlockedBloomParamMismatchError`](/api/blocked/classes/blockedbloomparammismatcherror/) | `BlockedBloomFilter.union`                                | Filters disagree on geometry                          |
+| [`ScalableParamMismatchError`](/api/scalable/classes/scalableparammismatcherror/)        | `ScalableBloomFilter.union`                               | Filters disagree on settings or stages                |
+| [`CountMinParamMismatchError`](/api/countmin/classes/countminparammismatcherror/)        | `CountMinSketch.union`                                    | Sketches disagree on geometry or seed                 |
+| [`TopKParamMismatchError`](/api/topk/classes/topkparammismatcherror/)                    | `TopK.union`                                              | Sketches disagree on capacity                         |
+| [`DDSketchParamMismatchError`](/api/ddsketch/classes/ddsketchparammismatcherror/)        | `DDSketch.union`                                          | Sketches bin values differently                       |
+| [`BinaryFuseBuildError`](/api/fuse/classes/binaryfusebuilderror/)                        | `BinaryFuse8.from`, `BinaryFuse16.from`                   | The peel stalled on every seed                        |
+| [`CuckooFullError`](/api/cuckoo/classes/cuckoofullerror/)                                | `CuckooFilter.add`                                        | No room for the key after 500 moves                   |
+| [`CountMinOverflowError`](/api/countmin/classes/countminoverflowerror/)                  | `CountMinSketch.add`, `union`                             | A counter would pass `2^32 - 1`                       |
+| [`TopKOverflowError`](/api/topk/classes/topkoverflowerror/)                              | `TopK.add`, `union`                                       | A count would pass `2^32 - 1` or the total `2^53 - 1` |
+| [`SerializationError`](/api/bloom/classes/serializationerror/)                           | `fromJSON`, `fromProtobuf`, and the base of the six below | The envelope is malformed                             |
+| [`TruncatedError`](/api/bloom/classes/truncatederror/)                                   | `fromBytes`                                               | The frame is short                                    |
+| [`BadMagicError`](/api/bloom/classes/badmagicerror/)                                     | `fromBytes`                                               | Not a DSTL frame                                      |
+| [`UnknownVersionError`](/api/bloom/classes/unknownversionerror/)                         | `fromBytes`, `fromJSON`                                   | A format version this build cannot read               |
+| [`UnknownHashVariantError`](/api/bloom/classes/unknownhashvarianterror/)                 | `fromBytes`                                               | A hash scheme this build cannot reproduce             |
+| [`ReservedBitsError`](/api/bloom/classes/reservedbitserror/)                             | `fromBytes`                                               | A newer frame sets reserved header bits               |
+| [`ChecksumError`](/api/bloom/classes/checksumerror/)                                     | `fromBytes`                                               | CRC32 does not match                                  |
 
 The seven serialization errors are exported from all eight structure subpaths
 (`distillate/bloom`, `distillate/blocked`, `distillate/fuse`, `distillate/hll`,
@@ -217,6 +218,34 @@ try {
   error = e;
 }
 error instanceof TopKParamMismatchError; // true
+```
+
+### `DDSketchParamMismatchError`
+
+[API reference](/api/ddsketch/classes/ddsketchparammismatcherror/).
+
+**Thrown when** `DDSketch.union` is given a sketch whose mapping bins values
+differently: a different mapping kind, or a `gamma` or `indexOffset` more than
+1e-12 relative apart. Adding counts from bins that cover different ranges would
+give quantiles with no bound at all.
+
+**What to do:** build both sides with the same `relativeAccuracy` and mapping.
+The store may differ. A sketch decoded from Datadog's protobuf carries the
+sender's mapping, and merges with one built here at the same accuracy.
+
+```ts
+import { DDSketch, DDSketchParamMismatchError } from "distillate/ddsketch";
+
+const a = DDSketch.create(0.01);
+const b = DDSketch.create(0.02); // wider bins
+
+let error: unknown;
+try {
+  a.union(b);
+} catch (e) {
+  error = e;
+}
+error instanceof DDSketchParamMismatchError; // true
 ```
 
 ## Build errors
