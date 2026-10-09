@@ -21,6 +21,7 @@ import {
 } from "../../src/ddsketch/store.js";
 import { SerializationError } from "../../src/core/serialize.js";
 import { fromBase64 } from "../helpers/base64.js";
+import { readFrameBins } from "../helpers/ddsketch-frame.js";
 import { expectWithin } from "../helpers/quantile.js";
 import fixture from "../fixtures/ddsketch/protobuf.go.json" with { type: "json" };
 
@@ -42,29 +43,15 @@ interface ProtoCase {
 const cases = fixture.cases as ProtoCase[];
 const KINDS: MappingKind[] = ["log", "linear", "quadratic", "cubic"];
 
-// The bins a sketch holds, read back from its type 10 frame: posBins and
-// negBins at body offset 64, then every count, then every index.
+// The bins a sketch holds, read back from its type 10 frame by a reader
+// written from the documented layout.
 function binsOf(sketch: DDSketch): {
   positive: number[][];
   negative: number[][];
   zeroCount: number;
 } {
-  const frame = sketch.toBytes();
-  const view = new DataView(frame.buffer, frame.byteOffset, frame.byteLength);
-  const body = 16;
-  const pos = view.getUint32(body + 64, true);
-  const neg = view.getUint32(body + 68, true);
-  const counts = body + 72;
-  const indices = counts + 8 * (pos + neg);
-  const pair = (i: number): number[] => [
-    view.getInt32(indices + 4 * i, true),
-    view.getFloat64(counts + 8 * i, true),
-  ];
-  return {
-    positive: Array.from({ length: pos }, (_, i) => pair(i)),
-    negative: Array.from({ length: neg }, (_, i) => pair(pos + i)),
-    zeroCount: view.getFloat64(body + 56, true),
-  };
+  const { positive, negative, zeroCount } = readFrameBins(sketch.toBytes());
+  return { positive: positive.bins, negative: negative.bins, zeroCount };
 }
 
 describe.each(cases)("sketches-go's $name message", (c) => {

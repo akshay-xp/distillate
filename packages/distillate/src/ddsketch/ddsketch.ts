@@ -9,6 +9,7 @@ import {
   readHeader,
   SerializationError,
   toJSONEnvelope,
+  TruncatedError,
   UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
@@ -33,8 +34,12 @@ const TYPE = 10;
 // hash-variant nibble is always 0.
 const NO_HASH = 0;
 const PARAMS_SIZE = 64;
-// posBins and negBins, ahead of the bin arrays.
-const COUNTS_SIZE = 8;
+// Each sign's bins are a block: a 16-byte header, then its counts, and for
+// pairs its indices, padded to 8 bytes so the next block's header and any f64
+// counts stay aligned.
+const BLOCK_HEADER = 16;
+const CONTIGUOUS = 1;
+const F64_COUNTS = 2;
 
 // Wire codes, by position. The mapping codes are Datadog's protobuf
 // Interpolation values.
@@ -70,44 +75,150 @@ interface Bins {
   total: number;
 }
 
-// Reads one sign's bins, refusing any a store could not have written: counts
-// that are not finite and positive, indices out of order or outside the
-// mapping's range, or a span wider than a collapsing store keeps.
-function readBins(
+// How one sign's bins are written, chosen from the bins alone so that equal
+// bins give equal bytes: counts as u32 when every one is a whole number that
+// fits, else f64; and one contiguous run from the first bin to the last,
+// empty slots written as 0, when that is no larger than (count, index) pairs.
+interface Layout {
+  contiguous: boolean;
+  f64: boolean;
+  /** Slots in the run, or bins as pairs. */
+  n: number;
+  /** The run's first index; 0 for pairs. */
+  start: number;
+  /** Bytes the block takes, header and padding included. */
+  size: number;
+}
+
+function layoutOf(
+  indices: readonly number[],
+  counts: readonly number[],
+): Layout {
+  const f64 = !counts.every((c) => Number.isInteger(c) && c <= 0xffffffff);
+  const width = f64 ? 8 : 4;
+  const first = indices[0];
+  if (first === undefined) {
+    return { contiguous: false, f64, n: 0, start: 0, size: BLOCK_HEADER };
+  }
+  const span = (indices.at(-1) ?? first) - first + 1;
+  const contiguous = span * width <= indices.length * (width + 4);
+  const n = contiguous ? span : indices.length;
+  const data = contiguous ? width * n : (width + 4) * n;
+  return {
+    contiguous,
+    f64,
+    n,
+    start: contiguous ? first : 0,
+    size: BLOCK_HEADER + Math.ceil(data / 8) * 8,
+  };
+}
+
+function writeBlock(
   view: DataView,
-  countsAt: number,
-  indicesAt: number,
-  n: number,
+  at: number,
+  layout: Layout,
+  bins: { indices: readonly number[]; counts: readonly number[] },
+): void {
+  const { contiguous, f64, n, start } = layout;
+  view.setUint8(at, (contiguous ? CONTIGUOUS : 0) | (f64 ? F64_COUNTS : 0));
+  view.setUint32(at + 4, n, true);
+  view.setInt32(at + 8, start, true);
+  const width = f64 ? 8 : 4;
+  const data = at + BLOCK_HEADER;
+  bins.counts.forEach((count, i) => {
+    const index = bins.indices[i] ?? 0;
+    const slot = contiguous ? index - start : i;
+    if (f64) view.setFloat64(data + 8 * slot, count, true);
+    else view.setUint32(data + 4 * slot, count, true);
+    if (!contiguous) view.setInt32(data + width * n + 4 * i, index, true);
+  });
+}
+
+// Reads the sign block at `at`, refusing any a writer could not have
+// produced: reserved bits or bytes set, a block running past the body,
+// counts that are not finite and positive (a run's empty slots aside),
+// indices out of order or outside the mapping's range, a span wider than a
+// collapsing store keeps, or a layout other than the one layoutOf picks for
+// these bins, which would be a second encoding of the same sketch.
+function readBlock(
+  view: DataView,
+  at: number,
   mapping: IndexMapping,
   maxBins: number,
-): Bins {
+): Bins & { size: number } {
+  const fail = (why: string): SerializationError =>
+    new SerializationError(`ddsketch: block at ${String(at)}: ${why}`);
+  if (at + BLOCK_HEADER > view.byteLength) {
+    throw new TruncatedError(
+      `ddsketch: body ends inside the block at ${String(at)}`,
+    );
+  }
+  const layout = view.getUint8(at);
+  if ((layout & ~(CONTIGUOUS | F64_COUNTS)) !== 0) {
+    throw fail("reserved layout bits are set");
+  }
+  for (const offset of [1, 2, 3, 12, 13, 14, 15]) {
+    if (view.getUint8(at + offset) !== 0)
+      throw fail("reserved bytes are not zero");
+  }
+  const contiguous = (layout & CONTIGUOUS) !== 0;
+  const f64 = (layout & F64_COUNTS) !== 0;
+  const n = view.getUint32(at + 4, true);
+  const start = view.getInt32(at + 8, true);
+  if (!contiguous && start !== 0) throw fail("pairs carry a start");
+  const width = f64 ? 8 : 4;
+  const data = contiguous ? width * n : (width + 4) * n;
+  const size = BLOCK_HEADER + Math.ceil(data / 8) * 8;
+  if (at + size > view.byteLength) {
+    throw new TruncatedError(
+      `ddsketch: body ends inside the block at ${String(at)}`,
+    );
+  }
+  for (let b = at + BLOCK_HEADER + data; b < at + size; b++) {
+    if (view.getUint8(b) !== 0) throw fail("padding is not zero");
+  }
+
   const lo = mapping.index(mapping.minIndexableValue);
   const hi = mapping.index(mapping.maxIndexableValue);
-  const bins: Bins = { indices: [], counts: [], total: 0 };
+  const countAt = (i: number): number =>
+    f64
+      ? view.getFloat64(at + BLOCK_HEADER + 8 * i, true)
+      : view.getUint32(at + BLOCK_HEADER + 4 * i, true);
+  const bins: Bins & { size: number } = {
+    indices: [],
+    counts: [],
+    total: 0,
+    size,
+  };
   let previous = -Infinity;
   for (let i = 0; i < n; i++) {
-    const count = view.getFloat64(countsAt + 8 * i, true);
-    const index = view.getInt32(indicesAt + 4 * i, true);
-    if (!(count > 0 && count < Infinity)) {
-      throw new SerializationError(
-        `ddsketch: bin count must be finite and positive, got ${String(count)}`,
-      );
+    const count = countAt(i);
+    const index = contiguous
+      ? start + i
+      : view.getInt32(at + BLOCK_HEADER + width * n + 4 * i, true);
+    // A run's interior may hold empty slots; its ends, and every pair, may not.
+    const end = !contiguous || i === 0 || i === n - 1;
+    if (!(count >= 0 && count < Infinity) || (end && count === 0)) {
+      throw fail(`count ${String(count)} is not one a store could hold`);
     }
     if (index <= previous || index < lo || index > hi) {
-      throw new SerializationError(
-        `ddsketch: bin index ${String(index)} is out of order or outside [${String(lo)}, ${String(hi)}]`,
+      throw fail(
+        `index ${String(index)} is out of order or outside [${String(lo)}, ${String(hi)}]`,
       );
     }
     previous = index;
+    if (count === 0) continue;
     bins.indices.push(index);
     bins.counts.push(count);
     bins.total += count;
   }
   const first = bins.indices[0] ?? 0;
   if (maxBins > 0 && previous - first + 1 > maxBins) {
-    throw new SerializationError(
-      `ddsketch: bins span more than maxBins ${String(maxBins)}`,
-    );
+    throw fail(`bins span more than maxBins ${String(maxBins)}`);
+  }
+  const canonical = layoutOf(bins.indices, bins.counts);
+  if (canonical.contiguous !== contiguous || canonical.f64 !== f64) {
+    throw fail("not the layout a writer chooses for these bins");
   }
   return bins;
 }
@@ -285,7 +396,11 @@ export class DDSketch {
         `ddsketch hashes nothing, so its hash variant must be 0, got ${String(flags & 0x0f)}`,
       );
     }
-    assertMinBodyLength(body.length, PARAMS_SIZE + COUNTS_SIZE, "ddsketch");
+    assertMinBodyLength(
+      body.length,
+      PARAMS_SIZE + 2 * BLOCK_HEADER,
+      "ddsketch",
+    );
     const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
     const kind = MAPPING_CODES[view.getUint8(0)];
     const storeKind = STORE_CODES[view.getUint8(1)];
@@ -305,13 +420,6 @@ export class DDSketch {
         `ddsketch: a ${storeKind} store cannot have maxBins ${String(maxBins)}`,
       );
     }
-    const posBins = view.getUint32(PARAMS_SIZE, true);
-    const negBins = view.getUint32(PARAMS_SIZE + 4, true);
-    assertBodyLength(
-      body.length,
-      PARAMS_SIZE + COUNTS_SIZE + 12 * (posBins + negBins),
-      "ddsketch",
-    );
     const gamma = view.getFloat64(8, true);
     const indexOffset = view.getFloat64(16, true);
     const relativeAccuracy = view.getFloat64(24, true);
@@ -333,16 +441,12 @@ export class DDSketch {
         "ddsketch: the mapping leaves no value indexable",
       );
     }
-    const countsAt = PARAMS_SIZE + COUNTS_SIZE;
-    const indicesAt = countsAt + 8 * (posBins + negBins);
-    const pos = readBins(view, countsAt, indicesAt, posBins, mapping, maxBins);
-    const neg = readBins(
-      view,
-      countsAt + 8 * posBins,
-      indicesAt + 4 * posBins,
-      negBins,
-      mapping,
-      maxBins,
+    const pos = readBlock(view, PARAMS_SIZE, mapping, maxBins);
+    const neg = readBlock(view, PARAMS_SIZE + pos.size, mapping, maxBins);
+    assertBodyLength(
+      body.length,
+      PARAMS_SIZE + pos.size + neg.size,
+      "ddsketch",
     );
     const zeroCount = view.getFloat64(56, true);
     if (!(zeroCount >= 0 && zeroCount < Infinity)) {
@@ -494,12 +598,12 @@ export class DDSketch {
   toBytes(): Uint8Array {
     const pos = binsOf(this.#positive);
     const neg = binsOf(this.#negative);
-    const counts = [...pos.counts, ...neg.counts];
-    const indices = [...pos.indices, ...neg.indices];
+    const posLayout = layoutOf(pos.indices, pos.counts);
+    const negLayout = layoutOf(neg.indices, neg.counts);
     return writeFrame(
       { version: FORMAT_VERSION, type: TYPE, flags: NO_HASH },
       PARAMS_SIZE,
-      COUNTS_SIZE + 12 * counts.length,
+      posLayout.size + negLayout.size,
       (_, view) => {
         view.setUint8(0, MAPPING_CODES.indexOf(this.#mapping.kind));
         view.setUint8(1, STORE_CODES.indexOf(this.#store.kind));
@@ -511,15 +615,8 @@ export class DDSketch {
         view.setFloat64(40, this.min, true);
         view.setFloat64(48, this.max, true);
         view.setFloat64(56, this.#zeroCount, true);
-        view.setUint32(PARAMS_SIZE, pos.counts.length, true);
-        view.setUint32(PARAMS_SIZE + 4, neg.counts.length, true);
-        const at = PARAMS_SIZE + COUNTS_SIZE;
-        counts.forEach((count, i) => {
-          view.setFloat64(at + 8 * i, count, true);
-        });
-        indices.forEach((index, i) => {
-          view.setInt32(at + 8 * counts.length + 4 * i, index, true);
-        });
+        writeBlock(view, PARAMS_SIZE, posLayout, pos);
+        writeBlock(view, PARAMS_SIZE + posLayout.size, negLayout, neg);
       },
     );
   }

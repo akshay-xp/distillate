@@ -10,6 +10,7 @@ import {
 } from "../../src/core/serialize.js";
 import { CountMinSketch } from "../../src/countmin/countmin.js";
 import { DDSketch, type DDSketchOptions } from "../../src/ddsketch/ddsketch.js";
+import { toProtobuf } from "../../src/ddsketch/protobuf/protobuf.js";
 import {
   cubicMapping,
   linearMapping,
@@ -23,6 +24,7 @@ import {
   sparseStore,
 } from "../../src/ddsketch/store.js";
 import { rng } from "../helpers/frequency.js";
+import { readFrameBins } from "../helpers/ddsketch-frame.js";
 import { lognormalValues } from "../helpers/quantile.js";
 
 const BODY = 16;
@@ -106,8 +108,64 @@ test("the frame follows the documented layout", () => {
   expect(view.getFloat64(BODY + 8, true)).toBe(sketch.mapping.gamma);
   expect(view.getFloat64(BODY + 24, true)).toBe(0.01);
   expect(view.getFloat64(BODY + 56, true)).toBe(1);
-  expect(view.getUint32(BODY + 64, true)).toBe(1);
-  expect(view.getUint32(BODY + 68, true)).toBe(1);
+  // One bin a side: each a contiguous run of one u32 count, starting at it.
+  const { positive, negative } = readFrameBins(frame);
+  for (const block of [positive, negative]) {
+    expect([block.contiguous, block.f64, block.n]).toEqual([true, false, 1]);
+  }
+  expect(positive.start).toBe(sketch.mapping.index(1));
+  expect(negative.start).toBe(sketch.mapping.index(2));
+});
+
+describe("each sign takes the smaller layout its bins allow", () => {
+  test("a dense run of whole counts is contiguous u32", () => {
+    // 100 to 1099 fill their bins densely; down at 1 to 100 most of each
+    // octave's 64 bins stay empty and pairs come out smaller.
+    const values = Array.from({ length: 1000 }, (_, i) => i + 100);
+    const sketch = DDSketch.from(values, 0.01, { store: denseStore() });
+    const { positive } = readFrameBins(sketch.toBytes());
+    expect([positive.contiguous, positive.f64]).toEqual([true, false]);
+    expect(positive.start).toBe(sketch.mapping.index(100));
+    expect(positive.n).toBe(sketch.mapping.index(1099) - positive.start + 1);
+  });
+
+  test("bins far apart are written as pairs", () => {
+    const { positive } = readFrameBins(
+      DDSketch.from([1, 1e10], 0.01).toBytes(),
+    );
+    expect([positive.contiguous, positive.n]).toEqual([false, 2]);
+  });
+
+  test("a fractional count makes the sign's counts f64", () => {
+    const sketch = DDSketch.create(0.01);
+    sketch.add(5, 2.5);
+    sketch.add(-5);
+    const { positive, negative } = readFrameBins(sketch.toBytes());
+    expect([positive.f64, negative.f64]).toEqual([true, false]);
+  });
+
+  test("an empty sign is an empty list of pairs", () => {
+    const { positive, negative } = readFrameBins(
+      DDSketch.from([0], 0.01).toBytes(),
+    );
+    for (const block of [positive, negative]) {
+      expect([block.contiguous, block.f64, block.n, block.start]).toEqual([
+        false,
+        false,
+        0,
+        0,
+      ]);
+    }
+  });
+
+  // The point of the layout: a latency stream's frame is smaller than the
+  // protobuf message Datadog's libraries write for the same bins.
+  test("a lognormal stream's frame is smaller than its protobuf message", () => {
+    const sketch = DDSketch.from(lognormalValues(55, 100_000), 0.01, {
+      store: denseStore(),
+    });
+    expect(sketch.toBytes().length).toBeLessThan(toProtobuf(sketch).length);
+  });
 });
 
 describe("canonical bytes", () => {
@@ -191,11 +249,19 @@ describe("a structurally broken frame is rejected", () => {
     ).toThrow(TruncatedError);
   });
 
+  // VALID's negative block header starts at 96; a body of 100 passes the
+  // minimum length and ends inside it.
+  test("a body that ends inside a block header", () => {
+    expect(() =>
+      DDSketch.fromBytes(forge((body) => body.subarray(0, 100))),
+    ).toThrow(TruncatedError);
+  });
+
   test("a body whose length disagrees with its bin counts", () => {
     expect(() =>
       DDSketch.fromBytes(
         forge((_, view) => {
-          view.setUint32(64, view.getUint32(64, true) + 1, true);
+          view.setUint32(68, view.getUint32(68, true) + 100, true);
           return undefined;
         }),
       ),
@@ -252,11 +318,22 @@ describe("a structurally broken frame is rejected", () => {
   });
 });
 
-// VALID holds bins for 1 and 2 (positive), 3 (negative) and one zero, so its
-// payload is: counts at 72, 80, 88; indices at 96, 100, 104.
-const COUNT0 = 72;
-const INDEX0 = 96;
-const INDEX1 = 100;
+// VALID holds bins for 1 and 2 (positive), 3 (negative) and one zero. Bins
+// for 1 and 2 are a power of two apart, so the positive block is u32 pairs:
+// header at 64, counts at 80 and 84, indices at 88 and 92. The negative block
+// is a contiguous run of one: header at 96, its count at 112, padding to 120.
+const COUNT0 = 80;
+const INDEX0 = 88;
+const INDEX1 = 92;
+const NEG = 96;
+
+// The same shape with fractional counts, so the positive counts are f64:
+// counts at 80 and 88, indices at 96 and 100.
+const VALID_F64 = DDSketch.create(0.01, { store: denseStore() });
+VALID_F64.add(1, 2.5);
+VALID_F64.add(2, 1.5);
+VALID_F64.add(-3);
+VALID_F64.add(0);
 
 describe("a frame whose contents cannot be true is rejected", () => {
   const edits: [string, (view: DataView) => void][] = [
@@ -275,25 +352,55 @@ describe("a frame whose contents cannot be true is rejected", () => {
     [
       "a zero count",
       (v) => {
-        v.setFloat64(COUNT0, 0, true);
+        v.setUint32(COUNT0, 0, true);
       },
     ],
     [
-      "a negative count",
+      "a contiguous run that ends on an empty slot",
       (v) => {
-        v.setFloat64(COUNT0, -1, true);
+        v.setUint32(NEG + 16, 0, true);
       },
     ],
     [
-      "a NaN count",
+      "set reserved bits in a block's layout byte",
       (v) => {
-        v.setFloat64(COUNT0, Number.NaN, true);
+        v.setUint8(NEG, v.getUint8(NEG) | 4);
       },
     ],
     [
-      "an infinite count",
+      "non-zero reserved bytes in a block header",
       (v) => {
-        v.setFloat64(COUNT0, Infinity, true);
+        v.setUint8(NEG + 13, 1);
+      },
+    ],
+    [
+      "a start on a block of pairs",
+      (v) => {
+        v.setInt32(64 + 8, 5, true);
+      },
+    ],
+    [
+      "non-zero padding after a block",
+      (v) => {
+        v.setUint8(NEG + 20, 1);
+      },
+    ],
+    // The same bins in the other layout or count width are a second encoding
+    // of one sketch, which would break equals as byte equality.
+    [
+      "f64 counts that fit u32",
+      (v) => {
+        v.setUint8(NEG, 3);
+        v.setFloat64(NEG + 16, 1, true);
+      },
+    ],
+    [
+      "pairs where the contiguous run is smaller",
+      (v) => {
+        const start = v.getInt32(NEG + 8, true);
+        v.setUint8(NEG, 0);
+        v.setInt32(NEG + 8, 0, true);
+        v.setInt32(NEG + 20, start, true);
       },
     ],
     [
@@ -523,4 +630,26 @@ test("sketches on different mappings are unequal rather than throwing", () => {
   const a = DDSketch.from([1, 2], 0.01);
   const b = DDSketch.from([1, 2], 0.01, { mapping: cubicMapping });
   expect(a.equals(b)).toBe(false);
+});
+
+describe("a frame with impossible float counts is rejected", () => {
+  test.each<[string, number]>([
+    ["a negative count", -1],
+    ["a NaN count", Number.NaN],
+    ["an infinite count", Infinity],
+    ["a zero count", 0],
+  ])("%s", (_, count) => {
+    expect(() =>
+      DDSketch.fromBytes(
+        forge(
+          (__, view) => {
+            view.setFloat64(80, count, true);
+            return undefined;
+          },
+          0,
+          VALID_F64,
+        ),
+      ),
+    ).toThrow(SerializationError);
+  });
 });
