@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { HyperLogLog } from "distillate/hll";
-import { expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
 const SPEC = fileURLToPath(
   new URL("../src/content/docs/reference/serialization.md", import.meta.url),
@@ -531,58 +531,85 @@ test("the hash variant section lists DDSketch among the variant 0 writers", () =
   expect(hashVariant().families).toContain("DDSketch");
 });
 
-// Payload rows give their offset as `A + Bb`, b being posBins + negBins, since
-// where the indices start depends on how many bins there are.
-function ddAt(
-  rows: Map<string, { at: string }>,
-  field: string,
-  bins: number,
-): number {
-  const at = rows.get(field)?.at ?? "";
-  const m = /^(\d+)(?: \+ (\d+)b)?$/.exec(at);
-  if (!m) throw new Error(`DDSketch ${field} row has offset "${at}"`);
-  return Number(m[1]) + (m[2] ? Number(m[2]) : 0) * bins;
+// The block table is the section's second code block. Its rows give offsets
+// within a block, the indices' as `16 + wn`: after n counts of width w.
+function blockTable(): Map<string, string> {
+  const section = sectionFrom(
+    "DDSketch (type 10), little-endian",
+    "\n### ",
+    "serialization.md has no DDSketch section",
+  );
+  const blocks = section.split("```");
+  const table = blocks[3] ?? "";
+  const rows = new Map<string, string>();
+  for (const line of table.trim().split("\n").slice(1)) {
+    const [offset, , ...rest] = line.trim().split(/\s{2,}/);
+    rows.set(rest.join(" ").split(/[:\s(]/)[0] ?? "", offset);
+  }
+  return rows;
 }
 
 // Decoded from the page's offsets alone, as for Top-K, so a wrong row fails
 // here rather than in the Go reader written from it.
-test("the documented DDSketch layout decodes the golden frame", () => {
-  const rows = paramsTable("DDSketch (type 10), little-endian");
-  const all = JSON.parse(readFileSync(GOLDEN, "utf8")) as (Fixture & {
-    values?: number[];
-    epsilon?: number;
-  })[];
-  const fixture = all.find((g) => g.name === "ddsketch");
-  if (!fixture) throw new Error("golden.json has no ddsketch fixture");
-  const body = frameBody(Buffer.from(fixture.frame, "base64"));
-  const at = (field: string): number => rows.get(field)?.offset ?? NaN;
-  const f64 = (field: string): number => body.getFloat64(at(field), true);
+describe.each(["ddsketch", "ddsketch-collapsed"])(
+  "the documented DDSketch layout decodes the golden %s frame",
+  (name) => {
+    test("params, both blocks and every count", () => {
+      const rows = paramsTable("DDSketch (type 10), little-endian");
+      const block = blockTable();
+      const all = JSON.parse(readFileSync(GOLDEN, "utf8")) as (Fixture & {
+        values?: number[];
+        epsilon?: number;
+      })[];
+      const fixture = all.find((g) => g.name === name);
+      if (!fixture) throw new Error(`golden.json has no ${name} fixture`);
+      const body = frameBody(Buffer.from(fixture.frame, "base64"));
+      const at = (field: string): number => rows.get(field)?.offset ?? NaN;
+      const f64 = (field: string): number => body.getFloat64(at(field), true);
+      const off = (field: string): number => Number(block.get(field));
 
-  // The default mapping: bitwise, which travels as linear with gamma
-  // 2^(1/64) at 1% and no offset.
-  expect(body.getUint8(at("mapping"))).toBe(1);
-  expect(body.getUint8(at("store"))).toBe(1);
-  expect(body.getUint16(at("reserved"), true)).toBe(0);
-  expect(body.getUint32(at("maxBins"), true)).toBe(4096);
-  expect(f64("gamma")).toBe(2 ** (1 / 64));
-  expect(f64("relativeAccuracy")).toBe(fixture.epsilon);
-  expect(f64("zeroCount")).toBe(2);
-  const values = fixture.values ?? [];
-  expect(f64("min")).toBe(Math.min(...values));
-  expect(f64("max")).toBe(Math.max(...values));
+      // The default mapping: bitwise, which travels as linear with gamma
+      // 2^(1/64) at 1% and no offset.
+      expect(body.getUint8(at("mapping"))).toBe(1);
+      expect(f64("gamma")).toBe(2 ** (1 / 64));
+      expect(f64("relativeAccuracy")).toBe(fixture.epsilon);
+      const values = fixture.values ?? [];
+      expect(f64("min")).toBe(Math.min(...values));
+      expect(f64("max")).toBe(Math.max(...values));
 
-  const pos = body.getUint32(at("posBins"), true);
-  const neg = body.getUint32(at("negBins"), true);
-  const bins = pos + neg;
-  expect(ddAt(rows, "indices", bins) + 4 * bins).toBe(body.byteLength);
-  let total = f64("zeroCount");
-  for (let i = 0; i < bins; i++) {
-    total += body.getFloat64(ddAt(rows, "counts", bins) + 8 * i, true);
-    if (i > 0 && i !== pos) {
-      const index = (j: number): number =>
-        body.getInt32(ddAt(rows, "indices", bins) + 4 * j, true);
-      expect(index(i)).toBeGreaterThan(index(i - 1));
-    }
-  }
-  expect(total).toBe(values.length);
-});
+      let total = f64("zeroCount");
+      let blockAt = 64;
+      const forms: boolean[] = [];
+      for (let sign = 0; sign < 2; sign++) {
+        const layout = body.getUint8(blockAt + off("layout"));
+        const contiguous = (layout & 1) === 1;
+        const width = layout & 2 ? 8 : 4;
+        const n = body.getUint32(blockAt + off("n"), true);
+        const start = body.getInt32(blockAt + off("start"), true);
+        const countsAt = blockAt + off("counts");
+        expect(block.get("indices")).toBe("16 + wn");
+        const indicesAt = countsAt + width * n;
+        let previous = -Infinity;
+        for (let i = 0; i < n; i++) {
+          const count =
+            width === 8
+              ? body.getFloat64(countsAt + 8 * i, true)
+              : body.getUint32(countsAt + 4 * i, true);
+          const index = contiguous
+            ? start + i
+            : body.getInt32(indicesAt + 4 * i, true);
+          expect(index).toBeGreaterThan(previous);
+          previous = index;
+          total += count;
+        }
+        forms.push(contiguous);
+        const data = contiguous ? width * n : (width + 4) * n;
+        blockAt += 16 + Math.ceil(data / 8) * 8;
+      }
+      expect(blockAt).toBe(body.byteLength);
+      expect(total).toBe(values.length);
+      // The two fixtures cover both forms between them.
+      expect(forms[0]).toBe(name === "ddsketch-collapsed");
+    });
+  },
+);

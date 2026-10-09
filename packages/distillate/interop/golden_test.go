@@ -1547,10 +1547,13 @@ func TestTopKDamaged(t *testing.T) {
 }
 
 // DDSketch, frame type 10: values, not keys, so nothing is hashed. A 64-byte
-// params block, then each sign's non-empty bins as (count, index) pairs in
-// ascending index order: both signs' f64 counts first, then their i32
-// indices, so every f64 lands 8-byte aligned. The frame stores no count; it
-// is the zero count plus every bin's.
+// params block, then a block per sign, positive first. A block is a 16-byte
+// header (layout byte: bit 0 contiguous, bit 1 f64 counts; n; start), then
+// either n counts for a run of bins from start, empty bins written as 0, or n
+// counts followed by n i32 indices, padded to 8 bytes. A writer picks, from
+// the bins alone, u32 counts when every count is a whole number that fits,
+// and a run when it is no larger than pairs. The frame stores no count; it is
+// the zero count plus every bin's.
 type ddBins struct {
 	indices []int32
 	counts  []float64
@@ -1573,7 +1576,7 @@ func parseDDSketch(f frame) (ddSketch, error) {
 	if f.flags != 0 {
 		return ddSketch{}, fmt.Errorf("hash variant %d, but type 10 hashes nothing", f.flags)
 	}
-	if len(f.body) < ddParams+8 {
+	if len(f.body) < ddParams+2*ddBlockHeader {
 		return ddSketch{}, fmt.Errorf("body of %d bytes is shorter than the params block", len(f.body))
 	}
 	b := f.body
@@ -1593,32 +1596,19 @@ func parseDDSketch(f frame) (ddSketch, error) {
 	if collapsing := d.store == 1 || d.store == 2; collapsing != (d.maxBins > 0) {
 		return ddSketch{}, fmt.Errorf("store %d cannot have maxBins %d", d.store, d.maxBins)
 	}
-	posBins, negBins := int(le.Uint32(b[ddParams:])), int(le.Uint32(b[ddParams+4:]))
-	if want := ddParams + 8 + 12*(posBins+negBins); len(b) != want {
-		return ddSketch{}, fmt.Errorf("body length %d disagrees with %d bins (want %d)", len(b), posBins+negBins, want)
+	pos, posSize, err := readDDBlock(b, ddParams)
+	if err != nil {
+		return ddSketch{}, err
 	}
-	counts := ddParams + 8
-	indices := counts + 8*(posBins+negBins)
-	read := func(from, n int) ddBins {
-		var bins ddBins
-		for i := from; i < from+n; i++ {
-			bins.counts = append(bins.counts, f64(counts+8*i))
-			bins.indices = append(bins.indices, int32(le.Uint32(b[indices+4*i:])))
-		}
-		return bins
+	neg, negSize, err := readDDBlock(b, ddParams+posSize)
+	if err != nil {
+		return ddSketch{}, err
 	}
-	d.pos, d.neg = read(0, posBins), read(posBins, negBins)
-	for _, bins := range []ddBins{d.pos, d.neg} {
-		for i, c := range bins.counts {
-			if !(c > 0) || math.IsInf(c, 1) {
-				return ddSketch{}, fmt.Errorf("bin count %v is not finite and positive", c)
-			}
-			if i > 0 && bins.indices[i] <= bins.indices[i-1] {
-				return ddSketch{}, fmt.Errorf("bin indices out of ascending order at %d", i)
-			}
-		}
+	if want := ddParams + posSize + negSize; len(b) != want {
+		return ddSketch{}, fmt.Errorf("body length %d disagrees with its blocks (want %d)", len(b), want)
 	}
-	if empty := posBins+negBins == 0 && d.zeroCount == 0; empty {
+	d.pos, d.neg = pos, neg
+	if empty := len(pos.counts)+len(neg.counts) == 0 && d.zeroCount == 0; empty {
 		if !math.IsNaN(d.min) || !math.IsNaN(d.max) {
 			return ddSketch{}, fmt.Errorf("an empty sketch has min %v and max %v, want NaN", d.min, d.max)
 		}
@@ -1626,6 +1616,96 @@ func parseDDSketch(f frame) (ddSketch, error) {
 		return ddSketch{}, fmt.Errorf("min %v is not at or below max %v", d.min, d.max)
 	}
 	return d, nil
+}
+
+const ddBlockHeader = 16
+
+// ddLayout is the block a writer chooses for a sign's bins: whether a run,
+// whether f64 counts, n, start, and the padded size.
+func ddLayout(bins ddBins) (contiguous, f64 bool, n int, start int32, size int) {
+	for _, c := range bins.counts {
+		if c != math.Trunc(c) || c > math.MaxUint32 {
+			f64 = true
+		}
+	}
+	width := 4
+	if f64 {
+		width = 8
+	}
+	if len(bins.indices) == 0 {
+		return false, f64, 0, 0, ddBlockHeader
+	}
+	span := int(bins.indices[len(bins.indices)-1]-bins.indices[0]) + 1
+	contiguous = span*width <= len(bins.indices)*(width+4)
+	data := (width + 4) * len(bins.indices)
+	n = len(bins.indices)
+	if contiguous {
+		data, n, start = width*span, span, bins.indices[0]
+	}
+	return contiguous, f64, n, start, ddBlockHeader + (data+7)/8*8
+}
+
+// readDDBlock reads the sign block at at, refusing what no writer produces.
+func readDDBlock(b []byte, at int) (ddBins, int, error) {
+	if at+ddBlockHeader > len(b) {
+		return ddBins{}, 0, fmt.Errorf("body length %d ends inside the block at %d", len(b), at)
+	}
+	layout := b[at]
+	if layout&^3 != 0 || b[at+1]|b[at+2]|b[at+3]|b[at+12]|b[at+13]|b[at+14]|b[at+15] != 0 {
+		return ddBins{}, 0, fmt.Errorf("block at %d sets reserved bits", at)
+	}
+	contiguous, f64 := layout&1 != 0, layout&2 != 0
+	n, start := int(le.Uint32(b[at+4:])), int32(le.Uint32(b[at+8:]))
+	if !contiguous && start != 0 {
+		return ddBins{}, 0, fmt.Errorf("block at %d: pairs carry a start", at)
+	}
+	width := 4
+	if f64 {
+		width = 8
+	}
+	data := (width + 4) * n
+	if contiguous {
+		data = width * n
+	}
+	size := ddBlockHeader + (data+7)/8*8
+	if at+size > len(b) {
+		return ddBins{}, 0, fmt.Errorf("body length %d ends inside the block at %d", len(b), at)
+	}
+	for i := at + ddBlockHeader + data; i < at+size; i++ {
+		if b[i] != 0 {
+			return ddBins{}, 0, fmt.Errorf("block at %d: padding is not zero", at)
+		}
+	}
+	count := func(i int) float64 {
+		if f64 {
+			return math.Float64frombits(le.Uint64(b[at+ddBlockHeader+8*i:]))
+		}
+		return float64(le.Uint32(b[at+ddBlockHeader+4*i:]))
+	}
+	var bins ddBins
+	for i := 0; i < n; i++ {
+		c := count(i)
+		index := start + int32(i)
+		if !contiguous {
+			index = int32(le.Uint32(b[at+ddBlockHeader+width*n+4*i:]))
+		}
+		end := !contiguous || i == 0 || i == n-1
+		if !(c >= 0) || math.IsInf(c, 1) || (end && c == 0) {
+			return ddBins{}, 0, fmt.Errorf("block at %d: bin count %v is not one a store holds", at, c)
+		}
+		if k := len(bins.indices); k > 0 && index <= bins.indices[k-1] {
+			return ddBins{}, 0, fmt.Errorf("block at %d: bin indices out of ascending order at %d", at, i)
+		}
+		if c == 0 {
+			continue
+		}
+		bins.indices = append(bins.indices, index)
+		bins.counts = append(bins.counts, c)
+	}
+	if wantC, wantF, _, _, _ := ddLayout(bins); wantC != contiguous || wantF != f64 {
+		return ddBins{}, 0, fmt.Errorf("block at %d is not the layout a writer chooses", at)
+	}
+	return bins, size, nil
 }
 
 // logIndex is the logarithmic mapping's bin: log(v) times 1/ln(gamma) plus the
@@ -1735,13 +1815,36 @@ func buildDDSketch(d ddSketch) []byte {
 	for i, v := range []float64{d.gamma, d.indexOffset, d.relativeAccuracy, d.sum, d.min, d.max, d.zeroCount} {
 		le.PutUint64(params[8+8*i:], math.Float64bits(v))
 	}
-	payload := le.AppendUint32(nil, uint32(len(d.pos.counts)))
-	payload = le.AppendUint32(payload, uint32(len(d.neg.counts)))
-	for _, c := range append(append([]float64{}, d.pos.counts...), d.neg.counts...) {
-		payload = le.AppendUint64(payload, math.Float64bits(c))
-	}
-	for _, i := range append(append([]int32{}, d.pos.indices...), d.neg.indices...) {
-		payload = le.AppendUint32(payload, uint32(i))
+	var payload []byte
+	for _, bins := range []ddBins{d.pos, d.neg} {
+		contiguous, f64, n, start, size := ddLayout(bins)
+		block := make([]byte, size)
+		if contiguous {
+			block[0] |= 1
+		}
+		if f64 {
+			block[0] |= 2
+		}
+		le.PutUint32(block[4:], uint32(n))
+		le.PutUint32(block[8:], uint32(start))
+		width := 4
+		if f64 {
+			width = 8
+		}
+		for i, c := range bins.counts {
+			slot := i
+			if contiguous {
+				slot = int(bins.indices[i] - start)
+			} else {
+				le.PutUint32(block[ddBlockHeader+width*n+4*i:], uint32(bins.indices[i]))
+			}
+			if f64 {
+				le.PutUint64(block[ddBlockHeader+8*slot:], math.Float64bits(c))
+			} else {
+				le.PutUint32(block[ddBlockHeader+4*slot:], uint32(c))
+			}
+		}
+		payload = append(payload, block...)
 	}
 	return writeFrame(10, params, payload)
 }
@@ -1784,11 +1887,11 @@ func TestDDSketch(t *testing.T) {
 func TestDDSketchDamaged(t *testing.T) {
 	e := find(t, "ddsketch")
 	at := func(b []byte, off int) []byte { return b[headerSize+off:] }
-	bins := func(b []byte) (int, int) {
-		return int(le.Uint32(at(b, ddParams))), int(le.Uint32(at(b, ddParams+4)))
-	}
-	countsAt := ddParams + 8
-	indicesAt := func(b []byte) int { p, n := bins(b); return countsAt + 8*(p+n) }
+	// The fixture's positive bins are far apart, so its block is u32 pairs:
+	// header at 64, counts from 80, then the indices.
+	n := func(b []byte) int { return int(le.Uint32(at(b, ddParams+4))) }
+	countsAt := ddParams + ddBlockHeader
+	indicesAt := func(b []byte) int { return countsAt + 4*n(b) }
 
 	stale := frameOf(t, e)
 	stale[headerSize]++
@@ -1806,8 +1909,8 @@ func TestDDSketchDamaged(t *testing.T) {
 		{"reserved bytes set", "reserved", func(b []byte) { at(b, 2)[0] = 1 }},
 		{"unknown mapping", "mapping", func(b []byte) { at(b, 0)[0] = 4 }},
 		{"collapsing store with no bound", "maxBins", func(b []byte) { le.PutUint32(at(b, 4), 0) }},
-		{"bin count disagrees with the body", "length", func(b []byte) {
-			le.PutUint32(at(b, ddParams), le.Uint32(at(b, ddParams))+1)
+		{"a block running past the body", "length", func(b []byte) {
+			le.PutUint32(at(b, ddParams+4), le.Uint32(at(b, ddParams+4))+100)
 		}},
 		{"indices out of order", "order", func(b []byte) {
 			i := indicesAt(b)
@@ -1815,7 +1918,7 @@ func TestDDSketchDamaged(t *testing.T) {
 			le.PutUint32(at(b, i), le.Uint32(at(b, i+4)))
 			le.PutUint32(at(b, i+4), first)
 		}},
-		{"a zero bin count", "count", func(b []byte) { le.PutUint64(at(b, countsAt), 0) }},
+		{"a zero bin count", "count", func(b []byte) { le.PutUint32(at(b, countsAt), 0) }},
 		{"min above max", "min", func(b []byte) {
 			le.PutUint64(at(b, 40), math.Float64bits(math.Float64frombits(le.Uint64(at(b, 48)))+1))
 		}},

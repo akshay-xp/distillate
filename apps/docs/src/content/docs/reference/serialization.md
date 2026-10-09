@@ -259,13 +259,24 @@ Offset    Size      Field
 40        8         min: the smallest value added (f64), NaN when empty
 48        8         max: the largest value added (f64), NaN when empty
 56        8         zeroCount: values counted as zero (f64), finite and at least 0
-64        4         posBins: non-empty positive bins (u32)
-68        4         negBins: non-empty negative bins (u32)
-72        8 * b     counts: every bin's count (f64), positive bins first
-72 + 8b   4 * b     indices: every bin's index (i32), in the same order
 ```
 
-Here `b` is `posBins + negBins`. The counts start at frame offset 88 and the indices follow them, so every `f64` is 8-byte aligned. Bin `i` is `counts[i]` at index `indices[i]`; the first `posBins` bins hold positive values and the rest hold negative values by magnitude. Within each sign the indices are strictly ascending and only non-empty bins are written, so the bytes depend on the bins alone, not on which store held them.
+The params end at 64. Then come two blocks, the positive values' bins and then the negative values' bins by magnitude, each laid out as:
+
+```
+Offset    Size      Field
+0         1         layout: bit 0 = contiguous run, bit 1 = f64 counts, bits 2-7 reserved (0)
+1         3         reserved (0)
+4         4         n: slots in the run, or bins as pairs (u32)
+8         4         start: the run's first index (i32), 0 for pairs
+12        4         reserved (0)
+16        w * n     counts: u32 (w = 4) or f64 (w = 8)
+16 + wn   4 * n     indices: each bin's index (i32), pairs only
+```
+
+A block is padded with zeros to a multiple of 8 bytes, so the next block's header and every `f64` count stay aligned. As a run, count `i` is the bin at index `start + i`, and a slot holding 0 is an empty bin; as pairs, count `i` is the bin at `indices[i]`, ascending.
+
+A writer chooses each block's form from its bins alone, so the bytes depend on the bins and not on which store held them or the order values arrived. Counts are u32 when every count in the sign is a whole number up to `2^32 - 1`, and f64 otherwise. The bins are a run from the first to the last when that takes no more bytes than pairs (`span * w <= bins * (w + 4)`), and pairs otherwise. A sign with no bins is pairs with `n` 0. Latency-like streams fill their range, so they come out as runs of u32 counts: four bytes a bin.
 
 A positive value `v` lands in bin `x = log(v) * multiplier + indexOffset` under the log mapping, where `multiplier = 1 / ln(gamma)`, taking `x` truncated toward zero and then one lower when `x` is negative, as sketches-go computes it (this differs from `floor` only at an exact negative integer); the interpolated mappings replace `log` with an approximation computed from the float's exponent and significand, as sketches-go and sketches-java define them. A linear mapping with `indexOffset` 0 and `gamma` exactly `2^(1 / 2^k)` is sketches-java's bitwise mapping, and a reader must bin it as that mapping does: a value's bin is its unbiased binary exponent times `2^k` plus the top `k` bits of its significand, read as one integer. The general linear formula reaches the same bins mathematically, but its float rounding moves some values on a boundary one bin over. Values whose magnitude is at most the mapping's smallest indexable value count in `zeroCount`. A bin reads back as its lower bound times `1 + a`, where `a` is the accuracy `gamma` implies, which keeps it within `a` of every value in the bin.
 
@@ -275,9 +286,11 @@ A reader rejects:
 
 - a mapping or store code above 3, or nonzero reserved bytes;
 - a `maxBins` of 0 on a collapsing store, or above 0 on any other;
-- a body length other than `72 + 12 * (posBins + negBins)`;
+- a body length other than 64 plus the two blocks, or a block that runs past the body;
+- set reserved layout bits or bytes, nonzero padding, or pairs with a nonzero `start`;
+- a block whose form or count width is not the one a writer chooses for its bins, since that would be a second encoding of the same sketch;
 - a `gamma` that is not finite and above 1, a non-finite `indexOffset`, or a `relativeAccuracy` outside `(0, 1)`;
-- a bin count that is not finite and positive, indices out of strictly ascending order within a sign, or an index outside the mapping's indexable range;
+- a bin count that is not finite and positive (a run's interior slots may be 0, its first and last may not), indices out of strictly ascending order within a sign, or an index outside the mapping's indexable range;
 - a collapsing store's bins spanning more than `maxBins` indices within a sign;
 - a negative or non-finite `zeroCount`;
 - an empty frame whose `min` and `max` are not NaN or whose `sum` is not 0, and a non-empty frame whose `sum`, `min` or `max` is not finite, whose `min` is above its `max`, or whose extreme bins lie outside `[min, max]` by more than the mapping's accuracy.
