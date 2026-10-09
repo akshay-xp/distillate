@@ -74,3 +74,20 @@ test("the errors page lists the union error with a sample that reproduces it", (
   expect(body).toContain("DDSketch.union");
   expect(body).toContain("instanceof DDSketchParamMismatchError; // true");
 });
+
+test("the choosing guide routes the percentile question to DDSketch", () => {
+  const page = read("../src/content/docs/guides/choosing-a-structure.md");
+  const matrix = section(page, "Decision matrix");
+  expect(matrix).toContain("[DDSketch](/guides/ddsketch/)");
+  const ships = section(page, "What ships today");
+  expect(ships).toContain(
+    "### [DDSketch](/guides/ddsketch/) (`distillate/ddsketch`)",
+  );
+  // The question list at the top is where a reader is sent first.
+  expect(page.slice(0, page.indexOf("## "))).toContain("/guides/ddsketch/");
+});
+
+test("the README shows the sketch", () => {
+  const readme = read("../../../packages/distillate/README.md");
+  expect(readme).toContain("### DDSketch (`distillate/ddsketch`)");
+});

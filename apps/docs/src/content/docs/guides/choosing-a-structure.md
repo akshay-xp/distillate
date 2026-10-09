@@ -15,6 +15,9 @@ First, which question are you asking?
 - **"Which keys have I seen most?"** A heavy-hitters sketch:
   [Top-K](/guides/topk/). It lists the heaviest keys without you naming them,
   which Count-Min cannot do because it holds no keys.
+- **"What is the p99 of these values?"** A quantile sketch:
+  [DDSketch](/guides/ddsketch/). It takes numbers rather than keys, and every
+  quantile it reports is within a relative error of the true value.
 
 There is no best filter, only a best filter for a workload. Answer three
 questions and the choice is usually forced:
@@ -40,12 +43,13 @@ questions and the choice is usually forced:
 | Counting distinct keys, not membership    | [HyperLogLog](/guides/hll/)                                                     |
 | Counting how often each key appears       | [Count-Min](/guides/countmin/)                                                  |
 | Finding the most frequent keys            | [Top-K](/guides/topk/)                                                          |
+| Latency or size percentiles               | [DDSketch](/guides/ddsketch/)                                                   |
 
 For the filters, space below is stated as overhead over the
 information-theoretic floor of `log2(1/epsilon)` bits per key: 6.64 bits/key at
 a 1% FPR, 9.97 at 0.1%. A sketch has no per-key cost to state, its size being
 fixed before it sees a key: by precision for HyperLogLog, by the error bound
-for Count-Min and Top-K.
+for Count-Min and Top-K, by the accuracy and the range of values for DDSketch.
 
 ## What ships today
 
@@ -70,6 +74,18 @@ true count, and any key heavier than the error is guaranteed to be held.
 Reach for it for the hottest routes, the noisiest clients, the most searched
 terms: any "which ones" question where you cannot name the candidates in
 advance. It keeps the keys themselves, so a serialized sketch holds user input.
+
+### [DDSketch](/guides/ddsketch/) (`distillate/ddsketch`)
+
+Not a filter, and not keyed: records numbers and reports any quantile within a
+relative error of the true value, 1% by default, at p50 and p99.9 alike. Its
+bins cover the range of values on a logarithmic scale, so a million latencies
+between 1 ms and 10 s take the same space as a thousand. Merges are exact, and
+`distillate/ddsketch/protobuf` reads and writes the message Datadog's libraries
+exchange.
+
+Reach for it for request latencies, payload sizes, queue depths: any "what is
+the p99" question over a stream you cannot keep in full.
 
 ### [Binary Fuse 8 and 16](/guides/fuse/) (`distillate/fuse`)
 
