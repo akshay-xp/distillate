@@ -30,7 +30,9 @@ for (const entry of entries) {
       compiler: { tsconfigFilePath: resolve(projectFolder, "tsconfig.json") },
       apiReport: {
         enabled: true,
-        reportFileName: `${entry.name}.api.md`,
+        // A report file name cannot hold a slash, so a nested subpath such as
+        // ddsketch/protobuf reports as ddsketch-protobuf.
+        reportFileName: `${entry.name.replaceAll("/", "-")}.api.md`,
         reportFolder,
         reportTempFolder,
       },

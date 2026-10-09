@@ -54,6 +54,7 @@ test("the package's own exports give every published entry, in order", () => {
     "countmin",
     "topk",
     "ddsketch",
+    "ddsketch/protobuf",
   ]);
   for (const { src } of entries) {
     expect(existsSync(`${pkgDir}/${src}`), src).toBe(true);
