@@ -25,6 +25,8 @@ type entry struct {
 	Epsilon float64
 	P       int
 	Deletes []string
+	Values  []float64
+	MaxBins uint32
 	Frame   string
 }
 
@@ -100,7 +102,7 @@ func find(t *testing.T, name string) entry {
 	return entry{}
 }
 
-var typeOf = map[string]byte{"bloom": 1, "blocked": 2, "fuse8": 3, "fuse16": 4, "hll": 5, "scalable": 6, "cuckoo": 7, "countmin": 8, "topk": 9}
+var typeOf = map[string]byte{"bloom": 1, "blocked": 2, "fuse8": 3, "fuse16": 4, "hll": 5, "scalable": 6, "cuckoo": 7, "countmin": 8, "topk": 9, "ddsketch": 10}
 
 func TestFrames(t *testing.T) {
 	for _, e := range golden(t) {
@@ -1541,5 +1543,177 @@ func TestTopKDamaged(t *testing.T) {
 		if _, err := parseTopK(f); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: want an error mentioning %q, got %v", c.name, c.want, err)
 		}
+	}
+}
+
+// DDSketch, frame type 10: values, not keys, so nothing is hashed. A 64-byte
+// params block, then each sign's non-empty bins as (count, index) pairs in
+// ascending index order: both signs' f64 counts first, then their i32
+// indices, so every f64 lands 8-byte aligned. The frame stores no count; it
+// is the zero count plus every bin's.
+type ddBins struct {
+	indices []int32
+	counts  []float64
+}
+
+type ddSketch struct {
+	mapping, store                       byte
+	maxBins                              uint32
+	gamma, indexOffset, relativeAccuracy float64
+	sum, min, max, zeroCount             float64
+	pos, neg                             ddBins
+}
+
+const ddParams = 64
+
+func parseDDSketch(f frame) (ddSketch, error) {
+	if len(f.body) < ddParams+8 {
+		return ddSketch{}, fmt.Errorf("body of %d bytes is shorter than the params block", len(f.body))
+	}
+	b := f.body
+	f64 := func(at int) float64 { return math.Float64frombits(le.Uint64(b[at:])) }
+	d := ddSketch{
+		mapping: b[0], store: b[1], maxBins: le.Uint32(b[4:]),
+		gamma: f64(8), indexOffset: f64(16), relativeAccuracy: f64(24),
+		sum: f64(32), min: f64(40), max: f64(48), zeroCount: f64(56),
+	}
+	posBins, negBins := int(le.Uint32(b[ddParams:])), int(le.Uint32(b[ddParams+4:]))
+	if want := ddParams + 8 + 12*(posBins+negBins); len(b) != want {
+		return ddSketch{}, fmt.Errorf("body length %d disagrees with %d bins (want %d)", len(b), posBins+negBins, want)
+	}
+	counts := ddParams + 8
+	indices := counts + 8*(posBins+negBins)
+	read := func(from, n int) ddBins {
+		var bins ddBins
+		for i := from; i < from+n; i++ {
+			bins.counts = append(bins.counts, f64(counts+8*i))
+			bins.indices = append(bins.indices, int32(le.Uint32(b[indices+4*i:])))
+		}
+		return bins
+	}
+	d.pos, d.neg = read(0, posBins), read(posBins, negBins)
+	return d, nil
+}
+
+// logIndex is the logarithmic mapping's bin: log(v) times 1/ln(gamma) plus the
+// offset, truncated, and one lower when negative. The explicit float64
+// conversion forbids fusing the multiply and add, which arm64 Go would
+// otherwise do and so round differently from every other implementation.
+func logIndex(v, gamma, offset float64) int32 {
+	x := float64(math.Log(v)*(1/math.Log(gamma))) + offset
+	if x >= 0 {
+		return int32(x)
+	}
+	return int32(x) - 1
+}
+
+// binValues is the sketch d's recipe implies: its params, with bins, zero
+// count and summaries computed here from the values. The golden values all
+// sit far above the smallest indexable value and away from bin boundaries.
+func binValues(d ddSketch, values []float64) ddSketch {
+	want := ddSketch{
+		mapping: d.mapping, store: d.store, maxBins: d.maxBins,
+		gamma: d.gamma, indexOffset: d.indexOffset, relativeAccuracy: d.relativeAccuracy,
+		min: math.NaN(), max: math.NaN(),
+	}
+	pos, neg := map[int32]float64{}, map[int32]float64{}
+	for _, v := range values {
+		switch {
+		case v > 0:
+			pos[logIndex(v, d.gamma, d.indexOffset)]++
+		case v < 0:
+			neg[logIndex(-v, d.gamma, d.indexOffset)]++
+		default:
+			want.zeroCount++
+		}
+		want.sum += v
+		if !(v >= want.min) {
+			want.min = v
+		}
+		if !(v <= want.max) {
+			want.max = v
+		}
+	}
+	want.pos, want.neg = sortedBins(pos, d.maxBins), sortedBins(neg, d.maxBins)
+	return want
+}
+
+// sortedBins orders a sign's bins after, for a collapsing-lowest store,
+// folding everything below the top maxBins indices into the lowest one kept.
+func sortedBins(bins map[int32]float64, maxBins uint32) ddBins {
+	if maxBins > 0 && len(bins) > 0 {
+		top := int32(math.MinInt32)
+		for i := range bins {
+			top = max(top, i)
+		}
+		floor := top - int32(maxBins) + 1
+		for i, c := range bins {
+			if i < floor {
+				bins[floor] += c
+				delete(bins, i)
+			}
+		}
+	}
+	var out ddBins
+	for i := range bins {
+		out.indices = append(out.indices, i)
+	}
+	sort.Slice(out.indices, func(a, b int) bool { return out.indices[a] < out.indices[b] })
+	for _, i := range out.indices {
+		out.counts = append(out.counts, bins[i])
+	}
+	return out
+}
+
+func buildDDSketch(d ddSketch) []byte {
+	params := make([]byte, ddParams)
+	params[0], params[1] = d.mapping, d.store
+	le.PutUint32(params[4:], d.maxBins)
+	for i, v := range []float64{d.gamma, d.indexOffset, d.relativeAccuracy, d.sum, d.min, d.max, d.zeroCount} {
+		le.PutUint64(params[8+8*i:], math.Float64bits(v))
+	}
+	payload := le.AppendUint32(nil, uint32(len(d.pos.counts)))
+	payload = le.AppendUint32(payload, uint32(len(d.neg.counts)))
+	for _, c := range append(append([]float64{}, d.pos.counts...), d.neg.counts...) {
+		payload = le.AppendUint64(payload, math.Float64bits(c))
+	}
+	for _, i := range append(append([]int32{}, d.pos.indices...), d.neg.indices...) {
+		payload = le.AppendUint32(payload, uint32(i))
+	}
+	return writeFrame(10, params, payload)
+}
+
+func TestDDSketch(t *testing.T) {
+	collapsed := false
+	for _, e := range golden(t) {
+		if e.Kind != "ddsketch" {
+			continue
+		}
+		f, err := readFrame(frameOf(t, e))
+		if err != nil {
+			t.Fatal(err)
+		}
+		d, err := parseDDSketch(f)
+		if err != nil {
+			t.Fatalf("%s: %v", e.Name, err)
+		}
+		want := binValues(d, e.Values)
+		if d.relativeAccuracy != e.Epsilon {
+			t.Errorf("%s: relativeAccuracy %v, want %v", e.Name, d.relativeAccuracy, e.Epsilon)
+		}
+		if d.maxBins != e.MaxBins && !(e.MaxBins == 0 && d.maxBins == 2048) {
+			t.Errorf("%s: maxBins %d, want %d", e.Name, d.maxBins, e.MaxBins)
+		}
+		got := fmt.Sprint(d.pos, d.neg, d.zeroCount, d.sum, d.min, d.max)
+		if exp := fmt.Sprint(want.pos, want.neg, want.zeroCount, want.sum, want.min, want.max); got != exp {
+			t.Errorf("%s: read %s, the values give %s", e.Name, got, exp)
+		}
+		if rebuilt := buildDDSketch(want); !bytes.Equal(rebuilt, frameOf(t, e)) {
+			t.Errorf("%s: rebuilt frame differs:\n got %x\nwant %x", e.Name, rebuilt, frameOf(t, e))
+		}
+		collapsed = collapsed || (d.maxBins > 0 && len(d.pos.counts) > 0 && d.pos.counts[0] > 1)
+	}
+	if !collapsed {
+		t.Error("no ddsketch fixture records a collapsed bin")
 	}
 }
