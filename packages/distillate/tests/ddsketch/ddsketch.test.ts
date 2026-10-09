@@ -142,3 +142,26 @@ describe("weighted add", () => {
     }
   });
 });
+
+describe("batch", () => {
+  test("quantiles(qs) is quantile per entry", () => {
+    const sketch = DDSketch.from(lognormalValues(6, 300), 0.01);
+    const qs = [0, 0.5, 0.99, 1];
+    expect(sketch.quantiles(qs)).toEqual(qs.map((q) => sketch.quantile(q)));
+  });
+
+  test("from(values) is create plus adding each value", () => {
+    const values = lognormalValues(7, 300);
+    const built = DDSketch.from(values, 0.01, { mapping: cubicMapping });
+    const added = DDSketch.create(0.01, { mapping: cubicMapping });
+    for (const v of values) added.add(v);
+    expect(built.mapping.kind).toBe("cubic");
+    expect([built.count, built.sum, built.min, built.max]).toEqual([
+      added.count,
+      added.sum,
+      added.min,
+      added.max,
+    ]);
+    expect(built.quantiles(QS)).toEqual(added.quantiles(QS));
+  });
+});

@@ -41,6 +41,25 @@ export class DDSketch {
     return new DDSketch(relativeAccuracy, options);
   }
 
+  /**
+   * Builds a sketch holding `values`.
+   *
+   * @param values - Finite numbers within the mapping's indexable range.
+   * @param relativeAccuracy - Relative error bound on every quantile, in `(0, 1)`.
+   * @param options - Optional mapping factory.
+   * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)` or a
+   * value cannot be recorded.
+   */
+  static from(
+    values: Iterable<number>,
+    relativeAccuracy: number,
+    options: DDSketchOptions = {},
+  ): DDSketch {
+    const sketch = DDSketch.create(relativeAccuracy, options);
+    for (const value of values) sketch.add(value);
+    return sketch;
+  }
+
   /** See {@link DDSketch.create}. */
   constructor(relativeAccuracy: number, options: DDSketchOptions = {}) {
     const { mapping = logMapping } = options;
@@ -113,6 +132,11 @@ export class DDSketch {
     // A bin reads back as one value for everything in it; clamping to what
     // was actually seen can only move the answer closer to the truth.
     return Math.min(Math.max(value, this.#min), this.#max);
+  }
+
+  /** {@link DDSketch.quantile} for each of `qs`, in order. */
+  quantiles(qs: readonly number[]): number[] {
+    return qs.map((q) => this.quantile(q));
   }
 
   /**
