@@ -19,6 +19,7 @@ import {
   denseStore,
   sparseStore,
 } from "../../src/ddsketch/store.js";
+import { SerializationError } from "../../src/core/serialize.js";
 import { fromBase64 } from "../helpers/base64.js";
 import { expectWithin } from "../helpers/quantile.js";
 import fixture from "../fixtures/ddsketch/protobuf.go.json" with { type: "json" };
@@ -151,5 +152,148 @@ describe("toProtobuf", () => {
       expect(back.mapping.gamma).toBe(sketch.mapping.gamma);
       expect(binsOf(back)).toEqual(binsOf(sketch));
     }
+  });
+});
+
+// A minimal encoder of its own, so these messages are built independently of
+// the code under test.
+const varint = (n: number): number[] => {
+  const out: number[] = [];
+  while (n >= 0x80) {
+    out.push((n % 0x80) | 0x80);
+    n = Math.floor(n / 0x80);
+  }
+  out.push(n);
+  return out;
+};
+const f64 = (x: number): number[] => [
+  ...new Uint8Array(Float64Array.of(x).buffer),
+];
+const zigzag = (n: number): number => ((n << 1) ^ (n >> 31)) >>> 0;
+const field = (n: number, wire: number, payload: number[]): number[] =>
+  wire === 2
+    ? [...varint(n * 8 + 2), ...varint(payload.length), ...payload]
+    : [...varint(n * 8 + wire), ...payload];
+const mappingOf = (gamma: number, interpolation = 0): number[] =>
+  field(1, 2, [
+    ...field(1, 1, f64(gamma)),
+    ...(interpolation ? field(3, 0, varint(interpolation)) : []),
+  ]);
+const binAt = (index: number, count: number): number[] =>
+  field(
+    2,
+    2,
+    field(1, 2, [
+      ...field(1, 0, varint(zigzag(index))),
+      ...field(2, 1, f64(count)),
+    ]),
+  );
+const decode = (bytes: number[]): DDSketch =>
+  fromProtobuf(Uint8Array.from(bytes));
+
+describe("a malformed message is rejected", () => {
+  const gamma = logMapping(0.01).gamma;
+  test.each<[string, number[]]>([
+    ["a truncated varint", [0x80]],
+    ["a varint longer than ten bytes", new Array<number>(11).fill(0xff)],
+    ["a length past the end", [0x0a, 0x05, 0x09]],
+    [
+      "a known field with the wrong wire type",
+      [...mappingOf(gamma), ...field(4, 0, [1])],
+    ],
+    ["an unknown interpolation", mappingOf(gamma, 4)],
+    ["no mapping, so gamma 0", []],
+    ["gamma of 1", mappingOf(1)],
+    ["a NaN gamma", mappingOf(Number.NaN)],
+    ["a negative bin count", [...mappingOf(gamma), ...binAt(3, -1)]],
+    ["a NaN bin count", [...mappingOf(gamma), ...binAt(3, Number.NaN)]],
+    [
+      "an index outside the mapping's range",
+      [...mappingOf(gamma), ...binAt(2 ** 30, 1)],
+    ],
+    [
+      "a group, which proto3 does not use",
+      [...mappingOf(gamma), ...varint(15 * 8 + 3)],
+    ],
+  ])("%s", (_, bytes) => {
+    expect(() => decode(bytes)).toThrow(SerializationError);
+  });
+});
+
+test("fields this codec does not know are skipped, of every wire type", () => {
+  const base = fromBase64(cases[0]?.message ?? "");
+  const unknown = [
+    ...field(15, 0, varint(300)),
+    ...field(15, 1, f64(1.5)),
+    ...field(15, 2, [0xaa, 0xbb]),
+    ...field(15, 5, [1, 2, 3, 4]),
+  ];
+  expect(binsOf(decode([...base, ...unknown]))).toEqual(
+    binsOf(fromProtobuf(base)),
+  );
+});
+
+test("a QUADRATIC mapping, which sketches-go lacks, decodes", () => {
+  const sketch = decode([
+    ...mappingOf(quadraticMapping(0.01).gamma, 2),
+    ...binAt(5, 2),
+  ]);
+  expect(sketch.mapping.kind).toBe("quadratic");
+  expect(sketch.count).toBe(2);
+});
+
+describe("the shapes a valid message can take", () => {
+  const gamma = logMapping(0.01).gamma;
+
+  test("unknown fields inside the mapping, a store and a map entry are skipped", () => {
+    const plain = decode([...mappingOf(gamma), ...binAt(3, 2)]);
+    const padded = decode([
+      ...field(1, 2, [...field(1, 1, f64(gamma)), ...field(9, 0, [7])]),
+      ...field(2, 2, [
+        ...field(1, 2, [
+          ...field(1, 0, varint(zigzag(3))),
+          ...field(2, 1, f64(2)),
+          ...field(9, 0, [7]),
+        ]),
+        ...field(9, 5, [1, 2, 3, 4]),
+      ]),
+    ]);
+    expect(binsOf(padded)).toEqual(binsOf(plain));
+  });
+
+  test("contiguous counts unpacked, one per field, read as packed ones do", () => {
+    const packed = decode([
+      ...mappingOf(gamma),
+      ...field(2, 2, [
+        ...field(2, 2, [...f64(1), ...f64(0), ...f64(4)]),
+        ...field(3, 0, varint(zigzag(-2))),
+      ]),
+    ]);
+    const unpacked = decode([
+      ...mappingOf(gamma),
+      ...field(2, 2, [
+        ...field(2, 1, f64(1)),
+        ...field(2, 1, f64(0)),
+        ...field(2, 1, f64(4)),
+        ...field(3, 0, varint(zigzag(-2))),
+      ]),
+    ]);
+    expect(binsOf(unpacked)).toEqual(binsOf(packed));
+    expect(binsOf(packed).positive).toEqual([
+      [-2, 1],
+      [0, 4],
+    ]);
+  });
+
+  test("a map entry with a zero count adds nothing", () => {
+    expect(
+      binsOf(decode([...mappingOf(gamma), ...binAt(3, 0)])).positive,
+    ).toEqual([]);
+  });
+
+  test("a negative zeroCount is rejected", () => {
+    expect(() =>
+      decode([...mappingOf(gamma), ...field(4, 1, f64(-1))]),
+    ).toThrow(SerializationError);
   });
 });
