@@ -9,8 +9,10 @@ import {
   linearMapping,
   logMapping,
   mappingWithGamma,
+  quadraticMapping,
 } from "../../src/ddsketch/mapping.js";
 import goFixture from "../fixtures/ddsketch/mappings.go.json" with { type: "json" };
+import javaFixture from "../fixtures/ddsketch/mappings.java.json" with { type: "json" };
 
 interface FixtureEntry {
   kind: string;
@@ -33,6 +35,7 @@ const kinds: [
   ["log", logMapping, goFixture.mappings],
   ["linear", linearMapping, goFixture.mappings],
   ["cubic", cubicMapping, goFixture.mappings],
+  ["quadratic", quadraticMapping, javaFixture.mappings],
 ];
 
 describe.each(kinds)("%s mapping", (kind, factory, fixture) => {
@@ -62,6 +65,9 @@ describe.each(kinds)("%s mapping", (kind, factory, fixture) => {
       const m = factory(e.relativeAccuracy);
       expect(m.kind).toBe(kind);
       expect(near(m.gamma, e.gamma)).toBe(true);
+      // Java's Math.pow and V8's agree on every gamma the fixture holds;
+      // Go's Pow does not, so only the Java reference is held to the bit.
+      if (kind === "quadratic") expect(m.gamma).toBe(e.gamma);
       expect(m.indexOffset).toBe(e.indexOffset);
       expect(near(m.minIndexableValue, e.minIndexableValue)).toBe(true);
       expect(near(m.maxIndexableValue, e.maxIndexableValue)).toBe(true);
