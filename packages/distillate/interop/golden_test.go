@@ -1567,6 +1567,12 @@ type ddSketch struct {
 const ddParams = 64
 
 func parseDDSketch(f frame) (ddSketch, error) {
+	if f.typ != 10 {
+		return ddSketch{}, fmt.Errorf("type %d, want 10", f.typ)
+	}
+	if f.flags != 0 {
+		return ddSketch{}, fmt.Errorf("hash variant %d, but type 10 hashes nothing", f.flags)
+	}
 	if len(f.body) < ddParams+8 {
 		return ddSketch{}, fmt.Errorf("body of %d bytes is shorter than the params block", len(f.body))
 	}
@@ -1576,6 +1582,16 @@ func parseDDSketch(f frame) (ddSketch, error) {
 		mapping: b[0], store: b[1], maxBins: le.Uint32(b[4:]),
 		gamma: f64(8), indexOffset: f64(16), relativeAccuracy: f64(24),
 		sum: f64(32), min: f64(40), max: f64(48), zeroCount: f64(56),
+	}
+	if b[2] != 0 || b[3] != 0 {
+		return ddSketch{}, fmt.Errorf("reserved bytes 2-3 are not zero")
+	}
+	if d.mapping > 3 || d.store > 3 {
+		return ddSketch{}, fmt.Errorf("unknown mapping %d or store %d", d.mapping, d.store)
+	}
+	// Stores 1 and 2 collapse and so carry a bound; dense and sparse do not.
+	if collapsing := d.store == 1 || d.store == 2; collapsing != (d.maxBins > 0) {
+		return ddSketch{}, fmt.Errorf("store %d cannot have maxBins %d", d.store, d.maxBins)
 	}
 	posBins, negBins := int(le.Uint32(b[ddParams:])), int(le.Uint32(b[ddParams+4:]))
 	if want := ddParams + 8 + 12*(posBins+negBins); len(b) != want {
@@ -1592,6 +1608,23 @@ func parseDDSketch(f frame) (ddSketch, error) {
 		return bins
 	}
 	d.pos, d.neg = read(0, posBins), read(posBins, negBins)
+	for _, bins := range []ddBins{d.pos, d.neg} {
+		for i, c := range bins.counts {
+			if !(c > 0) || math.IsInf(c, 1) {
+				return ddSketch{}, fmt.Errorf("bin count %v is not finite and positive", c)
+			}
+			if i > 0 && bins.indices[i] <= bins.indices[i-1] {
+				return ddSketch{}, fmt.Errorf("bin indices out of ascending order at %d", i)
+			}
+		}
+	}
+	if empty := posBins+negBins == 0 && d.zeroCount == 0; empty {
+		if !math.IsNaN(d.min) || !math.IsNaN(d.max) {
+			return ddSketch{}, fmt.Errorf("an empty sketch has min %v and max %v, want NaN", d.min, d.max)
+		}
+	} else if !(d.min <= d.max) {
+		return ddSketch{}, fmt.Errorf("min %v is not at or below max %v", d.min, d.max)
+	}
 	return d, nil
 }
 
@@ -1715,5 +1748,57 @@ func TestDDSketch(t *testing.T) {
 	}
 	if !collapsed {
 		t.Error("no ddsketch fixture records a collapsed bin")
+	}
+}
+
+func TestDDSketchDamaged(t *testing.T) {
+	e := find(t, "ddsketch")
+	at := func(b []byte, off int) []byte { return b[headerSize+off:] }
+	bins := func(b []byte) (int, int) {
+		return int(le.Uint32(at(b, ddParams))), int(le.Uint32(at(b, ddParams+4)))
+	}
+	countsAt := ddParams + 8
+	indicesAt := func(b []byte) int { p, n := bins(b); return countsAt + 8*(p+n) }
+
+	stale := frameOf(t, e)
+	stale[headerSize]++
+	if _, err := readFrame(stale); err == nil || !strings.Contains(err.Error(), "CRC") {
+		t.Errorf("altered mapping byte: want a CRC error, got %v", err)
+	}
+
+	// Resealed, each mutation gets past the trailer and has to be caught by
+	// the type 10 rules alone.
+	cases := []struct {
+		name, want string
+		mutate     func(b []byte)
+	}{
+		{"wrong type", "type", func(b []byte) { b[5] = 9 }},
+		{"reserved bytes set", "reserved", func(b []byte) { at(b, 2)[0] = 1 }},
+		{"unknown mapping", "mapping", func(b []byte) { at(b, 0)[0] = 4 }},
+		{"collapsing store with no bound", "maxBins", func(b []byte) { le.PutUint32(at(b, 4), 0) }},
+		{"bin count disagrees with the body", "length", func(b []byte) {
+			le.PutUint32(at(b, ddParams), le.Uint32(at(b, ddParams))+1)
+		}},
+		{"indices out of order", "order", func(b []byte) {
+			i := indicesAt(b)
+			first := le.Uint32(at(b, i))
+			le.PutUint32(at(b, i), le.Uint32(at(b, i+4)))
+			le.PutUint32(at(b, i+4), first)
+		}},
+		{"a zero bin count", "count", func(b []byte) { le.PutUint64(at(b, countsAt), 0) }},
+		{"min above max", "min", func(b []byte) {
+			le.PutUint64(at(b, 40), math.Float64bits(math.Float64frombits(le.Uint64(at(b, 48)))+1))
+		}},
+	}
+	for _, c := range cases {
+		b := frameOf(t, e)
+		c.mutate(b)
+		f, err := readFrame(reseal(b))
+		if err != nil {
+			t.Fatalf("%s: resealed frame: %v", c.name, err)
+		}
+		if _, err := parseDDSketch(f); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: want an error mentioning %q, got %v", c.name, c.want, err)
+		}
 	}
 }
