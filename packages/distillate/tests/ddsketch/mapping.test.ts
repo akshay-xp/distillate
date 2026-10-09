@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
 import {
+  cubicMapping,
   type IndexMapping,
   type MappingKind,
   linearMapping,
@@ -31,6 +32,7 @@ const kinds: [
 ][] = [
   ["log", logMapping, goFixture.mappings],
   ["linear", linearMapping, goFixture.mappings],
+  ["cubic", cubicMapping, goFixture.mappings],
 ];
 
 describe.each(kinds)("%s mapping", (kind, factory, fixture) => {

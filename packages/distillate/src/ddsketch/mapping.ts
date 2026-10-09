@@ -1,7 +1,7 @@
 import { assertProbability } from "../core/params.js";
 
 /** Which approximation of the logarithm a mapping bins values by. */
-export type MappingKind = "log" | "linear";
+export type MappingKind = "log" | "linear" | "cubic";
 
 /**
  * Maps a positive value to the integer index of the bin holding it, and an
@@ -171,6 +171,55 @@ class LinearMapping extends LogLikeMapping {
   }
 }
 
+// The cubic's coefficients. sketches-go declares them as untyped constants, so
+// Go folds every constant subexpression exactly before rounding once; these
+// are those folded values, each a single correctly rounded division.
+const A = 6 / 35;
+const B = -3 / 5;
+const C = 10 / 7;
+const D0 = -459 / 1225; // B*B - 3*A*C
+const D1 = 5454 / 6125; // 2*B*B*B - 9*A*B*C
+const A2_27 = 972 / 1225; // 27*A*A
+const A_3 = 18 / 35; // 3*A
+
+// sketches-go CubicallyInterpolatedMapping: log2 approximated by a cubic in
+// the significand, close enough that bins are only about 1% more numerous
+// than the exact logarithm's.
+class CubicMapping extends LogLikeMapping {
+  readonly kind = "cubic";
+
+  constructor(gamma: number, indexOffset: number) {
+    const multiplier = 1 / goLog2(gamma);
+    const adjustedGamma = gamma ** (7 / (10 * Math.LN2));
+    super(
+      gamma,
+      indexOffset,
+      multiplier,
+      1 - 2 / (1 + Math.exp(0.7 * goLog2(gamma))),
+      Math.max(
+        2 ** ((MIN_INT32 - indexOffset) / multiplier + 1),
+        MIN_NORMAL * adjustedGamma,
+      ),
+      Math.min(
+        2 ** ((MAX_INT32 - indexOffset) / multiplier - 1),
+        (Math.exp(EXP_OVERFLOW) / (2 * adjustedGamma)) * (adjustedGamma + 1),
+      ),
+    );
+  }
+
+  protected log(value: number): number {
+    const s = significandPlusOne(value) - 1;
+    return ((A * s + B) * s + C) * s + exponentOf(value);
+  }
+
+  protected logInverse(index: number): number {
+    const exponent = Math.floor(index);
+    const d1 = D1 - A2_27 * (index - exponent);
+    const p = Math.cbrt((d1 - Math.sqrt(d1 * d1 - 4 * D0 * D0 * D0)) / 2);
+    return buildFloat(exponent, -(B + p + D0 / p) / A_3 + 1);
+  }
+}
+
 function exactLogGamma(relativeAccuracy: number): number {
   assertProbability(relativeAccuracy, "relativeAccuracy");
   return (1 + relativeAccuracy) / (1 - relativeAccuracy);
@@ -202,9 +251,24 @@ export function linearMapping(relativeAccuracy: number): IndexMapping {
   return new LinearMapping(gamma, 1 / goLog2(gamma));
 }
 
+/**
+ * A mapping that approximates log2 with a cubic in the float's significand:
+ * nearly as compact as {@link logMapping} without calling `Math.log`.
+ *
+ * @param relativeAccuracy - Relative error bound, in `(0, 1)`.
+ * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`.
+ */
+export function cubicMapping(relativeAccuracy: number): IndexMapping {
+  return new CubicMapping(
+    exactLogGamma(relativeAccuracy) ** ((10 * Math.LN2) / 7),
+    0,
+  );
+}
+
 const MAPPINGS = {
   log: LogMapping,
   linear: LinearMapping,
+  cubic: CubicMapping,
 } satisfies Record<
   MappingKind,
   new (gamma: number, indexOffset: number) => IndexMapping
