@@ -275,6 +275,7 @@ export function ddSketchSection(table: string, bundles: string): string[] {
     "A lognormal stream at 0.01 never reaches 2048 bins, so the two hold the same bins and the comparison is like for like.",
     "",
     "`max rel. error` is the largest relative error over 11 quantiles from 0 to 1, each against the exact value at rank `floor(q * (n - 1))`, on one seeded lognormal stream around 100 shared by both. Both promise at most 1%.",
+    "`add` is the median of 5 timed passes after 2 untimed ones, each on a fresh sketch, so it is the steady rate rather than how fast V8 optimises the first pass.",
     "`size` is each library's own serialization: distillate's DSTL frame, and sketches-js's protobuf message, its only one. `protobuf` is Datadog's message from each, the like-for-like size.",
     "",
     table,

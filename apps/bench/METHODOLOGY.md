@@ -279,4 +279,8 @@ sketches-js leaves it to the caller.
 
 Bundle sizes are measured by bundling each import with esbuild for the browser,
 minified, then gzipped. Each library is run in its own process, as every other
-section is, at 1k, 10k, 100k and 1M values.
+section is, at 1k, 10k, 100k and 1M values. Each `add` rate is the median of 5
+timed passes after 2 untimed ones, a fresh sketch each pass, as for key length:
+a single pass in a fresh process measured how fast V8 optimises each library
+rather than how fast it adds, and read the two 35% apart at 10k values where
+warm they were 1% apart.

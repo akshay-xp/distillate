@@ -3,6 +3,7 @@ import { DDSketch } from "distillate/ddsketch";
 import { toProtobuf } from "distillate/ddsketch/protobuf";
 
 import { rng } from "./countmin.js";
+import { median } from "./keylength.js";
 
 export interface QuantileSketch {
   /** The accuracy the sketch reports it was built for. */
@@ -25,6 +26,14 @@ export const DDSKETCH_ACCURACY = 0.01;
 
 /** Values per run, as for Top-K. */
 export const DDSKETCH_EVENT_COUNTS = [1_000, 10_000, 100_000, 1_000_000];
+
+/**
+ * Untimed passes before the timed ones, and timed passes per row. One pass in
+ * a fresh process measures how fast V8 tiers each library up rather than how
+ * fast it adds: at 10k values the two read 35% apart cold and 1% apart warm.
+ */
+export const DDSKETCH_WARM_PASSES = 2;
+export const DDSKETCH_TIMED_PASSES = 5;
 
 /** Every quantile the error is measured at, the ends included. */
 const QS = [0, 0.001, 0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99, 0.999, 1];
@@ -111,10 +120,17 @@ export function ddSketchRows(
     const exact = QS.map((q) => sorted[Math.floor(q * (events - 1))] ?? 0);
 
     for (const adapter of adapters) {
-      const s = adapter.create(DDSKETCH_ACCURACY);
-      const started = performance.now();
-      for (const v of stream) s.add(v);
-      const addMs = performance.now() - started;
+      // A fresh sketch every pass, so each times the same work from empty.
+      const pass = (): { s: QuantileSketch; ms: number } => {
+        const s = adapter.create(DDSKETCH_ACCURACY);
+        const started = performance.now();
+        for (const v of stream) s.add(v);
+        return { s, ms: performance.now() - started };
+      };
+      for (let p = 0; p < DDSKETCH_WARM_PASSES; p++) pass();
+      const timed = Array.from({ length: DDSKETCH_TIMED_PASSES }, pass);
+      const s = timed.at(-1)?.s ?? pass().s;
+      const addMs = median(timed.map((t) => t.ms));
 
       let maxRelError = 0;
       QS.forEach((q, i) => {
