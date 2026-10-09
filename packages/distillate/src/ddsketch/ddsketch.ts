@@ -118,6 +118,49 @@ export class DDSketch {
   }
 
   /**
+   * Returns a new sketch holding everything this one and `other` have
+   * recorded: the same bins, count, min and max one sketch over both streams
+   * would hold, with `sum` equal up to float rounding. It takes this sketch's
+   * accuracy, mapping and store; both operands are left untouched.
+   *
+   * @param other - A sketch whose mapping bins values identically.
+   * @returns A new sketch holding both streams.
+   */
+  union(other: DDSketch): DDSketch {
+    const merged = new DDSketch(this.#relativeAccuracy, {
+      mapping: () => this.#mapping,
+      store: this.#store,
+    });
+    merged.#absorb(this);
+    merged.#absorb(other);
+    return merged;
+  }
+
+  // Adds another sketch's bins and summaries into this one. Bins go through
+  // add, so a collapsing store folds the merged range exactly as it would
+  // have folded one stream.
+  #absorb(from: DDSketch): void {
+    if (from.#count === 0) return;
+    from.#positive.forEach((index, count) => {
+      this.#positive.add(index, count);
+    });
+    from.#negative.forEach((index, count) => {
+      this.#negative.add(index, count);
+    });
+    this.#zeroCount += from.#zeroCount;
+    this.#count += from.#count;
+    this.#sum += from.#sum;
+    this.#widen(from.#min, from.#max);
+  }
+
+  // Extends min and max to cover [lo, hi]. NaN compares false, so an empty
+  // sketch takes the first range it is given.
+  #widen(lo: number, hi: number): void {
+    if (!(lo >= this.#min)) this.#min = lo;
+    if (!(hi <= this.#max)) this.#max = hi;
+  }
+
+  /**
    * The value at quantile `q`, within `relativeAccuracy` of the exact value at
    * rank `floor(q * (count - 1))`. `q = 0` and `q = 1` give `min` and `max`
    * exactly.
@@ -188,8 +231,6 @@ export class DDSketch {
     }
     this.#count += count;
     this.#sum += value * count;
-    // NaN compares false, so the first value replaces the empty NaN.
-    if (!(value >= this.#min)) this.#min = value;
-    if (!(value <= this.#max)) this.#max = value;
+    this.#widen(value, value);
   }
 }
