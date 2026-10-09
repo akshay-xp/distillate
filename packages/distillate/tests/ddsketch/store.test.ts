@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { ParamError } from "../../src/core/params.js";
 import { DDSketch } from "../../src/ddsketch/ddsketch.js";
 import {
+  collapsingHighestStore,
   collapsingLowestStore,
   denseStore,
   sparseStore,
@@ -109,4 +110,39 @@ describe("collapsing-lowest store", () => {
       expect(() => collapsingLowestStore(bad)).toThrow(ParamError);
     }
   });
+});
+
+describe("collapsing-highest store", () => {
+  test("reports its kind and bound", () => {
+    const factory = collapsingHighestStore(64);
+    expect([factory.kind, factory.maxBins]).toEqual(["collapsingHighest", 64]);
+  });
+
+  test("never spans more than maxBins, folding the highest into the ceiling", () => {
+    const store = collapsingHighestStore(64).create();
+    for (let i = 0; i < 1000; i++) store.add(i, 1);
+    const bins = binsOf(store);
+    expect(bins[0]).toEqual([0, 1]);
+    expect(bins.at(-1)).toEqual([63, 937]);
+    expect(bins).toHaveLength(64);
+    expect(store.total).toBe(1000);
+  });
+
+  test("rejects a maxBins that is not a positive integer", () => {
+    for (const bad of [0, -1, 1.5, Number.NaN]) {
+      expect(() => collapsingHighestStore(bad)).toThrow(ParamError);
+    }
+  });
+});
+
+test("every store answers alike until one collapses", () => {
+  const values = lognormalValues(22, 10_000);
+  const qs = [0, 0.001, 0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99, 0.999, 1];
+  const answers = [
+    denseStore(),
+    sparseStore(),
+    collapsingLowestStore(4096),
+    collapsingHighestStore(4096),
+  ].map((store) => DDSketch.from(values, 0.01, { store }).quantiles(qs));
+  for (const answer of answers) expect(answer).toEqual(answers[0]);
 });
