@@ -214,6 +214,10 @@ export class DDSketch {
 
   readonly #relativeAccuracy: number;
   readonly #mapping: IndexMapping;
+  // The mapping's range, read on every add, so held here rather than fetched
+  // through the mapping each time.
+  readonly #minIndexable: number;
+  readonly #maxIndexable: number;
   readonly #store: StoreFactory;
   readonly #positive: Store;
   // Negative values, binned by magnitude.
@@ -221,8 +225,10 @@ export class DDSketch {
   #zeroCount = 0;
   #count = 0;
   #sum = 0;
-  #min = Number.NaN;
-  #max = Number.NaN;
+  // Infinite until the first value, so add compares plainly against them; the
+  // getters report NaN for an empty sketch.
+  #min = Infinity;
+  #max = -Infinity;
 
   /**
    * Builds an empty sketch.
@@ -358,8 +364,10 @@ export class DDSketch {
     sketch.#zeroCount = zeroCount;
     sketch.#count = count;
     sketch.#sum = sum;
-    sketch.#min = min;
-    sketch.#max = max;
+    if (count > 0) {
+      sketch.#min = min;
+      sketch.#max = max;
+    }
     return sketch;
   }
 
@@ -368,6 +376,8 @@ export class DDSketch {
     const { mapping = logMapping, store = collapsingLowestStore(2048) } =
       options;
     this.#mapping = mapping(relativeAccuracy);
+    this.#minIndexable = this.#mapping.minIndexableValue;
+    this.#maxIndexable = this.#mapping.maxIndexableValue;
     this.#store = store;
     this.#positive = store.create();
     this.#negative = store.create();
@@ -401,12 +411,12 @@ export class DDSketch {
 
   /** The smallest value added, exactly; `NaN` when empty. */
   get min(): number {
-    return this.#min;
+    return this.#count === 0 ? Number.NaN : this.#min;
   }
 
   /** The largest value added, exactly; `NaN` when empty. */
   get max(): number {
-    return this.#max;
+    return this.#count === 0 ? Number.NaN : this.#max;
   }
 
   /**
@@ -461,8 +471,8 @@ export class DDSketch {
   // Extends min and max to cover [lo, hi]. NaN compares false, so an empty
   // sketch takes the first range it is given.
   #widen(lo: number, hi: number): void {
-    if (!(lo >= this.#min)) this.#min = lo;
-    if (!(hi <= this.#max)) this.#max = hi;
+    if (lo < this.#min) this.#min = lo;
+    if (hi > this.#max) this.#max = hi;
   }
 
   /**
@@ -489,8 +499,8 @@ export class DDSketch {
         view.setFloat64(16, this.#mapping.indexOffset, true);
         view.setFloat64(24, this.#relativeAccuracy, true);
         view.setFloat64(32, this.#sum, true);
-        view.setFloat64(40, this.#min, true);
-        view.setFloat64(48, this.#max, true);
+        view.setFloat64(40, this.min, true);
+        view.setFloat64(48, this.max, true);
         view.setFloat64(56, this.#zeroCount, true);
         view.setUint32(PARAMS_SIZE, pos.counts.length, true);
         view.setUint32(PARAMS_SIZE + 4, neg.counts.length, true);
@@ -592,25 +602,33 @@ export class DDSketch {
    * positive number. Nothing is recorded.
    */
   add(value: number, count = 1): void {
-    if (!(Math.abs(value) <= this.#mapping.maxIndexableValue)) {
-      throw new ParamError(
-        `value must be finite and at most ${String(this.#mapping.maxIndexableValue)} in magnitude, got ${String(value)}`,
-      );
-    }
-    assertPositiveFinite(count, "count");
-    // -0 + 0 is +0. Without this, [0, -0] and [-0, 0] would leave different
-    // min bits and the same data would serialize to different bytes.
-    value += 0;
-    const min = this.#mapping.minIndexableValue;
+    if (count !== 1) assertPositiveFinite(count, "count");
+    // Each range check sits in its own sign's branch, and NaN, which compares
+    // false both ways, falls through to the zero branch and is refused there;
+    // so the common path compares once. Nothing is recorded before a throw.
+    const min = this.#minIndexable;
     if (value > min) {
+      if (!(value <= this.#maxIndexable)) throw this.#unindexable(value);
       this.#positive.add(this.#mapping.index(value), count);
     } else if (value < -min) {
+      if (!(value >= -this.#maxIndexable)) throw this.#unindexable(value);
       this.#negative.add(this.#mapping.index(-value), count);
     } else {
+      if (Number.isNaN(value)) throw this.#unindexable(value);
+      // -0 becomes +0 here, the only branch it reaches. Without this, [0, -0]
+      // and [-0, 0] would leave different min bits and serialize differently.
+      if (value === 0) value = 0;
       this.#zeroCount += count;
     }
     this.#count += count;
     this.#sum += value * count;
-    this.#widen(value, value);
+    if (value < this.#min) this.#min = value;
+    if (value > this.#max) this.#max = value;
+  }
+
+  #unindexable(value: number): ParamError {
+    return new ParamError(
+      `value must be finite and at most ${String(this.#maxIndexable)} in magnitude, got ${String(value)}`,
+    );
   }
 }

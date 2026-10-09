@@ -46,9 +46,10 @@ class DenseStore implements Store {
   #bins = new Float64Array(0);
   // The bin index that #bins[0] holds.
   #offset = 0;
-  // The lowest and highest non-empty bin indices, meaningful once total > 0.
-  #min = 0;
-  #max = 0;
+  // The lowest and highest non-empty bin indices. Infinite while empty, so the
+  // range test in add needs no separate check for an empty store.
+  #min = Infinity;
+  #max = -Infinity;
   #total = 0;
 
   constructor(maxBins = 0, collapse: Collapse = null) {
@@ -61,9 +62,16 @@ class DenseStore implements Store {
   }
 
   add(index: number, count: number): void {
-    const empty = this.#total === 0;
-    let min = empty ? index : Math.min(this.#min, index);
-    let max = empty ? index : Math.max(this.#max, index);
+    // Most adds land inside the range already held: no bound moves, nothing
+    // grows or folds, so the bin is incremented and nothing else is touched.
+    if (index >= this.#min && index <= this.#max) {
+      const at = index - this.#offset;
+      this.#bins[at] = (this.#bins[at] ?? 0) + count;
+      this.#total += count;
+      return;
+    }
+    let min = Math.min(this.#min, index);
+    let max = Math.max(this.#max, index);
     const collapses = this.#collapse !== null && max - min + 1 > this.#maxBins;
     if (collapses) {
       // Clamp the new index into the kept range; the bins it pushes out are
