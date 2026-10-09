@@ -492,3 +492,29 @@ test("the corruption reaches both outcomes", () => {
   );
   expect([...seen].sort()).toEqual(["accepted", "rejected"]);
 });
+
+test("the JSON envelope round-trips", () => {
+  const sketch = DDSketch.from(mixed(53, 200), 0.01);
+  const json = JSON.parse(JSON.stringify(sketch.toJSON())) as unknown;
+  expect(DDSketch.fromJSON(json).toBytes()).toEqual(sketch.toBytes());
+});
+
+test("equals is exactly byte equality of the frame (property)", () => {
+  const small = fc.array(fc.integer({ min: -3, max: 3 }), { maxLength: 4 });
+  fc.assert(
+    fc.property(small, small, (x, y) => {
+      const a = DDSketch.from(x, 0.01);
+      const b = DDSketch.from(y, 0.01);
+      const sameBytes =
+        a.toBytes().length === b.toBytes().length &&
+        a.toBytes().every((byte, i) => byte === b.toBytes()[i]);
+      expect(a.equals(b)).toBe(sameBytes);
+    }),
+  );
+});
+
+test("sketches on different mappings are unequal rather than throwing", () => {
+  const a = DDSketch.from([1, 2], 0.01);
+  const b = DDSketch.from([1, 2], 0.01, { mapping: cubicMapping });
+  expect(a.equals(b)).toBe(false);
+});
