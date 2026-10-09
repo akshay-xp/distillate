@@ -1,5 +1,7 @@
+import { assertPositiveInt } from "../core/params.js";
+
 /** How a store lays out its bins and what it gives up to bound memory. */
-export type StoreKind = "dense" | "sparse";
+export type StoreKind = "dense" | "sparse" | "collapsingLowest";
 
 /** Counts per bin index for one sign of a sketch. */
 export interface Store {
@@ -33,58 +35,117 @@ export interface StoreFactory {
 // rarely rather than per new index.
 const HEADROOM = 32;
 
+// Which end of the range a bounded store folds into its outermost kept bin.
+type Collapse = "lowest" | "highest" | null;
+
 /** Counts per bin index, over a contiguous window that grows to fit. */
 class DenseStore implements Store {
+  readonly #maxBins: number;
+  readonly #collapse: Collapse;
   #bins = new Float64Array(0);
   // The bin index that #bins[0] holds.
   #offset = 0;
+  // The lowest and highest non-empty bin indices, meaningful once total > 0.
+  #min = 0;
+  #max = 0;
   #total = 0;
 
-  /** The sum of every count added. */
+  constructor(maxBins = 0, collapse: Collapse = null) {
+    this.#maxBins = maxBins;
+    this.#collapse = collapse;
+  }
+
   get total(): number {
     return this.#total;
   }
 
-  /** Adds `count` to the bin at `index`. */
   add(index: number, count: number): void {
-    if (index < this.#offset || index >= this.#offset + this.#bins.length) {
-      this.#grow(index);
+    const empty = this.#total === 0;
+    let min = empty ? index : Math.min(this.#min, index);
+    let max = empty ? index : Math.max(this.#max, index);
+    const collapses = this.#collapse !== null && max - min + 1 > this.#maxBins;
+    if (collapses) {
+      // Clamp the new index into the kept range; the bins it pushes out are
+      // folded below, once the window covers the kept range.
+      if (this.#collapse === "lowest") {
+        min = max - this.#maxBins + 1;
+        index = Math.max(index, min);
+      } else {
+        max = min + this.#maxBins - 1;
+        index = Math.min(index, max);
+      }
     }
+    if (min < this.#offset || max >= this.#offset + this.#bins.length) {
+      this.#grow(min, max);
+    }
+    if (collapses) this.#fold(min, max);
     const at = index - this.#offset;
     this.#bins[at] = (this.#bins[at] ?? 0) + count;
+    this.#min = min;
+    this.#max = max;
     this.#total += count;
   }
 
   // The first bin whose running total exceeds rank.
   keyAtRank(rank: number): number {
     let running = 0;
-    let last = this.#offset;
-    for (let i = 0; i < this.#bins.length; i++) {
-      const count = this.#bins[i] ?? 0;
+    let last = this.#min;
+    for (let index = this.#min; index <= this.#max; index++) {
+      const count = this.#bins[index - this.#offset] ?? 0;
       if (count === 0) continue;
       running += count;
-      last = i + this.#offset;
+      last = index;
       if (running > rank) break;
     }
     return last;
   }
 
   forEach(fn: (index: number, count: number) => void): void {
-    for (let i = 0; i < this.#bins.length; i++) {
-      const count = this.#bins[i] ?? 0;
-      if (count !== 0) fn(i + this.#offset, count);
+    if (this.#total === 0) return;
+    for (let index = this.#min; index <= this.#max; index++) {
+      const count = this.#bins[index - this.#offset] ?? 0;
+      if (count !== 0) fn(index, count);
     }
   }
 
-  #grow(index: number): void {
-    const old = this.#bins;
-    const empty = old.length === 0;
-    const lo = empty ? index : Math.min(index, this.#offset);
-    const hi = empty ? index : Math.max(index, this.#offset + old.length - 1);
+  // Moves every count outside [min, max] into the nearer end bin.
+  #fold(min: number, max: number): void {
+    let below = 0;
+    for (let index = this.#min; index < min; index++) {
+      const at = index - this.#offset;
+      below += this.#bins[at] ?? 0;
+      this.#bins[at] = 0;
+    }
+    let above = 0;
+    for (let index = max + 1; index <= this.#max; index++) {
+      const at = index - this.#offset;
+      above += this.#bins[at] ?? 0;
+      this.#bins[at] = 0;
+    }
+    const lo = min - this.#offset;
+    const hi = max - this.#offset;
+    this.#bins[lo] = (this.#bins[lo] ?? 0) + below;
+    this.#bins[hi] = (this.#bins[hi] ?? 0) + above;
+  }
+
+  // Reallocates around [min, max] plus the bins currently held, so nothing is
+  // lost before #fold runs.
+  #grow(min: number, max: number): void {
+    const empty = this.#total === 0;
+    const lo = empty ? min : Math.min(min, this.#min);
+    const hi = empty ? max : Math.max(max, this.#max);
     const span = hi - lo + 1;
     const bins = new Float64Array(span + 2 * (HEADROOM + (span >>> 1)));
     const offset = lo - HEADROOM - (span >>> 1);
-    if (!empty) bins.set(old, this.#offset - offset);
+    if (!empty) {
+      bins.set(
+        this.#bins.subarray(
+          this.#min - this.#offset,
+          this.#max - this.#offset + 1,
+        ),
+        this.#min - offset,
+      );
+    }
     this.#bins = bins;
     this.#offset = offset;
   }
@@ -142,4 +203,22 @@ class SparseStore implements Store {
  */
 export function sparseStore(): StoreFactory {
   return { kind: "sparse", maxBins: 0, create: () => new SparseStore() };
+}
+
+/**
+ * A dense store that never spans more than `maxBins` bins. Past that it folds
+ * the lowest bins into the lowest one it keeps, giving up accuracy on the
+ * smallest magnitudes, near zero on either sign, and keeping it for the
+ * largest. The default, since the tails are what quantiles are read for.
+ *
+ * @param maxBins - The most bins kept per sign; a positive integer.
+ * @throws {@link ParamError} when `maxBins` is not a positive integer.
+ */
+export function collapsingLowestStore(maxBins: number): StoreFactory {
+  assertPositiveInt(maxBins, "maxBins");
+  return {
+    kind: "collapsingLowest",
+    maxBins,
+    create: () => new DenseStore(maxBins, "lowest"),
+  };
 }
