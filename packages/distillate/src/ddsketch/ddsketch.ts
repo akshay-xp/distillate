@@ -1,3 +1,4 @@
+import { assertPositiveFinite, ParamError } from "../core/params.js";
 import { type IndexMapping, logMapping } from "./mapping.js";
 import { DenseStore } from "./store.js";
 
@@ -74,8 +75,22 @@ export class DDSketch {
     return this.#max;
   }
 
-  /** Records a value. */
-  add(value: number): void {
+  /**
+   * Records a value.
+   *
+   * @param value - Any finite number within the mapping's indexable range.
+   * @param count - How many times to record it; finite and positive.
+   * @throws {@link ParamError} when `value` is not finite or beyond
+   * `mapping.maxIndexableValue` in magnitude, or `count` is not a finite
+   * positive number. Nothing is recorded.
+   */
+  add(value: number, count = 1): void {
+    if (!(Math.abs(value) <= this.#mapping.maxIndexableValue)) {
+      throw new ParamError(
+        `value must be finite and at most ${String(this.#mapping.maxIndexableValue)} in magnitude, got ${String(value)}`,
+      );
+    }
+    assertPositiveFinite(count, "count");
     if (value > this.#mapping.minIndexableValue) {
       this.#positive.add(this.#mapping.index(value), 1);
     }
