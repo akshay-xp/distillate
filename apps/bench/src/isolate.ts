@@ -5,6 +5,7 @@ import { adapters as bloomAdapters } from "./adapters.js";
 import { cardinalityAdapters, cardinalityRows } from "./cardinality.js";
 import { countMinAdapters, countMinRows } from "./countmin.js";
 import { cuckooAdapters, cuckooRows } from "./cuckoo.js";
+import { ddSketchAdapters, ddSketchRows } from "./ddsketch.js";
 import { keyLengthRows } from "./keylength.js";
 import type { Alphabet } from "./keylength.js";
 import { scalableAdapters, scalableRows } from "./scalable.js";
@@ -57,6 +58,8 @@ const JOBS: Record<string, Job> = {
   throughput: (name, [n]: [number]) => measureThroughput(name, n),
   topk: (name, [ns]: [number[]]) =>
     topKRows(ns, only(topKAdapters, name, "topk")),
+  ddsketch: (name, [ns]: [number[]]) =>
+    ddSketchRows(ns, only(ddSketchAdapters, name, "ddsketch")),
 };
 
 const SELF = fileURLToPath(import.meta.url);

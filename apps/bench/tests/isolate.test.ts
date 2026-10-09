@@ -89,3 +89,14 @@ test("isolatedThroughput lists each library's labels in turn, whatever their cou
     "blocked has (miss)",
   ]);
 });
+
+test("the ddsketch job measures only the named library", () => {
+  const { rows } = runIsolated<{ name: string; events: number }>(
+    "ddsketch",
+    "@datadog/sketches-js",
+    [[1000]],
+  );
+  expect(rows.map((r) => [r.name, r.events])).toEqual([
+    ["@datadog/sketches-js", 1000],
+  ]);
+});
