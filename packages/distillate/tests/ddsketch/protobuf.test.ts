@@ -204,6 +204,10 @@ describe("a malformed message is rejected", () => {
     ["an unknown interpolation", mappingOf(gamma, 4)],
     ["no mapping, so gamma 0", []],
     ["gamma of 1", mappingOf(1)],
+    [
+      "an indexOffset so large no value can be indexed",
+      field(1, 2, [...field(1, 1, f64(gamma)), ...field(2, 1, f64(-6.8e38))]),
+    ],
     ["a NaN gamma", mappingOf(Number.NaN)],
     ["a negative bin count", [...mappingOf(gamma), ...binAt(3, -1)]],
     ["a NaN bin count", [...mappingOf(gamma), ...binAt(3, Number.NaN)]],

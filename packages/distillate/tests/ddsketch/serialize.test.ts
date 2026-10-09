@@ -328,6 +328,12 @@ describe("a frame whose contents cannot be true is rejected", () => {
       },
     ],
     [
+      "an indexOffset so large no value can be indexed",
+      (v) => {
+        v.setFloat64(16, -6.8e38, true);
+      },
+    ],
+    [
       "relativeAccuracy of 0",
       (v) => {
         v.setFloat64(24, 0, true);
