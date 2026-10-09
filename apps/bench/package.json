@@ -15,9 +15,12 @@
     "distillate": "workspace:*"
   },
   "devDependencies": {
+    "@datadog/sketches-js": "^2.1.1",
     "@types/bloomfilter": "^0.0.2",
     "@types/node": "^22.20.4",
+    "esbuild": "^0.28.2",
     "mitata": "^1.0.34",
+    "protobufjs": "^8.8.0",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^5.0.2"
