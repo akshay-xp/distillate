@@ -133,14 +133,14 @@ export class DDSketch {
     assertPositiveFinite(count, "count");
     const min = this.#mapping.minIndexableValue;
     if (value > min) {
-      this.#positive.add(this.#mapping.index(value), 1);
+      this.#positive.add(this.#mapping.index(value), count);
     } else if (value < -min) {
-      this.#negative.add(this.#mapping.index(-value), 1);
+      this.#negative.add(this.#mapping.index(-value), count);
     } else {
-      this.#zeroCount += 1;
+      this.#zeroCount += count;
     }
-    this.#count += 1;
-    this.#sum += value;
+    this.#count += count;
+    this.#sum += value * count;
     // NaN compares false, so the first value replaces the empty NaN.
     if (!(value >= this.#min)) this.#min = value;
     if (!(value <= this.#max)) this.#max = value;
