@@ -23,3 +23,22 @@ describe("create", () => {
     }
   });
 });
+
+describe("summaries", () => {
+  test("count, sum, min and max are exact", () => {
+    const sketch = DDSketch.create(0.01);
+    for (const v of [3, 1, 2]) sketch.add(v);
+    expect(sketch.count).toBe(3);
+    expect(sketch.sum).toBe(6);
+    expect(sketch.min).toBe(1);
+    expect(sketch.max).toBe(3);
+  });
+
+  test("an empty sketch has no min or max", () => {
+    const sketch = DDSketch.create(0.01);
+    expect(sketch.count).toBe(0);
+    expect(sketch.sum).toBe(0);
+    expect(sketch.min).toBeNaN();
+    expect(sketch.max).toBeNaN();
+  });
+});
