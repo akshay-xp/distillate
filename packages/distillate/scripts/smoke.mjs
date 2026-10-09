@@ -20,6 +20,7 @@ import { CuckooFilter } from "../dist/cuckoo/index.js";
 import { CountMinSketch, countMinSizing } from "../dist/countmin/index.js";
 import { TopK, topKSizing } from "../dist/topk/index.js";
 import { collapsingLowestStore, DDSketch } from "../dist/ddsketch/index.js";
+import { fromProtobuf, toProtobuf } from "../dist/ddsketch/protobuf/index.js";
 
 if (typeof VERSION !== "string") {
   console.error(
@@ -285,6 +286,17 @@ if (dd.union(DDSketch.from([1000], 0.01)).max !== 1000) {
   process.exit(1);
 }
 
+const fromDatadog = fromProtobuf(toProtobuf(dd));
+if (
+  fromDatadog.count !== 100 ||
+  Math.abs(fromDatadog.quantile(0.5) - 50) > 0.5
+) {
+  console.error(
+    `smoke: DDSketch protobuf round trip counted ${fromDatadog.count} or moved the median to ${fromDatadog.quantile(0.5)}`,
+  );
+  process.exit(1);
+}
+
 // A log of concatenated frames must walk by declared length alone.
 const log = [
   golden.find((g) => g.name === "bloom"),
@@ -308,5 +320,5 @@ if (walked.join() !== "1,5" || at !== stream.length) {
 }
 
 console.log(
-  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo + distillate/countmin + distillate/topk + distillate/ddsketch work (filters, sketches, sizing helpers, frame walk, growth, delete, counting, heavy hitters, quantiles), toBytes byte-identical to golden`,
+  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo + distillate/countmin + distillate/topk + distillate/ddsketch + distillate/ddsketch/protobuf work (filters, sketches, sizing helpers, frame walk, growth, delete, counting, heavy hitters, quantiles), toBytes byte-identical to golden`,
 );

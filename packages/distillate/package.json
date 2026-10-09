@@ -111,6 +111,14 @@
       "import": "./dist/ddsketch/index.js",
       "require": "./dist/ddsketch/index.cjs"
     },
+    "./ddsketch/protobuf": {
+      "types": {
+        "import": "./dist/ddsketch/protobuf/index.d.ts",
+        "require": "./dist/ddsketch/protobuf/index.d.cts"
+      },
+      "import": "./dist/ddsketch/protobuf/index.js",
+      "require": "./dist/ddsketch/protobuf/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",

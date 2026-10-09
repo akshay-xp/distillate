@@ -66,7 +66,13 @@ test("the README structures table lists every structure subpath", () => {
     ).exports,
   );
   const structures = exports
-    .filter((key) => ![".", "./frame", "./package.json"].includes(key))
+    // A nested subpath such as ./ddsketch/protobuf is a codec for the
+    // structure above it, not a structure of its own.
+    .filter(
+      (key) =>
+        ![".", "./frame", "./package.json"].includes(key) &&
+        key.split("/").length === 2,
+    )
     .map((key) => `distillate/${key.slice(2)}`);
 
   const readme = readFileSync(README, "utf8");
