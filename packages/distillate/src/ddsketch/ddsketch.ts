@@ -21,6 +21,18 @@ export interface DDSketchOptions {
   store?: StoreFactory;
 }
 
+/** Thrown by {@link DDSketch.union} when the two sketches' bins differ. */
+export class DDSketchParamMismatchError extends Error {
+  /** Discriminates this error from other `Error`s. */
+  override readonly name = "DDSketchParamMismatchError";
+}
+
+// sketches-go's tolerance for treating two mappings as one: Math.pow and Go's
+// Pow can put the same accuracy's gamma an ulp apart.
+function withinTolerance(x: number, y: number): boolean {
+  return Math.abs(x - y) <= 1e-12 * Math.max(Math.abs(x), Math.abs(y));
+}
+
 /**
  * A quantile sketch whose every answer is within a relative error of the true
  * value at that quantile, tails included.
@@ -125,8 +137,21 @@ export class DDSketch {
    *
    * @param other - A sketch whose mapping bins values identically.
    * @returns A new sketch holding both streams.
+   * @throws {@link DDSketchParamMismatchError} when the mappings differ in
+   * kind, or in `gamma` or `indexOffset` by more than 1e-12 relative.
    */
   union(other: DDSketch): DDSketch {
+    const mine = this.#mapping;
+    const theirs = other.#mapping;
+    if (
+      mine.kind !== theirs.kind ||
+      !withinTolerance(mine.gamma, theirs.gamma) ||
+      !withinTolerance(mine.indexOffset, theirs.indexOffset)
+    ) {
+      throw new DDSketchParamMismatchError(
+        "cannot union DDSketches whose mappings bin values differently",
+      );
+    }
     const merged = new DDSketch(this.#relativeAccuracy, {
       mapping: () => this.#mapping,
       store: this.#store,
