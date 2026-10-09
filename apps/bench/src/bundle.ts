@@ -1,0 +1,56 @@
+import { fileURLToPath } from "node:url";
+import { gzipSync } from "node:zlib";
+
+import { build } from "esbuild";
+
+// Imports in the measured code resolve from the bench package, so each
+// library is the version the rest of the bench measures.
+const BENCH_DIR = fileURLToPath(new URL("..", import.meta.url));
+
+/**
+ * What a browser bundle of `code` costs: esbuild's minified output, gzipped.
+ * Measured rather than quoted, so a release of either library moves it.
+ */
+export async function bundleSize(code: string): Promise<number> {
+  const result = await build({
+    stdin: { contents: code, resolveDir: BENCH_DIR },
+    bundle: true,
+    minify: true,
+    format: "esm",
+    platform: "browser",
+    write: false,
+    logLevel: "silent",
+  });
+  return gzipSync(result.outputFiles[0]?.contents ?? new Uint8Array()).length;
+}
+
+export interface BundleRow {
+  name: string;
+  /** The sketch alone. */
+  sketch: number;
+  /** The sketch and what it takes to write Datadog's protobuf. */
+  withProtobuf: number;
+}
+
+export async function ddSketchBundles(): Promise<BundleRow[]> {
+  return [
+    {
+      name: "distillate/ddsketch",
+      sketch: await bundleSize(
+        'import { DDSketch } from "distillate/ddsketch"; globalThis.x = DDSketch;',
+      ),
+      withProtobuf: await bundleSize(
+        'import { DDSketch } from "distillate/ddsketch"; import { toProtobuf } from "distillate/ddsketch/protobuf"; globalThis.x = [DDSketch, toProtobuf];',
+      ),
+    },
+    {
+      name: "@datadog/sketches-js",
+      sketch: await bundleSize(
+        'import { DDSketch } from "@datadog/sketches-js"; globalThis.x = DDSketch;',
+      ),
+      withProtobuf: await bundleSize(
+        'import { DDSketch } from "@datadog/sketches-js"; globalThis.x = () => new DDSketch().toProto();',
+      ),
+    },
+  ];
+}
