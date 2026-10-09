@@ -73,7 +73,7 @@ many places from the smallest.
 ## Choosing a mapping
 
 The mapping turns a value into a bin index. All four meet the same bound; they
-trade bins for speed.
+differ in how many bins that takes.
 
 | Mapping            | How it finds the bin             | Bins, relative to log |
 | ------------------ | -------------------------------- | --------------------- |
@@ -89,9 +89,12 @@ const sketch = DDSketch.create(0.01, { mapping: cubicMapping });
 sketch.mapping.kind; // "cubic"
 ```
 
-The interpolated mappings avoid a `Math.log` per value. Cubic is nearly as
-compact as log and is the one to reach for when `add` is hot. The bins match
-Datadog's own libraries bin for bin, which is what lets a sketch cross to them.
+Keep the default unless you are matching another sketch. The interpolated
+mappings were designed to avoid a logarithm per value, but `Math.log` is cheap
+in V8: measured warm, linear adds about 7% faster than log for 44% more bins,
+quadratic about as fast, and cubic about 10% slower. They are here so a sketch
+built with one of them by Datadog's libraries can be read and merged, bin for
+bin.
 
 ## Choosing a store
 

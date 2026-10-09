@@ -91,3 +91,13 @@ test("the README shows the sketch", () => {
   const readme = read("../../../packages/distillate/README.md");
   expect(readme).toContain("### DDSketch (`distillate/ddsketch`)");
 });
+
+// Measured warm on V8, cubic adds about 10% slower than log, quadratic about
+// as fast and linear about 7% faster for 44% more bins: Math.log is cheap
+// there. The guide once said to reach for cubic when add is hot.
+test("the guide does not sell the interpolated mappings as faster", () => {
+  const mappings = section(guide(), "Choosing a mapping");
+  expect(mappings).not.toMatch(/is hot|reach for/);
+  expect(mappings).toContain("Math.log");
+  expect(mappings).toContain("Datadog");
+});
