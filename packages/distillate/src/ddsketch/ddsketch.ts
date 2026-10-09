@@ -2,9 +2,13 @@ import { assertPositiveFinite, ParamError } from "../core/params.js";
 import {
   assertBodyLength,
   assertMinBodyLength,
+  bytesEqual,
+  type FilterJSON,
   FORMAT_VERSION,
+  fromJSONEnvelope,
   readHeader,
   SerializationError,
+  toJSONEnvelope,
   UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
@@ -474,6 +478,38 @@ export class DDSketch {
         });
       },
     );
+  }
+
+  /**
+   * Tests structural equality: `true` when `other` serializes to identical
+   * bytes, meaning the same mapping, store, summaries and bins.
+   *
+   * @param other - The sketch to compare against.
+   * @returns `true` if the two sketches are byte-for-byte identical.
+   */
+  equals(other: DDSketch): boolean {
+    return bytesEqual(this.toBytes(), other.toBytes());
+  }
+
+  /**
+   * Serializes the sketch into the JSON envelope: the base64 of
+   * {@link DDSketch.toBytes}.
+   *
+   * @returns The envelope, readable by {@link DDSketch.fromJSON}.
+   */
+  toJSON(): FilterJSON {
+    return toJSONEnvelope(this.toBytes());
+  }
+
+  /**
+   * Restores a sketch from its {@link DDSketch.toJSON} envelope.
+   *
+   * @param value - The parsed envelope.
+   * @returns The reconstructed sketch.
+   * @throws {@link SerializationError} when the envelope or frame is malformed.
+   */
+  static fromJSON(value: unknown): DDSketch {
+    return DDSketch.fromBytes(fromJSONEnvelope(value));
   }
 
   /**
