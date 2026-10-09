@@ -3,9 +3,14 @@ import { describe, expect, test } from "vitest";
 import { ParamError } from "../../src/core/params.js";
 import { DDSketch } from "../../src/ddsketch/ddsketch.js";
 import { cubicMapping } from "../../src/ddsketch/mapping.js";
+import {
+  collapsingHighestStore,
+  collapsingLowestStore,
+} from "../../src/ddsketch/store.js";
 import { rng } from "../helpers/frequency.js";
 import {
   exactQuantile,
+  exactQuantiles,
   expectWithin,
   lognormalValues,
 } from "../helpers/quantile.js";
@@ -170,5 +175,53 @@ describe("batch", () => {
       added.max,
     ]);
     expect(built.quantiles(QS)).toEqual(added.quantiles(QS));
+  });
+});
+
+describe("bounded memory", () => {
+  const ALL_QS = [0, 0.001, 0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99, 0.999, 1];
+  // About 1,600 bins at 0.01, so 256 collapses.
+  const values = lognormalValues(23, 100_000).map((v) => v ** 4);
+  const exact = exactQuantiles(values, ALL_QS);
+
+  test("defaults to collapsing-lowest at 2048 bins", () => {
+    const { store } = DDSketch.create(0.01);
+    expect([store.kind, store.maxBins]).toEqual(["collapsingLowest", 2048]);
+  });
+
+  test("collapsing-lowest keeps the bound above the collapsed range", () => {
+    const sketch = DDSketch.from(values, 0.01, {
+      store: collapsingLowestStore(256),
+    });
+    const indices = values.map((v) => sketch.mapping.index(v));
+    const floor = Math.max(...indices) - 256 + 1;
+    let collapsedSide = 0;
+    for (const [i, q] of ALL_QS.entries()) {
+      const want = exact[i] ?? Number.NaN;
+      if (sketch.mapping.index(want) > floor) {
+        expectWithin(sketch.quantile(q), want, 0.01);
+      } else {
+        collapsedSide++;
+      }
+    }
+    expect(collapsedSide).toBeGreaterThan(0);
+  });
+
+  test("collapsing-highest keeps the bound below the collapsed range", () => {
+    const sketch = DDSketch.from(values, 0.01, {
+      store: collapsingHighestStore(256),
+    });
+    const indices = values.map((v) => sketch.mapping.index(v));
+    const ceiling = Math.min(...indices) + 256 - 1;
+    let collapsedSide = 0;
+    for (const [i, q] of ALL_QS.entries()) {
+      const want = exact[i] ?? Number.NaN;
+      if (sketch.mapping.index(want) < ceiling) {
+        expectWithin(sketch.quantile(q), want, 0.01);
+      } else {
+        collapsedSide++;
+      }
+    }
+    expect(collapsedSide).toBeGreaterThan(0);
   });
 });

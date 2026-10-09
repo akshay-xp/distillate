@@ -1,6 +1,10 @@
 import { assertPositiveFinite, ParamError } from "../core/params.js";
 import { type IndexMapping, logMapping } from "./mapping.js";
-import { denseStore, type Store, type StoreFactory } from "./store.js";
+import {
+  collapsingLowestStore,
+  type Store,
+  type StoreFactory,
+} from "./store.js";
 
 /** Options for {@link DDSketch.create}. */
 export interface DDSketchOptions {
@@ -9,7 +13,11 @@ export interface DDSketchOptions {
    * most compact; the interpolated mappings trade bins for speed.
    */
   mapping?: (relativeAccuracy: number) => IndexMapping;
-  /** The store factory that holds each sign's bins. */
+  /**
+   * The store factory that holds each sign's bins. Defaults to
+   * {@link collapsingLowestStore} at 2048 bins, which bounds memory while
+   * keeping the tails accurate.
+   */
   store?: StoreFactory;
 }
 
@@ -20,6 +28,7 @@ export interface DDSketchOptions {
 export class DDSketch {
   readonly #relativeAccuracy: number;
   readonly #mapping: IndexMapping;
+  readonly #store: StoreFactory;
   readonly #positive: Store;
   // Negative values, binned by magnitude.
   readonly #negative: Store;
@@ -64,8 +73,10 @@ export class DDSketch {
 
   /** See {@link DDSketch.create}. */
   constructor(relativeAccuracy: number, options: DDSketchOptions = {}) {
-    const { mapping = logMapping, store = denseStore() } = options;
+    const { mapping = logMapping, store = collapsingLowestStore(2048) } =
+      options;
     this.#mapping = mapping(relativeAccuracy);
+    this.#store = store;
     this.#positive = store.create();
     this.#negative = store.create();
     this.#relativeAccuracy = relativeAccuracy;
@@ -79,6 +90,11 @@ export class DDSketch {
   /** The mapping that bins values. */
   get mapping(): IndexMapping {
     return this.#mapping;
+  }
+
+  /** The store factory holding each sign's bins. */
+  get store(): StoreFactory {
+    return this.#store;
   }
 
   /** How many values have been added. */
