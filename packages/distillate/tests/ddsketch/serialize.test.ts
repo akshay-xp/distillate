@@ -1,6 +1,13 @@
 import fc from "fast-check";
 import { describe, expect, test } from "vitest";
 
+import {
+  FORMAT_VERSION,
+  SerializationError,
+  TruncatedError,
+  UnknownHashVariantError,
+  writeHeader,
+} from "../../src/core/serialize.js";
 import { DDSketch, type DDSketchOptions } from "../../src/ddsketch/ddsketch.js";
 import {
   cubicMapping,
@@ -143,5 +150,97 @@ describe("canonical bytes", () => {
     const b = DDSketch.from([-0, 0], 0.01);
     expect(a.toBytes()).toEqual(b.toBytes());
     expect(Object.is(b.min, 0)).toBe(true);
+  });
+});
+
+// A valid frame's body, edited and resealed with a correct CRC, so each forged
+// frame reaches DDSketch's own checks rather than stopping at the trailer.
+const VALID = DDSketch.from([1, 2, -3, 0], 0.01, { store: denseStore() });
+function forge(
+  mutate: (body: Uint8Array, view: DataView) => Uint8Array | undefined,
+  flags = 0,
+): Uint8Array {
+  const frame = VALID.toBytes();
+  const body = frame.slice(BODY, frame.length - 4);
+  const edited =
+    mutate(body, new DataView(body.buffer, body.byteOffset, body.byteLength)) ??
+    body;
+  return writeHeader({ version: FORMAT_VERSION, type: 10, flags }, edited);
+}
+
+describe("a structurally broken frame is rejected", () => {
+  test("every truncated prefix", () => {
+    const frame = DDSketch.from(mixed(52, 200), 0.01).toBytes();
+    for (let n = 0; n < frame.length; n += 7) {
+      expect(() => DDSketch.fromBytes(frame.subarray(0, n))).toThrow(
+        SerializationError,
+      );
+    }
+  });
+
+  test("a body shorter than the params block", () => {
+    expect(() =>
+      DDSketch.fromBytes(forge((body) => body.subarray(0, 40))),
+    ).toThrow(TruncatedError);
+  });
+
+  test("a body whose length disagrees with its bin counts", () => {
+    expect(() =>
+      DDSketch.fromBytes(
+        forge((_, view) => {
+          view.setUint32(64, view.getUint32(64, true) + 1, true);
+          return undefined;
+        }),
+      ),
+    ).toThrow(TruncatedError);
+  });
+
+  test("a hash variant other than none", () => {
+    expect(() => DDSketch.fromBytes(forge(() => undefined, 1))).toThrow(
+      UnknownHashVariantError,
+    );
+  });
+
+  test.each<[string, (view: DataView) => void]>([
+    [
+      "an unknown mapping",
+      (view) => {
+        view.setUint8(0, 4);
+      },
+    ],
+    [
+      "an unknown store",
+      (view) => {
+        view.setUint8(1, 4);
+      },
+    ],
+    [
+      "non-zero reserved bytes",
+      (view) => {
+        view.setUint16(2, 1, true);
+      },
+    ],
+    [
+      "a bound on an unbounded store",
+      (view) => {
+        view.setUint32(4, 5, true);
+      },
+    ],
+    [
+      "a collapsing store with no bound",
+      (view) => {
+        view.setUint8(1, 1);
+        view.setUint32(4, 0, true);
+      },
+    ],
+  ])("%s", (_, mutate) => {
+    expect(() =>
+      DDSketch.fromBytes(
+        forge((__, view) => {
+          mutate(view);
+          return undefined;
+        }),
+      ),
+    ).toThrow(SerializationError);
   });
 });
