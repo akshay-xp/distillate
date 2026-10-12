@@ -148,21 +148,60 @@ class DenseStore implements Store {
       return;
     }
     if (other.#total === 0) return;
-    // Widening to both ends first sets the window an ascending replay would
-    // end on; every bin then lands in it, a folded one at the nearer end.
-    this.add(other.#min, 0);
-    this.add(other.#max, 0);
+    const min = Math.min(this.#min, other.#min);
+    const max = Math.max(this.#max, other.#max);
+    if (this.#collapse !== null && max - min + 1 > this.#maxBins) {
+      // Widening to both ends first sets the window an ascending replay
+      // would end on; every bin then lands in it, a folded one at the nearer
+      // end.
+      this.add(other.#min, 0);
+      this.add(other.#max, 0);
+    } else {
+      // Sized to the merged window with only fixed headroom: a union's
+      // result is read more often than it is grown.
+      if (min < this.#offset || max >= this.#offset + this.#bins.length) {
+        this.#grow(min, max, HEADROOM);
+      }
+      this.#min = min;
+      this.#max = max;
+    }
+    // Ascending, as a replay adds them: bins below the window into its first
+    // bin, those inside onto their own, those above into its last. An empty
+    // bin adds nothing to either, so none is skipped.
     const from = other.#bins;
     const to = this.#bins;
+    const shift = other.#offset;
+    const offset = this.#offset;
     const lo = this.#min;
     const hi = this.#max;
-    for (let index = other.#min; index <= other.#max; index++) {
-      const count = from[index - other.#offset] ?? 0;
-      if (count === 0) continue;
-      const at = Math.min(Math.max(index, lo), hi) - this.#offset;
-      to[at] = (to[at] ?? 0) + count;
-      this.#total += count;
+    const last = other.#max;
+    let index = other.#min;
+    let total = this.#total;
+    if (total === 0 && lo <= index && last <= hi) {
+      // Into an empty window that holds every bin: a copy, then the total
+      // summed in the same ascending order a replay adds them.
+      to.set(from.subarray(index - shift, last - shift + 1), index - offset);
+      for (; index <= last; index++) total += from[index - shift] ?? 0;
+      this.#total = total;
+      return;
     }
+    for (; index < lo; index++) {
+      const count = from[index - shift] ?? 0;
+      to[lo - offset] = (to[lo - offset] ?? 0) + count;
+      total += count;
+    }
+    const inside = Math.min(last, hi);
+    for (; index <= inside; index++) {
+      const count = from[index - shift] ?? 0;
+      to[index - offset] = (to[index - offset] ?? 0) + count;
+      total += count;
+    }
+    for (; index <= last; index++) {
+      const count = from[index - shift] ?? 0;
+      to[hi - offset] = (to[hi - offset] ?? 0) + count;
+      total += count;
+    }
+    this.#total = total;
   }
 
   forEach(fn: (index: number, count: number) => void): void {
@@ -186,9 +225,13 @@ class DenseStore implements Store {
 
   // Reallocates around [min, max], keeping the held bins inside it. A bounded
   // store's array never outgrows maxBins plus its headroom.
-  #grow(min: number, max: number): void {
+  #grow(
+    min: number,
+    max: number,
+    spare = HEADROOM + ((max - min + 1) >>> 1),
+  ): void {
     const span = max - min + 1;
-    let length = span + 2 * (HEADROOM + (span >>> 1));
+    let length = span + 2 * spare;
     if (this.#collapse !== null) {
       length = Math.min(length, this.#maxBins + 2 * HEADROOM);
     }
