@@ -3,6 +3,7 @@ import { defineConfig } from "vitest/config";
 const PROBES = [
   "tests/hll/allocation.test.ts",
   "tests/ddsketch/allocation.test.ts",
+  "tests/fuse/allocation.test.ts",
 ];
 
 const shared = {
@@ -35,7 +36,7 @@ export default defineConfig({
         },
       },
       {
-        // The allocation probe cannot share a machine with other test files.
+        // The allocation probes cannot share a machine with other test files.
         // Workers competing for CPU do not make it noisier, they change what it
         // measures: under load V8 declines to inline the hash path, and add()
         // then really does allocate one encodeInto result object per key.

@@ -10,19 +10,13 @@ export interface Hash128 {
 // Scratch output registers for the 64-bit-lane helpers below. Reused across
 // calls (zero per-call allocation); safe because hash128 is synchronous and
 // non-recursive, so no call observes another's registers mid-computation.
-export let RLO = 0;
-export let RHI = 0;
+export const R64: Uint32Array = new Uint32Array(2);
 
 // Reused output struct for the final hash lanes, same non-reentrant rationale
-// as RLO/RHI. computeLanes writes it; the allocating wrappers copy it out.
+// as R64. computeLanes writes it; the allocating wrappers copy it out.
 const LANES: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
 
-export function mul64(
-  alo: number,
-  ahi: number,
-  blo: number,
-  bhi: number,
-): void {
+function mul64(alo: number, ahi: number, blo: number, bhi: number): void {
   const a0 = alo & 0xffff;
   const a1 = alo >>> 16;
   const a2 = ahi & 0xffff;
@@ -56,25 +50,25 @@ export function mul64(
   c3 += a3 * b0 + a2 * b1 + a1 * b2 + a0 * b3;
   c3 &= 0xffff;
 
-  RLO = ((c1 << 16) | c0) >>> 0;
-  RHI = ((c3 << 16) | c2) >>> 0;
+  R64[0] = ((c1 << 16) | c0) >>> 0;
+  R64[1] = ((c3 << 16) | c2) >>> 0;
 }
 
-export function fmix64(lo: number, hi: number): void {
-  let l = lo;
-  let h = hi;
+// Reads and writes R64 rather than taking arguments: words past 2^30 passed
+// to a call that is not inlined are boxed.
+export function fmix64(): void {
+  let l = R64[0] ?? 0;
+  let h = R64[1] ?? 0;
   // k ^= k >>> 33: since 33 >= 32, the shifted low word is (hi >>> 1), high 0.
   l = (l ^ (h >>> 1)) >>> 0;
   mul64(l, h, 0xed558ccd, 0xff51afd7);
-  l = RLO;
-  h = RHI;
+  l = R64[0] ?? 0;
+  h = R64[1] ?? 0;
   l = (l ^ (h >>> 1)) >>> 0;
   mul64(l, h, 0x1a85ec53, 0xc4ceb9fe);
-  l = RLO;
-  h = RHI;
-  l = (l ^ (h >>> 1)) >>> 0;
-  RLO = l;
-  RHI = h;
+  l = R64[0] ?? 0;
+  h = R64[1] ?? 0;
+  R64[0] = (l ^ (h >>> 1)) >>> 0;
 }
 
 function rotl32(x: number, r: number): number {
