@@ -158,6 +158,33 @@ describe("weighted add", () => {
       expect(weighted.quantile(q)).toBe(repeated.quantile(q));
     }
   });
+  // Below a total weight of 1, q * (count - 1) floors to rank -1. That still
+  // reads the lowest value: the walk from the far end lands on the largest
+  // negative magnitude, and an empty side clamps to min. Clamping the rank to
+  // 0 instead would read the negative side's smallest magnitude.
+  test.each<[string, [number, number][], number]>([
+    [
+      "zero and positive",
+      [
+        [0, 0.3],
+        [5, 0.3],
+      ],
+      0,
+    ],
+    [
+      "mixed signs",
+      [
+        [-5, 0.2],
+        [-1, 0.2],
+        [3, 0.2],
+      ],
+      -5,
+    ],
+  ])("a total weight below 1 reads the lowest value: %s", (_, adds, lowest) => {
+    const sketch = DDSketch.create(0.01);
+    for (const [value, count] of adds) sketch.add(value, count);
+    expectWithin(sketch.quantile(0.5), lowest, 0.01);
+  });
 });
 
 describe("batch", () => {
