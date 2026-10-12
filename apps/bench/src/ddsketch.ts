@@ -1,6 +1,6 @@
 import { DDSketch as DatadogSketch } from "@datadog/sketches-js";
 import { DDSketch, logMapping } from "distillate/ddsketch";
-import { toProtobuf } from "distillate/ddsketch/protobuf";
+import { fromProtobuf, toProtobuf } from "distillate/ddsketch/protobuf";
 
 import { rng } from "./countmin.js";
 import { median } from "./keylength.js";
@@ -14,12 +14,21 @@ export interface QuantileSketch {
   bytes(): number;
   /** Bytes as Datadog's DDSketch protobuf message. */
   protoBytes(): number;
+  /** A new sketch holding this one and `other`, both left as they were. */
+  union(other: QuantileSketch): void;
+  /** Datadog's DDSketch protobuf message. */
+  toProto(): Uint8Array;
 }
 
 export interface DDSketchAdapter {
   name: string;
   create(relativeAccuracy: number): QuantileSketch;
+  /** Decodes a message `toProto` wrote. */
+  fromProto(bytes: Uint8Array): void;
 }
+
+// Each wrapper's library sketch, so union can reach the other operand's.
+const raw = new WeakMap<QuantileSketch, unknown>();
 
 /** The accuracy both sketches are built at: Datadog's own default. */
 export const DDSKETCH_ACCURACY = 0.01;
@@ -46,7 +55,7 @@ function distillateAdapter(
     name,
     create(relativeAccuracy) {
       const s = DDSketch.create(relativeAccuracy, options);
-      return {
+      const wrapped: QuantileSketch = {
         relativeAccuracy: s.relativeAccuracy,
         add: (v) => {
           s.add(v);
@@ -54,7 +63,16 @@ function distillateAdapter(
         quantile: (q) => s.quantile(q),
         bytes: () => s.toBytes().length,
         protoBytes: () => toProtobuf(s).length,
+        union: (other) => {
+          s.union(raw.get(other) as DDSketch);
+        },
+        toProto: () => toProtobuf(s),
       };
+      raw.set(wrapped, s);
+      return wrapped;
+    },
+    fromProto: (bytes) => {
+      fromProtobuf(bytes);
     },
   };
 }
@@ -82,7 +100,7 @@ export const datadogDDSketchAdapter: DDSketchAdapter = {
   name: "@datadog/sketches-js",
   create(relativeAccuracy) {
     const s = new DatadogSketch({ relativeAccuracy });
-    return {
+    const wrapped: QuantileSketch = {
       relativeAccuracy: s.mapping.relativeAccuracy,
       add: (v) => {
         s.accept(v);
@@ -91,7 +109,20 @@ export const datadogDDSketchAdapter: DDSketchAdapter = {
       // Its only serialization is the protobuf message.
       bytes: () => s.toProto().length,
       protoBytes: () => s.toProto().length,
+      // Its merge folds into the receiver, so a fresh one takes both, as
+      // distillate's union returns a new sketch.
+      union: (other) => {
+        const merged = new DatadogSketch({ relativeAccuracy });
+        merged.merge(s);
+        merged.merge(raw.get(other) as DatadogSketch);
+      },
+      toProto: () => s.toProto(),
     };
+    raw.set(wrapped, s);
+    return wrapped;
+  },
+  fromProto: (bytes) => {
+    DatadogSketch.fromProto(bytes);
   },
 };
 
@@ -124,6 +155,30 @@ export interface DDSketchRow {
   bytes: number;
   protoBytes: number;
   addOpsPerSec: number;
+  /** Over QS, on the sketch the timed adds built. */
+  quantileOpsPerSec: number;
+  /** With a second sketch of as many values from another stream. */
+  unionOpsPerSec: number;
+  toProtoOpsPerSec: number;
+  fromProtoOpsPerSec: number;
+}
+
+// Calls per timed pass of the read-side operations: enough that a pass of the
+// cheapest outlasts the timer's resolution.
+const QUANTILE_CALLS = 10_000;
+const CODEC_CALLS = 50;
+
+// Calls per second of `fn`, as add is timed: the median of timed passes of
+// `calls` calls, after untimed ones.
+function rateOf(fn: (i: number) => void, calls: number): number {
+  const pass = (): number => {
+    const started = performance.now();
+    for (let i = 0; i < calls; i++) fn(i);
+    return performance.now() - started;
+  };
+  for (let p = 0; p < DDSKETCH_WARM_PASSES; p++) pass();
+  const ms = median(Array.from({ length: DDSKETCH_TIMED_PASSES }, pass));
+  return calls / (ms / 1000);
 }
 
 export function ddSketchRows(
@@ -135,6 +190,7 @@ export function ddSketchRows(
     // One stream per count, shared by both libraries, so both are scored
     // against the same exact quantiles: the value at rank floor(q * (n - 1)).
     const stream = lognormalStream(29, events);
+    const second = lognormalStream(30, events);
     const sorted = [...stream].sort((a, b) => a - b);
     const exact = QS.map((q) => sorted[Math.floor(q * (events - 1))] ?? 0);
 
@@ -159,6 +215,9 @@ export function ddSketchRows(
           Math.abs(s.quantile(q) - want) / want,
         );
       });
+      const other = adapter.create(DDSKETCH_ACCURACY);
+      for (const v of second) other.add(v);
+      const message = s.toProto();
       rows.push({
         name: adapter.name,
         events,
@@ -166,6 +225,17 @@ export function ddSketchRows(
         bytes: s.bytes(),
         protoBytes: s.protoBytes(),
         addOpsPerSec: events / (addMs / 1000),
+        quantileOpsPerSec: rateOf(
+          (i) => s.quantile(QS[i % QS.length] ?? 0),
+          QUANTILE_CALLS,
+        ),
+        unionOpsPerSec: rateOf(() => {
+          s.union(other);
+        }, CODEC_CALLS),
+        toProtoOpsPerSec: rateOf(() => s.toProto(), CODEC_CALLS),
+        fromProtoOpsPerSec: rateOf(() => {
+          adapter.fromProto(message);
+        }, CODEC_CALLS),
       });
     }
   }

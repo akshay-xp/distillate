@@ -727,14 +727,18 @@ const ddSketchRowsFixture: DDSketchRow[] = [
     bytes: 2492,
     protoBytes: 3115,
     addOpsPerSec: 31_200_000,
+    quantileOpsPerSec: 4_100_000,
+    unionOpsPerSec: 480_000,
+    toProtoOpsPerSec: 297_000,
+    fromProtoOpsPerSec: 66_000,
   },
 ];
 
-test("ddSketchTable renders the error, both sizes and the add rate", () => {
+test("ddSketchTable renders the error, both sizes and every rate", () => {
   expect(ddSketchTable(ddSketchRowsFixture).split("\n")).toEqual([
-    "| Sketch | values | max rel. error | size | protobuf | add |",
-    "| --- | --- | --- | --- | --- | --- |",
-    "| distillate/ddsketch | 1M | 0.97% | 2492 B | 3115 B | 31.20 M ops/s |",
+    "| Sketch | values | max rel. error | size | protobuf | add | quantile | union | toProtobuf | fromProtobuf |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| distillate/ddsketch | 1M | 0.97% | 2492 B | 3115 B | 31.20 M ops/s | 4.10 M ops/s | 480 k ops/s | 297 k ops/s | 66 k ops/s |",
   ]);
 });
 

@@ -132,11 +132,11 @@ export function topKTable(rows: TopKRow[]): string {
 
 export function ddSketchTable(rows: DDSketchRow[]): string {
   const header =
-    "| Sketch | values | max rel. error | size | protobuf | add |\n" +
-    "| --- | --- | --- | --- | --- | --- |";
+    "| Sketch | values | max rel. error | size | protobuf | add | quantile | union | toProtobuf | fromProtobuf |\n" +
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |";
   const body = rows.map(
     (r) =>
-      `| ${r.name} | ${capacityLabel(r.events)} | ${(r.maxRelError * 100).toFixed(2)}% | ${String(r.bytes)} B | ${String(r.protoBytes)} B | ${ops(r.addOpsPerSec)} |`,
+      `| ${r.name} | ${capacityLabel(r.events)} | ${(r.maxRelError * 100).toFixed(2)}% | ${String(r.bytes)} B | ${String(r.protoBytes)} B | ${ops(r.addOpsPerSec)} | ${ops(r.quantileOpsPerSec)} | ${ops(r.unionOpsPerSec)} | ${ops(r.toProtoOpsPerSec)} | ${ops(r.fromProtoOpsPerSec)} |`,
   );
   return [header, ...body].join("\n");
 }
@@ -277,6 +277,7 @@ export function ddSketchSection(table: string, bundles: string): string[] {
     "",
     "`max rel. error` is the largest relative error over 11 quantiles from 0 to 1, each against the exact value at rank `floor(q * (n - 1))`, on one seeded lognormal stream around 100 shared by all three. Each promises at most 1%.",
     "`add` is the median of 5 timed passes after 2 untimed ones, each on a fresh sketch, so it is the steady rate rather than how fast V8 optimises the first pass.",
+    "`quantile`, `union`, `toProtobuf` and `fromProtobuf` are timed the same way on the sketch the adds built: `quantile` over the same 11 quantiles, `union` with a second sketch of as many values from another stream. sketches-js merges in place, so its union merges both into a fresh sketch, as distillate's returns one.",
     "`size` is each library's own serialization: distillate's DSTL frame, and sketches-js's protobuf message, its only one. `protobuf` is Datadog's message from each, the like-for-like size.",
     "",
     table,

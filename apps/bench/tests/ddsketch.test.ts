@@ -35,6 +35,10 @@ test("rows measure accuracy, both sizes and throughput for each library", () => 
     expect(r.addOpsPerSec).toBeGreaterThan(0);
     expect(r.bytes).toBeGreaterThan(0);
     expect(r.protoBytes).toBeGreaterThan(0);
+    expect(r.quantileOpsPerSec).toBeGreaterThan(0);
+    expect(r.unionOpsPerSec).toBeGreaterThan(0);
+    expect(r.toProtoOpsPerSec).toBeGreaterThan(0);
+    expect(r.fromProtoOpsPerSec).toBeGreaterThan(0);
   }
   // Measured, not assumed: the bound is the claim the section makes.
   expect(rows[0]?.maxRelError).toBeLessThanOrEqual(0.01 * (1 + 1e-12));
@@ -51,19 +55,20 @@ test("each row times warm passes on fresh sketches and keeps the median", () => 
     ...distillateDDSketchAdapter,
     create(relativeAccuracy: number) {
       sketches++;
+      // Wrapped in place: union finds the library sketch by this object.
       const s = distillateDDSketchAdapter.create(relativeAccuracy);
-      return {
-        ...s,
-        add(v: number) {
-          adds++;
-          s.add(v);
-        },
+      const add = s.add;
+      s.add = (v: number) => {
+        adds++;
+        add(v);
       };
+      return s;
     },
   };
   ddSketchRows([100], [counting]);
   expect(DDSKETCH_WARM_PASSES).toBe(2);
   expect(DDSKETCH_TIMED_PASSES).toBe(5);
-  expect(sketches).toBe(DDSKETCH_WARM_PASSES + DDSKETCH_TIMED_PASSES);
-  expect(adds).toBe((DDSKETCH_WARM_PASSES + DDSKETCH_TIMED_PASSES) * 100);
+  // One more sketch, built once from a second stream, is the union operand.
+  expect(sketches).toBe(DDSKETCH_WARM_PASSES + DDSKETCH_TIMED_PASSES + 1);
+  expect(adds).toBe((DDSKETCH_WARM_PASSES + DDSKETCH_TIMED_PASSES + 1) * 100);
 });
