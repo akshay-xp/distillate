@@ -44,6 +44,26 @@ export function exactQuantiles(
   );
 }
 
+/**
+ * The exact weighted quantile: the first value, in ascending order, whose
+ * cumulative weight exceeds rank `floor(q * (W - 1))`, or the smallest when
+ * that rank is negative.
+ */
+export function exactWeightedQuantile(
+  points: readonly (readonly [value: number, weight: number])[],
+  q: number,
+): number {
+  const sorted = [...points].sort((a, b) => a[0] - b[0]);
+  const total = sorted.reduce((sum, [, weight]) => sum + weight, 0);
+  const rank = Math.floor(q * (total - 1));
+  let running = 0;
+  for (const [value, weight] of sorted) {
+    running += weight;
+    if (running > rank) return value;
+  }
+  return sorted.at(-1)?.[0] ?? Number.NaN;
+}
+
 /** {@link exactQuantiles} for a single `q`. */
 export function exactQuantile(values: readonly number[], q: number): number {
   return exactQuantiles(values, [q])[0] ?? Number.NaN;

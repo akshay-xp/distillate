@@ -6,11 +6,14 @@ import { bitwiseMapping, cubicMapping } from "../../src/ddsketch/mapping.js";
 import {
   collapsingHighestStore,
   collapsingLowestStore,
+  denseStore,
+  sparseStore,
 } from "../../src/ddsketch/store.js";
 import { rng } from "../helpers/frequency.js";
 import {
   exactQuantile,
   exactQuantiles,
+  exactWeightedQuantile,
   expectWithin,
   lognormalValues,
 } from "../helpers/quantile.js";
@@ -185,6 +188,50 @@ describe("weighted add", () => {
     for (const [value, count] of adds) sketch.add(value, count);
     expectWithin(sketch.quantile(0.5), lowest, 0.01);
   });
+
+  test("fractional weights on negatives rank by cumulative weight", () => {
+    const sketch = DDSketch.create(0.01);
+    sketch.add(-9, 1.27);
+    sketch.add(-7, 1.96);
+    sketch.add(1, 0.87);
+    expectWithin(sketch.quantile(0.5), -9, 0.01);
+  });
+
+  // The rank promise holds for any weights: below a total of 1, fractional,
+  // or whole, on either sign and through every store.
+  test.each([
+    denseStore(),
+    sparseStore(),
+    collapsingLowestStore(4096),
+    collapsingHighestStore(4096),
+  ])(
+    "every weighted quantile is exact to the bin on a $kind store",
+    (store) => {
+      const next = rng(41);
+      for (let t = 0; t < 3000; t++) {
+        const n = 1 + Math.floor(next() * 6);
+        const weight = (): number =>
+          t % 3 === 0
+            ? next() * (0.9 / n) + 0.001
+            : t % 3 === 1
+              ? next() * 2 + 0.05
+              : 1 + Math.floor(next() * 3);
+        const points = Array.from(
+          { length: n },
+          () => [Math.round(next() * 20 - 10) || 1, weight()] as const,
+        );
+        const sketch = DDSketch.create(0.01, { store });
+        for (const [value, w] of points) sketch.add(value, w);
+        for (const q of [0.01, 0.3, 0.5, 0.7, 0.99]) {
+          expectWithin(
+            sketch.quantile(q),
+            exactWeightedQuantile(points, q),
+            0.01,
+          );
+        }
+      }
+    },
+  );
 });
 
 describe("batch", () => {
