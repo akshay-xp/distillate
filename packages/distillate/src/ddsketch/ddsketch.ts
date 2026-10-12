@@ -505,10 +505,16 @@ export class DDSketch {
       );
     }
     const sum = view.getFloat64(32, true);
-    // No sketch sums to -0: add records -0 as 0, and x + -x is +0.
-    if (Object.is(sum, -0)) {
+    // No sketch sums to -0: add records -0 as 0, and x + -x is +0. A NaN sum
+    // is written as one bit pattern, so any other is a second encoding.
+    if (
+      Object.is(sum, -0) ||
+      (Number.isNaN(sum) &&
+        (view.getUint32(32, true) !== 0 ||
+          view.getUint32(36, true) !== 0x7ff80000))
+    ) {
       throw new SerializationError(
-        "ddsketch: sum is -0, which no sketch holds",
+        "ddsketch: sum is -0 or a NaN no writer produces",
       );
     }
     const min = view.getFloat64(40, true);

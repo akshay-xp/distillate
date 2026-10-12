@@ -708,3 +708,54 @@ describe("a sketch whose sum overflows round-trips", () => {
     }
   });
 });
+
+describe("a non-finite sum the bins cannot produce is rejected", () => {
+  const small = DDSketch.from([1, 2, 3], 0.01);
+  const high = DDSketch.from([1e308, 1e308], 0.01);
+  const both = DDSketch.from([1e308, 1e308, -1e308, -1e308], 0.01);
+  const sumAt = (view: DataView, value: number): undefined => {
+    view.setFloat64(32, value, true);
+    return undefined;
+  };
+  test.each<[string, DDSketch, (view: DataView) => undefined]>([
+    [
+      "+Infinity from small bins",
+      small,
+      (v) => {
+        sumAt(v, Infinity);
+      },
+    ],
+    [
+      "-Infinity from positive bins",
+      high,
+      (v) => {
+        sumAt(v, -Infinity);
+      },
+    ],
+    [
+      "NaN with one side able to overflow",
+      high,
+      (v) => {
+        sumAt(v, NaN);
+      },
+    ],
+    [
+      "a NaN other than the one a writer writes",
+      both,
+      (v) => {
+        v.setUint32(32, 1, true);
+        v.setUint32(36, 0x7ff80000, true);
+        return undefined;
+      },
+    ],
+  ])("%s", (_, base, edit) => {
+    const frame = forge(
+      (__, view) => {
+        edit(view);
+      },
+      0,
+      base,
+    );
+    expect(() => DDSketch.fromBytes(frame)).toThrow(SerializationError);
+  });
+});
