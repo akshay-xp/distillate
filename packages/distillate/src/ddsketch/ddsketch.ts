@@ -199,7 +199,11 @@ function readBlock(
       : view.getInt32(at + BLOCK_HEADER + width * n + 4 * i, true);
     // A run's interior may hold empty slots; its ends, and every pair, may not.
     const end = !contiguous || i === 0 || i === n - 1;
-    if (!(count >= 0 && count < Infinity) || (end && count === 0)) {
+    if (
+      !(count >= 0 && count < Infinity) ||
+      Object.is(count, -0) ||
+      (end && count === 0)
+    ) {
       throw fail(`count ${String(count)} is not one a store could hold`);
     }
     if (index <= previous || index < lo || index > hi) {
@@ -451,12 +455,18 @@ export class DDSketch {
       "ddsketch",
     );
     const zeroCount = view.getFloat64(56, true);
-    if (!(zeroCount >= 0 && zeroCount < Infinity)) {
+    if (!(zeroCount >= 0 && zeroCount < Infinity) || Object.is(zeroCount, -0)) {
       throw new SerializationError(
         `ddsketch: zeroCount must be finite and not negative, got ${String(zeroCount)}`,
       );
     }
     const sum = view.getFloat64(32, true);
+    // No sketch sums to -0: add records -0 as 0, and x + -x is +0.
+    if (Object.is(sum, -0)) {
+      throw new SerializationError(
+        "ddsketch: sum is -0, which no sketch holds",
+      );
+    }
     const min = view.getFloat64(40, true);
     const max = view.getFloat64(48, true);
     const count = zeroCount + pos.total + neg.total;
