@@ -4,9 +4,8 @@ import {
   fmix64,
   type Hash128,
   hash128KeyInto,
-  mul64,
-  RHI,
-  RLO,
+  R64,
+  reduce,
 } from "../core/hasher.js";
 import {
   assertBodyLength,
@@ -47,7 +46,7 @@ export interface FuseParams {
 }
 
 // Reused across key hashing (build + lookup); same non-reentrant rationale as
-// the shared RLO/RHI scratch in core/hasher.
+// the shared R64 scratch in core/hasher.
 const scratchHash: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
 
 // Cheaply perturb a stored 64-bit key hash with the attempt seed, avoiding a
@@ -55,30 +54,28 @@ const scratchHash: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
 function mixSeed(lo: number, hi: number, seed: number): void {
   const l = (lo >>> 0) + (seed >>> 0);
   const carry = l > 0xffffffff ? 1 : 0;
-  fmix64(l >>> 0, (hi + carry) >>> 0);
+  R64[0] = l;
+  R64[1] = hi + carry;
+  fmix64();
 }
 
 // High 32 bits of (hi:lo) * n, for n < 2^32: the 64-bit analogue of the
 // Lemire multiply-shift reduction, mapping the hash into [0, n).
 function mulhi64(lo: number, hi: number, n: number): number {
-  mul64(hi, 0, n, 0);
-  const aLo = RLO;
-  const aHi = RHI;
-  mul64(lo, 0, n, 0);
-  const bHi = RHI;
-  const carry = (aLo >>> 0) + (bHi >>> 0) > 0xffffffff ? 1 : 0;
-  return (aHi + carry) >>> 0;
+  const carry = (Math.imul(hi, n) >>> 0) + reduce(lo, n) > 0xffffffff ? 1 : 0;
+  return (reduce(hi, n) + carry) >>> 0;
 }
 
 // Part of hash variant 0: changing this mapping needs a new variant (see HASH_MURMUR128).
+// Reads the mixed hash from R64: passed as arguments, words past 2^30 are boxed.
 function positionsInto(
-  mlo: number,
-  mhi: number,
   seg: number,
   segMask: number,
   segCountLen: number,
   out: Uint32Array,
 ): void {
+  const mlo = R64[0] ?? 0;
+  const mhi = R64[1] ?? 0;
   const h0 = mulhi64(mlo, mhi, segCountLen);
   let h1 = (h0 + seg) >>> 0;
   let h2 = (h1 + seg) >>> 0;
@@ -157,9 +154,9 @@ export function buildFingerprints(
 
     for (let i = 0; i < size; i++) {
       mixSeed(hashes[2 * i] ?? 0, hashes[2 * i + 1] ?? 0, seed);
-      const mlo = RLO;
-      const mhi = RHI;
-      positionsInto(mlo, mhi, seg, segMask, segCountLen, pos);
+      const mlo = R64[0] ?? 0;
+      const mhi = R64[1] ?? 0;
+      positionsInto(seg, segMask, segCountLen, pos);
       for (let j = 0; j < 3; j++) {
         const p = pos[j] ?? 0;
         counts[p] = (counts[p] ?? 0) + 1;
@@ -184,7 +181,9 @@ export function buildFingerprints(
       orderHi[processed] = mhi;
       orderIdx[processed] = idx;
       processed++;
-      positionsInto(mlo, mhi, seg, segMask, segCountLen, pos);
+      R64[0] = mlo;
+      R64[1] = mhi;
+      positionsInto(seg, segMask, segCountLen, pos);
       for (let j = 0; j < 3; j++) {
         const p = pos[j] ?? 0;
         counts[p] = (counts[p] ?? 0) - 1;
@@ -200,7 +199,9 @@ export function buildFingerprints(
         const mlo = orderLo[i] ?? 0;
         const mhi = orderHi[i] ?? 0;
         const idx = orderIdx[i] ?? 0;
-        positionsInto(mlo, mhi, seg, segMask, segCountLen, pos);
+        R64[0] = mlo;
+        R64[1] = mhi;
+        positionsInto(seg, segMask, segCountLen, pos);
         const p0 = pos[0] ?? 0;
         const p1 = pos[1] ?? 0;
         const p2 = pos[2] ?? 0;
@@ -371,16 +372,9 @@ abstract class BinaryFuse {
     if (this.#fp.length === 0) return false;
     hash128KeyInto(key, 0, scratchHash);
     mixSeed(scratchHash.w0 >>> 0, scratchHash.w1 >>> 0, this.#seed);
-    const mlo = RLO;
-    const mhi = RHI;
-    positionsInto(
-      mlo,
-      mhi,
-      this.#seg,
-      this.#segMask,
-      this.#segCountLen,
-      this.#pos,
-    );
+    const mlo = R64[0] ?? 0;
+    const mhi = R64[1] ?? 0;
+    positionsInto(this.#seg, this.#segMask, this.#segCountLen, this.#pos);
     const mask = fpMask(this.#fp);
     const p0 = this.#pos[0] ?? 0;
     const p1 = this.#pos[1] ?? 0;
