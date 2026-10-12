@@ -1,5 +1,5 @@
 import { SerializationError } from "../../core/serialize.js";
-import { DDSketch, sketchBins } from "../ddsketch.js";
+import { type DDSketch, sketchBins, sketchFromBins } from "../ddsketch.js";
 import { isIndexable, type MappingKind, mappingWithGamma } from "../mapping.js";
 import {
   collapsingLowestStore,
@@ -274,18 +274,7 @@ export function fromProtobuf(
       }
     }
   }
-  // Each bin is added at its own value, which the mapping indexes back to
-  // the same bin, so the bins land exactly and sum, min and max follow.
-  const sketch = new DDSketch(mapping.relativeAccuracy, {
-    mapping: () => mapping,
-    store,
-  });
-  for (const [index, count] of positive)
-    sketch.add(mapping.value(index), count);
-  for (const [index, count] of negative)
-    sketch.add(-mapping.value(index), count);
-  if (zeroCount > 0) sketch.add(0, zeroCount);
-  return sketch;
+  return sketchFromBins(mapping, store, positive, negative, zeroCount);
 }
 
 // The bytes a varint of `value` takes.
