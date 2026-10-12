@@ -276,7 +276,7 @@ export function ddSketchSection(table: string, bundles: string): string[] {
     "`distillate/ddsketch (log)` takes the log mapping, sketches-js's default, so it and sketches-js hold the same bins and that comparison is like for like. The stream never reaches either store's bound.",
     "",
     "`max rel. error` is the largest relative error over 11 quantiles from 0 to 1, each against the exact value at rank `floor(q * (n - 1))`, on one seeded lognormal stream around 100 shared by all three. Each promises at most 1%.",
-    "`add` is the median of 5 timed passes after 2 untimed ones, each on a fresh sketch, so it is the steady rate rather than how fast V8 optimises the first pass.",
+    "`add` is the median of 5 timed passes after 2 untimed ones, each on a fresh sketch, so it is the steady rate rather than how fast V8 optimises the first pass. At the defaults it also depends on how V8 compiles the calling loop: the table is the loop optimised while it runs; compiled whole, the default adds about 150 M ops/s at 1M values. See METHODOLOGY.md.",
     "`quantile`, `union`, `toProtobuf` and `fromProtobuf` are timed the same way on the sketch the adds built: `quantile` over the same 11 quantiles, `union` with a second sketch of as many values from another stream. sketches-js merges in place, so its union merges both into a fresh sketch, as distillate's returns one.",
     "`size` is each library's own serialization: distillate's DSTL frame, and sketches-js's protobuf message, its only one. `protobuf` is Datadog's message from each, the like-for-like size.",
     "",

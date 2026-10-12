@@ -285,3 +285,16 @@ timed passes after 2 untimed ones, a fresh sketch each pass, as for key length:
 a single pass in a fresh process measured how fast V8 optimises each library
 rather than how fast it adds, and read the two 35% apart at 10k values where
 warm they were 1% apart.
+
+`quantile`, `union`, `toProtobuf` and `fromProtobuf` are timed the same way on
+the sketch the timed adds built: `quantile` cycling the same 11 quantiles,
+`union` with a second sketch of as many values from another seeded stream.
+sketches-js merges in place, so its union merges both operands into a fresh
+sketch, as distillate's returns one.
+
+The default mapping's `add` depends on how V8 compiles the loop calling it, and
+nothing else does. When V8 optimises the loop while it is running, as it does
+the bench's single long pass, the default adds at about 117 M ops/s at 1M
+values; when the loop is compiled whole before it runs (`--no-use-osr`), about 150. The log mapping and sketches-js move by under 3% between the two. The
+table reports the first, which is what a loop that adds a stream in one call
+gets.
