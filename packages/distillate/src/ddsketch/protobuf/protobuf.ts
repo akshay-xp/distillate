@@ -288,40 +288,18 @@ export function fromProtobuf(
   return sketch;
 }
 
-// Appends protobuf's wire encodings to a growing byte list.
-class Writer {
-  readonly bytes: number[] = [];
-  readonly #word = new DataView(new ArrayBuffer(8));
-
-  tag(field: number, wire: number): void {
-    this.varint(field * 8 + wire);
+// The bytes a varint of `value` takes.
+function varintSize(value: number): number {
+  let size = 1;
+  while (value >= 0x80) {
+    value = Math.floor(value / 0x80);
+    size++;
   }
+  return size;
+}
 
-  varint(value: number): void {
-    while (value >= 0x80) {
-      this.bytes.push((value % 0x80) | 0x80);
-      value = Math.floor(value / 0x80);
-    }
-    this.bytes.push(value);
-  }
-
-  sint32(value: number): void {
-    this.varint(((value << 1) ^ (value >> 31)) >>> 0);
-  }
-
-  double(value: number): void {
-    this.#word.setFloat64(0, value, true);
-    for (let i = 0; i < 8; i++) this.bytes.push(this.#word.getUint8(i));
-  }
-
-  // A length-delimited field whose contents `write` produces.
-  message(field: number, write: (w: Writer) => void): void {
-    const inner = new Writer();
-    write(inner);
-    this.tag(field, LENGTH);
-    this.varint(inner.bytes.length);
-    for (const byte of inner.bytes) this.bytes.push(byte);
-  }
+function zigzag(value: number): number {
+  return ((value << 1) ^ (value >> 31)) >>> 0;
 }
 
 // proto3 leaves a field at its default out of the message; -0 is not the
@@ -330,37 +308,102 @@ function present(value: number): boolean {
   return value !== 0 || Object.is(value, -0);
 }
 
-// As sketches-go writes each store: a sparse one as the binCounts map, in
-// ascending index order; any other as one contiguous run from the lowest bin
-// to the highest, empty bins written as 0.
-function writeStore(w: Writer, store: Store, sparse: boolean): void {
+// One store's non-empty bins, and the bytes its message body takes: as
+// sketches-go writes it, a sparse store as the binCounts map in ascending
+// index order, any other as one contiguous run from the lowest bin to the
+// highest, empty bins written as 0.
+interface StoreBody {
+  indices: number[];
+  counts: number[];
+  sparse: boolean;
+  size: number;
+}
+
+function storeBody(store: Store, sparse: boolean): StoreBody {
   const indices: number[] = [];
   const counts: number[] = [];
   store.forEach((index, count) => {
     indices.push(index);
     counts.push(count);
   });
-  if (sparse) {
-    indices.forEach((index, i) => {
-      w.message(1, (entry) => {
-        entry.tag(1, VARINT);
-        entry.sint32(index);
-        entry.tag(2, FIXED64);
-        entry.double(counts[i] ?? 0);
-      });
-    });
-    return;
-  }
+  let size = 0;
   const first = indices[0];
-  if (first === undefined) return;
-  const run = new Array<number>((indices.at(-1) ?? first) - first + 1).fill(0);
-  indices.forEach((index, i) => (run[index - first] = counts[i] ?? 0));
-  w.message(2, (packed) => {
-    for (const count of run) packed.double(count);
-  });
-  if (first !== 0) {
-    w.tag(3, VARINT);
-    w.sint32(first);
+  if (sparse) {
+    for (const index of indices) {
+      const entry = 1 + varintSize(zigzag(index)) + 1 + 8;
+      size += 1 + varintSize(entry) + entry;
+    }
+  } else if (first !== undefined) {
+    const packed = 8 * ((indices.at(-1) ?? first) - first + 1);
+    size = 1 + varintSize(packed) + packed;
+    if (first !== 0) size += 1 + varintSize(zigzag(first));
+  }
+  return { indices, counts, sparse, size };
+}
+
+// Writes protobuf's wire encodings into a buffer sized up front. Every field
+// number here is below 16, so each tag is one byte.
+class Writer {
+  readonly bytes: Uint8Array;
+  readonly #view: DataView;
+  #at = 0;
+
+  constructor(size: number) {
+    this.bytes = new Uint8Array(size);
+    this.#view = new DataView(this.bytes.buffer);
+  }
+
+  tag(field: number, wire: number): void {
+    this.bytes[this.#at++] = field * 8 + wire;
+  }
+
+  varint(value: number): void {
+    while (value >= 0x80) {
+      this.bytes[this.#at++] = (value % 0x80) | 0x80;
+      value = Math.floor(value / 0x80);
+    }
+    this.bytes[this.#at++] = value;
+  }
+
+  double(value: number): void {
+    this.#view.setFloat64(this.#at, value, true);
+    this.#at += 8;
+  }
+
+  store(field: number, body: StoreBody): void {
+    this.tag(field, LENGTH);
+    this.varint(body.size);
+    const { indices, counts } = body;
+    const first = indices[0];
+    if (first === undefined) return;
+    if (body.sparse) {
+      indices.forEach((index, i) => {
+        const key = zigzag(index);
+        this.tag(1, LENGTH);
+        this.varint(1 + varintSize(key) + 1 + 8);
+        this.tag(1, VARINT);
+        this.varint(key);
+        this.tag(2, FIXED64);
+        this.double(counts[i] ?? 0);
+      });
+      return;
+    }
+    const span = (indices.at(-1) ?? first) - first + 1;
+    this.tag(2, LENGTH);
+    this.varint(8 * span);
+    // The buffer starts zeroed, so only non-empty bins need writing.
+    indices.forEach((index, i) => {
+      this.#view.setFloat64(
+        this.#at + 8 * (index - first),
+        counts[i] ?? 0,
+        true,
+      );
+    });
+    this.#at += 8 * span;
+    if (first !== 0) {
+      this.tag(3, VARINT);
+      this.varint(zigzag(first));
+    }
   }
 }
 
@@ -379,31 +422,40 @@ export function toProtobuf(sketch: DDSketch): Uint8Array {
   const { mapping } = sketch;
   const { positive, negative, zeroCount } = sketchBins(sketch);
   const sparse = sketch.store.kind === "sparse";
-  const w = new Writer();
-  w.message(1, (m) => {
-    if (present(mapping.gamma)) {
-      m.tag(1, FIXED64);
-      m.double(mapping.gamma);
-    }
-    if (present(mapping.indexOffset)) {
-      m.tag(2, FIXED64);
-      m.double(mapping.indexOffset);
-    }
-    const interpolation = KINDS.indexOf(mapping.kind);
-    if (interpolation !== 0) {
-      m.tag(3, VARINT);
-      m.varint(interpolation);
-    }
-  });
-  w.message(2, (s) => {
-    writeStore(s, positive, sparse);
-  });
-  w.message(3, (s) => {
-    writeStore(s, negative, sparse);
-  });
+  const pos = storeBody(positive, sparse);
+  const neg = storeBody(negative, sparse);
+  const interpolation = KINDS.indexOf(mapping.kind);
+  const mappingSize =
+    (present(mapping.gamma) ? 9 : 0) +
+    (present(mapping.indexOffset) ? 9 : 0) +
+    (interpolation !== 0 ? 1 + varintSize(interpolation) : 0);
+  const w = new Writer(
+    1 +
+      varintSize(mappingSize) +
+      mappingSize +
+      (1 + varintSize(pos.size) + pos.size) +
+      (1 + varintSize(neg.size) + neg.size) +
+      (present(zeroCount) ? 9 : 0),
+  );
+  w.tag(1, LENGTH);
+  w.varint(mappingSize);
+  if (present(mapping.gamma)) {
+    w.tag(1, FIXED64);
+    w.double(mapping.gamma);
+  }
+  if (present(mapping.indexOffset)) {
+    w.tag(2, FIXED64);
+    w.double(mapping.indexOffset);
+  }
+  if (interpolation !== 0) {
+    w.tag(3, VARINT);
+    w.varint(interpolation);
+  }
+  w.store(2, pos);
+  w.store(3, neg);
   if (present(zeroCount)) {
     w.tag(4, FIXED64);
     w.double(zeroCount);
   }
-  return Uint8Array.from(w.bytes);
+  return w.bytes;
 }
