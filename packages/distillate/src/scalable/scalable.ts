@@ -6,6 +6,7 @@ import {
   probeAt,
   probeLanesInto,
 } from "../core/hasher.js";
+import { forEachItem, toArray } from "../core/iterable.js";
 import {
   assertPositiveInt,
   assertProbability,
@@ -199,13 +200,15 @@ export class ScalableBloomFilter {
     epsilon: number,
     options: ScalableBloomOptions = {},
   ): ScalableBloomFilter {
-    const arr = [...keys];
+    const list = toArray(keys);
     const f = ScalableBloomFilter.create(
-      Math.max(1, arr.length),
+      Math.max(1, list.length),
       epsilon,
       options,
     );
-    for (const key of arr) f.add(key);
+    forEachItem(list, (key) => {
+      f.add(key);
+    });
     return f;
   }
 

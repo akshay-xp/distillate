@@ -1,6 +1,7 @@
 import { BitSet } from "../core/bitset.js";
 import type { BytesLike } from "../core/bytes.js";
 import { hash32x2Into, probeAt, probeInto } from "../core/hasher.js";
+import { forEachItem, toArray } from "../core/iterable.js";
 import {
   assertBodyLength,
   assertMinBodyLength,
@@ -99,9 +100,11 @@ export class BloomFilter {
    * @returns A new filter containing every key.
    */
   static from(keys: Iterable<BytesLike>, epsilon: number): BloomFilter {
-    const arr = [...keys];
-    const f = BloomFilter.create(Math.max(1, arr.length), epsilon);
-    for (const k of arr) f.add(k);
+    const list = toArray(keys);
+    const f = BloomFilter.create(Math.max(1, list.length), epsilon);
+    forEachItem(list, (k) => {
+      f.add(k);
+    });
     return f;
   }
 
