@@ -19,6 +19,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     [data-pg-add],
     [data-pg-grow],
     [data-pg-delete],
+    [data-pg-values],
     [data-pg-query],
     [data-pg-status],
     [data-pg-results],
@@ -291,6 +292,36 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     recorded itself.
   </p>
 
+  <form class="dstl-form-stack" data-pg-values novalidate>
+    <div class="dstl-field">
+      <label for="pg-value">Record a value</label>
+      <input
+        id="pg-value"
+        name="value"
+        type="text"
+        inputmode="decimal"
+        value="5000"
+      />
+    </div>
+    <div class="dstl-field">
+      <label for="pg-value-n">How many</label>
+      <input
+        id="pg-value-n"
+        name="count"
+        type="text"
+        inputmode="numeric"
+        value="100"
+      />
+      <p class="dstl-hint">
+        A hundred slow requests move p99.9 and leave p50 where it was. Negative
+        values and zero count too.
+      </p>
+    </div>
+    <button class="dstl-btn" type="submit">
+      Observe
+    </button>
+  </form>
+
   <dl class="dstl-readout">
     <div>
       <dt>Recorded</dt>
@@ -376,6 +407,8 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     document.querySelector<HTMLFormElement>("[data-pg-delete]");
   const recordForm =
     document.querySelector<HTMLFormElement>("[data-pg-record]");
+  const valuesForm =
+    document.querySelector<HTMLFormElement>("[data-pg-values]");
   const status = document.querySelector<HTMLElement>("[data-pg-status]");
 
   // Held between events. `report()` walks every key it holds, so a query must
@@ -566,6 +599,18 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     renderEstimate(current.estimate(key));
   }
 
+  function recordValue(): void {
+    if (!valuesForm || !current) return;
+    const data = new FormData(valuesForm);
+    const result = current.recordValue(data.get("value"), data.get("count"));
+    if (!result.ok) {
+      if (status) status.textContent = result.message;
+      return;
+    }
+    if (status) status.textContent = "";
+    renderQuantiles(current.quantiles());
+  }
+
   function query(): void {
     if (!queryForm || !current) return;
     const key = String(new FormData(queryForm).get("key") ?? "");
@@ -587,5 +632,6 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   onSubmit(growForm, grow);
   onSubmit(deleteForm, remove);
   onSubmit(recordForm, record);
+  onSubmit(valuesForm, recordValue);
   build();
 </script>

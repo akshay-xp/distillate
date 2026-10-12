@@ -549,3 +549,36 @@ test("the quantiles panel shows each estimate beside exact, inside its band", as
   await expect(panel.locator("[data-dd='accuracy']")).toHaveText("1%");
   expect(errors).toEqual([]);
 });
+
+async function addValue(page: Page, value: string, count: string) {
+  await page.locator("#pg-value").fill(value);
+  await page.locator("#pg-value-n").fill(count);
+  await page.getByRole("button", { name: "Observe" }).click();
+}
+
+test("the quantiles panel records a value and refuses one it cannot", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  await addValue(page, "5000", "100");
+  const count = page.locator("[data-dd='count']");
+  await expect(count).toHaveText("10,100");
+  const rows = await quantileRows(page);
+  expect(rows[3]?.[1]).toBe("5,000");
+  for (const cells of rows) expectInsideBand(cells);
+
+  await addValue(page, "abc", "1");
+  await expect(page.locator("[data-pg-status]")).toContainText(
+    "Value must be a number",
+  );
+  await expect(count).toHaveText("10,100");
+  expect(await quantileRows(page)).toEqual(rows);
+
+  // Without JavaScript the form could only submit to nowhere.
+  expect(await page.content()).toMatch(
+    /<noscript><style>[^<]*\[data-pg-values\]/,
+  );
+  expect(errors).toEqual([]);
+});
