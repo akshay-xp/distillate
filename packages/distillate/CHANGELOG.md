@@ -1,5 +1,13 @@
 # distillate
 
+## 0.15.2
+
+### Patch Changes
+
+- dfab559: `from()` builders no longer allocate an iterator result per key for array input, and Bloom, Blocked and Scalable no longer copy an array before sizing. Non-array input still streams. Results and frames are unchanged.
+- 7e3d1fb: Binary Fuse `has` no longer allocates in steady state on Node 24, and building no longer allocates a growable queue per attempt. Frames are unchanged.
+- b80bb79: Top-K `add` and `count` no longer allocate in steady state, including the purges a stream of new keys triggers at capacity. Frames are unchanged.
+
 ## 0.15.1
 
 ### Patch Changes
