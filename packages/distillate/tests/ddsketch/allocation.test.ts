@@ -30,12 +30,16 @@ test.each([
     for (let i = 0; i < 2_000_000; i++) sketch.add(values[i & 4095] ?? 0);
 
     let at = 0;
-    const step = (): void => {
+    // Two closures, not one passed twice: on Node 22 a shared one measured
+    // 11 to 23 collections on the log mapping, every run.
+    await countCollections(() => {
       at = (at + 1) & 4095;
       sketch.add(values[at] ?? 0);
-    };
-    await countCollections(step, 6_000_000);
-    const collections = await countCollections(step, 6_000_000);
+    }, 6_000_000);
+    const collections = await countCollections(() => {
+      at = (at + 1) & 4095;
+      sketch.add(values[at] ?? 0);
+    }, 6_000_000);
 
     expect(collections).toBe(0);
   },
