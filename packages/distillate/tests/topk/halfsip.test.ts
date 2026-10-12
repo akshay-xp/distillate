@@ -24,8 +24,11 @@ const input = Uint8Array.from({ length: 64 }, (_, i) => i);
 test.each(VECTORS.map((want, n) => [n, want]))(
   "matches the reference vector for %i bytes",
   (n, want) => {
-    expect(halfSipHash13(input.subarray(0, n), 0x03020100, 0x07060504)).toBe(
-      want,
-    );
+    expect(
+      halfSipHash13(
+        input.subarray(0, n),
+        new Uint32Array([0x03020100, 0x07060504]),
+      ),
+    ).toBe(want);
   },
 );

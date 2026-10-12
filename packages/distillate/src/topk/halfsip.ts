@@ -8,17 +8,21 @@
  * measured an order of magnitude slower.
  *
  * @param bytes - The message.
- * @param k0 - Low 32 bits of the key.
- * @param k1 - High 32 bits of the key.
+ * @param key - The 64-bit key as two words, low first. An array rather than
+ * two numbers: words past 2^30 would be boxed on every call.
  * @param len - How many leading bytes of `bytes` to hash.
- * @returns The 32-bit hash.
+ * @param mask - Applied before returning, so a slot index comes back small
+ * enough not to be boxed.
+ * @returns The 32-bit hash, masked.
  */
 export function halfSipHash13(
   bytes: Uint8Array,
-  k0: number,
-  k1: number,
+  key: Uint32Array,
   len: number = bytes.length,
+  mask = 0xffffffff,
 ): number {
+  const k0 = key[0] ?? 0;
+  const k1 = key[1] ?? 0;
   let v0 = k0 | 0;
   let v1 = k1 | 0;
   let v2 = (0x6c796765 ^ k0) | 0;
@@ -75,5 +79,5 @@ export function halfSipHash13(
     v1 ^= v2;
     v2 = (v2 << 16) | (v2 >>> 16);
   }
-  return (v1 ^ v3) >>> 0;
+  return ((v1 ^ v3) & mask) >>> 0;
 }

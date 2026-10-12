@@ -1,0 +1,44 @@
+import { expect, test } from "vitest";
+
+import { countCollections } from "../../bench/harness.js";
+import { TopK } from "../../src/topk/topk.js";
+
+// Alone in its file and in the single-worker project for the same reasons as
+// tests/hll/allocation.test.ts.
+//
+// What these caught before they passed: count and a held key's add boxed the
+// two SipHash key words and the hash's uint32 return on every call, about 40
+// bytes/op. They run 5M calls because at 600k count read 0 collections on that
+// code: V8 grows the young generation as the window runs, so a small window can
+// hold all of the garbage.
+
+const keys: string[] = [];
+for (let i = 0; i < 65_536; i++) keys.push(`alloc:${String(i)}`);
+
+const held = (): TopK => {
+  const sketch = TopK.create(0.001);
+  for (let i = 0; i < 2048; i++) sketch.add(keys[i] ?? "");
+  return sketch;
+};
+
+test("count allocates nothing in steady state", async () => {
+  const sketch = held();
+  let at = 0;
+  let sink = 0;
+  const collections = await countCollections(() => {
+    at = (at + 1) & 2047;
+    sink += sketch.count(keys[at] ?? "");
+  }, 5_000_000);
+  expect(sink).toBeGreaterThan(0);
+  expect(collections).toBe(0);
+});
+
+test("add of a held key allocates nothing in steady state", async () => {
+  const sketch = held();
+  let at = 0;
+  const collections = await countCollections(() => {
+    at = (at + 1) & 2047;
+    sketch.add(keys[at] ?? "");
+  }, 5_000_000);
+  expect(collections).toBe(0);
+});
