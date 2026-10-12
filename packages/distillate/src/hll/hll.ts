@@ -1,5 +1,6 @@
 import type { BytesLike } from "../core/bytes.js";
 import { hash128KeyInto, type Hash128 } from "../core/hasher.js";
+import { forEachItem } from "../core/iterable.js";
 import { assertUint32, ParamError } from "../core/params.js";
 import {
   assertBodyLength,
@@ -130,7 +131,9 @@ export class HyperLogLog {
    */
   static from(keys: Iterable<BytesLike>, relativeError: number): HyperLogLog {
     const sketch = HyperLogLog.create(relativeError);
-    for (const key of keys) sketch.add(key);
+    forEachItem(keys, (key) => {
+      sketch.add(key);
+    });
     return sketch;
   }
 

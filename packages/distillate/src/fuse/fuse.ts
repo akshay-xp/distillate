@@ -7,6 +7,7 @@ import {
   R64,
   reduce,
 } from "../core/hasher.js";
+import { forEachItem } from "../core/iterable.js";
 import {
   assertBodyLength,
   assertMinBodyLength,
@@ -235,10 +236,10 @@ function buildState(
   // Deduped on the 64-bit lane alone: it is all construction can tell apart,
   // and peeling fails on two keys that share it.
   const distinct = new DistinctHashes(2);
-  for (const key of keys) {
+  forEachItem(keys, (key) => {
     hash128KeyInto(key, 0, scratchHash);
     distinct.add(scratchHash);
-  }
+  });
   const size = distinct.size;
   const params = computeParams(size);
   if (size === 0) return { fp: alloc(0), seed: 0, params, size: 0 };

@@ -1,5 +1,6 @@
 import type { BytesLike } from "../core/bytes.js";
 import { hash32x2Into, probeAt } from "../core/hasher.js";
+import { forEachItem } from "../core/iterable.js";
 import { assertPositiveInt, assertUint32, ParamError } from "../core/params.js";
 import {
   assertBodyLength,
@@ -157,7 +158,9 @@ export class CountMinSketch {
     options: CountMinOptions = {},
   ): CountMinSketch {
     const sketch = CountMinSketch.create(epsilon, delta, options);
-    for (const key of keys) sketch.add(key);
+    forEachItem(keys, (key) => {
+      sketch.add(key);
+    });
     return sketch;
   }
 
