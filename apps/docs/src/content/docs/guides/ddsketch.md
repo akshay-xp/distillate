@@ -75,13 +75,13 @@ many places from the smallest.
 The mapping turns a value into a bin index. All five meet the same bound; they
 differ in how fast they find a bin and how many bins that takes.
 
-| Mapping            | How it finds the bin                              | Adds, relative            | Bins, relative to log |
-| ------------------ | ------------------------------------------------- | ------------------------- | --------------------- |
-| `bitwiseMapping`   | the float's exponent and top bits, as one integer | about 1.75x (the default) | about 1.85x           |
-| `logMapping`       | `Math.log2`                                       | 1x                        | 1x                    |
-| `linearMapping`    | linear interpolation of the bits                  | about 1.1x                | about 1.44x           |
-| `quadraticMapping` | a quadratic in the float's bits                   | about 0.95x               | about 1.08x           |
-| `cubicMapping`     | a cubic in the float's bits                       | about 0.9x                | about 1.01x           |
+| Mapping            | How it finds the bin                              | Adds, relative           | Bins, relative to log |
+| ------------------ | ------------------------------------------------- | ------------------------ | --------------------- |
+| `bitwiseMapping`   | the float's exponent and top bits, as one integer | about 2.3x (the default) | about 1.85x           |
+| `logMapping`       | `Math.log2`                                       | 1x                       | 1x                    |
+| `linearMapping`    | linear interpolation of the bits                  | about 1.1x               | about 1.44x           |
+| `quadraticMapping` | a quadratic in the float's bits                   | about 0.95x              | about 1.08x           |
+| `cubicMapping`     | a cubic in the float's bits                       | about 0.9x               | about 1.01x           |
 
 ```ts
 import { DDSketch, logMapping } from "distillate/ddsketch";
@@ -90,10 +90,11 @@ const compact = DDSketch.create(0.01, { mapping: logMapping });
 compact.mapping.kind; // "log"
 ```
 
-The default, `bitwiseMapping`, is the one sketches-java's `DDSketch.fast()` uses:
-finding a bin takes no logarithm and no floating-point arithmetic at all, which
-is what makes it about 1.75 times as fast as the log mapping. Its bins come in powers of two,
-so it takes the finest that meets the accuracy you ask for: at 0.01 it delivers
+The default, `bitwiseMapping`, is the one sketches-java's `DDSketch.fast()`
+uses: finding a bin takes no logarithm and no floating-point arithmetic at all,
+which is what makes it about 2.3 times as fast as the log mapping in the
+[benchmark results](/bench/results/). Its bins come in powers of two, so it
+takes the finest that meets the accuracy you ask for: at 0.01 it delivers
 0.78%. Choose `logMapping` when memory or serialized size matters more than
 `add`: it needs the fewest bins for the bound.
 
@@ -115,6 +116,10 @@ so the store decides what happens when the range of values grows.
 - `denseStore()`: unbounded, for a range you know is narrow.
 - `sparseStore()`: unbounded, and pays only for the bins used, for a few values
   far apart.
+
+Mappings and stores come from these factories only. A sketch serializes them by
+kind, so a custom implementation would be read back as the built-in one of the
+same kind.
 
 `maxBins` is sized for the default accuracy of 1%, where 4096 of the default
 mapping's bins span about 19 orders of magnitude. A tighter accuracy needs
