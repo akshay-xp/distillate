@@ -1,6 +1,9 @@
 import { defineConfig } from "vitest/config";
 
-const PROBE = "tests/hll/allocation.test.ts";
+const PROBES = [
+  "tests/hll/allocation.test.ts",
+  "tests/ddsketch/allocation.test.ts",
+];
 
 const shared = {
   environment: "node" as const,
@@ -28,7 +31,7 @@ export default defineConfig({
           ...shared,
           name: "unit",
           include: ["tests/**/*.test.ts"],
-          exclude: [PROBE],
+          exclude: PROBES,
         },
       },
       {
@@ -43,7 +46,7 @@ export default defineConfig({
         test: {
           ...shared,
           name: "allocation",
-          include: [PROBE],
+          include: PROBES,
           maxWorkers: 1,
         },
       },
