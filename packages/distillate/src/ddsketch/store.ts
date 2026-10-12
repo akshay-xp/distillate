@@ -17,6 +17,8 @@ export interface Store {
   keyAtRank(rank: number, descending?: boolean): number;
   /** Calls `fn` for every non-empty bin, in ascending index order. */
   forEach(fn: (index: number, count: number) => void): void;
+  /** Adds every bin of `other`, as adding them in ascending index order would. */
+  merge(other: Store): void;
 }
 
 /**
@@ -138,6 +140,31 @@ class DenseStore implements Store {
     return at + this.#offset;
   }
 
+  merge(other: Store): void {
+    if (!(other instanceof DenseStore)) {
+      other.forEach((index, count) => {
+        this.add(index, count);
+      });
+      return;
+    }
+    if (other.#total === 0) return;
+    // Widening to both ends first sets the window an ascending replay would
+    // end on; every bin then lands in it, a folded one at the nearer end.
+    this.add(other.#min, 0);
+    this.add(other.#max, 0);
+    const from = other.#bins;
+    const to = this.#bins;
+    const lo = this.#min;
+    const hi = this.#max;
+    for (let index = other.#min; index <= other.#max; index++) {
+      const count = from[index - other.#offset] ?? 0;
+      if (count === 0) continue;
+      const at = Math.min(Math.max(index, lo), hi) - this.#offset;
+      to[at] = (to[at] ?? 0) + count;
+      this.#total += count;
+    }
+  }
+
   forEach(fn: (index: number, count: number) => void): void {
     if (this.#total === 0) return;
     for (let index = this.#min; index <= this.#max; index++) {
@@ -220,6 +247,12 @@ class SparseStore implements Store {
 
   forEach(fn: (index: number, count: number) => void): void {
     for (const index of this.#keys()) fn(index, this.#bins.get(index) ?? 0);
+  }
+
+  merge(other: Store): void {
+    other.forEach((index, count) => {
+      this.add(index, count);
+    });
   }
 
   #keys(): number[] {

@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest";
 import {
   DDSketch,
   DDSketchParamMismatchError,
+  sketchBins,
 } from "../../src/ddsketch/ddsketch.js";
 import {
   cubicMapping,
@@ -17,6 +18,7 @@ import {
   denseStore,
   sparseStore,
 } from "../../src/ddsketch/store.js";
+import { rng } from "../helpers/frequency.js";
 import { lognormalValues } from "../helpers/quantile.js";
 
 // quantile at every rank: equal answers at every rank means the same counts
@@ -76,6 +78,65 @@ describe.each([
       ),
     );
   });
+});
+
+// Every bin and count, both signs and zero.
+function binsOf(sketch: DDSketch): [number, number][][] {
+  const { positive, negative, zeroCount } = sketchBins(sketch);
+  const list = (store: typeof positive): [number, number][] => {
+    const out: [number, number][] = [];
+    store.forEach((index, count) => out.push([index, count]));
+    return out;
+  };
+  return [list(positive), list(negative), [[0, zeroCount]]];
+}
+
+// The union a sketch would hold if every bin of both operands were added to it
+// one value at a time, in ascending index order.
+function replayed(a: DDSketch, b: DDSketch): DDSketch {
+  const out = DDSketch.create(0.01, {
+    mapping: () => a.mapping,
+    store: a.store,
+  });
+  for (const from of [a, b]) {
+    const { positive, negative, zeroCount } = sketchBins(from);
+    positive.forEach((index, count) => {
+      out.add(a.mapping.value(index), count);
+    });
+    negative.forEach((index, count) => {
+      out.add(-a.mapping.value(index), count);
+    });
+    if (zeroCount > 0) out.add(0, zeroCount);
+  }
+  return out;
+}
+
+test("union holds the bins of replaying both operands, across stores", () => {
+  const stores = [
+    denseStore(),
+    sparseStore(),
+    collapsingLowestStore(8),
+    collapsingHighestStore(8),
+    collapsingLowestStore(64),
+    collapsingHighestStore(64),
+  ];
+  const next = rng(43);
+  const values = (): number[] =>
+    Array.from({ length: Math.floor(next() * 60) }, () => {
+      const r = next();
+      if (r < 0.1) return 0;
+      const magnitude = 10 ** (next() * 12 - 6);
+      return r < 0.4 ? -magnitude : magnitude;
+    });
+  for (let t = 0; t < 300; t++) {
+    const a = DDSketch.from(values(), 0.01, {
+      store: stores[t % stores.length],
+    });
+    const b = DDSketch.from(values(), 0.01, {
+      store: stores[(t * 7 + 3) % stores.length],
+    });
+    expect(binsOf(a.union(b))).toEqual(binsOf(replayed(a, b)));
+  }
 });
 
 test("a union leaves both operands as they were", () => {
