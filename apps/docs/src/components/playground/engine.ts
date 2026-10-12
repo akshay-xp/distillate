@@ -2,6 +2,7 @@ import { BlockedBloomFilter, ParamError } from "distillate/blocked";
 import { BloomFilter } from "distillate/bloom";
 import { CountMinSketch } from "distillate/countmin";
 import { CuckooFilter, CuckooFullError } from "distillate/cuckoo";
+import { DDSketch, denseStore } from "distillate/ddsketch";
 import { BinaryFuse8, BinaryFuseBuildError } from "distillate/fuse";
 import { ScalableBloomFilter } from "distillate/scalable";
 import { TopK } from "distillate/topk";
@@ -75,6 +76,24 @@ export interface TopKReport {
   error: number;
   /** Everything recorded so far. */
   total: number;
+}
+
+/** One quantile: the exact value, the sketch's estimate, and its band. */
+export interface QuantileRow {
+  q: number;
+  /** The value at rank `floor(q * (count - 1))` of everything recorded. */
+  exact: number;
+  estimate: number;
+  /** The band `relativeAccuracy` promises around `exact`. */
+  low: number;
+  high: number;
+}
+
+export interface QuantileReport {
+  rows: QuantileRow[];
+  /** Values recorded so far. */
+  count: number;
+  relativeAccuracy: number;
 }
 
 /** What one structure says about one queried key. */
@@ -188,6 +207,32 @@ function probeKeys(): string[] {
   return keys;
 }
 
+/** The quantiles the panel shows. */
+const QUANTILES = [0.5, 0.9, 0.99, 0.999];
+
+/**
+ * `count` lognormal latencies in milliseconds, median 100, from a fixed seed
+ * so every build of the page shows the same quantiles.
+ */
+export function latencies(count: number): number[] {
+  // mulberry32.
+  let state = 1;
+  const next = (): number => {
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 2 ** 32;
+  };
+  const values = new Array<number>(count);
+  for (let i = 0; i < count; i += 1) {
+    // Box-Muller; 1 - next() keeps the log's argument above zero.
+    const z =
+      Math.sqrt(-2 * Math.log(1 - next())) * Math.cos(2 * Math.PI * next());
+    values[i] = 100 * Math.exp(z);
+  }
+  return values;
+}
+
 // Top-K returns keys as the bytes it stored; the page shows them as text.
 const decoder = new TextDecoder();
 
@@ -199,6 +244,7 @@ interface Filters {
   fuse8: BinaryFuse8;
   scalable: ScalableBloomFilter;
   cuckoo: CuckooFilter;
+  ddsketch: DDSketch;
 }
 
 function describe(
@@ -221,6 +267,17 @@ function describe(
     falsePositives,
     measuredFpr: falsePositives / probes.length,
   };
+}
+
+// The first value whose running count passes `rank`, over [value, count]
+// pairs in ascending value order.
+function exactAt(values: readonly [number, number][], rank: number): number {
+  let running = 0;
+  for (const [value, count] of values) {
+    running += count;
+    if (running > rank) return value;
+  }
+  return Number.NaN;
 }
 
 /**
@@ -260,8 +317,15 @@ export class Playground {
   #generated: number;
   /** Occurrences per key, so the panel can show the sketch's error exactly. */
   readonly #counts = new Map<string, number>();
+  /** Occurrences per value the sketch holds, so each quantile is exact. */
+  readonly #values = new Map<number, number>();
 
-  private constructor(keys: string[], target: number, filters: Filters) {
+  private constructor(
+    keys: string[],
+    values: readonly number[],
+    target: number,
+    filters: Filters,
+  ) {
     this.#built = keys;
     this.#generated = keys.length;
     this.#keys = [...keys];
@@ -270,6 +334,9 @@ export class Playground {
     this.#target = target;
     this.#filters = filters;
     for (const key of keys) this.#counts.set(key, 1);
+    for (const value of values) {
+      this.#values.set(value, (this.#values.get(value) ?? 0) + 1);
+    }
   }
 
   /** Builds all five structures from `keyCount` generated keys. */
@@ -284,6 +351,7 @@ export class Playground {
     if (Number.isNaN(epsilon)) return { ok: false, message: RATE_MESSAGE };
 
     const keys = memberKeys(n);
+    const values = latencies(n);
     let filters: Filters;
     try {
       filters = {
@@ -294,11 +362,18 @@ export class Playground {
         cuckoo: CuckooFilter.from(keys, epsilon),
         countmin: CountMinSketch.from(keys, epsilon, COUNTMIN_DELTA),
         topk: TopK.from(keys, epsilon),
+        // Dense, not the default collapsing store: a reader can record values
+        // dozens of orders of magnitude apart, and folding the low end would
+        // break the band the panel promises. At most about 1 MB a sign at 1%.
+        ddsketch: DDSketch.from(values, epsilon, { store: denseStore() }),
       };
     } catch (error) {
       return { ok: false, message: toMessage(error) };
     }
-    return { ok: true, playground: new Playground(keys, epsilon, filters) };
+    return {
+      ok: true,
+      playground: new Playground(keys, values, epsilon, filters),
+    };
   }
 
   /**
@@ -499,6 +574,29 @@ export class Playground {
       }),
       error: topk.error(),
       total: topk.total,
+    };
+  }
+
+  /** p50, p90, p99 and p99.9 from the sketch, beside the exact values. */
+  quantiles(): QuantileReport {
+    const sketch = this.#filters.ddsketch;
+    const accuracy = sketch.relativeAccuracy;
+    const values = [...this.#values].sort((a, b) => a[0] - b[0]);
+    return {
+      rows: QUANTILES.map((q) => {
+        const exact = exactAt(values, Math.floor(q * (sketch.count - 1)));
+        const a = exact * (1 - accuracy);
+        const b = exact * (1 + accuracy);
+        return {
+          q,
+          exact,
+          estimate: sketch.quantile(q),
+          low: Math.min(a, b),
+          high: Math.max(a, b),
+        };
+      }),
+      count: sketch.count,
+      relativeAccuracy: accuracy,
     };
   }
 

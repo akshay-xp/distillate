@@ -7,6 +7,7 @@ import { ScalableBloomFilter } from "distillate/scalable";
 import { expect, test } from "vitest";
 
 import {
+  latencies,
   MAX_KEYS,
   Playground,
   toMessage,
@@ -630,4 +631,23 @@ test("a new key past the playground's bound is refused and changes nothing", () 
   // A key already held costs nothing, so it is still taken.
   expect(pg.insert("key-5").ok).toBe(true);
   expect(pg.report().keyCount).toBe(MAX_KEYS);
+});
+
+// The exact value at the rank the library reads, floor(q * (n - 1)), so the
+// band the panel draws is the sketch's guarantee rather than a coincidence.
+test("the build seeds a DDSketch and reports its quantiles beside exact", () => {
+  const report = built().quantiles();
+  const sorted = latencies(KEYS).sort((a, b) => a - b);
+
+  expect(report.count).toBe(KEYS);
+  expect(report.relativeAccuracy).toBe(TARGET);
+  expect(report.rows.map((r) => r.q)).toEqual([0.5, 0.9, 0.99, 0.999]);
+  for (const row of report.rows) {
+    expect(row.exact).toBe(sorted[Math.floor(row.q * (KEYS - 1))]);
+    expect(row.low).toBeCloseTo(row.exact * (1 - TARGET), 9);
+    expect(row.high).toBeCloseTo(row.exact * (1 + TARGET), 9);
+    expect(row.estimate, String(row.q)).toBeGreaterThanOrEqual(row.low);
+    expect(row.estimate, String(row.q)).toBeLessThanOrEqual(row.high);
+  }
+  expect(built().quantiles()).toEqual(report);
 });
