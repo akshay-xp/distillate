@@ -10,6 +10,7 @@ import {
   type Store,
 } from "../../src/ddsketch/store.js";
 import { lognormalValues } from "../helpers/quantile.js";
+import { allocatedBy } from "../helpers/topk.js";
 
 function binsOf(store: Store): [number, number][] {
   const out: [number, number][] = [];
@@ -132,6 +133,39 @@ describe("collapsing-highest store", () => {
     for (const bad of [0, -1, 1.5, Number.NaN]) {
       expect(() => collapsingHighestStore(bad)).toThrow(ParamError);
     }
+  });
+});
+
+// sketches-go never lets a collapsing store's array outgrow maxBins: two
+// values 600 orders of magnitude apart at 1e-4 are 14 million indices apart,
+// and holding every slot between them would retain over 100 MB.
+describe.each([
+  {
+    factory: collapsingLowestStore(2048),
+    adds: [-7_000_000, 7_000_000],
+    expected: [
+      [7_000_000 - 2047, 1],
+      [7_000_000, 1],
+    ],
+  },
+  {
+    factory: collapsingHighestStore(2048),
+    adds: [7_000_000, -7_000_000],
+    expected: [
+      [-7_000_000, 1],
+      [-7_000_000 + 2047, 1],
+    ],
+  },
+])("$factory.kind store", ({ factory, adds, expected }) => {
+  test("keeps memory within maxBins however far apart the indices", () => {
+    const { value: store, bytes } = allocatedBy(() => {
+      const s = factory.create();
+      // The kept end second, so the first add is what gets folded.
+      for (const index of adds) s.add(index, 1);
+      return s;
+    });
+    expect(bytes).toBeLessThan(64 * 1024);
+    expect(binsOf(store)).toEqual(expected);
   });
 });
 
