@@ -228,6 +228,16 @@ function readBlock(
   return bins;
 }
 
+// Whether one side's bins could sum past the largest double: every count at
+// its bin's upper edge, with the mapping's slack.
+function overflows(mapping: IndexMapping, bins: Bins): boolean {
+  let bound = 0;
+  bins.indices.forEach((index, i) => {
+    bound += (bins.counts[i] ?? 0) * mapping.lowerBound(index + 1);
+  });
+  return bound * (1 + mapping.relativeAccuracy) >= Number.MAX_VALUE;
+}
+
 // Whether sum, min and max could have come from these bins. Bins carry the
 // mapping's relative error, so the extremes are checked against bin bounds
 // with that much slack: the highest positive bin must not start above max,
@@ -243,7 +253,18 @@ function summariesHold(
   max: number,
 ): boolean {
   if (count === 0) return Number.isNaN(min) && Number.isNaN(max) && sum === 0;
-  if (![sum, min, max].every(Number.isFinite) || min > max) return false;
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min > max) {
+    return false;
+  }
+  if (!Number.isFinite(sum)) {
+    // Indexable values can sum past the largest double: to Infinity on a
+    // side whose bins could reach it, and to NaN once both sides do.
+    const up = overflows(mapping, pos);
+    const down = overflows(mapping, neg);
+    if (Number.isNaN(sum) ? !(up && down) : !(sum > 0 ? up : down)) {
+      return false;
+    }
+  }
   const slack = 1 + mapping.relativeAccuracy;
   const posFirst = pos.indices[0];
   if (posFirst !== undefined) {
@@ -665,7 +686,8 @@ export class DDSketch {
         view.setFloat64(8, this.#mapping.gamma, true);
         view.setFloat64(16, this.#mapping.indexOffset, true);
         view.setFloat64(24, this.#relativeAccuracy, true);
-        view.setFloat64(32, this.#sum, true);
+        // x86 makes Infinity - Infinity a negative NaN; the frame keeps one.
+        view.setFloat64(32, Number.isNaN(this.#sum) ? NaN : this.#sum, true);
         view.setFloat64(40, this.min, true);
         view.setFloat64(48, this.max, true);
         view.setFloat64(56, this.#zeroCount, true);
