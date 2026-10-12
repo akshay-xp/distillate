@@ -280,6 +280,48 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   </p>
 </section>
 
+<section class="dstl-panel" data-pg-ddsketch>
+  <h3>How slow is the tail, not how many</h3>
+
+  <p class="dstl-hint">
+    A DDSketch answers <em>what value sits at this quantile</em>, within a
+    relative error of the true one, tails included. The build fed it one latency
+    per key, around 100 ms with a long tail, and it keeps the target above as
+    its relative accuracy. The exact column comes from every value the page
+    recorded itself.
+  </p>
+
+  <dl class="dstl-readout">
+    <div>
+      <dt>Recorded</dt>
+      <dd data-dd="count"></dd>
+    </div>
+    <div>
+      <dt>Accuracy</dt>
+      <dd data-dd="accuracy"></dd>
+    </div>
+  </dl>
+
+  <table class="dstl-table">
+    <thead>
+      <tr>
+        <th scope="col">Quantile</th>
+        <th scope="col">Exact</th>
+        <th scope="col">Estimate</th>
+        <th scope="col">Band</th>
+      </tr>
+    </thead>
+    <tbody data-dd="rows"></tbody>
+  </table>
+
+  <p class="dstl-hint">
+    <strong>The estimate always sits inside the band.</strong> The band is the
+    exact value plus and minus the relative accuracy, so p99.9 is as close in
+    proportion as p50, where a sketch with a rank guarantee would let the tail
+    drift furthest.
+  </p>
+</section>
+
 <div data-pg-notes>
   <p class="dstl-hint">
     <strong>A false positive is the filter working, not a bug.</strong> These
@@ -307,6 +349,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     CountReport,
     PlaygroundReport,
     StructureKey,
+    QuantileReport,
     TopKReport,
   } from "./engine.js";
 
@@ -374,28 +417,55 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
 
   // Rebuilt from text nodes rather than markup: the keys are whatever the
   // reader typed into the Record form.
-  function renderHeaviest(report: TopKReport): void {
-    const error = document.querySelector("[data-tk='error']");
-    const total = document.querySelector("[data-tk='total']");
-    if (error) error.textContent = report.error.toLocaleString("en-US");
-    if (total) total.textContent = report.total.toLocaleString("en-US");
-    const body = document.querySelector("[data-tk='rows']");
-    if (!body) return;
-    body.replaceChildren(
-      ...report.entries.map((e) => {
+  function fillRows(selector: string, rows: string[][]): void {
+    document.querySelector(selector)?.replaceChildren(
+      ...rows.map((cells) => {
         const row = document.createElement("tr");
-        for (const value of [
-          e.key,
-          String(e.estimate),
-          String(e.lowerBound),
-          String(e.trueCount),
-        ]) {
+        for (const value of cells) {
           const td = document.createElement("td");
           td.textContent = value;
           row.append(td);
         }
         return row;
       }),
+    );
+  }
+
+  function renderHeaviest(report: TopKReport): void {
+    const error = document.querySelector("[data-tk='error']");
+    const total = document.querySelector("[data-tk='total']");
+    if (error) error.textContent = report.error.toLocaleString("en-US");
+    if (total) total.textContent = report.total.toLocaleString("en-US");
+    fillRows(
+      "[data-tk='rows']",
+      report.entries.map((e) => [
+        e.key,
+        String(e.estimate),
+        String(e.lowerBound),
+        String(e.trueCount),
+      ]),
+    );
+  }
+
+  function formatFigure(value: number): string {
+    return value.toLocaleString("en-US", { maximumSignificantDigits: 4 });
+  }
+
+  function renderQuantiles(report: QuantileReport): void {
+    const count = document.querySelector("[data-dd='count']");
+    const accuracy = document.querySelector("[data-dd='accuracy']");
+    if (count) count.textContent = report.count.toLocaleString("en-US");
+    if (accuracy) {
+      accuracy.textContent = `${formatFigure(report.relativeAccuracy * 100)}%`;
+    }
+    fillRows(
+      "[data-dd='rows']",
+      report.rows.map((r) => [
+        `p${String(r.q * 100)}`,
+        formatFigure(r.exact),
+        formatFigure(r.estimate),
+        `${formatFigure(r.low)} to ${formatFigure(r.high)}`,
+      ]),
     );
   }
 
@@ -432,6 +502,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     renderSketch(current.countMin());
     renderHeaviest(current.heaviest(HEAVIEST));
     renderEstimate(current.estimate(recordKey()));
+    renderQuantiles(current.quantiles());
   }
 
   /** The key the sketch panel is currently pointed at. */
