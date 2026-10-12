@@ -79,10 +79,12 @@ class DenseStore implements Store {
   #extend(index: number, count: number): void {
     let min = Math.min(this.#min, index);
     let max = Math.max(this.#max, index);
-    const collapses = this.#collapse !== null && max - min + 1 > this.#maxBins;
-    if (collapses) {
-      // Clamp the new index into the kept range; the bins it pushes out are
-      // folded below, once the window covers the kept range.
+    let below = 0;
+    let above = 0;
+    if (this.#collapse !== null && max - min + 1 > this.#maxBins) {
+      // Clamp the new index into the kept range, and take the counts it
+      // pushes out from the old array before anything is reallocated, so the
+      // array never has to span the bins being given up.
       if (this.#collapse === "lowest") {
         min = max - this.#maxBins + 1;
         index = Math.max(index, min);
@@ -90,11 +92,16 @@ class DenseStore implements Store {
         max = min + this.#maxBins - 1;
         index = Math.min(index, max);
       }
+      below = this.#take(this.#min, Math.min(this.#max, min - 1));
+      above = this.#take(Math.max(this.#min, max + 1), this.#max);
     }
     if (min < this.#offset || max >= this.#offset + this.#bins.length) {
       this.#grow(min, max);
     }
-    if (collapses) this.#fold(min, max);
+    const lo = min - this.#offset;
+    const hi = max - this.#offset;
+    this.#bins[lo] = (this.#bins[lo] ?? 0) + below;
+    this.#bins[hi] = (this.#bins[hi] ?? 0) + above;
     const at = index - this.#offset;
     this.#bins[at] = (this.#bins[at] ?? 0) + count;
     this.#min = min;
@@ -124,42 +131,33 @@ class DenseStore implements Store {
     }
   }
 
-  // Moves every count outside [min, max] into the nearer end bin.
-  #fold(min: number, max: number): void {
-    let below = 0;
-    for (let index = this.#min; index < min; index++) {
+  // Empties the held bins from lo to hi and returns what they held.
+  #take(lo: number, hi: number): number {
+    let taken = 0;
+    for (let index = lo; index <= hi; index++) {
       const at = index - this.#offset;
-      below += this.#bins[at] ?? 0;
+      taken += this.#bins[at] ?? 0;
       this.#bins[at] = 0;
     }
-    let above = 0;
-    for (let index = max + 1; index <= this.#max; index++) {
-      const at = index - this.#offset;
-      above += this.#bins[at] ?? 0;
-      this.#bins[at] = 0;
-    }
-    const lo = min - this.#offset;
-    const hi = max - this.#offset;
-    this.#bins[lo] = (this.#bins[lo] ?? 0) + below;
-    this.#bins[hi] = (this.#bins[hi] ?? 0) + above;
+    return taken;
   }
 
-  // Reallocates around [min, max] plus the bins currently held, so nothing is
-  // lost before #fold runs.
+  // Reallocates around [min, max], keeping the held bins inside it. A bounded
+  // store's array never outgrows maxBins plus its headroom.
   #grow(min: number, max: number): void {
-    const empty = this.#total === 0;
-    const lo = empty ? min : Math.min(min, this.#min);
-    const hi = empty ? max : Math.max(max, this.#max);
-    const span = hi - lo + 1;
-    const bins = new Float64Array(span + 2 * (HEADROOM + (span >>> 1)));
-    const offset = lo - HEADROOM - (span >>> 1);
-    if (!empty) {
+    const span = max - min + 1;
+    let length = span + 2 * (HEADROOM + (span >>> 1));
+    if (this.#collapse !== null) {
+      length = Math.min(length, this.#maxBins + 2 * HEADROOM);
+    }
+    const bins = new Float64Array(length);
+    const offset = min - ((length - span) >>> 1);
+    const lo = Math.max(min, this.#min);
+    const hi = Math.min(max, this.#max);
+    if (lo <= hi) {
       bins.set(
-        this.#bins.subarray(
-          this.#min - this.#offset,
-          this.#max - this.#offset + 1,
-        ),
-        this.#min - offset,
+        this.#bins.subarray(lo - this.#offset, hi - this.#offset + 1),
+        lo - offset,
       );
     }
     this.#bins = bins;
