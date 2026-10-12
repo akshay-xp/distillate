@@ -149,6 +149,14 @@ export type RecordResult =
     }
   | { ok: false; message: string };
 
+export type ValueResult =
+  | {
+      ok: true;
+      /** Values recorded so far. */
+      count: number;
+    }
+  | { ok: false; message: string };
+
 export type RemoveResult =
   | {
       ok: true;
@@ -185,6 +193,8 @@ const MAX_RECORD = 1_000_000;
 const MAX_TOTAL = 4_000_000_000;
 
 const RECORD_MESSAGE = `Occurrences must be a whole number from 1 to ${MAX_RECORD.toLocaleString("en-US")}, and the playground stops at ${MAX_TOTAL.toLocaleString("en-US")} recorded in all. The sketch counts events, and a count below one would let an estimate fall under the truth, which is the one thing it rules out; the cap in all keeps every counter inside the 32 bits it holds.`;
+
+const VALUE_MESSAGE = `Value must be a number, and how many a whole number from 1 to ${MAX_RECORD.toLocaleString("en-US")}.`;
 
 const INSERT_MESSAGE = `The playground holds at most ${MAX_KEYS.toLocaleString("en-US")} keys, and this one would be past that. It builds real filters in your browser, so rebuild with fewer keys to add more.`;
 
@@ -334,9 +344,7 @@ export class Playground {
     this.#target = target;
     this.#filters = filters;
     for (const key of keys) this.#counts.set(key, 1);
-    for (const value of values) {
-      this.#values.set(value, (this.#values.get(value) ?? 0) + 1);
-    }
+    for (const value of values) this.#tally(value, 1);
   }
 
   /** Builds all five structures from `keyCount` generated keys. */
@@ -575,6 +583,32 @@ export class Playground {
       error: topk.error(),
       total: topk.total,
     };
+  }
+
+  /**
+   * Records `count` occurrences of `value` in the quantile sketch. What the
+   * sketch cannot index it refuses itself, in its own words.
+   */
+  recordValue(value: unknown, count: unknown): ValueResult {
+    const v = toNumber(value);
+    const n = toNumber(count);
+    if (Number.isNaN(v) || !Number.isInteger(n) || n < 1 || n > MAX_RECORD) {
+      return { ok: false, message: VALUE_MESSAGE };
+    }
+    const sketch = this.#filters.ddsketch;
+    try {
+      sketch.add(v, n);
+    } catch (error) {
+      return { ok: false, message: toMessage(error) };
+    }
+    this.#tally(v, n);
+    return { ok: true, count: sketch.count };
+  }
+
+  #tally(value: number, n: number): void {
+    // As the sketch records it: -0 is 0.
+    const key = value === 0 ? 0 : value;
+    this.#values.set(key, (this.#values.get(key) ?? 0) + n);
   }
 
   /** p50, p90, p99 and p99.9 from the sketch, beside the exact values. */

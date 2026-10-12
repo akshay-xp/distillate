@@ -651,3 +651,41 @@ test("the build seeds a DDSketch and reports its quantiles beside exact", () => 
   }
   expect(built().quantiles()).toEqual(report);
 });
+
+test("recording values moves the quantiles and every band still holds", () => {
+  const pg = built();
+  const recorded = pg.recordValue(5000, 100);
+  expect(recorded.ok).toBe(true);
+
+  const report = pg.quantiles();
+  expect(report.count).toBe(KEYS + 100);
+  expect(report.rows[3]?.exact).toBe(5000);
+
+  expect(pg.recordValue(-3, 1).ok).toBe(true);
+  expect(pg.recordValue("0", "1").ok).toBe(true);
+  for (const row of pg.quantiles().rows) {
+    expect(row.estimate, String(row.q)).toBeGreaterThanOrEqual(row.low);
+    expect(row.estimate, String(row.q)).toBeLessThanOrEqual(row.high);
+  }
+});
+
+// The sketch records nothing before it throws, and the exact map is updated
+// only after it accepts, so a refusal leaves the two in step.
+test.each<[string, unknown, unknown]>([
+  ["a value that is not a number", "abc", 1],
+  ["NaN", Number.NaN, 1],
+  ["Infinity", Infinity, 1],
+  ["a value past the mapping's range", Number.MAX_VALUE, 1],
+  ["a count of 0", 100, 0],
+  ["a fractional count", 100, 1.5],
+  ["a count past 1,000,000", 100, 1_000_001],
+])("recording %s is refused and changes nothing", (_, value, count) => {
+  const pg = built();
+  const before = pg.quantiles();
+
+  const result = pg.recordValue(value, count);
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.message).not.toBe("");
+  expect(pg.quantiles()).toEqual(before);
+});
