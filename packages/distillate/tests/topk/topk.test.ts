@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { expect, test, vi } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
@@ -301,4 +303,22 @@ test("add and count encode string keys without allocating, and a stored key keep
     "alpha",
     "beta",
   ]);
+});
+
+// Pins what purging writes, so a rewrite of the purge has to land on the same
+// entries and offset. The frame is canonical and the secret slot key never
+// reaches it, so the digest does not depend on where keys sit.
+test("a long purging stream writes the frame it always has", () => {
+  const sketch = TopK.create(0.01);
+  for (let i = 0; i < 60_000; i++) {
+    // Every third add is one of ten heavy keys; the rest spread over 20,000.
+    sketch.add(
+      i % 3 === 0 ? `h:${String(i % 30)}` : `k:${String((i * 7919) % 20_000)}`,
+    );
+  }
+
+  expect(sketch.error()).toBeGreaterThan(0);
+  expect(createHash("sha256").update(sketch.toBytes()).digest("hex")).toBe(
+    "92696872ca69fd395c2e8fa4f4718115a7fdf1f4521af9f607ad1ab038218db2",
+  );
 });
