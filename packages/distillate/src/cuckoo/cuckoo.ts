@@ -1,6 +1,7 @@
 import type { BytesLike } from "../core/bytes.js";
 import { DistinctHashes } from "../core/distinct.js";
 import { type Hash128, hash128KeyInto, reduce } from "../core/hasher.js";
+import { forEachItem } from "../core/iterable.js";
 import {
   assertPositiveInt,
   assertProbability,
@@ -133,10 +134,11 @@ export class CuckooFilter {
     // uses would otherwise collapse into one copy, and deleting either would
     // drop the other.
     const distinct = new DistinctHashes(4);
-    for (const key of keys) {
-      hash128KeyInto(key, options.seed ?? 0, HASH);
+    const seed = options.seed ?? 0;
+    forEachItem(keys, (key) => {
+      hash128KeyInto(key, seed, HASH);
       distinct.add(HASH);
-    }
+    });
     const f = CuckooFilter.create(Math.max(1, distinct.size), epsilon, options);
     // Replayed from the kept hashes in first-seen order, which is the order
     // add would have seen, so the table is the one add builds.

@@ -1,3 +1,4 @@
+import { forEachItem } from "../core/iterable.js";
 import { assertPositiveFinite, ParamError } from "../core/params.js";
 import {
   assertBodyLength,
@@ -427,7 +428,9 @@ export class DDSketch {
     options: DDSketchOptions = {},
   ): DDSketch {
     const sketch = DDSketch.create(relativeAccuracy, options);
-    for (const value of values) sketch.add(value);
+    forEachItem(values, (value) => {
+      sketch.add(value);
+    });
     return sketch;
   }
 

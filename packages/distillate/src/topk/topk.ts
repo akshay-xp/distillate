@@ -1,4 +1,5 @@
 import { type BytesLike, encodedBytes, encodeKey } from "../core/bytes.js";
+import { forEachItem } from "../core/iterable.js";
 import { assertPositiveInt, assertUint32, ParamError } from "../core/params.js";
 import {
   assertBodyLength,
@@ -164,7 +165,9 @@ export class TopK {
    */
   static from(keys: Iterable<BytesLike>, epsilon: number): TopK {
     const sketch = TopK.create(epsilon);
-    for (const key of keys) sketch.add(key);
+    forEachItem(keys, (key) => {
+      sketch.add(key);
+    });
     return sketch;
   }
 
