@@ -110,8 +110,7 @@ export class TopK {
   // The slot hash's secret key, drawn on first use. No stored byte depends on
   // where a key sits, so the key never reaches the frame and can differ per
   // sketch; being secret is what keeps crafted keys off a shared chain.
-  #k0 = 0;
-  #k1 = 0;
+  readonly #sipKey = new Uint32Array(2);
   #keyed = false;
   // Slots in the table now, a power of two up to capacity.
   #size = 0;
@@ -466,13 +465,11 @@ export class TopK {
     // Drawn here rather than in the constructor: Cloudflare Workers refuse
     // random values at module scope, where a sketch is commonly created.
     if (!this.#keyed) {
-      const key = crypto.getRandomValues(new Uint32Array(2));
-      this.#k0 = key[0] ?? 0;
-      this.#k1 = key[1] ?? 0;
+      crypto.getRandomValues(this.#sipKey);
       this.#keyed = true;
     }
     const mask = this.#size - 1;
-    let slot = halfSipHash13(bytes, this.#k0, this.#k1, len) & mask;
+    let slot = halfSipHash13(bytes, this.#sipKey, len, mask);
     for (;;) {
       if ((this.#counts[slot] ?? 0) === 0) return slot;
       if (this.#slotHolds(slot, bytes, len)) return slot;
