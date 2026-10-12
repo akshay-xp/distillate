@@ -374,13 +374,15 @@ export function isIndexable(mapping: IndexMapping): boolean {
 
 // Accuracy tight enough leaves no value a bin: a sketch built on that mapping
 // would count every value as zero and write a frame its reader rejects.
+// Named by the factory, since a bitwise mapping's kind is "linear".
 function indexing(
   mapping: IndexMapping,
   relativeAccuracy: number,
+  name: string = mapping.kind,
 ): IndexMapping {
   if (!isIndexable(mapping)) {
     throw new ParamError(
-      `relativeAccuracy ${String(relativeAccuracy)} leaves the ${mapping.kind} mapping no value it can index`,
+      `relativeAccuracy ${String(relativeAccuracy)} leaves the ${name} mapping no value it can index`,
     );
   }
   return mapping;
@@ -443,6 +445,7 @@ export function bitwiseMapping(relativeAccuracy: number): IndexMapping {
   return indexing(
     new BitwiseMapping(bitwiseBits(relativeAccuracy)),
     relativeAccuracy,
+    "bitwise",
   );
 }
 

@@ -57,6 +57,11 @@ const STORE_CODES: readonly StoreKind[] = [
   "sparse",
 ];
 
+// String(-0) is "0", which hides why a -0 was refused.
+function show(value: number): string {
+  return Object.is(value, -0) ? "-0" : String(value);
+}
+
 function storeOf(kind: StoreKind, maxBins: number): StoreFactory {
   switch (kind) {
     case "dense":
@@ -204,7 +209,7 @@ function readBlock(
       Object.is(count, -0) ||
       (end && count === 0)
     ) {
-      throw fail(`count ${String(count)} is not one a store could hold`);
+      throw fail(`count ${show(count)} is not one a store could hold`);
     }
     if (index <= previous || index < lo || index > hi) {
       throw fail(
@@ -501,7 +506,7 @@ export class DDSketch {
     const zeroCount = view.getFloat64(56, true);
     if (!(zeroCount >= 0 && zeroCount < Infinity) || Object.is(zeroCount, -0)) {
       throw new SerializationError(
-        `ddsketch: zeroCount must be finite and not negative, got ${String(zeroCount)}`,
+        `ddsketch: zeroCount must be finite and not negative, got ${show(zeroCount)}`,
       );
     }
     const sum = view.getFloat64(32, true);
@@ -629,9 +634,9 @@ export class DDSketch {
     return merged;
   }
 
-  // Adds another sketch's bins and summaries into this one. Bins go through
-  // add, so a collapsing store folds the merged range exactly as it would
-  // have folded one stream.
+  // Adds another sketch's bins and summaries into this one. Store.merge
+  // leaves the bins adding them one by one would, so a collapsing store folds
+  // the merged range exactly as it would have folded one stream.
   #absorb(from: DDSketch): void {
     if (from.#count === 0) return;
     this.#positive.merge(from.#positive);

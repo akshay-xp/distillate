@@ -14,8 +14,9 @@ import { lognormalValues } from "../helpers/quantile.js";
 // steady-state add is not. The cycling runs far longer than the bins need.
 // The bitwise add is fast enough that countCollections' own warm-up ends
 // before V8's background compile does, and finishing that compile inside the
-// window cost one collection that a second window, or ten times the adds,
-// never repeats.
+// window costs one collection that a second window never repeats. A longer
+// pre-warm alone did not hold under load (3 of 5 full runs failed on a
+// reviewer's laptop), so the first window is run and discarded.
 test.each([
   ["the defaults", {}],
   ["the log mapping", { mapping: logMapping }],
@@ -29,10 +30,12 @@ test.each([
     for (let i = 0; i < 2_000_000; i++) sketch.add(values[i & 4095] ?? 0);
 
     let at = 0;
-    const collections = await countCollections(() => {
+    const step = (): void => {
       at = (at + 1) & 4095;
       sketch.add(values[at] ?? 0);
-    }, 6_000_000);
+    };
+    await countCollections(step, 6_000_000);
+    const collections = await countCollections(step, 6_000_000);
 
     expect(collections).toBe(0);
   },

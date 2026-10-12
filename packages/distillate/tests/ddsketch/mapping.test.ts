@@ -176,6 +176,10 @@ describe("an accuracy that leaves no value indexable", () => {
     expect(build).toThrow(ParamError);
   });
 
+  test("the error names the mapping asked for, not its wire kind", () => {
+    expect(() => DDSketch.create(1e-10)).toThrow(/the bitwise mapping/);
+  });
+
   test.each([
     ["bitwise", bitwiseMapping],
     ...kinds.map(([kind, factory]) => [kind, factory] as const),

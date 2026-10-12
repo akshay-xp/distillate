@@ -680,6 +680,7 @@ describe("a frame carrying -0 is rejected", () => {
       base,
     );
     expect(() => DDSketch.fromBytes(frame)).toThrow(SerializationError);
+    expect(() => DDSketch.fromBytes(frame)).toThrow(/-0/);
   });
 });
 
