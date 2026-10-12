@@ -145,6 +145,9 @@ export function buildFingerprints(
   const orderHi = new Uint32Array(size);
   const orderIdx = new Uint32Array(size);
   const pos = new Uint32Array(3);
+  // A slot is pushed only when its count reaches 1, and counts only fall, so
+  // each slot is pushed at most once per attempt.
+  const stack = new Uint32Array(arrayLength);
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const seed = attempt;
@@ -165,15 +168,14 @@ export function buildFingerprints(
       }
     }
 
-    const queue: number[] = [];
+    let top = 0;
     for (let idx = 0; idx < arrayLength; idx++) {
-      if ((counts[idx] ?? 0) === 1) queue.push(idx);
+      if ((counts[idx] ?? 0) === 1) stack[top++] = idx;
     }
 
     let processed = 0;
-    while (queue.length > 0) {
-      const idx = queue.pop();
-      if (idx === undefined) break;
+    while (top > 0) {
+      const idx = stack[--top] ?? 0;
       if ((counts[idx] ?? 0) !== 1) continue;
       const mlo = xorLo[idx] ?? 0;
       const mhi = xorHi[idx] ?? 0;
@@ -189,7 +191,7 @@ export function buildFingerprints(
         counts[p] = (counts[p] ?? 0) - 1;
         xorLo[p] = (xorLo[p] ?? 0) ^ mlo;
         xorHi[p] = (xorHi[p] ?? 0) ^ mhi;
-        if ((counts[p] ?? 0) === 1) queue.push(p);
+        if ((counts[p] ?? 0) === 1) stack[top++] = p;
       }
     }
 
