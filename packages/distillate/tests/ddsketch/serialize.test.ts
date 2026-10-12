@@ -10,7 +10,10 @@ import {
 } from "../../src/core/serialize.js";
 import { CountMinSketch } from "../../src/countmin/countmin.js";
 import { DDSketch, type DDSketchOptions } from "../../src/ddsketch/ddsketch.js";
-import { toProtobuf } from "../../src/ddsketch/protobuf/protobuf.js";
+import {
+  fromProtobuf,
+  toProtobuf,
+} from "../../src/ddsketch/protobuf/protobuf.js";
 import {
   cubicMapping,
   linearMapping,
@@ -677,5 +680,31 @@ describe("a frame carrying -0 is rejected", () => {
       base,
     );
     expect(() => DDSketch.fromBytes(frame)).toThrow(SerializationError);
+  });
+});
+
+// Indexable values can sum past the largest double: the sum is then Infinity,
+// or NaN once both signs overflow, and the frame must still carry it.
+describe("a sketch whose sum overflows round-trips", () => {
+  const of = (...values: number[]): DDSketch => DDSketch.from(values, 0.01);
+  test.each<[string, () => DDSketch]>([
+    ["+Infinity from add", () => of(1e308, 1e308)],
+    ["-Infinity from add", () => of(-1e308, -1e308)],
+    ["NaN from both signs", () => of(1e308, 1e308, -1e308, -1e308)],
+    ["+Infinity from union", () => of(1e308).union(of(1e308))],
+    [
+      "+Infinity from protobuf",
+      () => fromProtobuf(toProtobuf(of(1e308, 1e308))),
+    ],
+  ])("%s", (_, build) => {
+    const sketch = build();
+    expect(Number.isFinite(sketch.sum)).toBe(false);
+    for (const back of [
+      DDSketch.fromBytes(sketch.toBytes()),
+      DDSketch.fromJSON(sketch.toJSON()),
+    ]) {
+      expect(back.equals(sketch)).toBe(true);
+      expect(Object.is(back.sum, sketch.sum)).toBe(true);
+    }
   });
 });
