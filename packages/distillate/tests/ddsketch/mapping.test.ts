@@ -2,6 +2,7 @@ import fc from "fast-check";
 import { describe, expect, test } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
+import { DDSketch } from "../../src/ddsketch/ddsketch.js";
 import {
   bitwiseMapping,
   cubicMapping,
@@ -160,5 +161,45 @@ describe("bitwise mapping", () => {
     for (const bad of [0, 1, -0.1, Number.NaN]) {
       expect(() => bitwiseMapping(bad)).toThrow(ParamError);
     }
+  });
+});
+
+// Accuracy tight enough leaves the mapping no value it can bin, min above max.
+// A sketch built on one would count every value as zero and write a frame its
+// own reader rejects, so the factories refuse it up front.
+describe("an accuracy that leaves no value indexable", () => {
+  test.each<[string, () => unknown]>([
+    ["bitwiseMapping(1e-10)", () => bitwiseMapping(1e-10)],
+    ["logMapping(1e-12)", () => logMapping(1e-12)],
+    ["DDSketch.create(1e-10)", () => DDSketch.create(1e-10)],
+  ])("is rejected by %s", (_, build) => {
+    expect(build).toThrow(ParamError);
+  });
+
+  test.each([
+    ["bitwise", bitwiseMapping],
+    ...kinds.map(([kind, factory]) => [kind, factory] as const),
+  ] as const)(
+    "the %s factory builds only mappings that index something",
+    (_, factory) => {
+      for (let exponent = 3; exponent <= 15; exponent++) {
+        let mapping: IndexMapping;
+        try {
+          mapping = factory(10 ** -exponent);
+        } catch (error) {
+          expect(error).toBeInstanceOf(ParamError);
+          continue;
+        }
+        expect(mapping.minIndexableValue).toBeLessThanOrEqual(
+          mapping.maxIndexableValue,
+        );
+      }
+    },
+  );
+
+  test("the tightest default accuracy still round-trips", () => {
+    const sketch = DDSketch.create(1e-9);
+    sketch.add(1);
+    expect(DDSketch.fromBytes(sketch.toBytes()).equals(sketch)).toBe(true);
   });
 });

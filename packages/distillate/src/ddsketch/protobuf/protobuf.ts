@@ -1,6 +1,6 @@
 import { SerializationError } from "../../core/serialize.js";
 import { DDSketch, sketchBins } from "../ddsketch.js";
-import { type MappingKind, mappingWithGamma } from "../mapping.js";
+import { isIndexable, type MappingKind, mappingWithGamma } from "../mapping.js";
 import {
   collapsingLowestStore,
   type Store,
@@ -254,7 +254,7 @@ export function fromProtobuf(
     );
   }
   const mapping = mappingWithGamma(kind, gamma, indexOffset);
-  if (!(mapping.minIndexableValue <= mapping.maxIndexableValue)) {
+  if (!isIndexable(mapping)) {
     throw new SerializationError(
       "protobuf: the mapping leaves no value indexable",
     );
