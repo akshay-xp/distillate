@@ -1,8 +1,14 @@
 import { describe, expect, test } from "vitest";
 
-import { DDSketch } from "../../src/ddsketch/ddsketch.js";
 import {
+  DDSketch,
+  sketchBins,
+  sketchFromBins,
+} from "../../src/ddsketch/ddsketch.js";
+import {
+  bitwiseMapping,
   cubicMapping,
+  type IndexMapping,
   linearMapping,
   logMapping,
   type MappingKind,
@@ -18,9 +24,11 @@ import {
   collapsingLowestStore,
   denseStore,
   sparseStore,
+  type StoreFactory,
 } from "../../src/ddsketch/store.js";
 import { SerializationError } from "../../src/core/serialize.js";
 import { fromBase64 } from "../helpers/base64.js";
+import { rng } from "../helpers/frequency.js";
 import { readFrameBins } from "../helpers/ddsketch-frame.js";
 import { expectWithin } from "../helpers/quantile.js";
 import fixture from "../fixtures/ddsketch/protobuf.go.json" with { type: "json" };
@@ -197,6 +205,119 @@ test.each([denseStore(), sparseStore()])(
     expect(binsOf(back)).toEqual(binsOf(sketch));
   },
 );
+
+// What decoding promises: the sketch adding each bin's value, in the order the
+// message lists the bins, would hold, its sum, min and max included.
+function addedBins(
+  mapping: IndexMapping,
+  store: StoreFactory,
+  positive: number[][],
+  negative: number[][],
+  zeroCount: number,
+): DDSketch {
+  const sketch = DDSketch.create(mapping.relativeAccuracy, {
+    mapping: () => mapping,
+    store,
+  });
+  for (const [index = 0, count = 0] of positive) {
+    sketch.add(mapping.value(index), count);
+  }
+  for (const [index = 0, count = 0] of negative) {
+    sketch.add(-mapping.value(index), count);
+  }
+  if (zeroCount > 0) sketch.add(0, zeroCount);
+  return sketch;
+}
+
+describe("a decoded sketch is the one adding its bins builds", () => {
+  test.each(cases)("for sketches-go's $name message", (c) => {
+    const mapping = mappingWithGamma(
+      KINDS[c.interpolation] ?? "log",
+      c.gamma,
+      c.indexOffset,
+    );
+    const store = collapsingLowestStore(4096);
+    expect(
+      fromProtobuf(fromBase64(c.message)).equals(
+        addedBins(mapping, store, c.positive, c.negative, c.zeroCount),
+      ),
+    ).toBe(true);
+  });
+
+  test("for random sketches on every store", () => {
+    const stores = [
+      denseStore(),
+      sparseStore(),
+      collapsingLowestStore(16),
+      collapsingHighestStore(16),
+    ];
+    const next = rng(47);
+    for (let t = 0; t < 200; t++) {
+      const store = stores[t % stores.length] ?? denseStore();
+      const values = Array.from({ length: Math.floor(next() * 50) }, () => {
+        const r = next();
+        if (r < 0.1) return 0;
+        const magnitude = 10 ** (next() * 8 - 4);
+        return r < 0.4 ? -magnitude : magnitude;
+      });
+      const sketch = DDSketch.from(values, 0.01, { store });
+      const list = (sign: "positive" | "negative"): number[][] => {
+        const out: number[][] = [];
+        sketchBins(sketch)[sign].forEach((index, count) =>
+          out.push([index, count]),
+        );
+        return out;
+      };
+      const want = addedBins(
+        sketch.mapping,
+        store,
+        list("positive"),
+        list("negative"),
+        sketchBins(sketch).zeroCount,
+      );
+      expect(fromProtobuf(toProtobuf(sketch), { store }).equals(want)).toBe(
+        true,
+      );
+    }
+  });
+});
+
+// The extreme bins' values can fall just outside the indexable range: decoded
+// through add, the top bin threw and the bottom one was counted as zero.
+test.each([
+  ["bitwise", bitwiseMapping(0.01)],
+  ["log", logMapping(0.01)],
+  ["linear", linearMapping(0.01)],
+  ["quadratic", quadraticMapping(0.01)],
+  ["cubic", cubicMapping(0.01)],
+] as const)("a %s message's extreme bins decode in place", (_, mapping) => {
+  const lo = mapping.index(mapping.minIndexableValue);
+  const hi = mapping.index(mapping.maxIndexableValue);
+  const message = toProtobuf(
+    sketchFromBins(
+      mapping,
+      sparseStore(),
+      new Map([
+        [lo, 1],
+        [hi, 1],
+      ]),
+      new Map(),
+      0,
+    ),
+  );
+  const back = fromProtobuf(message, { store: sparseStore() });
+  const bins: number[][] = [];
+  sketchBins(back).positive.forEach((index, count) =>
+    bins.push([index, count]),
+  );
+  expect([bins, sketchBins(back).zeroCount]).toEqual([
+    [
+      [lo, 1],
+      [hi, 1],
+    ],
+    0,
+  ]);
+});
 
 describe("decoding untrusted bytes", () => {
   // Two keys 2e8 apart are a valid message of a few dozen bytes; a dense

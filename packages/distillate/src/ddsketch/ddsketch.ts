@@ -318,6 +318,19 @@ export interface SketchBins {
 export let sketchBins!: (sketch: DDSketch) => SketchBins;
 
 /**
+ * Builds a sketch from bins by index: the sketch adding each bin's value, in
+ * the bins' order, would hold, without mapping each value back to its index.
+ * Package-internal, as {@link sketchBins} is.
+ */
+export let sketchFromBins!: (
+  mapping: IndexMapping,
+  store: StoreFactory,
+  positive: Map<number, number>,
+  negative: Map<number, number>,
+  zeroCount: number,
+) => DDSketch;
+
+/**
  * A quantile sketch whose every answer is within a relative error of the true
  * value at that quantile, tails included.
  */
@@ -328,6 +341,16 @@ export class DDSketch {
       negative: sketch.#negative,
       zeroCount: sketch.#zeroCount,
     });
+    sketchFromBins = (mapping, store, positive, negative, zeroCount) => {
+      const sketch = new DDSketch(mapping.relativeAccuracy, {
+        mapping: () => mapping,
+        store,
+      });
+      sketch.#place(sketch.#positive, positive, 1);
+      sketch.#place(sketch.#negative, negative, -1);
+      if (zeroCount > 0) sketch.add(0, zeroCount);
+      return sketch;
+    };
   }
 
   readonly #relativeAccuracy: number;
@@ -587,6 +610,29 @@ export class DDSketch {
     this.#count += from.#count;
     this.#sum += from.#sum;
     this.#widen(from.#min, from.#max);
+  }
+
+  // Adds each bin's count at its index, and its value to the summaries as add
+  // would. The store is widened to both ends first, so it grows once rather
+  // than once per new bin.
+  #place(store: Store, bins: Map<number, number>, sign: 1 | -1): void {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const index of bins.keys()) {
+      if (index < lo) lo = index;
+      if (index > hi) hi = index;
+    }
+    if (lo > hi) return;
+    store.add(lo, 0);
+    store.add(hi, 0);
+    for (const [index, count] of bins) {
+      store.add(index, count);
+      const value = sign * this.#mapping.value(index);
+      this.#count += count;
+      this.#sum += value * count;
+      if (value < this.#min) this.#min = value;
+      if (value > this.#max) this.#max = value;
+    }
   }
 
   // Extends min and max to cover [lo, hi]. NaN compares false, so an empty
