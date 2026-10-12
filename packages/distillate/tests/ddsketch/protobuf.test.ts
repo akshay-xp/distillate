@@ -24,6 +24,7 @@ import { fromBase64 } from "../helpers/base64.js";
 import { readFrameBins } from "../helpers/ddsketch-frame.js";
 import { expectWithin } from "../helpers/quantile.js";
 import fixture from "../fixtures/ddsketch/protobuf.go.json" with { type: "json" };
+import { allocatedBy } from "../helpers/topk.js";
 
 interface ProtoCase {
   name: string;
@@ -71,8 +72,11 @@ describe.each(cases)("sketches-go's $name message", (c) => {
     });
   });
 
-  test("lands on a dense store, as sketches-go's FromProto does", () => {
-    expect(sketch.store.kind).toBe("dense");
+  test("lands on a store collapsing the lowest bins past 4096", () => {
+    expect([sketch.store.kind, sketch.store.maxBins]).toEqual([
+      "collapsingLowest",
+      4096,
+    ]);
   });
 
   // The message carries no min or max; they come back as the extreme bins'
@@ -177,6 +181,31 @@ const binAt = (index: number, count: number): number[] =>
   );
 const decode = (bytes: number[]): DDSketch =>
   fromProtobuf(Uint8Array.from(bytes));
+
+describe("decoding untrusted bytes", () => {
+  // Two keys 2e8 apart are a valid message of a few dozen bytes; a dense
+  // store would hold every slot between them, about 3.2 GB.
+  const message = toProtobuf(
+    DDSketch.from([1.000001 ** -1e8, 1.000001 ** 1e8], 5e-7, {
+      mapping: logMapping,
+      store: sparseStore(),
+    }),
+  );
+
+  test("stays bounded at the default store", () => {
+    expect(message.length).toBeLessThan(64);
+    const { value, bytes } = allocatedBy(() => fromProtobuf(message));
+    expect(bytes).toBeLessThan(1024 * 1024);
+    expect(value.count).toBe(2);
+  });
+
+  test("takes a dense store when asked", () => {
+    const small = toProtobuf(DDSketch.from([1, 2, 3], 0.01));
+    expect(fromProtobuf(small, { store: denseStore() }).store.kind).toBe(
+      "dense",
+    );
+  });
+});
 
 describe("a malformed message is rejected", () => {
   const gamma = logMapping(0.01).gamma;
