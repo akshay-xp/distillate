@@ -129,6 +129,12 @@ const fine = DDSketch.create(0.001, { store: collapsingLowestStore(8192) });
 fine.store.maxBins; // 8192
 ```
 
+Accuracy also bounds the range a mapping can index at all, since bins that fine
+run out of float precision. At `1e-9` the default mapping indexes magnitudes
+from 0.125 to 8 and `logMapping` from about 0.037 to 27; smaller magnitudes
+count as zero and larger ones are rejected. Tight enough, and no value is indexable: `create` then throws a
+`ParamError` rather than build a sketch that would count everything as zero.
+
 ## Union
 
 `union` returns a new sketch holding both streams, leaving both operands as they

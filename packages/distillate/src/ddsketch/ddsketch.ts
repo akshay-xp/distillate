@@ -16,6 +16,7 @@ import {
 import {
   type IndexMapping,
   bitwiseMapping,
+  isIndexable,
   type MappingKind,
   mappingWithGamma,
 } from "./mapping.js";
@@ -348,7 +349,8 @@ export class DDSketch {
    *
    * @param relativeAccuracy - Relative error bound on every quantile, in `(0, 1)`.
    * @param options - Optional mapping and store factories.
-   * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`.
+   * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`, or
+   * so small that the mapping indexes no value.
    */
   static create(
     relativeAccuracy: number,
@@ -363,8 +365,8 @@ export class DDSketch {
    * @param values - Finite numbers within the mapping's indexable range.
    * @param relativeAccuracy - Relative error bound on every quantile, in `(0, 1)`.
    * @param options - Optional mapping and store factories.
-   * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)` or a
-   * value cannot be recorded.
+   * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)` or
+   * so small that the mapping indexes no value, or a value cannot be recorded.
    */
   static from(
     values: Iterable<number>,
@@ -436,7 +438,7 @@ export class DDSketch {
     const mapping = mappingWithGamma(kind, gamma, indexOffset);
     // An offset far enough out leaves no value a bin, min above max; no
     // sketch was built that way, and every index read below would be garbage.
-    if (!(mapping.minIndexableValue <= mapping.maxIndexableValue)) {
+    if (!isIndexable(mapping)) {
       throw new SerializationError(
         "ddsketch: the mapping leaves no value indexable",
       );

@@ -1,4 +1,4 @@
-import { assertProbability } from "../core/params.js";
+import { assertProbability, ParamError } from "../core/params.js";
 
 /** Which approximation of the logarithm a mapping bins values by. */
 export type MappingKind = "log" | "linear" | "quadratic" | "cubic";
@@ -364,6 +364,25 @@ function asBitwise(gamma: number, indexOffset: number): number | undefined {
   return undefined;
 }
 
+/** Whether any value falls in the mapping's indexable range. */
+export function isIndexable(mapping: IndexMapping): boolean {
+  return mapping.minIndexableValue <= mapping.maxIndexableValue;
+}
+
+// Accuracy tight enough leaves no value a bin: a sketch built on that mapping
+// would count every value as zero and write a frame its reader rejects.
+function indexing(
+  mapping: IndexMapping,
+  relativeAccuracy: number,
+): IndexMapping {
+  if (!isIndexable(mapping)) {
+    throw new ParamError(
+      `relativeAccuracy ${String(relativeAccuracy)} leaves the ${mapping.kind} mapping no value it can index`,
+    );
+  }
+  return mapping;
+}
+
 function exactLogGamma(relativeAccuracy: number): number {
   assertProbability(relativeAccuracy, "relativeAccuracy");
   return (1 + relativeAccuracy) / (1 - relativeAccuracy);
@@ -374,10 +393,14 @@ function exactLogGamma(relativeAccuracy: number): number {
  * accuracy, at the cost of a `Math.log` per value.
  *
  * @param relativeAccuracy - Relative error bound, in `(0, 1)`.
- * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`.
+ * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`, or
+ * so small that no value is indexable.
  */
 export function logMapping(relativeAccuracy: number): IndexMapping {
-  return new LogMapping(exactLogGamma(relativeAccuracy), 0);
+  return indexing(
+    new LogMapping(exactLogGamma(relativeAccuracy), 0),
+    relativeAccuracy,
+  );
 }
 
 /**
@@ -387,13 +410,17 @@ export function logMapping(relativeAccuracy: number): IndexMapping {
  * only slightly faster than the log mapping.
  *
  * @param relativeAccuracy - Relative error bound, in `(0, 1)`.
- * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`.
+ * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`, or
+ * so small that no value is indexable.
  */
 export function linearMapping(relativeAccuracy: number): IndexMapping {
   const gamma = exactLogGamma(relativeAccuracy) ** Math.LN2;
   // sketches-go keeps this offset for backward compatibility; matching it
   // keeps bins aligned with sketches built there.
-  return new LinearMapping(gamma, 1 / goLog2(gamma));
+  return indexing(
+    new LinearMapping(gamma, 1 / goLog2(gamma)),
+    relativeAccuracy,
+  );
 }
 
 /**
@@ -405,11 +432,15 @@ export function linearMapping(relativeAccuracy: number): IndexMapping {
  * `relativeAccuracy`. Datadog's protobuf carries it as a linear mapping.
  *
  * @param relativeAccuracy - Relative error bound, in `(0, 1)`.
- * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`.
+ * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`, or
+ * so small that no value is indexable.
  */
 export function bitwiseMapping(relativeAccuracy: number): IndexMapping {
   assertProbability(relativeAccuracy, "relativeAccuracy");
-  return new BitwiseMapping(bitwiseBits(relativeAccuracy));
+  return indexing(
+    new BitwiseMapping(bitwiseBits(relativeAccuracy)),
+    relativeAccuracy,
+  );
 }
 
 /**
@@ -418,12 +449,16 @@ export function bitwiseMapping(relativeAccuracy: number): IndexMapping {
  * bins per accuracy. Matches sketches-java, the reference that has it.
  *
  * @param relativeAccuracy - Relative error bound, in `(0, 1)`.
- * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`.
+ * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`, or
+ * so small that no value is indexable.
  */
 export function quadraticMapping(relativeAccuracy: number): IndexMapping {
-  return new QuadraticMapping(
-    exactLogGamma(relativeAccuracy) ** (1 / QUADRATIC_CORRECTION),
-    0,
+  return indexing(
+    new QuadraticMapping(
+      exactLogGamma(relativeAccuracy) ** (1 / QUADRATIC_CORRECTION),
+      0,
+    ),
+    relativeAccuracy,
   );
 }
 
@@ -433,12 +468,16 @@ export function quadraticMapping(relativeAccuracy: number): IndexMapping {
  * elsewhere; in V8 it adds slower than the log mapping, `Math.log` being cheap.
  *
  * @param relativeAccuracy - Relative error bound, in `(0, 1)`.
- * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`.
+ * @throws {@link ParamError} when `relativeAccuracy` is outside `(0, 1)`, or
+ * so small that no value is indexable.
  */
 export function cubicMapping(relativeAccuracy: number): IndexMapping {
-  return new CubicMapping(
-    exactLogGamma(relativeAccuracy) ** ((10 * Math.LN2) / 7),
-    0,
+  return indexing(
+    new CubicMapping(
+      exactLogGamma(relativeAccuracy) ** ((10 * Math.LN2) / 7),
+      0,
+    ),
+    relativeAccuracy,
   );
 }
 
