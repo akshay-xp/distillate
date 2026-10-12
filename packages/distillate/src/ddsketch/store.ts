@@ -21,7 +21,9 @@ export interface Store {
 
 /**
  * Builds the stores a sketch keeps, one per sign, both with the same policy.
- * Passed to {@link DDSketch.create} as `store`.
+ * Passed to {@link DDSketch.create} as `store`. Built by this module's
+ * factories only: a sketch serializes its store by `kind` and `maxBins`, so a
+ * custom one would be read back as the built-in store of that kind.
  */
 export interface StoreFactory {
   /** Which store this builds. */

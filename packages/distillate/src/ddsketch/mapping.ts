@@ -6,6 +6,9 @@ export type MappingKind = "log" | "linear" | "quadratic" | "cubic";
 /**
  * Maps a positive value to the integer index of the bin holding it, and an
  * index back to a value within `relativeAccuracy` of everything in that bin.
+ * Built by this module's factories only: a sketch serializes its mapping by
+ * `kind`, so a custom implementation would be written, and read back, as the
+ * built-in one of that kind.
  */
 export interface IndexMapping {
   /** Which approximation of the logarithm the mapping uses. */
