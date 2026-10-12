@@ -275,7 +275,7 @@ function binsOf(store: Store): { indices: number[]; counts: number[] } {
 export interface DDSketchOptions {
   /**
    * The mapping factory that bins values. Defaults to {@link bitwiseMapping},
-   * the fastest, adding about 2.3 times as fast as the log mapping in the
+   * the fastest, adding about twice as fast as the log mapping in the
    * benchmarks, as sketches-java's fast sketch does; take {@link logMapping}
    * for the fewest bins. The interpolated mappings exist to
    * match sketches built with them by Datadog's libraries.

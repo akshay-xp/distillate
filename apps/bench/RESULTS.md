@@ -4,7 +4,7 @@
 - Package: distillate@0.14.1
 - Date: 2026-10-05
 
-The DDSketch section was measured on 2026-10-09, on the same machine, from the
+The DDSketch section was measured on 2026-10-12, on the same machine, from the
 unreleased build that adds `distillate/ddsketch` on top of 0.14.2, against
 `@datadog/sketches-js@2.1.1`. Every other section keeps the numbers it was
 published with.
@@ -222,32 +222,33 @@ Compared with `@datadog/sketches-js`, Datadog's own JavaScript port, all at a `r
 `distillate/ddsketch (log)` takes the log mapping, sketches-js's default, so it and sketches-js hold the same bins and that comparison is like for like. The stream never reaches either store's bound.
 
 `max rel. error` is the largest relative error over 11 quantiles from 0 to 1, each against the exact value at rank `floor(q * (n - 1))`, on one seeded lognormal stream around 100 shared by all three. Each promises at most 1%.
-`add` is the median of 5 timed passes after 2 untimed ones, each on a fresh sketch, so it is the steady rate rather than how fast V8 optimises the first pass.
+`add` is the median of 5 timed passes after 2 untimed ones, each on a fresh sketch, so it is the steady rate rather than how fast V8 optimises the first pass. At the defaults it also depends on how V8 compiles the calling loop: the table is the loop optimised while it runs; compiled whole, the default adds about 150 M ops/s at 1M values. See METHODOLOGY.md.
+`quantile`, `union`, `toProtobuf` and `fromProtobuf` are timed the same way on the sketch the adds built: `quantile` over the same 11 quantiles, `union` with a second sketch of as many values from another stream. sketches-js merges in place, so its union merges both into a fresh sketch, as distillate's returns one.
 `size` is each library's own serialization: distillate's DSTL frame, and sketches-js's protobuf message, its only one. `protobuf` is Datadog's message from each, the like-for-like size.
 
-| Sketch                    | values | max rel. error | size   | protobuf | add            |
-| ------------------------- | ------ | -------------- | ------ | -------- | -------------- |
-| distillate/ddsketch       | 1k     | 0.72%          | 2252 B | 4288 B   | 25.03 M ops/s  |
-| distillate/ddsketch (log) | 1k     | 0.88%          | 1268 B | 2326 B   | 19.61 M ops/s  |
-| @datadog/sketches-js      | 1k     | 0.88%          | 3115 B | 3115 B   | 22.84 M ops/s  |
-| distillate/ddsketch       | 10k    | 0.62%          | 3076 B | 5944 B   | 73.26 M ops/s  |
-| distillate/ddsketch (log) | 10k    | 0.78%          | 1716 B | 3213 B   | 47.44 M ops/s  |
-| @datadog/sketches-js      | 10k    | 0.78%          | 4139 B | 4139 B   | 41.00 M ops/s  |
-| distillate/ddsketch       | 100k   | 0.73%          | 3364 B | 6519 B   | 139.58 M ops/s |
-| distillate/ddsketch (log) | 100k   | 0.85%          | 1868 B | 3525 B   | 59.71 M ops/s  |
-| @datadog/sketches-js      | 100k   | 0.85%          | 4139 B | 4139 B   | 62.55 M ops/s  |
-| distillate/ddsketch       | 1M     | 0.62%          | 3652 B | 7087 B   | 140.69 M ops/s |
-| distillate/ddsketch (log) | 1M     | 0.92%          | 2036 B | 3853 B   | 60.72 M ops/s  |
-| @datadog/sketches-js      | 1M     | 0.92%          | 4139 B | 4139 B   | 64.66 M ops/s  |
+| Sketch                    | values | max rel. error | size   | protobuf | add            | quantile      | union       | toProtobuf  | fromProtobuf |
+| ------------------------- | ------ | -------------- | ------ | -------- | -------------- | ------------- | ----------- | ----------- | ------------ |
+| distillate/ddsketch       | 1k     | 0.72%          | 2252 B | 4288 B   | 25.05 M ops/s  | 7.26 M ops/s  | 271 k ops/s | 112 k ops/s | 46 k ops/s   |
+| distillate/ddsketch (log) | 1k     | 0.88%          | 1268 B | 2326 B   | 19.37 M ops/s  | 13.28 M ops/s | 370 k ops/s | 222 k ops/s | 57 k ops/s   |
+| @datadog/sketches-js      | 1k     | 0.88%          | 3115 B | 3115 B   | 22.86 M ops/s  | 14.29 M ops/s | 399 k ops/s | 48 k ops/s  | 57 k ops/s   |
+| distillate/ddsketch       | 10k    | 0.62%          | 3076 B | 5944 B   | 86.36 M ops/s  | 5.29 M ops/s  | 446 k ops/s | 117 k ops/s | 38 k ops/s   |
+| distillate/ddsketch (log) | 10k    | 0.78%          | 1716 B | 3213 B   | 48.82 M ops/s  | 9.34 M ops/s  | 656 k ops/s | 281 k ops/s | 64 k ops/s   |
+| @datadog/sketches-js      | 10k    | 0.78%          | 4139 B | 4139 B   | 39.06 M ops/s  | 6.80 M ops/s  | 633 k ops/s | 47 k ops/s  | 52 k ops/s   |
+| distillate/ddsketch       | 100k   | 0.73%          | 3364 B | 6519 B   | 125.77 M ops/s | 4.34 M ops/s  | 525 k ops/s | 97 k ops/s  | 44 k ops/s   |
+| distillate/ddsketch (log) | 100k   | 0.85%          | 1868 B | 3525 B   | 60.14 M ops/s  | 7.67 M ops/s  | 790 k ops/s | 225 k ops/s | 57 k ops/s   |
+| @datadog/sketches-js      | 100k   | 0.85%          | 4139 B | 4139 B   | 59.24 M ops/s  | 5.97 M ops/s  | 791 k ops/s | 51 k ops/s  | 55 k ops/s   |
+| distillate/ddsketch       | 1M     | 0.62%          | 3652 B | 7087 B   | 113.00 M ops/s | 3.85 M ops/s  | 412 k ops/s | 88 k ops/s  | 39 k ops/s   |
+| distillate/ddsketch (log) | 1M     | 0.92%          | 2036 B | 3853 B   | 60.29 M ops/s  | 6.90 M ops/s  | 611 k ops/s | 222 k ops/s | 66 k ops/s   |
+| @datadog/sketches-js      | 1M     | 0.92%          | 4139 B | 4139 B   | 61.30 M ops/s  | 5.92 M ops/s  | 814 k ops/s | 58 k ops/s  | 57 k ops/s   |
 
-At its defaults distillate adds about 2.2 times as fast as sketches-js from 100k values up and 1.8 times at 10k, with a tighter error, since the bitwise mapping takes the finest power-of-two bins that meet 1%, and a smaller frame. Those finer bins cost protobuf size: its message is larger than sketches-js's at the defaults.
-On the log mapping, holding the same bins as sketches-js, distillate's frame is about half the size of sketches-js's message and its own message is smaller too; its `add` is level at 100k, ahead at 10k and about 6% behind at 1M values.
+At its defaults distillate adds 1.8 to 2.2 times as fast as sketches-js from 10k values up, with a tighter error, since the bitwise mapping takes the finest power-of-two bins that meet 1%, and a smaller frame, and writes protobuf about 1.5 times as fast. Those finer bins, about 1.85 times as many, cost everything that walks them: the default's protobuf message is larger than sketches-js's, and its quantile, union and fromProtobuf trail sketches-js's.
+On the log mapping, holding the same bins as sketches-js, distillate's frame is about half the size of sketches-js's message and its own message is smaller too. Its `add` is level from 100k up and ahead at 10k; quantile is 15 to 37% ahead from 10k up; toProtobuf is about 4 times as fast and fromProtobuf level to 23% ahead. Union is level to 100k and about 25% behind at 1M values in this table; in a steady loop of unions it is within 6% at both sizes, the gap here being how V8 compiles each short timed pass.
 
 Bundle sizes are measured, not quoted: each import bundled by esbuild for the browser, minified and gzipped. sketches-js serializes through `protobufjs`, which it bundles whether or not a caller serializes; distillate keeps its codec on the `distillate/ddsketch/protobuf` subpath.
 
 | Library              | sketch  | with protobuf |
 | -------------------- | ------- | ------------- |
-| distillate/ddsketch  | 6.4 KB  | 6.9 KB        |
+| distillate/ddsketch  | 7.0 KB  | 7.6 KB        |
 | @datadog/sketches-js | 18.3 KB | 18.3 KB       |
 
 ## Throughput (n = 100k)

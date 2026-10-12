@@ -820,7 +820,7 @@ test("RESULTS carries the measured DDSketch section for both libraries", () => {
     .filter((l) =>
       /^\| (distillate\/ddsketch( \(log\))?|@datadog\/sketches-js) /.test(l),
     );
-  const measured = rows.filter((r) => cells(r).length === 8);
+  const measured = rows.filter((r) => cells(r).length === 12);
   const bundles = rows.filter((r) => cells(r).length === 5);
   expect(measured).toHaveLength(12);
   expect(bundles).toHaveLength(2);
