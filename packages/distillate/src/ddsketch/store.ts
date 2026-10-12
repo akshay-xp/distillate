@@ -112,29 +112,30 @@ class DenseStore implements Store {
   }
 
   // The first bin whose running total exceeds rank. One loop per direction:
-  // a step chosen per bin costs about 40% of the scan.
+  // a step chosen per bin costs about 40% of the scan. Empty bins need no
+  // skip: they leave the total where it was, so it crosses rank only on a
+  // non-empty bin, and both ends of the held range are non-empty.
   keyAtRank(rank: number, descending = false): number {
+    const bins = this.#bins;
+    const min = this.#min - this.#offset;
+    const max = this.#max - this.#offset;
     let running = 0;
     if (descending) {
-      let last = this.#max;
-      for (let index = this.#max; index >= this.#min; index--) {
-        const count = this.#bins[index - this.#offset] ?? 0;
-        if (count === 0) continue;
-        running += count;
-        last = index;
+      let at = max;
+      while (at > min) {
+        running += bins[at] ?? 0;
         if (running > rank) break;
+        at--;
       }
-      return last;
+      return at + this.#offset;
     }
-    let last = this.#min;
-    for (let index = this.#min; index <= this.#max; index++) {
-      const count = this.#bins[index - this.#offset] ?? 0;
-      if (count === 0) continue;
-      running += count;
-      last = index;
+    let at = min;
+    while (at < max) {
+      running += bins[at] ?? 0;
       if (running > rank) break;
+      at++;
     }
-    return last;
+    return at + this.#offset;
   }
 
   forEach(fn: (index: number, count: number) => void): void {
