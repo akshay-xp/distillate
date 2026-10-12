@@ -667,6 +667,7 @@ describe("a frame carrying -0 is rejected", () => {
 
   test.each<[string, DDSketch, number]>([
     ["a -0 sum", empty, 32],
+    ["a -0 indexOffset", empty, 16],
     ["a -0 zeroCount", empty, 56],
     ["a -0 interior slot in a contiguous f64 run", gapped, 88],
   ])("%s", (_, base, at) => {
@@ -682,6 +683,22 @@ describe("a frame carrying -0 is rejected", () => {
     expect(() => DDSketch.fromBytes(frame)).toThrow(SerializationError);
     expect(() => DDSketch.fromBytes(frame)).toThrow(/-0/);
   });
+});
+
+// The fuzz case that found the -0 indexOffset (#299): a linear mapping with a
+// bitwise gamma was rebuilt as the bitwise mapping, whose offset is +0, so the
+// frame decoded and then re-encoded differently.
+test("the fuzzed frame with a -0 indexOffset is rejected", () => {
+  const frame = Uint8Array.from([
+    68, 83, 84, 76, 5, 10, 0, 0, 96, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+    0, 97, 128, 119, 62, 154, 44, 240, 63, 0, 0, 0, 0, 0, 0, 0, 128, 123, 20,
+    174, 71, 225, 122, 132, 63, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 240, 63, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 147,
+    57, 67, 79,
+  ]);
+  expect(() => DDSketch.fromBytes(frame)).toThrow(SerializationError);
+  expect(() => DDSketch.fromBytes(frame)).toThrow(/-0/);
 });
 
 // Indexable values can sum past the largest double: the sum is then Infinity,

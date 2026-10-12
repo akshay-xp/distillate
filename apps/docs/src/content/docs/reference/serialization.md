@@ -289,7 +289,7 @@ A reader rejects:
 - a body length other than 64 plus the two blocks, or a block that runs past the body;
 - set reserved layout bits or bytes, nonzero padding, or pairs with a nonzero `start`;
 - a block whose form or count width is not the one a writer chooses for its bins, since that would be a second encoding of the same sketch;
-- a `gamma` that is not finite and above 1, a non-finite `indexOffset`, or a `relativeAccuracy` outside `(0, 1)`;
+- a `gamma` that is not finite and above 1, a non-finite or `-0` `indexOffset`, or a `relativeAccuracy` outside `(0, 1)`;
 - a bin count that is not finite and positive (a run's interior slots may be 0, its first and last may not), indices out of strictly ascending order within a sign, or an index outside the mapping's indexable range;
 - a collapsing store's bins spanning more than `maxBins` indices within a sign;
 - a negative or non-finite `zeroCount`;

@@ -483,6 +483,13 @@ export class DDSketch {
         "ddsketch: gamma must be finite and above 1, and indexOffset finite",
       );
     }
+    // No mapping has a -0 offset, and a bitwise one is rebuilt with +0, so a
+    // -0 here would decode and then re-encode differently.
+    if (Object.is(indexOffset, -0)) {
+      throw new SerializationError(
+        "ddsketch: indexOffset is -0, which no writer produces",
+      );
+    }
     if (!(relativeAccuracy > 0 && relativeAccuracy < 1)) {
       throw new SerializationError(
         `ddsketch: relativeAccuracy must be in (0, 1), got ${String(relativeAccuracy)}`,
