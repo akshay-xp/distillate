@@ -117,7 +117,8 @@ export function sparseStore(): StoreFactory;
 export interface Store {
     add(index: number, count: number): void;
     forEach(fn: (index: number, count: number) => void): void;
-    keyAtRank(rank: number): number;
+    keyAtRank(rank: number, descending?: boolean): number;
+    merge(other: Store): void;
     readonly total: number;
 }
 
