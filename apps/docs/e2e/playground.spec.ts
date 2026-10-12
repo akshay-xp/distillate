@@ -509,3 +509,43 @@ test("a record count the sketches could not hold is refused in the shared status
   await expect(page.locator("[data-pg-status]")).toContainText("1,000,000");
   expect(errors).toEqual([]);
 });
+
+/** A number the panel printed, with its thousands separators. */
+function figure(text: string): number {
+  return Number(text.replaceAll(",", ""));
+}
+
+/** Each quantile row's cells: label, exact, estimate and band. */
+async function quantileRows(page: Page): Promise<string[][]> {
+  const rows = page.locator("[data-pg-ddsketch] tbody tr");
+  await expect(rows).toHaveCount(4);
+  return Promise.all(
+    (await rows.all()).map(async (row) =>
+      (await row.locator("td").allTextContents()).map((c) => c.trim()),
+    ),
+  );
+}
+
+function expectInsideBand(cells: string[]): void {
+  const [low, high] = (cells[3] ?? "").split(" to ").map(figure);
+  const estimate = figure(cells[2] ?? "");
+  expect(estimate, cells[0]).toBeGreaterThanOrEqual(low);
+  expect(estimate, cells[0]).toBeLessThanOrEqual(high);
+}
+
+test("the quantiles panel shows each estimate beside exact, inside its band", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  const panel = page.locator("[data-pg-ddsketch]");
+  await expect(panel.locator("table.dstl-table")).toHaveCount(1);
+  await expect(panel.locator("th[scope='col']")).toHaveCount(4);
+  const rows = await quantileRows(page);
+  expect(rows.map((r) => r[0])).toEqual(["p50", "p90", "p99", "p99.9"]);
+  for (const cells of rows) expectInsideBand(cells);
+  await expect(panel.locator("[data-dd='count']")).toHaveText("10,000");
+  await expect(panel.locator("[data-dd='accuracy']")).toHaveText("1%");
+  expect(errors).toEqual([]);
+});
