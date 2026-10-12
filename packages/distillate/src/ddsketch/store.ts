@@ -12,9 +12,9 @@ export interface Store {
   add(index: number, count: number): void;
   /**
    * The index of the bin holding the value at `rank`, counting from 0 in
-   * ascending index order.
+   * ascending index order, or descending when `descending` is set.
    */
-  keyAtRank(rank: number): number;
+  keyAtRank(rank: number, descending?: boolean): number;
   /** Calls `fn` for every non-empty bin, in ascending index order. */
   forEach(fn: (index: number, count: number) => void): void;
 }
@@ -111,9 +111,21 @@ class DenseStore implements Store {
     this.#total += count;
   }
 
-  // The first bin whose running total exceeds rank.
-  keyAtRank(rank: number): number {
+  // The first bin whose running total exceeds rank. One loop per direction:
+  // a step chosen per bin costs about 40% of the scan.
+  keyAtRank(rank: number, descending = false): number {
     let running = 0;
+    if (descending) {
+      let last = this.#max;
+      for (let index = this.#max; index >= this.#min; index--) {
+        const count = this.#bins[index - this.#offset] ?? 0;
+        if (count === 0) continue;
+        running += count;
+        last = index;
+        if (running > rank) break;
+      }
+      return last;
+    }
     let last = this.#min;
     for (let index = this.#min; index <= this.#max; index++) {
       const count = this.#bins[index - this.#offset] ?? 0;
@@ -192,10 +204,12 @@ class SparseStore implements Store {
     this.#total += count;
   }
 
-  keyAtRank(rank: number): number {
+  keyAtRank(rank: number, descending = false): number {
     let running = 0;
     let last = 0;
-    for (const index of this.#keys()) {
+    const keys = this.#keys();
+    for (let i = 0; i < keys.length; i++) {
+      const index = keys[descending ? keys.length - 1 - i : i] ?? 0;
       running += this.#bins.get(index) ?? 0;
       last = index;
       if (running > rank) break;

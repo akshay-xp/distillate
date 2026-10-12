@@ -682,17 +682,16 @@ export class DDSketch {
     if (q === 0) return this.#min;
     if (q === 1) return this.#max;
     // Ranks run through the negatives from most negative, then the zero
-    // bin, then the positives, as sketches-go walks them. The rank is floored
-    // first, where sketches-go keeps it fractional: the negatives are indexed
-    // from the far end as total - 1 - rank, which rounds a fractional rank up
-    // to the next value and, on a dense stream, past the error bound.
+    // bin, then the positives. The rank is floored, where sketches-go keeps
+    // it fractional. The negatives are walked from the far end, the largest
+    // magnitude, so the running total accumulates in value order:
+    // sketches-go indexes them as total - 1 - rank from the near end, which
+    // is right only for whole weights and rounds a fractional rank up a value.
     const rank = Math.floor(q * (this.#count - 1));
     const negatives = this.#negative.total;
     let value: number;
     if (rank < negatives) {
-      value = -this.#mapping.value(
-        this.#negative.keyAtRank(negatives - 1 - rank),
-      );
+      value = -this.#mapping.value(this.#negative.keyAtRank(rank, true));
     } else if (rank < negatives + this.#zeroCount) {
       value = 0;
     } else {
