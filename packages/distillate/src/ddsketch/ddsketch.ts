@@ -581,12 +581,8 @@ export class DDSketch {
   // have folded one stream.
   #absorb(from: DDSketch): void {
     if (from.#count === 0) return;
-    from.#positive.forEach((index, count) => {
-      this.#positive.add(index, count);
-    });
-    from.#negative.forEach((index, count) => {
-      this.#negative.add(index, count);
-    });
+    this.#positive.merge(from.#positive);
+    this.#negative.merge(from.#negative);
     this.#zeroCount += from.#zeroCount;
     this.#count += from.#count;
     this.#sum += from.#sum;
