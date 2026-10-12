@@ -653,3 +653,29 @@ describe("a frame with impossible float counts is rejected", () => {
     ).toThrow(SerializationError);
   });
 });
+
+// -0 equals 0 to every comparison a reader makes, so without an explicit check
+// it slips through as a second encoding of the same sketch.
+describe("a frame carrying -0 is rejected", () => {
+  const empty = DDSketch.create(0.01, { store: denseStore() });
+  const gapped = DDSketch.create(0.01, { store: denseStore() });
+  gapped.add(gapped.mapping.value(100), 0.5);
+  gapped.add(gapped.mapping.value(102), 0.5);
+
+  test.each<[string, DDSketch, number]>([
+    ["a -0 sum", empty, 32],
+    ["a -0 zeroCount", empty, 56],
+    ["a -0 interior slot in a contiguous f64 run", gapped, 88],
+  ])("%s", (_, base, at) => {
+    const frame = forge(
+      (__, view) => {
+        expect(view.getFloat64(at, true)).toBe(0);
+        view.setFloat64(at, -0, true);
+        return undefined;
+      },
+      0,
+      base,
+    );
+    expect(() => DDSketch.fromBytes(frame)).toThrow(SerializationError);
+  });
+});
