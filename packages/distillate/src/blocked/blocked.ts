@@ -1,5 +1,6 @@
 import { type BytesLike } from "../core/bytes.js";
 import { hash32x2Into, reduce } from "../core/hasher.js";
+import { forEachItem, toArray } from "../core/iterable.js";
 import {
   assertPositiveFinite,
   assertPositiveInt,
@@ -153,9 +154,11 @@ export class BlockedBloomFilter {
    * @returns A new filter containing every key.
    */
   static from(keys: Iterable<BytesLike>, epsilon: number): BlockedBloomFilter {
-    const arr = [...keys];
-    const f = BlockedBloomFilter.create(Math.max(1, arr.length), epsilon);
-    for (const k of arr) f.add(k);
+    const list = toArray(keys);
+    const f = BlockedBloomFilter.create(Math.max(1, list.length), epsilon);
+    forEachItem(list, (k) => {
+      f.add(k);
+    });
     return f;
   }
 
