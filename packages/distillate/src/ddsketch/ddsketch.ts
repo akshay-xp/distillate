@@ -296,8 +296,8 @@ function binsOf(store: Store): { indices: number[]; counts: number[] } {
 export interface DDSketchOptions {
   /**
    * The mapping factory that bins values. Defaults to {@link bitwiseMapping},
-   * the fastest, adding about twice as fast as the log mapping in the
-   * benchmarks, as sketches-java's fast sketch does; take {@link logMapping}
+   * the mapping sketches-java's fast sketch uses and the fastest, adding about
+   * twice as fast as the log mapping in the benchmarks; take {@link logMapping}
    * for the fewest bins. The interpolated mappings exist to
    * match sketches built with them by Datadog's libraries.
    */
@@ -579,7 +579,10 @@ export class DDSketch {
     return this.#count;
   }
 
-  /** The sum of every value added. */
+  /**
+   * The sum of every value added. Past the largest double it is `Infinity`
+   * or `-Infinity`, and NaN once both signs have overflowed.
+   */
   get sum(): number {
     return this.#sum;
   }
