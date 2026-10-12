@@ -42,3 +42,18 @@ test("add of a held key allocates nothing in steady state", async () => {
   }, 5_000_000);
   expect(collections).toBe(0);
 });
+
+// At capacity every few hundred new keys purge, so this window covers
+// thousands of purges. What it caught: each purge sliced every survivor into a
+// new array and sorted a copy of the counts, and each new key took a subarray
+// view into the arena (about 540 bytes/op).
+test("a stream of new keys allocates nothing once the sketch is full", async () => {
+  const sketch = TopK.create(0.01);
+  for (const key of keys) sketch.add(key);
+  let at = 0;
+  const collections = await countCollections(() => {
+    at = (at + 1) & 65_535;
+    sketch.add(keys[at] ?? "");
+  }, 600_000);
+  expect(collections).toBe(0);
+});

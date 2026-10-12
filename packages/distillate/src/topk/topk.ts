@@ -123,6 +123,15 @@ export class TopK {
   #keyLengths = new Uint32Array(0);
   #arena: Uint8Array;
   #arenaLen = 0;
+  // Purge scratch, allocated by the first purge and reused, so a stream of new
+  // keys at capacity leaves nothing for the GC: the purge compacts survivors
+  // into #spare and swaps it with the arena.
+  #spare: Uint8Array = new Uint8Array(0);
+  #probe = new Uint8Array(64);
+  #pCounts = new Uint32Array(0);
+  #pOffsets = new Uint32Array(0);
+  #pLengths = new Uint32Array(0);
+  #pSorted = new Uint32Array(0);
   #entries = 0;
   #offset = 0;
   #total = 0;
@@ -335,15 +344,73 @@ export class TopK {
    * zero, and charges what was subtracted to the offset.
    */
   #purge(): void {
-    const keys: Uint8Array[] = [];
-    const counts: number[] = [];
+    // The same passes as #reduceTo, over scratch arrays rather than lists.
+    // Entries are gathered and reinserted in slot order, as #reduceTo would.
+    const capacity = this.#capacity;
+    if (this.#pCounts.length < capacity) {
+      this.#pCounts = new Uint32Array(capacity);
+      this.#pOffsets = new Uint32Array(capacity);
+      this.#pLengths = new Uint32Array(capacity);
+      this.#pSorted = new Uint32Array(capacity);
+    }
+    const counts = this.#pCounts;
+    const offsets = this.#pOffsets;
+    const lengths = this.#pLengths;
+    let n = 0;
     for (let slot = 0; slot < this.#size; slot++) {
       const stored = this.#counts[slot] ?? 0;
       if (stored === 0) continue;
-      keys.push(this.#keyAt(slot).slice());
-      counts.push(stored);
+      counts[n] = stored;
+      offsets[n] = this.#keyOffsets[slot] ?? 0;
+      lengths[n] = this.#keyLengths[slot] ?? 0;
+      n++;
     }
-    this.#reduceTo(keys, counts);
+    while (n > this.#loadLimit) {
+      const sorted = this.#pSorted;
+      for (let i = 0; i < n; i++) sorted[i] = counts[i] ?? 0;
+      sorted.fill(0xffffffff, n).sort();
+      const median = sorted[n >> 1] ?? 0;
+      let kept = 0;
+      for (let i = 0; i < n; i++) {
+        const survived = (counts[i] ?? 0) - median;
+        if (survived <= 0) continue;
+        counts[kept] = survived;
+        offsets[kept] = offsets[i] ?? 0;
+        lengths[kept] = lengths[i] ?? 0;
+        kept++;
+      }
+      n = kept;
+      this.#offset += median;
+    }
+
+    const from = this.#arena;
+    if (this.#spare.length < from.length) {
+      this.#spare = new Uint8Array(from.length);
+    }
+    const to = this.#spare;
+    let at = 0;
+    for (let i = 0; i < n; i++) {
+      const start = offsets[i] ?? 0;
+      const end = start + (lengths[i] ?? 0);
+      offsets[i] = at;
+      for (let b = start; b < end; b++) to[at++] = from[b] ?? 0;
+    }
+    this.#spare = from;
+    this.#arena = to;
+    this.#arenaLen = at;
+    this.#entries = n;
+
+    this.#counts.fill(0);
+    for (let i = 0; i < n; i++) {
+      const start = offsets[i] ?? 0;
+      const len = lengths[i] ?? 0;
+      if (this.#probe.length < len) this.#probe = new Uint8Array(len * 2);
+      for (let b = 0; b < len; b++) this.#probe[b] = to[start + b] ?? 0;
+      const slot = this.#slotFor(this.#probe, len);
+      this.#counts[slot] = counts[i] ?? 0;
+      this.#keyOffsets[slot] = start;
+      this.#keyLengths[slot] = len;
+    }
   }
 
   /**
@@ -444,10 +511,10 @@ export class TopK {
       arena = grown;
       this.#arena = grown;
     }
-    arena.set(
-      len === bytes.length ? bytes : bytes.subarray(0, len),
-      this.#arenaLen,
-    );
+    // A byte loop rather than set(subarray()): the view would be one
+    // allocation per new key.
+    const at = this.#arenaLen;
+    for (let i = 0; i < len; i++) arena[at + i] = bytes[i] ?? 0;
     this.#keyOffsets[slot] = this.#arenaLen;
     this.#keyLengths[slot] = len;
     this.#arenaLen += len;
