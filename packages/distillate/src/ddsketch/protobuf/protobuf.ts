@@ -242,7 +242,10 @@ export function fromProtobuf(
       `protobuf: unknown interpolation ${String(mapped.interpolation)}`,
     );
   }
-  const { gamma, indexOffset } = mapped;
+  const { gamma } = mapped;
+  // -0 + 0 is +0: a -0 offset bins as 0 does, but a frame carrying it is
+  // refused as a second encoding of 0.
+  const indexOffset = mapped.indexOffset + 0;
   if (!(gamma > 1 && gamma < Infinity) || !Number.isFinite(indexOffset)) {
     throw new SerializationError(
       "protobuf: gamma must be finite and above 1, and indexOffset finite",
