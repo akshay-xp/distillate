@@ -454,3 +454,22 @@ describe("the shapes a valid message can take", () => {
     ).toThrow(SerializationError);
   });
 });
+
+// A -0 offset would be written into the frame, which its reader refuses as a
+// second encoding of 0 (#299), so the decoder reads it as 0.
+test.each([
+  ["log", 0],
+  ["linear", 1],
+])("a %s mapping's -0 indexOffset decodes as 0", (_, interpolation) => {
+  const gamma = logMapping(0.01).gamma;
+  const sketch = decode([
+    ...field(1, 2, [
+      ...field(1, 1, f64(gamma)),
+      ...field(2, 1, f64(-0)),
+      ...(interpolation ? field(3, 0, varint(interpolation)) : []),
+    ]),
+    ...binAt(3, 1),
+  ]);
+  expect(Object.is(sketch.mapping.indexOffset, 0)).toBe(true);
+  expect(DDSketch.fromBytes(sketch.toBytes()).equals(sketch)).toBe(true);
+});
