@@ -192,3 +192,11 @@ The message carries the mapping and the bins but no sum, min or max. On decode t
 are derived from the bins, so they come back within the accuracy rather than
 exactly: `min` is 1.01 here, not 1. Quantiles are unaffected. Sending the bytes
 to Datadog, with its endpoint and authentication, is up to you.
+
+`fromProtobuf` decodes into `collapsingLowestStore(4096)`, where sketches-go
+takes a dense store. A message of a few dozen bytes can name two bins billions
+of indices apart, and a dense store would allocate every slot between them. For
+trusted input, pass `{ store: denseStore() }` to match sketches-go. A DSTL frame
+keeps the store it was written with, so a frame from an untrusted source that
+declares a dense store can be just as large; decode those only from senders you
+trust.

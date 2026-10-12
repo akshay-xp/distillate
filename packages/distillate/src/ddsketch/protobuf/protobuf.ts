@@ -1,14 +1,21 @@
 import { SerializationError } from "../../core/serialize.js";
 import { DDSketch, sketchBins } from "../ddsketch.js";
 import { type MappingKind, mappingWithGamma } from "../mapping.js";
-import { denseStore, type Store, type StoreFactory } from "../store.js";
+import {
+  collapsingLowestStore,
+  type Store,
+  type StoreFactory,
+} from "../store.js";
 
 /** Options for {@link fromProtobuf}. */
 export interface ProtobufOptions {
   /**
    * The store the decoded sketch keeps its bins in. Defaults to
-   * {@link denseStore}, as sketches-go's FromProto does, so no bin is folded
-   * on the way in.
+   * {@link collapsingLowestStore} at 4096 bins, where sketches-go's FromProto
+   * takes a dense store: a message of a few dozen bytes can name two bins
+   * billions of indices apart, and a dense store would allocate every slot
+   * between them. Pass `denseStore()` for sketches-go's behavior on
+   * trusted input.
    */
   store?: StoreFactory;
 }
@@ -204,7 +211,7 @@ export function fromProtobuf(
   bytes: Uint8Array,
   options: ProtobufOptions = {},
 ): DDSketch {
-  const { store = denseStore() } = options;
+  const { store = collapsingLowestStore(4096) } = options;
   const r = new Reader(bytes);
   const mapped: Mapping = { gamma: 0, indexOffset: 0, interpolation: 0 };
   const positive = new Map<number, number>();
