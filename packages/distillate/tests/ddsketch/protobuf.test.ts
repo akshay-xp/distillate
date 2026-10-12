@@ -182,6 +182,22 @@ const binAt = (index: number, count: number): number[] =>
 const decode = (bytes: number[]): DDSketch =>
   fromProtobuf(Uint8Array.from(bytes));
 
+// The writer sizes the message before filling it, so a field whose varint
+// takes more than one byte, or a run starting below index 0, must be counted
+// exactly: a miscount leaves trailing zeros the reader rejects, or drops bytes.
+test.each([denseStore(), sparseStore()])(
+  "a $kind store with wide indices and multi-byte varints round-trips",
+  (store) => {
+    const sketch = DDSketch.from(
+      [1e-5, 3e-3, 0.5, 2, 7e3, 4e6, -1e-4, -9, -2e5, 0, 0],
+      0.001,
+      { store },
+    );
+    const back = fromProtobuf(toProtobuf(sketch), { store });
+    expect(binsOf(back)).toEqual(binsOf(sketch));
+  },
+);
+
 describe("decoding untrusted bytes", () => {
   // Two keys 2e8 apart are a valid message of a few dozen bytes; a dense
   // store would hold every slot between them, about 3.2 GB.
