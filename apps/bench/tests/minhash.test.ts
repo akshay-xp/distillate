@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { minHashRows, similarityAdapters } from "../src/minhash.js";
+import { lshRows, minHashRows, similarityAdapters } from "../src/minhash.js";
 
 const items = (prefix: string, n: number): string[] =>
   Array.from({ length: n }, (_, i) => `${prefix}:${String(i)}`);
@@ -49,4 +49,24 @@ test("minhash rows measure add rate, Jaccard error and size", () => {
     expect(r.maxAbsError, r.name).toBeLessThanOrEqual(1);
     expect(r.bytes, r.name).toBeGreaterThan(0);
   }
+});
+
+test("lsh rows measure index speed and recall where a library has an index", () => {
+  const rows = lshRows(1_000);
+
+  // bloom-filters has no LSH index, so it has no row.
+  expect(rows.map((r) => r.name)).toEqual(["distillate/minhash", "minhash"]);
+  for (const r of rows) {
+    expect(r.docs, r.name).toBe(1_000);
+    expect(r.thrown, r.name).toBeGreaterThanOrEqual(0);
+    expect(r.thrown, r.name).toBeLessThanOrEqual(2 * r.docs);
+    expect(Number.isFinite(r.insertOpsPerSec) && r.insertOpsPerSec > 0).toBe(
+      true,
+    );
+  }
+
+  const ours = rows[0];
+  expect(ours?.recall).toBeGreaterThanOrEqual(0.9);
+  expect(ours?.thrown).toBe(0);
+  expect(Number.isFinite(ours?.queryOpsPerSec)).toBe(true);
 });
