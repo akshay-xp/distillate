@@ -1,5 +1,5 @@
-import { MinHash } from "distillate/minhash";
-import { Minhash as PackageMinhash } from "minhash";
+import { MinHash, MinHashLSH } from "distillate/minhash";
+import { LshIndex, Minhash as PackageMinhash } from "minhash";
 
 import { Hashing, MinHashFactory } from "./incumbent.js";
 import { median } from "./keylength.js";
@@ -187,4 +187,144 @@ export function minHashRows(
     }
   }
   return rows;
+}
+
+export interface SimilarityIndex {
+  insert(key: string, sketch: SimilaritySketch): void;
+  query(sketch: SimilaritySketch): string[];
+}
+
+export interface LshAdapter {
+  name: string;
+  /** The sketches this index takes. */
+  sketches: SimilarityAdapter;
+  create(): SimilarityIndex;
+}
+
+/** The threshold distillate's index is tuned for; `minhash` takes none. */
+export const MINHASH_LSH_THRESHOLD = 0.5;
+/** Documents indexed in the published section. */
+export const MINHASH_LSH_DOCS = 10_000;
+
+export const distillateLshAdapter: LshAdapter = {
+  name: "distillate/minhash",
+  sketches: distillateMinHashAdapter,
+  create() {
+    const lsh = new MinHashLSH<string>({
+      threshold: MINHASH_LSH_THRESHOLD,
+      k: MINHASH_K,
+    });
+    return {
+      insert: (key, s) => {
+        lsh.insert(key, (s as Wrapped<MinHash>).inner);
+      },
+      query: (s) => lsh.query((s as Wrapped<MinHash>).inner),
+    };
+  },
+};
+
+/**
+ * `minhash`'s `LshIndex` at its default band size of 4: 32 bands at k = 128,
+ * with no threshold to tune them to. Its `query` reads every band's bucket
+ * without checking it exists, so a query holding a band the index never saw
+ * throws; the rows count those rather than letting one end the run.
+ */
+export const packageLshAdapter: LshAdapter = {
+  name: "minhash",
+  sketches: packageMinHashAdapter,
+  create() {
+    const index = new LshIndex();
+    return {
+      insert: (key, s) => {
+        index.insert(key, (s as Wrapped<PackageMinhash>).inner);
+      },
+      query: (s) => index.query((s as Wrapped<PackageMinhash>).inner),
+    };
+  },
+};
+
+export const lshAdapters: LshAdapter[] = [
+  distillateLshAdapter,
+  packageLshAdapter,
+];
+
+/** Items per indexed document. */
+const DOC_ITEMS = 100;
+/** A near-duplicate shares 89 of 100 items: J = 89 / 111, about 0.8. */
+const NEAR_SHARED = 89;
+
+export interface LshRow {
+  name: string;
+  docs: number;
+  insertOpsPerSec: number;
+  /** Over every query, near-duplicate and unrelated, thrown ones included. */
+  queryOpsPerSec: number;
+  /** Share of near-duplicate queries that found their document. */
+  recall: number;
+  /** Mean candidates an unrelated query returns. */
+  unrelatedCandidates: number;
+  /** Queries that threw instead of answering. */
+  thrown: number;
+}
+
+export function lshRows(
+  docs: number,
+  adapters: LshAdapter[] = lshAdapters,
+): LshRow[] {
+  return adapters.map((adapter) => {
+    const create = adapter.sketches.family(MINHASH_K);
+    const sketchOf = (list: string[]): SimilaritySketch => {
+      const s = create();
+      for (const item of list) s.add(item);
+      return s;
+    };
+    const stored = Array.from({ length: docs }, (_, d) =>
+      sketchOf(keys(`d${String(d)}`, DOC_ITEMS)),
+    );
+    const near = Array.from({ length: docs }, (_, d) =>
+      sketchOf([
+        ...keys(`d${String(d)}`, NEAR_SHARED),
+        ...keys(`n${String(d)}`, DOC_ITEMS - NEAR_SHARED),
+      ]),
+    );
+    const unrelated = Array.from({ length: docs }, (_, d) =>
+      sketchOf(keys(`u${String(d)}`, DOC_ITEMS)),
+    );
+
+    const index = adapter.create();
+    let started = performance.now();
+    stored.forEach((s, d) => {
+      index.insert(String(d), s);
+    });
+    const insertMs = performance.now() - started;
+
+    let thrown = 0;
+    const ask = (s: SimilaritySketch): string[] | null => {
+      try {
+        return index.query(s);
+      } catch {
+        thrown++;
+        return null;
+      }
+    };
+    started = performance.now();
+    const nearAnswers = near.map(ask);
+    const unrelatedAnswers = unrelated.map(ask);
+    const queryMs = performance.now() - started;
+
+    const found = nearAnswers.filter((a, d) => a?.includes(String(d))).length;
+    const candidates = unrelatedAnswers.reduce(
+      (sum, a) => sum + (a?.length ?? 0),
+      0,
+    );
+    return {
+      name: adapter.name,
+      docs,
+      insertOpsPerSec: docs / (insertMs / 1000),
+      queryOpsPerSec: (2 * docs) / (queryMs / 1000),
+      recall: found / docs,
+      unrelatedCandidates: candidates / docs,
+      thrown,
+    };
+  });
 }
