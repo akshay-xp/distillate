@@ -147,15 +147,17 @@ test("no page describes a Top-K seed, which the sketch no longer has", () => {
 
 test("the type 9 reference names the bound a reader enforces", () => {
   const reference = read("../src/content/docs/reference/serialization.md");
+  // The type sections run on without headings, so stop at the next one.
   const topK = reference.slice(
     reference.indexOf("Top-K (type 9), little-endian"),
+    reference.indexOf("DDSketch (type 10), little-endian"),
   );
   const rejects = topK.slice(
     topK.indexOf("A reader rejects:"),
     topK.indexOf("\n\n", topK.indexOf("A reader rejects:") + 20),
   );
   expect(rejects).toContain("sum(counts) + W * offset");
-  expect(topK.split("\n### ")[0]).not.toMatch(/\bseed\b/);
+  expect(topK).not.toMatch(/\bseed\b/);
 });
 
 test("the guide says why untrusted keys are safe and where a Worker builds one", () => {
