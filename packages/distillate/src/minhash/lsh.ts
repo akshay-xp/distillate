@@ -5,6 +5,11 @@ import { lshSizing } from "./sizing.js";
 
 const HI_MASK = 0x1fffff;
 const TWO_32 = 2 ** 32;
+// Most buckets hold one key, where an array costs well under half a Set, so a
+// bucket grows into a Set only past this size: removal never scans more.
+const SMALL_BUCKET = 16;
+
+type Bucket<K> = K[] | Set<K>;
 
 /** Construction parameters for a {@link MinHashLSH} index. */
 export interface MinHashLSHParams {
@@ -39,7 +44,7 @@ export class MinHashLSH<K> {
   readonly #bands: number;
   readonly #rows: number;
   // One bucket map per band, from band key to the keys filed under it.
-  readonly #buckets: Map<number, K[]>[];
+  readonly #buckets: Map<number, Bucket<K>>[];
   // Each stored key with the band keys it was filed under.
   readonly #entries = new Map<K, Float64Array>();
 
@@ -56,7 +61,10 @@ export class MinHashLSH<K> {
     this.#seed = seed;
     this.#bands = bands;
     this.#rows = rows;
-    this.#buckets = Array.from({ length: bands }, () => new Map<number, K[]>());
+    this.#buckets = Array.from(
+      { length: bands },
+      () => new Map<number, Bucket<K>>(),
+    );
   }
 
   /**
@@ -76,8 +84,10 @@ export class MinHashLSH<K> {
       const buckets = this.#buckets[band];
       const bandKey = bandKeys[band] ?? 0;
       const bucket = buckets?.get(bandKey);
-      if (bucket) bucket.push(key);
-      else buckets?.set(bandKey, [key]);
+      if (!bucket) buckets?.set(bandKey, [key]);
+      else if (!Array.isArray(bucket)) bucket.add(key);
+      else if (bucket.length < SMALL_BUCKET) bucket.push(key);
+      else buckets?.set(bandKey, new Set([...bucket, key]));
     }
     this.#entries.set(key, bandKeys);
   }
@@ -115,8 +125,16 @@ export class MinHashLSH<K> {
       const bandKey = bandKeys[band] ?? 0;
       const bucket = buckets?.get(bandKey);
       if (!bucket) continue;
-      bucket.splice(bucket.indexOf(key), 1);
-      if (bucket.length === 0) buckets?.delete(bandKey);
+      if (Array.isArray(bucket)) {
+        // Swap-remove: keys come back in no particular order anyway.
+        const last = bucket.pop() as K;
+        const at = bucket.indexOf(key);
+        if (at !== -1) bucket[at] = last;
+        if (bucket.length === 0) buckets?.delete(bandKey);
+      } else {
+        bucket.delete(key);
+        if (bucket.size === 0) buckets?.delete(bandKey);
+      }
     }
     this.#entries.delete(key);
     return true;
