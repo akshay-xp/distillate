@@ -3,6 +3,7 @@ import { bloomSizing } from "distillate/bloom";
 import { countMinSizing } from "distillate/countmin";
 import { BinaryFuse8, BinaryFuseBuildError } from "distillate/fuse";
 import { CuckooFilter } from "distillate/cuckoo";
+import { MinHash } from "distillate/minhash";
 import { ScalableBloomFilter } from "distillate/scalable";
 import { expect, test } from "vitest";
 
@@ -688,4 +689,38 @@ test.each<[string, unknown, unknown]>([
   expect(result.ok).toBe(false);
   if (!result.ok) expect(result.message).not.toBe("");
   expect(pg.quantiles()).toEqual(before);
+});
+
+/** Set B as the build seeds it: n keys starting halfway through set A. */
+const SET_B = Array.from(
+  { length: KEYS },
+  (_, i) => `key-${String(i + KEYS / 2)}`,
+);
+
+function sketchOf(items: readonly string[]): MinHash {
+  const sketch = new MinHash();
+  for (const item of items) sketch.add(item);
+  return sketch;
+}
+
+test("the build seeds two overlapping sets and reports their similarity beside exact", () => {
+  const report = built().similarity();
+
+  expect(report.sizeA).toBe(KEYS);
+  expect(report.sizeB).toBe(KEYS);
+  expect(report.k).toBe(128);
+  // 5,000 shared of 15,000 in all.
+  expect(report.exact).toBe(5000 / 15000);
+  expect(report.estimate).toBe(sketchOf(SAME_KEYS).jaccard(sketchOf(SET_B)));
+  expect(report.low).toBeCloseTo(report.exact - 2 * report.standardError, 12);
+  expect(report.high).toBeCloseTo(report.exact + 2 * report.standardError, 12);
+  expect(report.estimate).toBeGreaterThanOrEqual(report.low);
+  expect(report.estimate).toBeLessThanOrEqual(report.high);
+  expect(built().similarity()).toEqual(report);
+});
+
+// k is fixed rather than sized from the page's target: 0.001 would ask for
+// k = 250,000, past what MinHash takes, and fail every other structure's build.
+test("a target the sketch could not be sized for still builds", () => {
+  expect(built(KEYS, 0.001).similarity().k).toBe(128);
 });
