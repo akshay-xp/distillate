@@ -8,9 +8,14 @@ import {
 import { forEachItem } from "../core/iterable.js";
 import { assertUint32, ParamError } from "../core/params.js";
 import {
+  assertBodyLength,
+  assertMinBodyLength,
+  assertParamsPadding,
   FORMAT_VERSION,
   HASH_MURMUR128,
   readHeader,
+  SerializationError,
+  UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
 import { MINHASH_MAX_K, MINHASH_MIN_K, minHashSizing } from "./sizing.js";
@@ -29,6 +34,7 @@ const TYPE = 11;
  * Raw rather than densified, so a decoded sketch still unions exactly.
  */
 const PARAMS_SIZE = 8;
+const PARAMS_FIELDS_END = 6;
 
 function assertK(k: number): void {
   if (!Number.isInteger(k) || k < MINHASH_MIN_K || k > MINHASH_MAX_K) {
@@ -111,11 +117,34 @@ export class MinHash {
    * @returns The reconstructed sketch.
    */
   static fromBytes(bytes: Uint8Array): MinHash {
-    const { body } = readHeader(bytes);
+    const { type, flags, body } = readHeader(bytes);
+    if (type !== TYPE) {
+      throw new SerializationError(
+        `expected DSTL type ${String(TYPE)}, got ${String(type)}`,
+      );
+    }
+    if ((flags & 0x0f) !== HASH_MURMUR128) {
+      throw new UnknownHashVariantError(
+        `unsupported hash variant ${String(flags & 0x0f)}`,
+      );
+    }
+    assertMinBodyLength(body.length, PARAMS_SIZE, "minhash");
+    assertParamsPadding(body, PARAMS_FIELDS_END, PARAMS_SIZE, "minhash");
     const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
     const seed = view.getUint32(0, true);
     const k = view.getUint16(4, true);
-    const sketch = new MinHash({ k, seed });
+    assertBodyLength(body.length, PARAMS_SIZE + 4 * k, "minhash");
+    let sketch: MinHash;
+    try {
+      sketch = new MinHash({ k, seed });
+    } catch (err) {
+      // A k the body agrees with can still be one the constructor refuses,
+      // and a caller decoding a frame should see one error family.
+      if (err instanceof ParamError) {
+        throw new SerializationError(`minhash: ${err.message}`);
+      }
+      throw err;
+    }
     const slots = sketch.#slots;
     let filled = 0;
     for (let i = 0; i < k; i++) {
