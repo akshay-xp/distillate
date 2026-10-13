@@ -34,6 +34,22 @@ test("runIsolated names an adapter the section does not have", () => {
   );
 });
 
+test("the minhash jobs resolve each library by name", () => {
+  const sketches = runIsolated<{ name: string }>("minhash", "minhash", [
+    [1000],
+  ]);
+  expect(sketches.rows.map((r) => r.name)).toEqual(["minhash"]);
+  const index = runIsolated<{ name: string }>(
+    "minhash-lsh",
+    "distillate/minhash",
+    [1000],
+  );
+  expect(index.rows.map((r) => r.name)).toEqual(["distillate/minhash"]);
+  expect(() => runIsolated("minhash-lsh", "bloom-filters", [1000])).toThrow(
+    /bloom-filters/,
+  );
+});
+
 test("isolatedRows runs each adapter in turn and keeps the sweep order", () => {
   const rows = isolatedRows<CuckooRow>(
     "cuckoo",

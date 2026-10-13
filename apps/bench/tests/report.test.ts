@@ -11,13 +11,17 @@ import { KEYLENGTH_ALPHABETS, KEYLENGTH_LENGTHS } from "../src/keylength.js";
 import type { KeyLengthRow } from "../src/keylength.js";
 import type { ScalableRow } from "../src/scalable.js";
 import type { TopKRow } from "../src/topk.js";
-import type { BundleRow } from "../src/bundle.js";
+import type { BundleRow, LshBundleRow } from "../src/bundle.js";
 import type { DDSketchRow } from "../src/ddsketch.js";
+import type { LshRow, MinHashRow } from "../src/minhash.js";
 import {
   cardinalityTable,
   countMinTable,
   cuckooTable,
   keyLengthTable,
+  minHashBundleTable,
+  minHashLshTable,
+  minHashTable,
   renderResults,
   topKTable,
   ddSketchTable,
@@ -842,5 +846,103 @@ test("RESULTS carries the measured DDSketch section for both libraries", () => {
         ).toBeLessThanOrEqual(1);
       }
     }
+  }
+});
+
+test("minHashTable renders size, both errors and the add rate", () => {
+  const rows: MinHashRow[] = [
+    {
+      name: "distillate/minhash",
+      items: 100_000,
+      bytes: 532,
+      meanAbsError: 0.0312,
+      maxAbsError: 0.0859,
+      addOpsPerSec: 21_400_000,
+    },
+  ];
+  expect(minHashTable(rows).split("\n")).toEqual([
+    "| Sketch | items | size | mean error | max error | add |",
+    "| --- | --- | --- | --- | --- | --- |",
+    "| distillate/minhash | 100k | 532 B | 0.031 | 0.086 | 21.40 M ops/s |",
+  ]);
+});
+
+test("minHashLshTable renders speed, recall, candidates and thrown queries", () => {
+  const rows: LshRow[] = [
+    {
+      name: "minhash",
+      docs: 10_000,
+      insertOpsPerSec: 93_000,
+      queryOpsPerSec: 108_000,
+      recall: 0,
+      unrelatedCandidates: 0,
+      thrown: 20_000,
+    },
+  ];
+  expect(minHashLshTable(rows).split("\n")).toEqual([
+    "| Index | docs | insert | query | recall | unrelated candidates | thrown |",
+    "| --- | --- | --- | --- | --- | --- | --- |",
+    "| minhash | 10k | 93 k ops/s | 108 k ops/s | 0.000 | 0.00 | 20000 of 20000 |",
+  ]);
+});
+
+test("minHashBundleTable renders each library alone and with its index", () => {
+  const rows: LshBundleRow[] = [
+    { name: "distillate/minhash", sketch: 4096, withLsh: 5120 },
+    { name: "bloom-filters", sketch: 30720, withLsh: null },
+  ];
+  expect(minHashBundleTable(rows).split("\n")).toEqual([
+    "| Library | sketch | with LSH |",
+    "| --- | --- | --- |",
+    "| distillate/minhash | 4.0 KB | 5.0 KB |",
+    "| bloom-filters | 30.0 KB | none |",
+  ]);
+});
+
+test("renderResults places the MinHash section after DDSketch and states what is compared", () => {
+  const md = renderResults({
+    banner: "distillate-bench | node v24 | arm64 | Apple M1 | 8 cores",
+    version: "0.1.1",
+    date: "2026-07-31",
+    targetFpr: 0.01,
+    throughputCapacity: 100000,
+    spaceTable: "SPACE_TBL",
+    throughputTable: "TPUT_TBL",
+    ddSketchTable: "DD_TBL",
+    ddSketchBundleTable: "DD_BUNDLE_TBL",
+    minHashTable: "MH_TBL",
+    minHashLshTable: "MH_LSH_TBL",
+    minHashBundleTable: "MH_BUNDLE_TBL",
+  });
+  const at = md.indexOf("## MinHash");
+  expect(at).toBeGreaterThan(md.indexOf("## DDSketch"));
+  expect(at).toBeLessThan(md.indexOf("## Throughput"));
+  const section = md.slice(at, md.indexOf("## Throughput"));
+  for (const phrase of [
+    "MH_TBL",
+    "MH_LSH_TBL",
+    "MH_BUNDLE_TBL",
+    "k = 128",
+    "numbers",
+    "unseeded",
+    "band size of 4",
+    "throws",
+    "own form",
+  ]) {
+    expect(section, phrase).toContain(phrase);
+  }
+});
+
+test("METHODOLOGY states the MinHash configuration and what each library is fed", () => {
+  const md = readFileSync(
+    fileURLToPath(new URL("../METHODOLOGY.md", import.meta.url)),
+    "utf8",
+  );
+  const at = md.indexOf("## Configuration for MinHash");
+  expect(at).toBeGreaterThan(-1);
+  const end = md.indexOf("\n## ", at + 1);
+  const section = md.slice(at, end === -1 ? undefined : end);
+  for (const phrase of ["128", "hashAsInt", "J = 0.5", "0.8", "threshold"]) {
+    expect(section, phrase).toContain(phrase);
   }
 });
