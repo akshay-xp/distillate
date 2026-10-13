@@ -7,11 +7,28 @@ import {
 } from "../core/hasher.js";
 import { forEachItem } from "../core/iterable.js";
 import { assertUint32, ParamError } from "../core/params.js";
+import {
+  FORMAT_VERSION,
+  HASH_MURMUR128,
+  readHeader,
+  writeFrame,
+} from "../core/serialize.js";
 import { MINHASH_MAX_K, MINHASH_MIN_K, minHashSizing } from "./sizing.js";
 
 // Marks a slot no key has reached. A hash value equal to it is clamped one
 // below, so the sentinel never stands for a real minimum.
 const EMPTY = 0xffffffff;
+
+/** DSTL frame type for a MinHash sketch. */
+const TYPE = 11;
+
+/**
+ * Body layout: seed (u32 LE) | k (u16 LE) | 2 bytes padding | k raw slots
+ * (u32 LE, `0xffffffff` empty). Params occupy 6 bytes; the block is padded to
+ * 8 so the slots start at frame offset 24, where a typed u32 view can sit.
+ * Raw rather than densified, so a decoded sketch still unions exactly.
+ */
+const PARAMS_SIZE = 8;
 
 function assertK(k: number): void {
   if (!Number.isInteger(k) || k < MINHASH_MIN_K || k > MINHASH_MAX_K) {
@@ -85,6 +102,50 @@ export class MinHash {
       sketch.add(key);
     });
     return sketch;
+  }
+
+  /**
+   * Restores a sketch from its {@link MinHash.toBytes} form.
+   *
+   * @param bytes - The serialized sketch.
+   * @returns The reconstructed sketch.
+   */
+  static fromBytes(bytes: Uint8Array): MinHash {
+    const { body } = readHeader(bytes);
+    const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
+    const seed = view.getUint32(0, true);
+    const k = view.getUint16(4, true);
+    const sketch = new MinHash({ k, seed });
+    const slots = sketch.#slots;
+    let filled = 0;
+    for (let i = 0; i < k; i++) {
+      const value = view.getUint32(PARAMS_SIZE + 4 * i, true);
+      slots[i] = value;
+      if (value !== EMPTY) filled++;
+    }
+    sketch.#filled = filled;
+    return sketch;
+  }
+
+  /**
+   * Serializes the sketch to a portable little-endian byte layout.
+   *
+   * @returns The serialized sketch, readable by {@link MinHash.fromBytes}.
+   */
+  toBytes(): Uint8Array {
+    const slots = this.#slots;
+    return writeFrame(
+      { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
+      PARAMS_SIZE,
+      4 * slots.length,
+      (_, dv) => {
+        dv.setUint32(0, this.#seed, true);
+        dv.setUint16(4, slots.length, true);
+        for (let i = 0; i < slots.length; i++) {
+          dv.setUint32(PARAMS_SIZE + 4 * i, slots[i] ?? EMPTY, true);
+        }
+      },
+    );
   }
 
   /** Slots in the signature. */
