@@ -119,6 +119,14 @@
       "import": "./dist/ddsketch/protobuf/index.js",
       "require": "./dist/ddsketch/protobuf/index.cjs"
     },
+    "./minhash": {
+      "types": {
+        "import": "./dist/minhash/index.d.ts",
+        "require": "./dist/minhash/index.d.cts"
+      },
+      "import": "./dist/minhash/index.js",
+      "require": "./dist/minhash/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",

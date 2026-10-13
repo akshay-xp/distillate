@@ -25,6 +25,7 @@ import {
   logMapping,
 } from "../dist/ddsketch/index.js";
 import { fromProtobuf, toProtobuf } from "../dist/ddsketch/protobuf/index.js";
+import { MinHash, minHashSizing } from "../dist/minhash/index.js";
 
 if (typeof VERSION !== "string") {
   console.error(
@@ -98,6 +99,18 @@ if (merged.count() !== 200) {
 
 if (!HyperLogLog.fromBytes(hs.toBytes()).equals(hs)) {
   console.error("smoke: HyperLogLog round-trip through toBytes lost state");
+  process.exit(1);
+}
+
+if (minHashSizing(0.05).k !== 100) {
+  console.error(`smoke: minHashSizing(0.05) gave k=${minHashSizing(0.05).k}`);
+  process.exit(1);
+}
+
+const mhA = MinHash.from(["x", "y", "z"], 0.05);
+const mhB = MinHash.from(["z", "y", "x"], 0.05);
+if (mhA.jaccard(mhB) !== 1 || !mhA.union(mhB).equals(mhA)) {
+  console.error(`smoke: MinHash gave jaccard ${mhA.jaccard(mhB)} for one set`);
   process.exit(1);
 }
 
@@ -324,5 +337,5 @@ if (walked.join() !== "1,5" || at !== stream.length) {
 }
 
 console.log(
-  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo + distillate/countmin + distillate/topk + distillate/ddsketch + distillate/ddsketch/protobuf work (filters, sketches, sizing helpers, frame walk, growth, delete, counting, heavy hitters, quantiles), toBytes byte-identical to golden`,
+  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo + distillate/countmin + distillate/topk + distillate/ddsketch + distillate/ddsketch/protobuf + distillate/minhash work (filters, sketches, sizing helpers, frame walk, growth, delete, counting, heavy hitters, quantiles, similarity), toBytes byte-identical to golden`,
 );

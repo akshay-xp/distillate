@@ -46,5 +46,9 @@
   "./ddsketch/protobuf": {
     "raw": 51700,
     "gzip": 13150
+  },
+  "./minhash": {
+    "raw": 12700,
+    "gzip": 3700
   }
 }
