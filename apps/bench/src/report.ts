@@ -348,6 +348,7 @@ export function minHashSection(
     "`minhash` hashes strings with Java's `hashCode`, and its `a * hash + b` runs past 2^53 in doubles.",
     "",
     "`mean error` and `max error` are `|estimate - J|` over 20 seeded pairs at J = 0.5, each pair's union holding `items` items. All three carry the same theoretical error at equal k, about 0.044.",
+    "Twenty pairs make these a spot check: the expected mean error at k = 128 is about 0.035, and one row's mean lands up to about 0.012 either side of it by chance. distillate's own tests hold its estimate to 200 pairs per case.",
     "`add` is the median of 5 timed passes after 2 untimed ones, each on a fresh sketch.",
     "`size` is each library's own form: distillate's DSTL frame, `bloom-filters`' `saveAsJSON`, and for `minhash`, which has no serializer, the JSON of its signature array.",
     "",

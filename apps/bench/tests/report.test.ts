@@ -946,3 +946,31 @@ test("METHODOLOGY states the MinHash configuration and what each library is fed"
     expect(section, phrase).toContain(phrase);
   }
 });
+
+test("RESULTS carries the measured MinHash section for every library", () => {
+  const md = readFileSync(
+    fileURLToPath(new URL("../RESULTS.md", import.meta.url)),
+    "utf8",
+  );
+  // The section was added to an existing run, so the header says which build.
+  expect(md).toContain("The MinHash section was measured on");
+  const at = md.indexOf("## MinHash");
+  expect(at).toBeGreaterThan(md.indexOf("## DDSketch"));
+  expect(at).toBeLessThan(md.indexOf("## Throughput"));
+
+  const section = resultsSection(md, "MinHash");
+  const cells = (r: string): string[] => r.split("|").map((c) => c.trim());
+  const rows = section
+    .split("\n")
+    .filter((l) => /^\| (distillate\/minhash|bloom-filters|minhash) /.test(l));
+  const sketches = rows.filter((r) => cells(r).length === 8);
+  const index = rows.filter((r) => cells(r).length === 9);
+  const bundles = rows.filter((r) => cells(r).length === 5);
+  expect(sketches).toHaveLength(9);
+  expect(index).toHaveLength(2);
+  expect(bundles).toHaveLength(3);
+
+  // distillate answers every query; whatever minhash does is reported.
+  const ours = index.find((r) => cells(r)[1] === "distillate/minhash") ?? "";
+  expect(cells(ours)[7]).toBe("0 of 20000");
+});
