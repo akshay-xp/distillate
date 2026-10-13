@@ -91,10 +91,51 @@ describe("signature", () => {
     expect(Array.from(sketch.signature())).toEqual(kept);
   });
 
+  test("mutating a copy leaves later estimates alone", () => {
+    const a = sketchOf(["x", "y", "z"]);
+    const b = sketchOf(["x", "y", "w"]);
+    const before = a.jaccard(b);
+    a.signature().fill(0);
+    expect(a.jaccard(b)).toBe(before);
+  });
+
   test("an empty sketch has nothing to densify from", () => {
     expect(Array.from(new MinHash({ k: 4 }).signature())).toEqual([
       0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
     ]);
+  });
+});
+
+describe("densification", () => {
+  // At k 4096 with one filled slot each densification costs hundreds of ms,
+  // so 20 reads only fit the budget if all but the first reuse it.
+  test("is paid once per change, not once per read", () => {
+    const a = sketchOf(["x"], 4096);
+    const b = sketchOf(["x"], 4096);
+    a.jaccard(b);
+
+    const start = performance.now();
+    for (let i = 0; i < 10; i++) a.jaccard(b);
+    for (let i = 0; i < 10; i++) a.signature();
+    expect(performance.now() - start).toBeLessThan(100);
+  });
+
+  test("follows an add that changes a slot", () => {
+    const a = sketchOf(["x"], 64);
+    const b = sketchOf(["x", "y"], 64);
+    expect(a.jaccard(b)).toBeLessThan(1);
+    a.add("y");
+    expect(a.jaccard(b)).toBe(1);
+    expect(a.signature()).toEqual(b.signature());
+  });
+
+  test("starts fresh in a union and a decoded sketch", () => {
+    const a = sketchOf(["x"], 64);
+    const b = sketchOf(["y"], 64);
+    a.jaccard(b);
+    const both = sketchOf(["x", "y"], 64).signature();
+    expect(a.union(b).signature()).toEqual(both);
+    expect(MinHash.fromBytes(a.union(b).toBytes()).signature()).toEqual(both);
   });
 });
 

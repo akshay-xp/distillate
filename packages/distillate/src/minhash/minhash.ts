@@ -60,8 +60,10 @@ export interface MinHashParams {
 export class MinHash {
   readonly #slots: Uint32Array;
   readonly #seed: number;
-  // Densified slots for jaccard, rebuilt on each call rather than allocated.
+  // Densified slots, rebuilt only after a slot changes: at a large k with few
+  // slots filled one densification costs hundreds of ms.
   readonly #dense: Uint32Array;
+  #stale = true;
   // Reused across add() so hashing a key allocates nothing per call.
   readonly #scratch: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
   // Slots holding a real minimum; zero means the sketch has seen no key.
@@ -231,6 +233,7 @@ export class MinHash {
     if (value >= held) return;
     if (held === EMPTY) this.#filled++;
     slots[i] = value;
+    this.#stale = true;
   }
 
   /**
@@ -300,8 +303,8 @@ export class MinHash {
     if (this.isEmpty || other.isEmpty) {
       return this.isEmpty && other.isEmpty ? 1 : 0;
     }
-    const mine = this.#densify(this.#dense);
-    const theirs = other.#densify(other.#dense);
+    const mine = this.#denseSlots();
+    const theirs = other.#denseSlots();
     let equal = 0;
     for (let i = 0; i < mine.length; i++) {
       if (mine[i] === theirs[i]) equal++;
@@ -316,12 +319,17 @@ export class MinHash {
    * @returns A fresh array of `k` values; all `0xffffffff` for an empty sketch.
    */
   signature(): Uint32Array {
-    const out = new Uint32Array(this.#slots.length);
-    if (this.isEmpty) {
-      out.set(this.#slots);
-      return out;
+    return this.#denseSlots().slice();
+  }
+
+  // An empty sketch has nothing to borrow from, so its slots stand as they are.
+  #denseSlots(): Uint32Array {
+    if (this.#stale) {
+      if (this.isEmpty) this.#dense.set(this.#slots);
+      else this.#densify();
+      this.#stale = false;
     }
-    return this.#densify(out);
+    return this.#dense;
   }
 
   // Optimal densification (Shrivastava 2017): an empty slot borrows the value
@@ -329,8 +337,9 @@ export class MinHash {
   // depends only on the slot, attempt and seed, never on the contents, so two
   // sketches with the same k and seed borrow from the same places and an
   // empty slot matches exactly when the slots it borrows from do.
-  #densify(out: Uint32Array): Uint32Array {
+  #densify(): void {
     const slots = this.#slots;
+    const out = this.#dense;
     const k = slots.length;
     for (let i = 0; i < k; i++) {
       let value = slots[i] ?? EMPTY;
@@ -345,6 +354,5 @@ export class MinHash {
       }
       out[i] = value;
     }
-    return out;
   }
 }
