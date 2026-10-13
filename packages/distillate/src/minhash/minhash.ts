@@ -48,6 +48,15 @@ export interface MinHashParams {
 }
 
 /**
+ * Reads a sketch's cached densified slots without copying them, for
+ * {@link MinHashLSH} to band. Exported from this module but not from the
+ * subpath, so it is no part of the public API; callers must not write to the
+ * array. Assigned in MinHash's static block, the one place outside an
+ * instance method that can reach its private members.
+ */
+export let denseSlots!: (sketch: MinHash) => Uint32Array;
+
+/**
  * A MinHash sketch: estimates the Jaccard similarity of two key sets from
  * fixed-size signatures, in space fixed by `k` rather than by the sets.
  *
@@ -58,6 +67,10 @@ export interface MinHashParams {
  * ```
  */
 export class MinHash {
+  static {
+    denseSlots = (sketch) => sketch.#denseSlots();
+  }
+
   readonly #slots: Uint32Array;
   readonly #seed: number;
   // Densified slots, rebuilt only after a slot changes: at a large k with few

@@ -1,6 +1,6 @@
 import { fmix32 } from "../core/hasher.js";
 import { assertUint32, ParamError } from "../core/params.js";
-import type { MinHash } from "./minhash.js";
+import { denseSlots, type MinHash } from "./minhash.js";
 import { lshSizing } from "./sizing.js";
 
 const HI_MASK = 0x1fffff;
@@ -157,14 +157,14 @@ export class MinHashLSH<K> {
         `sketch has k ${String(sketch.k)} and seed ${String(sketch.seed)}, the index takes k ${String(this.#k)} and seed ${String(this.#seed)}`,
       );
     }
-    const signature = sketch.signature();
+    const slots = denseSlots(sketch);
     const rows = this.#rows;
     const out = new Float64Array(this.#bands);
     for (let band = 0; band < out.length; band++) {
       let lo = band;
       let hi = (band ^ 0x85ebca6b) >>> 0;
       for (let r = band * rows; r < (band + 1) * rows; r++) {
-        const value = signature[r] ?? 0;
+        const value = slots[r] ?? 0;
         lo = fmix32((lo ^ value) >>> 0);
         hi = fmix32((hi + value) >>> 0);
       }
