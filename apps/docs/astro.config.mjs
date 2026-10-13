@@ -133,6 +133,7 @@ export default defineConfig({
             { label: "Count-Min", link: "/guides/countmin/" },
             { label: "Top-K", link: "/guides/topk/" },
             { label: "DDSketch", link: "/guides/ddsketch/" },
+            { label: "MinHash", link: "/guides/minhash/" },
             { label: "Sizing and tuning FPR", link: "/guides/sizing/" },
             {
               label: "Sizing calculator",
