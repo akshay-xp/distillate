@@ -20,6 +20,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     [data-pg-grow],
     [data-pg-delete],
     [data-pg-values],
+    [data-pg-sets],
     [data-pg-query],
     [data-pg-status],
     [data-pg-results],
@@ -353,6 +354,76 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   </p>
 </section>
 
+<section class="dstl-panel" data-pg-minhash>
+  <h3>How alike two sets are, from a sketch of each</h3>
+
+  <p class="dstl-hint">
+    A MinHash answers <em>how much do these two sets overlap</em> as their
+    Jaccard similarity: shared items over all items. The build made set A from
+    the keys above and set B from as many keys starting halfway through them, so
+    they share half of each. Each set is sketched into 128 slots; the exact
+    figure comes from the sets the page keeps itself.
+  </p>
+
+  <form class="dstl-form-stack" data-pg-sets novalidate>
+    <div class="dstl-field">
+      <label for="pg-set-side">Record into</label>
+      <select id="pg-set-side" name="side">
+        <option value="a">Set A</option>
+        <option value="b" selected>
+          Set B
+        </option>
+      </select>
+    </div>
+    <div class="dstl-field">
+      <label for="pg-set-key">Item</label>
+      <input id="pg-set-key" name="key" type="text" value="key-0" />
+      <p class="dstl-hint">
+        Recording set A's keys into set B pulls the two together; new items push
+        them apart.
+      </p>
+    </div>
+    <button class="dstl-btn" type="submit">
+      Include
+    </button>
+  </form>
+
+  <dl class="dstl-readout">
+    <div>
+      <dt>Set A</dt>
+      <dd data-mh="a"></dd>
+    </div>
+    <div>
+      <dt>Set B</dt>
+      <dd data-mh="b"></dd>
+    </div>
+    <div>
+      <dt>Exact</dt>
+      <dd data-mh="exact"></dd>
+    </div>
+    <div>
+      <dt>Estimate</dt>
+      <dd data-mh="estimate"></dd>
+    </div>
+    <div>
+      <dt>Band</dt>
+      <dd data-mh="band"></dd>
+    </div>
+    <div>
+      <dt>Slots</dt>
+      <dd data-mh="k"></dd>
+    </div>
+  </dl>
+
+  <p class="dstl-hint">
+    <strong>The estimate lands inside the band about 95% of the time.</strong>
+    The band is the exact figure plus and minus two standard errors, and a
+    MinHash's error is a matter of chance rather than a bound, so now and then
+    it falls outside. More slots narrow the band; a set smaller than the slot
+    count widens it.
+  </p>
+</section>
+
 <div data-pg-notes>
   <p class="dstl-hint">
     <strong>A false positive is the filter working, not a bug.</strong> These
@@ -381,6 +452,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     PlaygroundReport,
     StructureKey,
     QuantileReport,
+    SimilarityReport,
     TopKReport,
   } from "./engine.js";
 
@@ -409,6 +481,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     document.querySelector<HTMLFormElement>("[data-pg-record]");
   const valuesForm =
     document.querySelector<HTMLFormElement>("[data-pg-values]");
+  const setsForm = document.querySelector<HTMLFormElement>("[data-pg-sets]");
   const status = document.querySelector<HTMLElement>("[data-pg-status]");
 
   // Held between events. `report()` walks every key it holds, so a query must
@@ -484,6 +557,21 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     return value.toLocaleString("en-US", { maximumSignificantDigits: 4 });
   }
 
+  function renderSimilarity(report: SimilarityReport): void {
+    const fields: Record<string, string> = {
+      a: report.sizeA.toLocaleString("en-US"),
+      b: report.sizeB.toLocaleString("en-US"),
+      exact: report.exact.toFixed(4),
+      estimate: report.estimate.toFixed(4),
+      band: `${report.low.toFixed(4)} to ${report.high.toFixed(4)}`,
+      k: String(report.k),
+    };
+    for (const [field, text] of Object.entries(fields)) {
+      const cell = document.querySelector(`[data-mh='${field}']`);
+      if (cell) cell.textContent = text;
+    }
+  }
+
   function renderQuantiles(report: QuantileReport): void {
     const count = document.querySelector("[data-dd='count']");
     const accuracy = document.querySelector("[data-dd='accuracy']");
@@ -536,6 +624,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     renderHeaviest(current.heaviest(HEAVIEST));
     renderEstimate(current.estimate(recordKey()));
     renderQuantiles(current.quantiles());
+    renderSimilarity(current.similarity());
   }
 
   /** The key the sketch panel is currently pointed at. */
@@ -611,6 +700,21 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     renderQuantiles(current.quantiles());
   }
 
+  function recordSetItem(): void {
+    if (!setsForm || !current) return;
+    const data = new FormData(setsForm);
+    const result = current.recordSetItem(
+      data.get("side"),
+      String(data.get("key") ?? ""),
+    );
+    if (!result.ok) {
+      if (status) status.textContent = result.message;
+      return;
+    }
+    if (status) status.textContent = "";
+    renderSimilarity(current.similarity());
+  }
+
   function query(): void {
     if (!queryForm || !current) return;
     const key = String(new FormData(queryForm).get("key") ?? "");
@@ -633,5 +737,6 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   onSubmit(deleteForm, remove);
   onSubmit(recordForm, record);
   onSubmit(valuesForm, recordValue);
+  onSubmit(setsForm, recordSetItem);
   build();
 </script>

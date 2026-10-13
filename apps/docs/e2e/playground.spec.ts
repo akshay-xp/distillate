@@ -582,3 +582,50 @@ test("the quantiles panel records a value and refuses one it cannot", async ({
   );
   expect(errors).toEqual([]);
 });
+
+/** The similarity panel's readout, by field. */
+async function similarity(page: Page): Promise<Record<string, string>> {
+  const panel = page.locator("[data-pg-minhash]");
+  const out: Record<string, string> = {};
+  for (const field of ["a", "b", "exact", "estimate", "band", "k"]) {
+    out[field] =
+      (await panel.locator(`[data-mh='${field}']`).textContent())?.trim() ?? "";
+  }
+  return out;
+}
+
+function expectEstimateInBand(read: Record<string, string>): void {
+  const [low, high] = read.band.split(" to ").map(Number);
+  const estimate = Number(read.estimate);
+  expect(estimate).toBeGreaterThanOrEqual(low);
+  expect(estimate).toBeLessThanOrEqual(high);
+}
+
+test("the similarity panel shows the estimate beside exact and records into either set", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  const panel = page.locator("[data-pg-minhash]");
+  await expect(panel.locator("[data-mh='a']")).toHaveText("10,000");
+  const before = await similarity(page);
+  expect(before).toMatchObject({ b: "10,000", exact: "0.3333", k: "128" });
+  expectEstimateInBand(before);
+
+  const form = page.locator("[data-pg-sets]");
+  await form.locator("select[name='side']").selectOption("b");
+  await form.locator("input[name='key']").fill("only-b");
+  await form.locator("button[type='submit']").click();
+
+  await expect(panel.locator("[data-mh='b']")).toHaveText("10,001");
+  const after = await similarity(page);
+  expect(after).toMatchObject({ a: "10,000", exact: "0.3333" });
+  expectEstimateInBand(after);
+
+  // Without JavaScript the form could only submit to nowhere.
+  expect(await page.content()).toMatch(
+    /<noscript><style>[^<]*\[data-pg-sets\]/,
+  );
+  expect(errors).toEqual([]);
+});
