@@ -70,3 +70,30 @@ describe("add and jaccard", () => {
     expect(sketchOf(items).jaccard(sketchOf(items))).toBe(1);
   });
 });
+
+describe("signature", () => {
+  test("does not depend on insertion order", () => {
+    const items = keys("o", 500);
+    const forward = sketchOf(items);
+    const backward = sketchOf([...items].reverse());
+    expect(backward.signature()).toEqual(forward.signature());
+  });
+
+  test("a set smaller than k has every slot densified", () => {
+    expect(sketchOf(["x", "y", "z"]).signature()).not.toContain(0xffffffff);
+  });
+
+  test("is a copy", () => {
+    const sketch = sketchOf(["x", "y", "z"]);
+    const first = sketch.signature();
+    const kept = Array.from(first);
+    first.fill(0);
+    expect(Array.from(sketch.signature())).toEqual(kept);
+  });
+
+  test("an empty sketch has nothing to densify from", () => {
+    expect(Array.from(new MinHash({ k: 4 }).signature())).toEqual([
+      0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
+    ]);
+  });
+});

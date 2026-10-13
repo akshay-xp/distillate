@@ -123,6 +123,21 @@ export class MinHash {
     return equal / mine.length;
   }
 
+  /**
+   * The densified signature: every slot filled, ready to compare slot by slot
+   * or to band for locality-sensitive hashing. Independent of insertion order.
+   *
+   * @returns A fresh array of `k` values; all `0xffffffff` for an empty sketch.
+   */
+  signature(): Uint32Array {
+    const out = new Uint32Array(this.#slots.length);
+    if (this.isEmpty) {
+      out.set(this.#slots);
+      return out;
+    }
+    return this.#densify(out);
+  }
+
   // Optimal densification (Shrivastava 2017): an empty slot borrows the value
   // of the first filled slot its own probe sequence reaches. The sequence
   // depends only on the slot, attempt and seed, never on the contents, so two
