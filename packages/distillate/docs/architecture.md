@@ -69,6 +69,13 @@ interface SimilaritySketch extends Sketch<SimilaritySketch> {
 MinHash's index, `MinHashLSH`, is not a sketch: it holds keys under band hashes of
 sketches and answers `query(sketch)` with candidate keys. It lives on the sketch's
 subpath because it takes nothing else, and it is not serialized; the sketches are.
+A bucket is an array up to 16 keys and a `Set` past that: most buckets hold one
+key, where a `Set` doubled the index's heap, while near-duplicates crowd a few,
+where array removal went quadratic. It bands a sketch's cached densified slots
+through `denseSlots`, a module-internal accessor, not a `signature()` copy.
+
+A sketch caches its densified slots until `add` changes a slot: densifying a
+sparse sketch at k 4096 costs hundreds of ms, too much to repeat per read.
 
 Each structure also exposes `fromBytes(bytes: Uint8Array): Filter` (static method).
 
@@ -121,7 +128,7 @@ src/
     protobuf/       # distillate/ddsketch/protobuf: Datadog's message, its own
                     # subpath so the sketch alone never bundles the codec
   minhash/          # MinHash: minhash.ts (frame type 11, one-permutation slots,
-                    # densified on read), lsh.ts for MinHashLSH, and sizing.ts for
+                    # densified on read, cached), lsh.ts for MinHashLSH, sizing.ts for
                     # minHashSizing, lshSizing and the k bounds both share
   frame/            # distillate/frame: readFrameAt for walking a stream of frames
   index.ts          # root barrel (VERSION only)

@@ -271,15 +271,15 @@ Twenty pairs make these a spot check: the expected mean error at k = 128 is abou
 
 | Sketch             | items | size   | mean error | max error | add           |
 | ------------------ | ----- | ------ | ---------- | --------- | ------------- |
-| distillate/minhash | 1k    | 540 B  | 0.034      | 0.109     | 9.48 M ops/s  |
-| bloom-filters      | 1k    | 7063 B | 0.034      | 0.094     | 127 k ops/s   |
-| minhash            | 1k    | 1005 B | 0.035      | 0.094     | 182 k ops/s   |
-| distillate/minhash | 10k   | 540 B  | 0.041      | 0.086     | 40.13 M ops/s |
-| bloom-filters      | 10k   | 6924 B | 0.039      | 0.094     | 157 k ops/s   |
-| minhash            | 10k   | 887 B  | 0.021      | 0.078     | 180 k ops/s   |
-| distillate/minhash | 100k  | 540 B  | 0.031      | 0.109     | 49.71 M ops/s |
-| bloom-filters      | 100k  | 6793 B | 0.034      | 0.102     | 157 k ops/s   |
-| minhash            | 100k  | 753 B  | 0.026      | 0.086     | 174 k ops/s   |
+| distillate/minhash | 1k    | 540 B  | 0.034      | 0.109     | 9.69 M ops/s  |
+| bloom-filters      | 1k    | 7048 B | 0.035      | 0.109     | 129 k ops/s   |
+| minhash            | 1k    | 1005 B | 0.035      | 0.094     | 184 k ops/s   |
+| distillate/minhash | 10k   | 540 B  | 0.041      | 0.086     | 39.42 M ops/s |
+| bloom-filters      | 10k   | 6928 B | 0.039      | 0.086     | 161 k ops/s   |
+| minhash            | 10k   | 887 B  | 0.021      | 0.078     | 183 k ops/s   |
+| distillate/minhash | 100k  | 540 B  | 0.031      | 0.109     | 44.41 M ops/s |
+| bloom-filters      | 100k  | 6804 B | 0.041      | 0.102     | 157 k ops/s   |
+| minhash            | 100k  | 753 B  | 0.026      | 0.086     | 178 k ops/s   |
 
 Only distillate and `minhash` ship an LSH index. distillate's `MinHashLSH` is tuned to a threshold of 0.5; `minhash`'s `LshIndex` takes no threshold and cuts the signature at a fixed band size of 4.
 Each indexes 10k documents of 100 items, then queries each document's near-duplicate (J about 0.8) and an unrelated document. `recall` is the share of near-duplicates that found their document; `unrelated candidates` is the mean returned for an unrelated query.
@@ -287,14 +287,14 @@ Each indexes 10k documents of 100 items, then queries each document's near-dupli
 
 | Index              | docs | insert      | query       | recall | unrelated candidates | thrown         |
 | ------------------ | ---- | ----------- | ----------- | ------ | -------------------- | -------------- |
-| distillate/minhash | 10k  | 165 k ops/s | 373 k ops/s | 1.000  | 0.00                 | 0 of 20000     |
-| minhash            | 10k  | 80 k ops/s  | 107 k ops/s | 0.000  | 0.00                 | 20000 of 20000 |
+| distillate/minhash | 10k  | 221 k ops/s | 426 k ops/s | 1.000  | 0.00                 | 0 of 20000     |
+| minhash            | 10k  | 80 k ops/s  | 109 k ops/s | 0.000  | 0.00                 | 20000 of 20000 |
 
 Bundle sizes are measured, not quoted: each import bundled by esbuild for the browser, minified and gzipped. `bloom-filters`' row includes `Hashing`, which its MinHash needs for strings.
 
 | Library            | sketch  | with LSH |
 | ------------------ | ------- | -------- |
-| distillate/minhash | 4.0 KB  | 4.8 KB   |
+| distillate/minhash | 4.0 KB  | 4.9 KB   |
 | bloom-filters      | 37.5 KB | none     |
 | minhash            | 1.2 KB  | 1.2 KB   |
 
