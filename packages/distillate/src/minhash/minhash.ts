@@ -21,7 +21,7 @@ import {
   UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
-import { MINHASH_MAX_K, MINHASH_MIN_K, minHashSizing } from "./sizing.js";
+import { assertK, minHashSizing } from "./sizing.js";
 
 // Marks a slot no key has reached. A hash value equal to it is clamped one
 // below, so the sentinel never stands for a real minimum.
@@ -38,14 +38,6 @@ const TYPE = 11;
  */
 const PARAMS_SIZE = 8;
 const PARAMS_FIELDS_END = 6;
-
-function assertK(k: number): void {
-  if (!Number.isInteger(k) || k < MINHASH_MIN_K || k > MINHASH_MAX_K) {
-    throw new ParamError(
-      `k must be an integer in [${String(MINHASH_MIN_K)}, ${String(MINHASH_MAX_K)}], got ${String(k)}`,
-    );
-  }
-}
 
 /** Construction parameters for a {@link MinHash} sketch. */
 export interface MinHashParams {
