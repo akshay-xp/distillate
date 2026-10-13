@@ -82,3 +82,21 @@ describe("insert and query", () => {
     expect(() => lsh.query(sketch)).toThrow(ParamError);
   });
 });
+
+describe("remove", () => {
+  test("unfiles a key from every band", () => {
+    const lsh = filled();
+    expect(lsh.remove("a")).toBe(true);
+    expect(lsh.has("a")).toBe(false);
+    expect(lsh.size).toBe(2);
+    expect(lsh.query(sketchOf(keys("s", 200)))).toEqual(["b"]);
+  });
+
+  test("reports a key that was not there, and lets a removed key back in", () => {
+    const lsh = filled();
+    lsh.remove("a");
+    expect(lsh.remove("a")).toBe(false);
+    lsh.insert("a", sketchOf(keys("s", 200)));
+    expect(lsh.query(sketchOf(keys("s", 200))).sort()).toEqual(["a", "b"]);
+  });
+});

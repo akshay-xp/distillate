@@ -102,6 +102,27 @@ export class MinHashLSH<K> {
   }
 
   /**
+   * Unfiles `key` from every band.
+   *
+   * @param key - The key to remove.
+   * @returns `true` if the key was stored.
+   */
+  remove(key: K): boolean {
+    const bandKeys = this.#entries.get(key);
+    if (!bandKeys) return false;
+    for (let band = 0; band < bandKeys.length; band++) {
+      const buckets = this.#buckets[band];
+      const bandKey = bandKeys[band] ?? 0;
+      const bucket = buckets?.get(bandKey);
+      if (!bucket) continue;
+      bucket.splice(bucket.indexOf(key), 1);
+      if (bucket.length === 0) buckets?.delete(bandKey);
+    }
+    this.#entries.delete(key);
+    return true;
+  }
+
+  /**
    * Whether `key` is stored.
    *
    * @param key - The key to look for.
