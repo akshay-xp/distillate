@@ -62,3 +62,21 @@ test("the sidebar links the MinHash guide", () => {
     '{ label: "MinHash", link: "/guides/minhash/" }',
   );
 });
+
+test("the choosing guide routes the similarity question to MinHash", () => {
+  const page = read("../src/content/docs/guides/choosing-a-structure.md");
+  const matrix = section(page, "Decision matrix");
+  expect(matrix).toContain("[MinHash](/guides/minhash/)");
+  const ships = section(page, "What ships today");
+  expect(ships).toContain(
+    "### [MinHash](/guides/minhash/) (`distillate/minhash`)",
+  );
+  // The question list at the top is where a reader is sent first.
+  expect(page.slice(0, page.indexOf("## "))).toContain("/guides/minhash/");
+  expect(section(page, "What is not shipped yet")).not.toContain("MinHash");
+});
+
+test("the README shows the sketch", () => {
+  const readme = read("../../../packages/distillate/README.md");
+  expect(readme).toContain("### MinHash (`distillate/minhash`)");
+});

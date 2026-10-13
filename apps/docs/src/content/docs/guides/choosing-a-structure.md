@@ -1,6 +1,6 @@
 ---
 title: Choosing a structure
-description: A decision matrix mapping each membership workload onto the filter that fits it, and what is not shipped yet.
+description: A decision matrix mapping each membership workload onto the filter that fits it, the sketches for counting, frequency, percentiles and similarity, and what is not shipped yet.
 ---
 
 First, which question are you asking?
@@ -18,6 +18,9 @@ First, which question are you asking?
 - **"What is the p99 of these values?"** A quantile sketch:
   [DDSketch](/guides/ddsketch/). It takes numbers rather than keys, and every
   quantile it reports is within a relative error of the true value.
+- **"How similar are these two sets?"** A similarity sketch:
+  [MinHash](/guides/minhash/). It compares two sets at once, and its index
+  finds near-duplicates among many without comparing every pair.
 
 There is no best filter, only a best filter for a workload. Answer three
 questions and the choice is usually forced:
@@ -44,12 +47,14 @@ questions and the choice is usually forced:
 | Counting how often each key appears       | [Count-Min](/guides/countmin/)                                                  |
 | Finding the most frequent keys            | [Top-K](/guides/topk/)                                                          |
 | Latency or size percentiles               | [DDSketch](/guides/ddsketch/)                                                   |
+| Near-duplicates, or how much sets overlap | [MinHash](/guides/minhash/)                                                     |
 
 For the filters, space below is stated as overhead over the
 information-theoretic floor of `log2(1/epsilon)` bits per key: 6.64 bits/key at
 a 1% FPR, 9.97 at 0.1%. A sketch has no per-key cost to state, its size being
 fixed before it sees a key: by precision for HyperLogLog, by the error bound
-for Count-Min and Top-K, by the accuracy and the range of values for DDSketch.
+for Count-Min and Top-K, by the accuracy and the range of values for DDSketch,
+by the slot count for MinHash.
 
 ## What ships today
 
@@ -86,6 +91,18 @@ exchange.
 
 Reach for it for request latencies, payload sizes, queue depths: any "what is
 the p99" question over a stream you cannot keep in full.
+
+### [MinHash](/guides/minhash/) (`distillate/minhash`)
+
+Not a filter. Sketches a set into `k` slots, a 540-byte frame at the default
+128, and estimates the Jaccard similarity of two sets from their sketches alone. Each
+item costs one hash, and sketches merge exactly. `MinHashLSH` indexes sketches
+by band, so a query finds the stored sets likely to resemble it without
+comparing against every one.
+
+Reach for it for near-duplicate documents, records or chunks, and for "how much
+do these two audiences or baskets overlap" questions. It does not count items
+or report whether one is present.
 
 ### [Binary Fuse 8 and 16](/guides/fuse/) (`distillate/fuse`)
 
