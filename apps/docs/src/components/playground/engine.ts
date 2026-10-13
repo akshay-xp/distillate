@@ -4,6 +4,7 @@ import { CountMinSketch } from "distillate/countmin";
 import { CuckooFilter, CuckooFullError } from "distillate/cuckoo";
 import { DDSketch, denseStore } from "distillate/ddsketch";
 import { BinaryFuse8, BinaryFuseBuildError } from "distillate/fuse";
+import { MinHash } from "distillate/minhash";
 import { ScalableBloomFilter } from "distillate/scalable";
 import { TopK } from "distillate/topk";
 
@@ -94,6 +95,19 @@ export interface QuantileReport {
   /** Values recorded so far. */
   count: number;
   relativeAccuracy: number;
+}
+
+export interface SimilarityReport {
+  sizeA: number;
+  sizeB: number;
+  /** `|A ∩ B| / |A ∪ B|` of the sets the page holds. */
+  exact: number;
+  estimate: number;
+  k: number;
+  standardError: number;
+  /** `exact` plus and minus two standard errors, inside [0, 1]. */
+  low: number;
+  high: number;
 }
 
 /** What one structure says about one queried key. */
@@ -217,6 +231,28 @@ function probeKeys(): string[] {
   return keys;
 }
 
+/**
+ * Slots in the similarity sketches. Fixed rather than sized from the page's
+ * target, as Count-Min's `delta` is: a target of 0.001 would ask for 250,000
+ * slots, past what MinHash takes, and fail the whole build with it.
+ */
+const SIMILARITY_K = 128;
+
+// Set B: `count` keys starting halfway through set A, so at any size the two
+// share half of each and the true similarity is 1/3.
+function setBKeys(count: number): string[] {
+  const start = Math.floor(count / 2);
+  const keys = new Array<string>(count);
+  for (let i = 0; i < count; i += 1) keys[i] = `key-${String(start + i)}`;
+  return keys;
+}
+
+function similaritySketch(items: readonly string[]): MinHash {
+  const sketch = new MinHash({ k: SIMILARITY_K });
+  for (const item of items) sketch.add(item);
+  return sketch;
+}
+
 /** The quantiles the panel shows. */
 const QUANTILES = [0.5, 0.9, 0.99, 0.999];
 
@@ -255,6 +291,8 @@ interface Filters {
   scalable: ScalableBloomFilter;
   cuckoo: CuckooFilter;
   ddsketch: DDSketch;
+  minhashA: MinHash;
+  minhashB: MinHash;
 }
 
 function describe(
@@ -329,6 +367,9 @@ export class Playground {
   readonly #counts = new Map<string, number>();
   /** Occurrences per value the sketch holds, so each quantile is exact. */
   readonly #values = new Map<number, number>();
+  /** The two sets the similarity sketches stand for, kept exactly. */
+  readonly #setA: Set<string>;
+  readonly #setB: Set<string>;
 
   private constructor(
     keys: string[],
@@ -336,6 +377,8 @@ export class Playground {
     target: number,
     filters: Filters,
   ) {
+    this.#setA = new Set(keys);
+    this.#setB = new Set(setBKeys(keys.length));
     this.#built = keys;
     this.#generated = keys.length;
     this.#keys = [...keys];
@@ -374,6 +417,8 @@ export class Playground {
         // dozens of orders of magnitude apart, and folding the low end would
         // break the band the panel promises. At most about 1 MB a sign at 1%.
         ddsketch: DDSketch.from(values, epsilon, { store: denseStore() }),
+        minhashA: similaritySketch(keys),
+        minhashB: similaritySketch(setBKeys(n)),
       };
     } catch (error) {
       return { ok: false, message: toMessage(error) };
@@ -631,6 +676,28 @@ export class Playground {
       }),
       count: sketch.count,
       relativeAccuracy: accuracy,
+    };
+  }
+
+  /** The sketches' similarity estimate, beside the sets' exact one. */
+  similarity(): SimilarityReport {
+    const a = this.#setA;
+    const b = this.#setB;
+    const [small, large] = a.size <= b.size ? [a, b] : [b, a];
+    let shared = 0;
+    for (const key of small) if (large.has(key)) shared += 1;
+    const exact = shared / (a.size + b.size - shared);
+    const sketch = this.#filters.minhashA;
+    const standardError = sketch.standardError;
+    return {
+      sizeA: a.size,
+      sizeB: b.size,
+      exact,
+      estimate: sketch.jaccard(this.#filters.minhashB),
+      k: sketch.k,
+      standardError,
+      low: Math.max(0, exact - 2 * standardError),
+      high: Math.min(1, exact + 2 * standardError),
     };
   }
 
