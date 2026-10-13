@@ -53,12 +53,14 @@ Each structure ships as its own subpath, so you only bundle what you import.
 | `distillate/countmin` | Count-Min      | how many times?     | Counting events per key in fixed space                   |
 | `distillate/topk`     | Top-K          | which are heaviest? | Finding the most frequent keys in fixed space            |
 | `distillate/ddsketch` | DDSketch       | what is the p99?    | Latency and size percentiles, mergeable, in fixed space  |
+| `distillate/minhash`  | MinHash        | how similar?        | Near-duplicate documents and set overlap, with an index  |
 
 The filters are mutable except Binary Fuse, which is built once from the whole
-key set. HyperLogLog, Count-Min, Top-K and DDSketch are sketches rather than
-filters: none reports whether it saw any particular key. HyperLogLog counts
+key set. HyperLogLog, Count-Min, Top-K, DDSketch and MinHash are sketches rather
+than filters: none reports whether it saw any particular key. HyperLogLog counts
 distinct keys, Count-Min counts how often each key appeared, Top-K reports which
-keys appeared most, and DDSketch reports quantiles of numbers rather than keys.
+keys appeared most, DDSketch reports quantiles of numbers rather than keys, and
+MinHash estimates how much two sets overlap.
 
 ### Classic Bloom (`distillate/bloom`)
 
@@ -233,6 +235,31 @@ latency.max; // 1000
 By default it bins with the bitwise mapping Datadog's `DDSketch.fast()` uses, about 1.75 times as fast as the log mapping, and keeps at most 4096 bins per sign, enough for about 19 orders of magnitude at 1%; at a tighter accuracy, raise `maxBins` through `collapsingLowestStore`. `distillate/ddsketch/protobuf` converts to and from the protobuf message Datadog's libraries exchange.
 
 Also: `add(value, count)`, `quantiles`, `count`, `sum`, `min`, `union`, `equals`, `toBytes` / `fromBytes`, `toJSON` / `fromJSON`, and the `bitwiseMapping`, `logMapping`, `linearMapping`, `quadraticMapping`, `cubicMapping`, `denseStore`, `sparseStore`, `collapsingLowestStore` and `collapsingHighestStore` factories.
+
+### MinHash (`distillate/minhash`)
+
+A **sketch** of a set: `k` slots that estimate how much two sets overlap (their Jaccard similarity), one hash per item, merging exactly. `MinHashLSH` indexes sketches so a query finds the near-duplicates among many without comparing every pair. Full API, the error bound and the index: [MinHash guide](https://distillate.akxp.net/guides/minhash/).
+
+```ts
+import { MinHash, MinHashLSH } from "distillate/minhash";
+
+const early = Array.from({ length: 1000 }, (_, i) => `user:${String(i)}`);
+const late = Array.from({ length: 1000 }, (_, i) => `user:${String(i + 500)}`);
+
+const a = MinHash.from(early, 0.05); // standard error at most 0.05
+const b = MinHash.from(late, 0.05);
+a.jaccard(b); // ~0.38
+
+const lsh = new MinHashLSH<string>({ threshold: 0.3, k: a.k });
+lsh.insert("early", a);
+const found = lsh.query(b);
+found.length; // 1
+found[0]; // "early"
+```
+
+The two sets share 500 of 1,500 users, so the true similarity is 1/3. Candidates from the index are likely matches, not confirmed ones; check each with `jaccard` where it matters. Sets smaller than `k` carry about 1.3 times the error.
+
+Also: `create`, `add`, `union`, `equals`, `signature`, `standardError`, `toBytes` / `fromBytes`, `toJSON` / `fromJSON`, `minHashSizing`, `lshSizing`, and the index's `remove`, `has` and `size`.
 
 ## Performance
 
