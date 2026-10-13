@@ -75,7 +75,7 @@ function rotl32(x: number, r: number): number {
   return ((x << r) | (x >>> (32 - r))) >>> 0;
 }
 
-function fmix32(h: number): number {
+export function fmix32(h: number): number {
   let x = h;
   x ^= x >>> 16;
   x = Math.imul(x, 0x85ebca6b);
