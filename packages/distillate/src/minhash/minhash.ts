@@ -5,8 +5,9 @@ import {
   reduce,
   type Hash128,
 } from "../core/hasher.js";
+import { forEachItem } from "../core/iterable.js";
 import { assertUint32, ParamError } from "../core/params.js";
-import { MINHASH_MAX_K, MINHASH_MIN_K } from "./sizing.js";
+import { MINHASH_MAX_K, MINHASH_MIN_K, minHashSizing } from "./sizing.js";
 
 // Marks a slot no key has reached. A hash value equal to it is clamped one
 // below, so the sentinel never stands for a real minimum.
@@ -59,6 +60,31 @@ export class MinHash {
     this.#slots = new Uint32Array(k).fill(EMPTY);
     this.#seed = seed;
     this.#dense = new Uint32Array(k);
+  }
+
+  /**
+   * Creates a sketch whose worst-case Jaccard standard error meets `maxError`.
+   *
+   * @param maxError - Target standard error, e.g. `0.05`.
+   * @returns A new, empty sketch.
+   */
+  static create(maxError: number): MinHash {
+    return new MinHash(minHashSizing(maxError));
+  }
+
+  /**
+   * Creates a sketch of `keys`, sized to meet `maxError`.
+   *
+   * @param keys - The keys to record.
+   * @param maxError - Target standard error, e.g. `0.05`.
+   * @returns A new sketch holding every key.
+   */
+  static from(keys: Iterable<BytesLike>, maxError: number): MinHash {
+    const sketch = MinHash.create(maxError);
+    forEachItem(keys, (key) => {
+      sketch.add(key);
+    });
+    return sketch;
   }
 
   /** Slots in the signature. */

@@ -97,3 +97,14 @@ describe("signature", () => {
     ]);
   });
 });
+
+describe("create and from", () => {
+  test("create sizes k from the target error", () => {
+    expect(MinHash.create(0.05).k).toBe(100);
+  });
+
+  test("from records every key", () => {
+    const items = keys("f", 400);
+    expect(MinHash.from(items, 0.05).equals(sketchOf(items, 100))).toBe(true);
+  });
+});

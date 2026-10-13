@@ -7,6 +7,7 @@ import { CuckooFilter } from "../../src/cuckoo/cuckoo.js";
 import { DDSketch } from "../../src/ddsketch/ddsketch.js";
 import { BinaryFuse8, BinaryFuse16 } from "../../src/fuse/fuse.js";
 import { HyperLogLog } from "../../src/hll/hll.js";
+import { MinHash } from "../../src/minhash/minhash.js";
 import { ScalableBloomFilter } from "../../src/scalable/scalable.js";
 import { TopK } from "../../src/topk/topk.js";
 
@@ -30,6 +31,7 @@ const builders: [string, (items: Iterable<string>) => Same][] = [
   ["ScalableBloomFilter", (k) => ScalableBloomFilter.from(k, 0.01)],
   ["CountMinSketch", (k) => CountMinSketch.from(k, 0.01, 0.01)],
   ["HyperLogLog", (k) => HyperLogLog.from(k, 0.01)],
+  ["MinHash", (k) => MinHash.from(k, 0.05)],
   ["TopK", (k) => TopK.from(k, 0.01)],
   ["CuckooFilter", (k) => CuckooFilter.from(k, 0.01)],
   ["BinaryFuse8", (k) => BinaryFuse8.from(k)],
