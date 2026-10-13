@@ -54,3 +54,42 @@ export async function ddSketchBundles(): Promise<BundleRow[]> {
     },
   ];
 }
+
+export interface LshBundleRow {
+  name: string;
+  /** The sketch alone. */
+  sketch: number;
+  /** The sketch and its LSH index; null where the library has none. */
+  withLsh: number | null;
+}
+
+export async function minHashBundles(): Promise<LshBundleRow[]> {
+  return [
+    {
+      name: "distillate/minhash",
+      sketch: await bundleSize(
+        'import { MinHash } from "distillate/minhash"; globalThis.x = MinHash;',
+      ),
+      withLsh: await bundleSize(
+        'import { MinHash, MinHashLSH } from "distillate/minhash"; globalThis.x = [MinHash, MinHashLSH];',
+      ),
+    },
+    {
+      // Hashing comes too: its MinHash takes numbers, so strings need it.
+      name: "bloom-filters",
+      sketch: await bundleSize(
+        'import { Hashing, MinHashFactory } from "bloom-filters"; globalThis.x = [Hashing, MinHashFactory];',
+      ),
+      withLsh: null,
+    },
+    {
+      name: "minhash",
+      sketch: await bundleSize(
+        'import { Minhash } from "minhash"; globalThis.x = Minhash;',
+      ),
+      withLsh: await bundleSize(
+        'import { Minhash, LshIndex } from "minhash"; globalThis.x = [Minhash, LshIndex];',
+      ),
+    },
+  ];
+}
