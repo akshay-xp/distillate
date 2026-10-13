@@ -1,3 +1,10 @@
+import type { BytesLike } from "../core/bytes.js";
+import {
+  fmix32,
+  hash128KeyInto,
+  reduce,
+  type Hash128,
+} from "../core/hasher.js";
 import { assertUint32, ParamError } from "../core/params.js";
 import { MINHASH_MAX_K, MINHASH_MIN_K } from "./sizing.js";
 
@@ -34,6 +41,10 @@ export interface MinHashParams {
 export class MinHash {
   readonly #slots: Uint32Array;
   readonly #seed: number;
+  // Densified slots for jaccard, rebuilt on each call rather than allocated.
+  readonly #dense: Uint32Array;
+  // Reused across add() so hashing a key allocates nothing per call.
+  readonly #scratch: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
   // Slots holding a real minimum; zero means the sketch has seen no key.
   #filled = 0;
 
@@ -47,6 +58,7 @@ export class MinHash {
     assertUint32(seed, "seed");
     this.#slots = new Uint32Array(k).fill(EMPTY);
     this.#seed = seed;
+    this.#dense = new Uint32Array(k);
   }
 
   /** Slots in the signature. */
@@ -70,5 +82,68 @@ export class MinHash {
   /** Whether the sketch has seen no key. */
   get isEmpty(): boolean {
     return this.#filled === 0;
+  }
+
+  /**
+   * Records a key. One hash picks one slot, which keeps the smaller value:
+   * one-permutation hashing, O(1) per key where classic MinHash is O(k).
+   *
+   * @param key - The key to record.
+   */
+  add(key: BytesLike): void {
+    const scratch = this.#scratch;
+    hash128KeyInto(key, this.#seed, scratch);
+    const slots = this.#slots;
+    const i = reduce(scratch.w0, slots.length);
+    const value = scratch.w1 === EMPTY ? EMPTY - 1 : scratch.w1;
+    const held = slots[i] ?? EMPTY;
+    if (value >= held) return;
+    if (held === EMPTY) this.#filled++;
+    slots[i] = value;
+  }
+
+  /**
+   * Estimates the Jaccard similarity `|A ∩ B| / |A ∪ B|` of the two key sets,
+   * within {@link standardError}.
+   *
+   * @param other - The sketch to compare against.
+   * @returns A similarity in `[0, 1]`; `1` for two empty sketches, `0` when
+   * exactly one is empty.
+   */
+  jaccard(other: MinHash): number {
+    if (this.isEmpty || other.isEmpty) {
+      return this.isEmpty && other.isEmpty ? 1 : 0;
+    }
+    const mine = this.#densify(this.#dense);
+    const theirs = other.#densify(other.#dense);
+    let equal = 0;
+    for (let i = 0; i < mine.length; i++) {
+      if (mine[i] === theirs[i]) equal++;
+    }
+    return equal / mine.length;
+  }
+
+  // Optimal densification (Shrivastava 2017): an empty slot borrows the value
+  // of the first filled slot its own probe sequence reaches. The sequence
+  // depends only on the slot, attempt and seed, never on the contents, so two
+  // sketches with the same k and seed borrow from the same places and an
+  // empty slot matches exactly when the slots it borrows from do.
+  #densify(out: Uint32Array): Uint32Array {
+    const slots = this.#slots;
+    const k = slots.length;
+    for (let i = 0; i < k; i++) {
+      let value = slots[i] ?? EMPTY;
+      for (let attempt = 1; value === EMPTY; attempt++) {
+        const probe = fmix32(
+          (Math.imul(i, 0x9e3779b1) ^
+            Math.imul(attempt, 0x85ebca6b) ^
+            this.#seed) >>>
+            0,
+        );
+        value = slots[reduce(probe, k)] ?? EMPTY;
+      }
+      out[i] = value;
+    }
+    return out;
   }
 }

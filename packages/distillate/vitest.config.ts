@@ -5,6 +5,7 @@ const PROBES = [
   "tests/ddsketch/allocation.test.ts",
   "tests/fuse/allocation.test.ts",
   "tests/topk/allocation.test.ts",
+  "tests/minhash/allocation.test.ts",
 ];
 
 const shared = {
