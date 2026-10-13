@@ -99,4 +99,20 @@ describe("remove", () => {
     lsh.insert("a", sketchOf(keys("s", 200)));
     expect(lsh.query(sketchOf(keys("s", 200))).sort()).toEqual(["a", "b"]);
   });
+
+  // Near-duplicates share buckets by design, so a crowded bucket must not
+  // make each removal scan it: 30k identical docs took about 3 s that way.
+  test("stays constant per band when every key shares the same buckets", () => {
+    const sketch = sketchOf(keys("s", 200));
+    const lsh = new MinHashLSH<number>({ threshold: 0.5 });
+    for (let i = 0; i < 30_000; i++) lsh.insert(i, sketch);
+
+    const start = performance.now();
+    for (let i = 0; i < 30_000; i++) lsh.remove(i);
+    const elapsed = performance.now() - start;
+
+    expect(elapsed).toBeLessThan(500);
+    expect(lsh.size).toBe(0);
+    expect(lsh.query(sketch)).toEqual([]);
+  });
 });
