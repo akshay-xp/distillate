@@ -2,7 +2,25 @@ import { describe, expect, test } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
 import { MinHashLSH } from "../../src/minhash/lsh.js";
+import { MinHash } from "../../src/minhash/minhash.js";
 import { lshSizing } from "../../src/minhash/sizing.js";
+
+const keys = (prefix: string, n: number): string[] =>
+  Array.from({ length: n }, (_, i) => `${prefix}:${String(i)}`);
+
+function sketchOf(items: readonly string[], k = 128, seed = 0): MinHash {
+  const sketch = new MinHash({ k, seed });
+  for (const item of items) sketch.add(item);
+  return sketch;
+}
+
+function filled(): MinHashLSH<string> {
+  const lsh = new MinHashLSH<string>({ threshold: 0.5 });
+  lsh.insert("a", sketchOf(keys("s", 200)));
+  lsh.insert("b", sketchOf(keys("s", 200)));
+  lsh.insert("c", sketchOf(keys("d", 200)));
+  return lsh;
+}
 
 describe("construction", () => {
   test("defaults to 128 slots, seed 0, and the balanced split", () => {
@@ -27,5 +45,40 @@ describe("construction", () => {
     expect(() => new MinHashLSH({ threshold: 0.5, seed: -1 })).toThrow(
       ParamError,
     );
+  });
+});
+
+describe("insert and query", () => {
+  test("returns every key sharing a band, each once", () => {
+    const lsh = filled();
+    expect(lsh.query(sketchOf(keys("s", 200))).sort()).toEqual(["a", "b"]);
+  });
+
+  test("an unrelated query finds nothing", () => {
+    expect(filled().query(sketchOf(keys("fresh", 200)))).toEqual([]);
+  });
+
+  test("reports what it holds", () => {
+    const lsh = filled();
+    expect(lsh.has("a")).toBe(true);
+    expect(lsh.has("z")).toBe(false);
+    expect(lsh.size).toBe(3);
+  });
+
+  test("refuses a duplicate key", () => {
+    expect(() => {
+      filled().insert("a", sketchOf(["x"]));
+    }).toThrow(ParamError);
+  });
+
+  test.each<[string, MinHash]>([
+    ["k", sketchOf(["x"], 64)],
+    ["seed", sketchOf(["x"], 128, 1)],
+  ])("refuses a sketch with a different %s", (_, sketch) => {
+    const lsh = filled();
+    expect(() => {
+      lsh.insert("x", sketch);
+    }).toThrow(ParamError);
+    expect(() => lsh.query(sketch)).toThrow(ParamError);
   });
 });
