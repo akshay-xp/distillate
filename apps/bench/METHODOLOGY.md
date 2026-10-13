@@ -298,3 +298,28 @@ the bench's single long pass, the default adds at about 117 M ops/s at 1M
 values; when the loop is compiled whole before it runs (`--no-use-osr`), about 150. The log mapping and sketches-js move by under 3% between the two. The
 table reports the first, which is what a loop that adds a stream in one call
 gets.
+
+## Configuration for MinHash
+
+MinHash is compared with `bloom-filters`' MinHash and with `minhash` (npm), all
+at k = 128 slots, which gives each the same theoretical Jaccard error of about
+0.044 at J = 0.5. Sketches that are compared come from one family per library:
+one factory for `bloom-filters`, whose hash functions are random per factory,
+and the default seed for the other two.
+
+`bloom-filters` hashes numbers, not strings, so it is fed its own
+`Hashing.hashAsInt` of each item. That returns a 64-bit xxhash as a double, past
+both its factory's `maxValue` and 2^53, so it is reduced to 32 bits, with
+`maxValue` set to 2^32 - 1 to hold it.
+
+Error is `|estimate - J|` over 20 seeded pairs at J = 0.5 per set size (1k, 10k
+and 100k items in the union), the same pairs for every library. `add` is the
+median of 5 timed passes after 2 untimed ones, a fresh sketch each pass, as for
+DDSketch. Sizes are each library's own form, named in the section.
+
+The LSH comparison covers the two libraries that ship an index. distillate's
+`MinHashLSH` is tuned to a threshold of 0.5; `minhash`'s `LshIndex` takes no
+threshold and runs at its default band size of 4. Each indexes 10k documents of
+100 items, then queries each one's near-duplicate (89 shared items of 100, J
+about 0.8) and an unrelated document. Queries that throw are caught and counted
+rather than ending the run. Each library runs in its own process.

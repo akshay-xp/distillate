@@ -21,8 +21,17 @@ import { COUNTMIN_KEY_COUNTS, countMinAdapters } from "./countmin.js";
 import type { CountMinRow } from "./countmin.js";
 import { TOPK_EVENT_COUNTS, topKAdapters } from "./topk.js";
 import type { TopKRow } from "./topk.js";
-import { ddSketchBundles } from "./bundle.js";
-import type { BundleRow } from "./bundle.js";
+import { ddSketchBundles, minHashBundles } from "./bundle.js";
+import type { BundleRow, LshBundleRow } from "./bundle.js";
+import {
+  lshAdapters,
+  MINHASH_K,
+  MINHASH_LSH_DOCS,
+  MINHASH_LSH_THRESHOLD,
+  MINHASH_SET_SIZES,
+  similarityAdapters,
+} from "./minhash.js";
+import type { LshRow, MinHashRow } from "./minhash.js";
 import { DDSKETCH_EVENT_COUNTS, ddSketchAdapters } from "./ddsketch.js";
 import type { DDSketchRow } from "./ddsketch.js";
 import {
@@ -150,6 +159,38 @@ export function ddSketchBundleTable(rows: BundleRow[]): string {
   return [header, ...body].join("\n");
 }
 
+export function minHashTable(rows: MinHashRow[]): string {
+  const header =
+    "| Sketch | items | size | mean error | max error | add |\n" +
+    "| --- | --- | --- | --- | --- | --- |";
+  const body = rows.map(
+    (r) =>
+      `| ${r.name} | ${capacityLabel(r.items)} | ${String(r.bytes)} B | ${r.meanAbsError.toFixed(3)} | ${r.maxAbsError.toFixed(3)} | ${ops(r.addOpsPerSec)} |`,
+  );
+  return [header, ...body].join("\n");
+}
+
+export function minHashLshTable(rows: LshRow[]): string {
+  const header =
+    "| Index | docs | insert | query | recall | unrelated candidates | thrown |\n" +
+    "| --- | --- | --- | --- | --- | --- | --- |";
+  const body = rows.map(
+    (r) =>
+      `| ${r.name} | ${capacityLabel(r.docs)} | ${ops(r.insertOpsPerSec)} | ${ops(r.queryOpsPerSec)} | ${r.recall.toFixed(3)} | ${r.unrelatedCandidates.toFixed(2)} | ${String(r.thrown)} of ${String(2 * r.docs)} |`,
+  );
+  return [header, ...body].join("\n");
+}
+
+export function minHashBundleTable(rows: LshBundleRow[]): string {
+  const kb = (bytes: number): string => `${(bytes / 1024).toFixed(1)} KB`;
+  const header = "| Library | sketch | with LSH |\n| --- | --- | --- |";
+  const body = rows.map(
+    (r) =>
+      `| ${r.name} | ${kb(r.sketch)} | ${r.withLsh === null ? "none" : kb(r.withLsh)} |`,
+  );
+  return [header, ...body].join("\n");
+}
+
 export interface ResultsOptions {
   banner: string;
   version: string;
@@ -165,6 +206,9 @@ export interface ResultsOptions {
   topKTable?: string;
   ddSketchTable?: string;
   ddSketchBundleTable?: string;
+  minHashTable?: string;
+  minHashLshTable?: string;
+  minHashBundleTable?: string;
   keyLengthTable?: string;
 }
 
@@ -289,6 +333,39 @@ export function ddSketchSection(table: string, bundles: string): string[] {
   ];
 }
 
+export function minHashSection(
+  table: string,
+  lsh: string,
+  bundles: string,
+): string[] {
+  return [
+    "## MinHash",
+    "",
+    `Compared with \`bloom-filters\`' MinHash and \`minhash\` (npm), all at k = ${String(MINHASH_K)}. distillate fills one slot per item (one-permutation hashing); both others compute all ${String(MINHASH_K)} hashes per item.`,
+    "",
+    "`bloom-filters` takes numbers, not strings, each at most its factory's `maxValue`, so a caller hashes strings first. The rows feed it its own `Hashing.hashAsInt` reduced to 32 bits, with `maxValue` 2^32 - 1.",
+    "Its hash functions are `(a * x + b) % c` in doubles, with `a` and `b` drawn from lodash's unseeded `random`, so its error column moves from run to run where the others do not.",
+    "`minhash` hashes strings with Java's `hashCode`, and its `a * hash + b` runs past 2^53 in doubles.",
+    "",
+    "`mean error` and `max error` are `|estimate - J|` over 20 seeded pairs at J = 0.5, each pair's union holding `items` items. All three carry the same theoretical error at equal k, about 0.044.",
+    "`add` is the median of 5 timed passes after 2 untimed ones, each on a fresh sketch.",
+    "`size` is each library's own form: distillate's DSTL frame, `bloom-filters`' `saveAsJSON`, and for `minhash`, which has no serializer, the JSON of its signature array.",
+    "",
+    table,
+    "",
+    `Only distillate and \`minhash\` ship an LSH index. distillate's \`MinHashLSH\` is tuned to a threshold of ${String(MINHASH_LSH_THRESHOLD)}; \`minhash\`'s \`LshIndex\` takes no threshold and cuts the signature at a fixed band size of 4.`,
+    `Each indexes ${capacityLabel(MINHASH_LSH_DOCS)} documents of 100 items, then queries each document's near-duplicate (J about 0.8) and an unrelated document. \`recall\` is the share of near-duplicates that found their document; \`unrelated candidates\` is the mean returned for an unrelated query.`,
+    "`minhash`'s `query` reads the bucket for each of the query's bands without checking it exists, so it throws whenever a query holds a band the index never saw. `thrown` counts those, and its query rate includes them.",
+    "",
+    lsh,
+    "",
+    "Bundle sizes are measured, not quoted: each import bundled by esbuild for the browser, minified and gzipped. `bloom-filters`' row includes `Hashing`, which its MinHash needs for strings.",
+    "",
+    bundles,
+    "",
+  ];
+}
+
 export function keyLengthTable(rows: KeyLengthRow[]): string {
   const header =
     "| Filter | key length | keys | add | has |\n| --- | --- | --- | --- | --- |";
@@ -336,6 +413,13 @@ export function renderResults(opts: ResultsOptions): string {
     ...(opts.topKTable ? topKSection(opts.topKTable) : []),
     ...(opts.ddSketchTable
       ? ddSketchSection(opts.ddSketchTable, opts.ddSketchBundleTable ?? "")
+      : []),
+    ...(opts.minHashTable
+      ? minHashSection(
+          opts.minHashTable,
+          opts.minHashLshTable ?? "",
+          opts.minHashBundleTable ?? "",
+        )
       : []),
     `## Throughput (n = ${capacityLabel(opts.throughputCapacity)})`,
     "",
@@ -412,6 +496,16 @@ async function main(): Promise<void> {
   );
   const ddBundles = ddSketchBundleTable(await ddSketchBundles());
 
+  const mhTable = minHashTable(
+    isolatedRows<MinHashRow>("minhash", names(similarityAdapters), [
+      MINHASH_SET_SIZES,
+    ]),
+  );
+  const mhLshTable = minHashLshTable(
+    isolatedRows<LshRow>("minhash-lsh", names(lshAdapters), [MINHASH_LSH_DOCS]),
+  );
+  const mhBundles = minHashBundleTable(await minHashBundles());
+
   console.log(banner);
   console.log("\n" + spaceTable);
   console.log("\n" + cardTable);
@@ -421,6 +515,9 @@ async function main(): Promise<void> {
   console.log("\n" + tkTable);
   console.log("\n" + ddTable);
   console.log("\n" + ddBundles);
+  console.log("\n" + mhTable);
+  console.log("\n" + mhLshTable);
+  console.log("\n" + mhBundles);
   console.log("\n" + tput);
   console.log("\n" + klTable);
 
@@ -438,6 +535,9 @@ async function main(): Promise<void> {
     topKTable: tkTable,
     ddSketchTable: ddTable,
     ddSketchBundleTable: ddBundles,
+    minHashTable: mhTable,
+    minHashLshTable: mhLshTable,
+    minHashBundleTable: mhBundles,
     throughputTable: tput,
     keyLengthTable: klTable,
   });

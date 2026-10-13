@@ -7,6 +7,12 @@ import { countMinAdapters, countMinRows } from "./countmin.js";
 import { cuckooAdapters, cuckooRows } from "./cuckoo.js";
 import { ddSketchAdapters, ddSketchRows } from "./ddsketch.js";
 import { keyLengthRows } from "./keylength.js";
+import {
+  lshAdapters,
+  lshRows,
+  minHashRows,
+  similarityAdapters,
+} from "./minhash.js";
 import type { Alphabet } from "./keylength.js";
 import { scalableAdapters, scalableRows } from "./scalable.js";
 import { measureThroughput, throughputNames } from "./throughput.js";
@@ -60,6 +66,10 @@ const JOBS: Record<string, Job> = {
     topKRows(ns, only(topKAdapters, name, "topk")),
   ddsketch: (name, [ns]: [number[]]) =>
     ddSketchRows(ns, only(ddSketchAdapters, name, "ddsketch")),
+  minhash: (name, [ns]: [number[]]) =>
+    minHashRows(ns, only(similarityAdapters, name, "minhash")),
+  "minhash-lsh": (name, [docs]: [number]) =>
+    lshRows(docs, only(lshAdapters, name, "minhash-lsh")),
 };
 
 const SELF = fileURLToPath(import.meta.url);
