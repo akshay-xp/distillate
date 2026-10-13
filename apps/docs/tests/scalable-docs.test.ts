@@ -104,7 +104,7 @@ test("the errors reference says which subpaths export what", () => {
   const page = errors();
   const at = page.indexOf("serialization errors are exported");
   const paragraph = page.slice(at, page.indexOf("\n\n", at));
-  expect(paragraph).toContain("eight structure subpaths");
+  expect(paragraph).toContain("ten structure subpaths");
   expect(paragraph).toContain("distillate/scalable");
   for (const subpath of [
     "bloom",
@@ -114,7 +114,15 @@ test("the errors reference says which subpaths export what", () => {
     "cuckoo",
     "countmin",
     "topk",
+    "ddsketch",
+    "minhash",
   ]) {
     expect(paragraph, subpath).toContain(`\`distillate/${subpath}\``);
+  }
+
+  // ParamError's list ends the paragraph, after "except".
+  const params = paragraph.slice(paragraph.indexOf("`ParamError`"));
+  for (const subpath of ["ddsketch", "minhash"]) {
+    expect(params, subpath).toContain(`\`distillate/${subpath}\``);
   }
 });
