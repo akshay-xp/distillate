@@ -114,6 +114,11 @@ if (mhA.jaccard(mhB) !== 1 || !mhA.union(mhB).equals(mhA)) {
   process.exit(1);
 }
 
+if (!MinHash.fromBytes(mhA.toBytes()).equals(mhA)) {
+  console.error("smoke: MinHash round-trip through toBytes lost state");
+  process.exit(1);
+}
+
 // Cross-runtime byte identity: every runtime must produce the exact committed
 // golden frame for a fixed key set, not merely import and run.
 const golden = JSON.parse(
