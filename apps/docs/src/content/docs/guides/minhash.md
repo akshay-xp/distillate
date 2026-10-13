@@ -130,11 +130,13 @@ lsh.insert(
 
 lsh.bands; // 20
 lsh.rows; // 5
-lsh.query(
+const found = lsh.query(
   sketch(
     "the quick brown fox jumps over the lazy dog while the cat naps on the warm mat by the door",
   ),
-); // ["fox"]
+);
+found.length; // 1
+found[0]; // "fox"
 ```
 
 The index cuts each signature into `bands` of `rows` slots and files a key
