@@ -1955,9 +1955,17 @@ func parseMinHash(f frame) (minHash, error) {
 	if len(f.body) < minHashParams {
 		return minHash{}, fmt.Errorf("body of %d bytes is shorter than the params block", len(f.body))
 	}
+	for at := 6; at < minHashParams; at++ {
+		if f.body[at] != 0 {
+			return minHash{}, fmt.Errorf("params padding at byte %d is not zero", at)
+		}
+	}
 	m := minHash{seed: le.Uint32(f.body), k: le.Uint16(f.body[4:])}
 	if want := minHashParams + 4*int(m.k); len(f.body) != want {
 		return minHash{}, fmt.Errorf("body of %d bytes disagrees with k %d (want %d)", len(f.body), m.k, want)
+	}
+	if m.k < 2 || m.k > 4096 {
+		return minHash{}, fmt.Errorf("k %d is out of the range [2, 4096]", m.k)
 	}
 	m.slots = make([]uint32, m.k)
 	for i := range m.slots {
@@ -2022,5 +2030,42 @@ func TestMinHash(t *testing.T) {
 	}
 	if !emptySlots {
 		t.Error("minhash-small pins no empty slot")
+	}
+}
+
+func TestMinHashDamaged(t *testing.T) {
+	e := find(t, "minhash")
+
+	short := frameOf(t, e)
+	if _, err := readFrame(short[:len(short)-1]); err == nil || !strings.Contains(err.Error(), "body length") {
+		t.Errorf("truncated frame: want a body length error, got %v", err)
+	}
+
+	stale := frameOf(t, e)
+	stale[headerSize+minHashParams]++
+	if _, err := readFrame(stale); err == nil || !strings.Contains(err.Error(), "CRC") {
+		t.Errorf("altered slot: want a CRC error, got %v", err)
+	}
+
+	// Resealed, each mutation gets past the trailer and must be caught by the
+	// params checks alone.
+	k1 := make([]byte, minHashParams+4)
+	le.PutUint16(k1[4:], 1)
+	cases := []struct {
+		name, want string
+		frame      []byte
+	}{
+		{"padding byte set", "padding", func() []byte { b := frameOf(t, e); b[headerSize+6] = 1; return reseal(b) }()},
+		{"k the body cannot hold", "disagrees", func() []byte { b := frameOf(t, e); le.PutUint16(b[headerSize+4:], 200); return reseal(b) }()},
+		{"k 1", "range", writeFrame(11, k1[:minHashParams], k1[minHashParams:])},
+	}
+	for _, c := range cases {
+		f, err := readFrame(c.frame)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if _, err := parseMinHash(f); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: want an error mentioning %q, got %v", c.name, c.want, err)
+		}
 	}
 }
