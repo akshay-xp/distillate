@@ -27,6 +27,8 @@ type entry struct {
 	Deletes []string
 	Values  []float64
 	MaxBins uint32
+	K       int
+	Seed    uint32
 	Frame   string
 }
 
@@ -1933,5 +1935,92 @@ func TestDDSketchDamaged(t *testing.T) {
 		if _, err := parseDDSketch(f); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: want an error mentioning %q, got %v", c.name, c.want, err)
 		}
+	}
+}
+
+// MinHash, frame type 11: seed (u32), k (u16), two bytes of padding, then k
+// raw u32 slots, 0xffffffff where no key landed. Raw rather than densified, so
+// the frame is exactly what a slot-wise min merge works on. One-permutation
+// hashing: a key's first murmur word picks its slot, the second is its value,
+// clamped below the empty marker, and a slot keeps the smallest it sees.
+type minHash struct {
+	k     uint16
+	seed  uint32
+	slots []uint32
+}
+
+const minHashParams = 8
+
+func parseMinHash(f frame) (minHash, error) {
+	if len(f.body) < minHashParams {
+		return minHash{}, fmt.Errorf("body of %d bytes is shorter than the params block", len(f.body))
+	}
+	m := minHash{seed: le.Uint32(f.body), k: le.Uint16(f.body[4:])}
+	if want := minHashParams + 4*int(m.k); len(f.body) != want {
+		return minHash{}, fmt.Errorf("body of %d bytes disagrees with k %d (want %d)", len(f.body), m.k, want)
+	}
+	m.slots = make([]uint32, m.k)
+	for i := range m.slots {
+		m.slots[i] = le.Uint32(f.body[minHashParams+4*i:])
+	}
+	return m, nil
+}
+
+func buildMinHash(k uint16, seed uint32, keys []string) []byte {
+	slots := make([]uint32, k)
+	for i := range slots {
+		slots[i] = ^uint32(0)
+	}
+	for _, key := range keys {
+		w := murmur3x86_128([]byte(key), seed)
+		value := min(w[1], ^uint32(0)-1)
+		at := reduce(w[0], uint32(k))
+		slots[at] = min(slots[at], value)
+	}
+	params := make([]byte, minHashParams)
+	le.PutUint32(params, seed)
+	le.PutUint16(params[4:], k)
+	payload := make([]byte, 4*len(slots))
+	for i, v := range slots {
+		le.PutUint32(payload[4*i:], v)
+	}
+	return writeFrame(11, params, payload)
+}
+
+func TestMinHash(t *testing.T) {
+	seeded, emptySlots := false, false
+	for _, e := range golden(t) {
+		if e.Kind != "minhash" {
+			continue
+		}
+		f, err := readFrame(frameOf(t, e))
+		if err != nil {
+			t.Fatal(err)
+		}
+		m, err := parseMinHash(f)
+		if err != nil {
+			t.Fatalf("%s: %v", e.Name, err)
+		}
+		if int(m.k) != e.K || m.seed != e.Seed {
+			t.Errorf("%s: k %d seed %d, recipe says k %d seed %d", e.Name, m.k, m.seed, e.K, e.Seed)
+		}
+		seeded = seeded || m.seed != 0
+		empty := 0
+		for _, s := range m.slots {
+			if s == ^uint32(0) {
+				empty++
+			}
+		}
+		emptySlots = emptySlots || (e.Name == "minhash-small" && empty > 0)
+		rebuilt := buildMinHash(m.k, m.seed, e.Keys)
+		if golden := frameOf(t, e); !bytes.Equal(rebuilt, golden) {
+			t.Errorf("%s: rebuilt frame differs:\n got %x\nwant %x", e.Name, rebuilt, golden)
+		}
+	}
+	if !seeded {
+		t.Error("no minhash fixture carries a non-zero seed")
+	}
+	if !emptySlots {
+		t.Error("minhash-small pins no empty slot")
 	}
 }
