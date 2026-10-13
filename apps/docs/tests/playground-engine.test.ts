@@ -724,3 +724,52 @@ test("the build seeds two overlapping sets and reports their similarity beside e
 test("a target the sketch could not be sized for still builds", () => {
   expect(built(KEYS, 0.001).similarity().k).toBe(128);
 });
+
+test("recording into a set moves the exact similarity and the estimate with it", () => {
+  const pg = built();
+
+  const recorded = pg.recordSetItem("b", "only-b");
+  expect(recorded).toEqual({
+    ok: true,
+    side: "b",
+    sizeA: KEYS,
+    sizeB: KEYS + 1,
+  });
+  const report = pg.similarity();
+  expect(report.exact).toBe(5000 / 15001);
+  expect(report.estimate).toBe(
+    sketchOf(SAME_KEYS).jaccard(sketchOf([...SET_B, "only-b"])),
+  );
+
+  // A key the set already holds changes neither the set nor its sketch.
+  pg.recordSetItem("b", "key-9999");
+  expect(pg.similarity()).toEqual(report);
+
+  for (const key of SAME_KEYS) pg.recordSetItem("b", key);
+  expect(pg.similarity().exact).toBe(10000 / 15001);
+});
+
+test.each<[string, unknown]>([
+  ["a side that is neither set", "c"],
+  ["no side at all", null],
+])("recording into %s is refused and changes nothing", (_, side) => {
+  const pg = built();
+  const before = pg.similarity();
+
+  const result = pg.recordSetItem(side, "x");
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.message).not.toBe("");
+  expect(pg.similarity()).toEqual(before);
+});
+
+test("a new item into a full set is refused and changes nothing", () => {
+  const pg = built(MAX_KEYS);
+  const before = pg.similarity();
+
+  const result = pg.recordSetItem("a", "brand-new");
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.message).toContain("at most 100,000");
+  expect(pg.similarity()).toEqual(before);
+});

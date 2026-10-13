@@ -171,6 +171,10 @@ export type ValueResult =
     }
   | { ok: false; message: string };
 
+export type SetResult =
+  | { ok: true; side: "a" | "b"; sizeA: number; sizeB: number }
+  | { ok: false; message: string };
+
 export type RemoveResult =
   | {
       ok: true;
@@ -211,6 +215,10 @@ const RECORD_MESSAGE = `Occurrences must be a whole number from 1 to ${MAX_RECOR
 const VALUE_MESSAGE = `Value must be a number, and how many a whole number from 1 to ${MAX_RECORD.toLocaleString("en-US")}.`;
 
 const INSERT_MESSAGE = `The playground holds at most ${MAX_KEYS.toLocaleString("en-US")} keys, and this one would be past that. It builds real filters in your browser, so rebuild with fewer keys to add more.`;
+
+const SIDE_MESSAGE = "Choose set A or set B to record into.";
+
+const SET_MESSAGE = `Each set holds at most ${MAX_KEYS.toLocaleString("en-US")} items, and this one would be past that. The playground keeps both sets exactly in your browser, so it stops there.`;
 
 const GROW_MESSAGE = `Keys to add must be a whole number of at least 1, and the total held must stay at or under ${MAX_KEYS.toLocaleString("en-US")}. The playground builds real filters in your browser, so it stops there.`;
 
@@ -676,6 +684,28 @@ export class Playground {
       }),
       count: sketch.count,
       relativeAccuracy: accuracy,
+    };
+  }
+
+  /** Adds `key` to set A or set B, and to the sketch that stands for it. */
+  recordSetItem(side: unknown, key: string): SetResult {
+    if (side !== "a" && side !== "b") {
+      return { ok: false, message: SIDE_MESSAGE };
+    }
+    const [set, sketch] =
+      side === "a"
+        ? [this.#setA, this.#filters.minhashA]
+        : [this.#setB, this.#filters.minhashB];
+    if (!set.has(key) && set.size >= MAX_KEYS) {
+      return { ok: false, message: SET_MESSAGE };
+    }
+    set.add(key);
+    sketch.add(key);
+    return {
+      ok: true,
+      side,
+      sizeA: this.#setA.size,
+      sizeB: this.#setB.size,
     };
   }
 
