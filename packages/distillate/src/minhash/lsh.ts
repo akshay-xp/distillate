@@ -1,5 +1,10 @@
-import { assertUint32 } from "../core/params.js";
+import { fmix32 } from "../core/hasher.js";
+import { assertUint32, ParamError } from "../core/params.js";
+import type { MinHash } from "./minhash.js";
 import { lshSizing } from "./sizing.js";
+
+const HI_MASK = 0x1fffff;
+const TWO_32 = 2 ** 32;
 
 /** Construction parameters for a {@link MinHashLSH} index. */
 export interface MinHashLSHParams {
@@ -33,6 +38,8 @@ export class MinHashLSH<K> {
   readonly #seed: number;
   readonly #bands: number;
   readonly #rows: number;
+  // One bucket map per band, from band key to the keys filed under it.
+  readonly #buckets: Map<number, K[]>[];
   // Each stored key with the band keys it was filed under.
   readonly #entries = new Map<K, Float64Array>();
 
@@ -49,6 +56,82 @@ export class MinHashLSH<K> {
     this.#seed = seed;
     this.#bands = bands;
     this.#rows = rows;
+    this.#buckets = Array.from({ length: bands }, () => new Map<number, K[]>());
+  }
+
+  /**
+   * Files a sketch under `key`, so later queries similar to it find `key`.
+   *
+   * @param key - The key to store; must not already be stored.
+   * @param sketch - The key's set, sketched with this index's `k` and seed.
+   * @throws {@link ParamError} on a duplicate key or a sketch whose `k` or
+   * seed differs from the index's.
+   */
+  insert(key: K, sketch: MinHash): void {
+    if (this.#entries.has(key)) {
+      throw new ParamError(`key ${String(key)} is already in the index`);
+    }
+    const bandKeys = this.#bandKeys(sketch);
+    for (let band = 0; band < bandKeys.length; band++) {
+      const buckets = this.#buckets[band];
+      const bandKey = bandKeys[band] ?? 0;
+      const bucket = buckets?.get(bandKey);
+      if (bucket) bucket.push(key);
+      else buckets?.set(bandKey, [key]);
+    }
+    this.#entries.set(key, bandKeys);
+  }
+
+  /**
+   * Finds the stored keys sharing at least one band with `sketch`: likely, not
+   * certainly, at least `threshold` similar. Confirm with
+   * {@link MinHash.jaccard} where it matters.
+   *
+   * @param sketch - The set to look up.
+   * @returns Each candidate key once, in no particular order.
+   * @throws {@link ParamError} if the sketch's `k` or seed differs.
+   */
+  query(sketch: MinHash): K[] {
+    const bandKeys = this.#bandKeys(sketch);
+    const found = new Set<K>();
+    for (let band = 0; band < bandKeys.length; band++) {
+      const bucket = this.#buckets[band]?.get(bandKeys[band] ?? 0);
+      if (bucket) for (const key of bucket) found.add(key);
+    }
+    return [...found];
+  }
+
+  /**
+   * Whether `key` is stored.
+   *
+   * @param key - The key to look for.
+   */
+  has(key: K): boolean {
+    return this.#entries.has(key);
+  }
+
+  // One 53-bit key per band, from two fmix32 accumulators over the band's
+  // densified slots. Two keys colliding only adds a candidate, never loses one.
+  #bandKeys(sketch: MinHash): Float64Array {
+    if (sketch.k !== this.#k || sketch.seed !== this.#seed) {
+      throw new ParamError(
+        `sketch has k ${String(sketch.k)} and seed ${String(sketch.seed)}, the index takes k ${String(this.#k)} and seed ${String(this.#seed)}`,
+      );
+    }
+    const signature = sketch.signature();
+    const rows = this.#rows;
+    const out = new Float64Array(this.#bands);
+    for (let band = 0; band < out.length; band++) {
+      let lo = band;
+      let hi = (band ^ 0x85ebca6b) >>> 0;
+      for (let r = band * rows; r < (band + 1) * rows; r++) {
+        const value = signature[r] ?? 0;
+        lo = fmix32((lo ^ value) >>> 0);
+        hi = fmix32((hi + value) >>> 0);
+      }
+      out[band] = (hi & HI_MASK) * TWO_32 + lo;
+    }
+    return out;
   }
 
   /** Similarity the index was tuned for. */
