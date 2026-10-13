@@ -22,6 +22,17 @@ export interface FilterJSON {
 }
 
 // @public
+export interface LshSizing {
+    bands: number;
+    falseNegative: number;
+    falsePositive: number;
+    rows: number;
+}
+
+// @public
+export function lshSizing(threshold: number, k: number, weights?: readonly [number, number]): LshSizing;
+
+// @public
 export class MinHash {
     constructor(input?: MinHashParams);
     add(key: BytesLike): void;
@@ -39,6 +50,29 @@ export class MinHash {
     toBytes(): Uint8Array;
     toJSON(): FilterJSON;
     union(other: MinHash): MinHash;
+}
+
+// @public
+export class MinHashLSH<K> {
+    constructor(input: MinHashLSHParams);
+    get bands(): number;
+    has(key: K): boolean;
+    insert(key: K, sketch: MinHash): void;
+    get k(): number;
+    query(sketch: MinHash): K[];
+    remove(key: K): boolean;
+    get rows(): number;
+    get seed(): number;
+    get size(): number;
+    get threshold(): number;
+}
+
+// @public
+export interface MinHashLSHParams {
+    k?: number;
+    seed?: number;
+    threshold: number;
+    weights?: readonly [number, number];
 }
 
 // @public
