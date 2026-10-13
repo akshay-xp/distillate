@@ -139,6 +139,7 @@ const rebuild = ({
   values = [],
   maxBins,
   mapping,
+  k,
 }) => {
   switch (kind) {
     case "bloom":
@@ -184,6 +185,11 @@ const rebuild = ({
         ...(maxBins ? { store: collapsingLowestStore(maxBins) } : {}),
         ...(mapping === "log" ? { mapping: logMapping } : {}),
       });
+    case "minhash": {
+      const sketch = new MinHash({ k, seed });
+      for (const key of keys) sketch.add(key);
+      return sketch;
+    }
     default:
       console.error(`smoke: unknown golden kind ${kind}`);
       process.exit(1);

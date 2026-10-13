@@ -8,6 +8,7 @@ import { BloomFilter } from "../src/bloom/index.js";
 import { toBase64 } from "../src/core/base64.js";
 import { BinaryFuse8, BinaryFuse16 } from "../src/fuse/index.js";
 import { HyperLogLog } from "../src/hll/hll.js";
+import { MinHash } from "../src/minhash/minhash.js";
 import { CountMinSketch } from "../src/countmin/countmin.js";
 import { CuckooFilter } from "../src/cuckoo/cuckoo.js";
 import { DDSketch } from "../src/ddsketch/ddsketch.js";
@@ -31,6 +32,7 @@ interface Entry {
   values?: number[];
   maxBins?: number;
   mapping?: string;
+  k?: number;
   frame?: string;
 }
 
@@ -96,6 +98,12 @@ const bytes = (entry: Entry): Uint8Array => {
         ...(maxBins ? { store: collapsingLowestStore(maxBins) } : {}),
         ...(mapping === "log" ? { mapping: logMapping } : {}),
       }).toBytes();
+    }
+    case "minhash": {
+      const { k, seed } = entry;
+      const sketch = new MinHash({ k, seed });
+      for (const key of keys) sketch.add(key);
+      return sketch.toBytes();
     }
     case "v2": {
       // A well-formed current-version Bloom frame with the version byte forced
