@@ -11,8 +11,8 @@ Versioned, self-describing, little-endian binary format. Spec'd here so Rust/Go 
 Offset  Size  Field
 0       4     Magic "DSTL" (0x44 53 54 4C)
 4       1     Format version (u8)         # bump on incompatible layout change
-5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog 6=ScalableBloom 7=Cuckoo 8=CountMin 9=TopK 10=DDSketch
-                                          # (11+ reserved: CountingBloom, ...)
+5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog 6=ScalableBloom 7=Cuckoo 8=CountMin 9=TopK 10=DDSketch 11=MinHash
+                                          # (12+ reserved: CountingBloom, ...)
 6       1     Flags (u8)                  # bit0-3 hash variant, bit4-7 reserved (must be 0)
 7       1     Reserved (u8)               # must be 0
 8       4     Body length (u32)           # bytes of body, excluding header and CRC
@@ -298,11 +298,33 @@ A reader rejects:
 
 Combining two frames, informatively: their mappings must agree on kind exactly and on `gamma` and `indexOffset` within 1e-12 relative, sketches-go's tolerance; then add every bin's count into one store, which folds a collapsing store exactly as one stream would have, and add `zeroCount` and `sum`, keeping the smaller `min` and larger `max`. This is the frame one sketch fed both streams would hold, `sum` aside.
 
+MinHash (type 11), little-endian. A similarity sketch: `k` slots, each holding the smallest hash value any key sent to it, from which two sketches' Jaccard similarity is estimated.
+
+```
+Offset    Size      Field
+0         4         seed: hash seed (u32)
+4         2         k: slots (u16), 2 to 4096
+6         2         reserved (0)
+8         4 * k     slots: each slot's minimum (u32), 0xffffffff where no key landed
+```
+
+The params end at 8, padded so the slots sit 4-byte aligned at frame offset 24. A key is hashed once (see [hash variant](#hash-variant-flags-nibble)) and touches one slot, one-permutation hashing: slot `reduce(w0, k)`, the high 32 bits of `w0 * k`, takes value `min(w1, 0xfffffffe)` when that is below what it holds. The clamp keeps `0xffffffff` free to mean empty.
+
+The slots are stored raw. A sketch of fewer keys than `k` leaves slots empty, and a reader estimating similarity fills each from a filled slot by optimal densification before comparing; that densified signature is never stored, so a decoded sketch still merges exactly. Combining two frames of identical `k` and `seed`: take the slot-wise min, which is the frame one sketch fed both key sets would hold.
+
+A reader rejects:
+
+- a body shorter than the 8-byte params block, or nonzero reserved bytes;
+- a `k` outside 2 to 4096;
+- a body length other than `8 + 4 * k`.
+
+Every slot value is otherwise valid: a real minimum is never `0xffffffff`, so a slot either holds one or is empty. Which slots are filled is derived on read; the frame has no count of them.
+
 ### Hash variant (flags nibble)
 
 Bits 0-3 of the flags byte name the complete scheme that turns a key into stored bits: the hash **and the index mapping** from its output to positions, not the hash alone. A change to any component takes a new variant, even when the hash itself is unchanged, because a reader that recognises the old variant would otherwise read every stored frame at the wrong positions with no error. Version 5 uses one scheme for every structure:
 
-- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog, Scalable, Cuckoo, Count-Min, Top-K, DDSketch) with the index mapping below. Top-K and DDSketch write and require `0`, though no hash reaches their frames
+- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog, Scalable, Cuckoo, Count-Min, Top-K, DDSketch, MinHash) with the index mapping below. Top-K and DDSketch write and require `0`, though no hash reaches their frames
 
 Variant `0` covers:
 
@@ -317,10 +339,11 @@ Variant `0` covers:
 - **Top-K:** no hash. The frame stores entries in canonical order, so no stored byte depends on where a key sat in memory, and a reader needs no hash to read or rebuild a frame. In memory, `distillate` places a key at `HalfSipHash-1-3(key) & (capacity - 1)` under 64 random bits each sketch draws for itself, probing linearly on a collision, so crafted keys cannot be made to share a slot. A reader in another language may place keys however it likes.
 
 - **DDSketch:** no hash. It records values, not keys, and the mapping that bins them is named by the frame's own `mapping` byte and `gamma`, so a change to it is a new mapping code rather than a new variant.
+- **MinHash:** slot `reduce(w0, k)` by Lemire multiply-shift; value `w1`, clamped to `0xfffffffe`. Densification probes slot `i`'s borrow sequence as `reduce(fmix32((i * 0x9e3779b1) ^ (attempt * 0x85ebca6b) ^ seed), k)` for `attempt = 1, 2, ...`, each product mod `2^32`; it is computed on read and never stored, but two readers must agree on it to agree on an estimate.
 
 This is the case Guava hit: `MURMUR128_MITZ_32` and `MURMUR128_MITZ_64` use the same hash and differ only in how its 128 bits map to indices, yet the change still needed a new `Strategy` ordinal because the stored bits differ. Guava's ordinal covers the whole strategy, and this nibble does too.
 
-All nine structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header and version 5 only the params padding; neither touched the hash.
+All ten structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header and version 5 only the params padding; neither touched the hash.
 
 That version 3 bump (rather than a flags-only change) was deliberate: the version-2 Fuse reader had no variant check and would silently misread a version-3 frame, so bumping the version made it reject on the version byte instead.
 

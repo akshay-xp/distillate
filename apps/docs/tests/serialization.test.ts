@@ -147,6 +147,7 @@ const NUMERALS = [
   "seven",
   "eight",
   "nine",
+  "ten",
 ];
 
 /** The structures the hash-variant section lists, and the count it claims. */
@@ -513,7 +514,7 @@ test("the documented Top-K layout decodes the golden frame", () => {
   expect(topKAt(rows, "keys", entries) + keyBytes).toBe(body.byteLength);
 });
 
-test("the layout table names type 10 as DDSketch and reserves from 11", () => {
+test("the layout table names type 10 as DDSketch", () => {
   const { types, reserved } = typeRows();
   const named = new Map(
     [...types.matchAll(/(\d+)=([A-Za-z0-9]+)/g)].map(([, n, name]) => [
@@ -523,9 +524,76 @@ test("the layout table names type 10 as DDSketch and reserves from 11", () => {
   );
 
   expect(named.get(10)).toBe("DDSketch");
-  expect(reserved).toContain("11+");
   expect(reserved).not.toContain("DDSketch");
 });
+
+test("the layout table names type 11 as MinHash and reserves from 12", () => {
+  const { types, reserved } = typeRows();
+  const named = new Map(
+    [...types.matchAll(/(\d+)=([A-Za-z0-9]+)/g)].map(([, n, name]) => [
+      Number(n),
+      name,
+    ]),
+  );
+
+  expect(named.get(11)).toBe("MinHash");
+  expect(reserved).toContain("12+");
+  expect(reserved).not.toContain("MinHash");
+});
+
+test("the hash variant section lists MinHash among the variant 0 writers", () => {
+  expect(hashVariant().families).toContain("MinHash");
+});
+
+const minHashSection = (): string =>
+  sectionFrom(
+    "MinHash (type 11), little-endian",
+    "\n### ",
+    "serialization.md has no MinHash section",
+  );
+
+test("the MinHash section states the slot rule, the clamp and what is stored", () => {
+  const section = minHashSection();
+  for (const phrase of [
+    "reduce(w0, k)",
+    "min(w1, 0xfffffffe)",
+    "densif",
+    "slot-wise min",
+    "A reader rejects",
+  ]) {
+    expect(section, phrase).toContain(phrase);
+  }
+});
+
+// Decoded from the page's offsets alone, so a wrong row fails here rather
+// than in the Go reader.
+describe.each<[string, number, number]>([
+  ["minhash", 7, 128],
+  ["minhash-small", 0, 64],
+])(
+  "the documented MinHash layout decodes the golden %s frame",
+  (name, seed, k) => {
+    test("seed, k, padding and every slot", () => {
+      const rows = paramsTable("MinHash (type 11), little-endian");
+      const body = frameBody(golden(name).frame);
+      const at = (field: string): number => rows.get(field)?.offset ?? NaN;
+
+      expect(rows.get("k")?.text).toContain("u16");
+      expect(body.getUint32(at("seed"), true)).toBe(seed);
+      const slots = body.getUint16(at("k"), true);
+      expect(slots).toBe(k);
+      expect(body.getUint8(at("reserved"))).toBe(0);
+      expect(body.getUint8(at("reserved") + 1)).toBe(0);
+      expect(body.byteLength).toBe(at("slots") + 4 * slots);
+
+      let empty = 0;
+      for (let i = 0; i < slots; i++) {
+        if (body.getUint32(at("slots") + 4 * i, true) === 0xffffffff) empty++;
+      }
+      if (name === "minhash-small") expect(empty).toBeGreaterThan(0);
+    });
+  },
+);
 
 test("the hash variant section lists DDSketch among the variant 0 writers", () => {
   expect(hashVariant().families).toContain("DDSketch");
