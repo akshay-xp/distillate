@@ -5,18 +5,39 @@
 ```ts
 
 // @public
+export class BadMagicError extends SerializationError {
+    override readonly name = "BadMagicError";
+}
+
+// @public
+export class ChecksumError extends SerializationError {
+    override readonly name = "ChecksumError";
+}
+
+// @public
+export interface FilterJSON {
+    $: string;
+    data: string;
+    v: number;
+}
+
+// @public
 export class MinHash {
     constructor(input?: MinHashParams);
     add(key: BytesLike): void;
     static create(maxError: number): MinHash;
     equals(other: MinHash): boolean;
     static from(keys: Iterable<BytesLike>, maxError: number): MinHash;
+    static fromBytes(bytes: Uint8Array): MinHash;
+    static fromJSON(value: unknown): MinHash;
     get isEmpty(): boolean;
     jaccard(other: MinHash): number;
     get k(): number;
     get seed(): number;
     signature(): Uint32Array;
     get standardError(): number;
+    toBytes(): Uint8Array;
+    toJSON(): FilterJSON;
     union(other: MinHash): MinHash;
 }
 
@@ -37,6 +58,31 @@ export function minHashSizing(maxError: number): MinHashSizing;
 // @public
 export class ParamError extends RangeError {
     override readonly name = "ParamError";
+}
+
+// @public
+export class ReservedBitsError extends SerializationError {
+    override readonly name = "ReservedBitsError";
+}
+
+// @public
+export class SerializationError extends Error {
+    override readonly name: string;
+}
+
+// @public
+export class TruncatedError extends SerializationError {
+    override readonly name = "TruncatedError";
+}
+
+// @public
+export class UnknownHashVariantError extends SerializationError {
+    override readonly name = "UnknownHashVariantError";
+}
+
+// @public
+export class UnknownVersionError extends SerializationError {
+    override readonly name = "UnknownVersionError";
 }
 
 // (No @packageDocumentation comment for this package)
