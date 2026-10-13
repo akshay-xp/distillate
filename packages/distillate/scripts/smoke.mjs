@@ -25,7 +25,7 @@ import {
   logMapping,
 } from "../dist/ddsketch/index.js";
 import { fromProtobuf, toProtobuf } from "../dist/ddsketch/protobuf/index.js";
-import { MinHash, minHashSizing } from "../dist/minhash/index.js";
+import { MinHash, MinHashLSH, minHashSizing } from "../dist/minhash/index.js";
 
 if (typeof VERSION !== "string") {
   console.error(
@@ -116,6 +116,15 @@ if (mhA.jaccard(mhB) !== 1 || !mhA.union(mhB).equals(mhA)) {
 
 if (!MinHash.fromBytes(mhA.toBytes()).equals(mhA)) {
   console.error("smoke: MinHash round-trip through toBytes lost state");
+  process.exit(1);
+}
+
+const lsh = new MinHashLSH({ threshold: 0.5, k: mhA.k });
+lsh.insert("a", mhA);
+lsh.insert("b", mhB);
+const candidates = lsh.query(mhA).sort().join(",");
+if (candidates !== "a,b") {
+  console.error(`smoke: MinHashLSH found [${candidates}] for two equal sets`);
   process.exit(1);
 }
 
