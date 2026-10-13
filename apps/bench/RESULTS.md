@@ -9,6 +9,11 @@ unreleased build that adds `distillate/ddsketch` on top of 0.14.2, against
 `@datadog/sketches-js@2.1.1`. Every other section keeps the numbers it was
 published with.
 
+The MinHash section was measured on 2026-10-13, on the same machine, from the
+unreleased build that adds `distillate/minhash` on top of 0.15.2, against
+`bloom-filters@3.0.4` and `minhash@0.0.9`. Every other section keeps the
+numbers it was published with.
+
 All filters are configured at the same target FPR (1%) and measured by identical code.
 See [METHODOLOGY.md](./METHODOLOGY.md) for how these benches are run.
 
@@ -250,6 +255,48 @@ Bundle sizes are measured, not quoted: each import bundled by esbuild for the br
 | -------------------- | ------- | ------------- |
 | distillate/ddsketch  | 7.0 KB  | 7.6 KB        |
 | @datadog/sketches-js | 18.3 KB | 18.3 KB       |
+
+## MinHash
+
+Compared with `bloom-filters`' MinHash and `minhash` (npm), all at k = 128. distillate fills one slot per item (one-permutation hashing); both others compute all 128 hashes per item.
+
+`bloom-filters` takes numbers, not strings, each at most its factory's `maxValue`, so a caller hashes strings first. The rows feed it its own `Hashing.hashAsInt` reduced to 32 bits, with `maxValue` 2^32 - 1.
+Its hash functions are `(a * x + b) % c` in doubles, with `a` and `b` drawn from lodash's unseeded `random`, so its error column moves from run to run where the others do not.
+`minhash` hashes strings with Java's `hashCode`, and its `a * hash + b` runs past 2^53 in doubles.
+
+`mean error` and `max error` are `|estimate - J|` over 20 seeded pairs at J = 0.5, each pair's union holding `items` items. All three carry the same theoretical error at equal k, about 0.044.
+Twenty pairs make these a spot check: the expected mean error at k = 128 is about 0.035, and one row's mean lands up to about 0.012 either side of it by chance. distillate's own tests hold its estimate to 200 pairs per case.
+`add` is the median of 5 timed passes after 2 untimed ones, each on a fresh sketch.
+`size` is each library's own form: distillate's DSTL frame, `bloom-filters`' `saveAsJSON`, and for `minhash`, which has no serializer, the JSON of its signature array.
+
+| Sketch             | items | size   | mean error | max error | add           |
+| ------------------ | ----- | ------ | ---------- | --------- | ------------- |
+| distillate/minhash | 1k    | 540 B  | 0.034      | 0.109     | 9.48 M ops/s  |
+| bloom-filters      | 1k    | 7063 B | 0.034      | 0.094     | 127 k ops/s   |
+| minhash            | 1k    | 1005 B | 0.035      | 0.094     | 182 k ops/s   |
+| distillate/minhash | 10k   | 540 B  | 0.041      | 0.086     | 40.13 M ops/s |
+| bloom-filters      | 10k   | 6924 B | 0.039      | 0.094     | 157 k ops/s   |
+| minhash            | 10k   | 887 B  | 0.021      | 0.078     | 180 k ops/s   |
+| distillate/minhash | 100k  | 540 B  | 0.031      | 0.109     | 49.71 M ops/s |
+| bloom-filters      | 100k  | 6793 B | 0.034      | 0.102     | 157 k ops/s   |
+| minhash            | 100k  | 753 B  | 0.026      | 0.086     | 174 k ops/s   |
+
+Only distillate and `minhash` ship an LSH index. distillate's `MinHashLSH` is tuned to a threshold of 0.5; `minhash`'s `LshIndex` takes no threshold and cuts the signature at a fixed band size of 4.
+Each indexes 10k documents of 100 items, then queries each document's near-duplicate (J about 0.8) and an unrelated document. `recall` is the share of near-duplicates that found their document; `unrelated candidates` is the mean returned for an unrelated query.
+`minhash`'s `query` reads the bucket for each of the query's bands without checking it exists, so it throws whenever a query holds a band the index never saw. `thrown` counts those, and its query rate includes them.
+
+| Index              | docs | insert      | query       | recall | unrelated candidates | thrown         |
+| ------------------ | ---- | ----------- | ----------- | ------ | -------------------- | -------------- |
+| distillate/minhash | 10k  | 165 k ops/s | 373 k ops/s | 1.000  | 0.00                 | 0 of 20000     |
+| minhash            | 10k  | 80 k ops/s  | 107 k ops/s | 0.000  | 0.00                 | 20000 of 20000 |
+
+Bundle sizes are measured, not quoted: each import bundled by esbuild for the browser, minified and gzipped. `bloom-filters`' row includes `Hashing`, which its MinHash needs for strings.
+
+| Library            | sketch  | with LSH |
+| ------------------ | ------- | -------- |
+| distillate/minhash | 4.0 KB  | 4.8 KB   |
+| bloom-filters      | 37.5 KB | none     |
+| minhash            | 1.2 KB  | 1.2 KB   |
 
 ## Throughput (n = 100k)
 
