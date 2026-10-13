@@ -11,10 +11,13 @@ import {
   assertBodyLength,
   assertMinBodyLength,
   assertParamsPadding,
+  type FilterJSON,
   FORMAT_VERSION,
+  fromJSONEnvelope,
   HASH_MURMUR128,
   readHeader,
   SerializationError,
+  toJSONEnvelope,
   UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
@@ -175,6 +178,26 @@ export class MinHash {
         }
       },
     );
+  }
+
+  /**
+   * Serializes the sketch to a JSON-safe envelope wrapping
+   * {@link MinHash.toBytes}.
+   *
+   * @returns The envelope, readable by {@link MinHash.fromJSON}.
+   */
+  toJSON(): FilterJSON {
+    return toJSONEnvelope(this.toBytes());
+  }
+
+  /**
+   * Restores a sketch from its {@link MinHash.toJSON} envelope.
+   *
+   * @param value - The parsed envelope.
+   * @returns The reconstructed sketch.
+   */
+  static fromJSON(value: unknown): MinHash {
+    return MinHash.fromBytes(fromJSONEnvelope(value));
   }
 
   /** Slots in the signature. */

@@ -198,3 +198,18 @@ test("a type 11 frame is walkable without knowing the structure", () => {
   expect(first.byteLength).toBe(a.length);
   expect(readFrameAt(buffer, first.byteLength).type).toBe(11);
 });
+
+test("the JSON envelope round-trips", () => {
+  const s = filled();
+  const restored = MinHash.fromJSON(JSON.parse(JSON.stringify(s)) as unknown);
+
+  expect(restored.toBytes()).toEqual(s.toBytes());
+});
+
+test.each<[string, unknown]>([
+  ["a non-object", 7],
+  ["a wrong tag", { $: "other", v: FORMAT_VERSION, data: "" }],
+  ["a wrong version", { $: "distillate", v: 1, data: "" }],
+])("fromJSON rejects %s", (_, value) => {
+  expect(() => MinHash.fromJSON(value)).toThrow(SerializationError);
+});
