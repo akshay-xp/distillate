@@ -55,6 +55,9 @@ test("the MinHash guide covers what a reader needs to choose and use it", () => 
   const limits = section(page, "Limits");
   expect(limits).toContain("crafted");
   expect(limits).toContain("seed");
+  // A sparse frame at the largest k costs hundreds of ms to densify.
+  expect(limits).toContain("untrusted");
+  expect(limits).toContain("`k` you choose");
 });
 
 test("the sidebar links the MinHash guide", () => {

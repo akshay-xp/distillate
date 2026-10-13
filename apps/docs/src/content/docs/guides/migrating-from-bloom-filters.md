@@ -365,8 +365,8 @@ a.jaccard(b); // ~0.38
 The two sets share 500 of 1,500 users, so the true similarity is 1/3. distillate also ships the index `bloom-filters`
 lacks, `MinHashLSH`, for finding near-duplicates among many sketches; see the
 [MinHash guide](/guides/minhash/). Each item costs one hash rather than `k`,
-which the [benchmark results](/bench/results/) measure at over 200 times the
-incumbent's add rate from 10k items up.
+which the [benchmark results](/bench/results/) measure at about
+two orders of magnitude above the incumbent's add rate from 10k items up.
 
 ### Serialized filters do not carry over
 

@@ -161,5 +161,12 @@ under the same bands, so queries return floods of candidates. Choose a private
 `seed` when the items come from people who may want that, and cap how many
 candidates you act on.
 
+Filling a sparse sketch's empty slots grows with `k`: at the default `k` of
+128 it takes under 2 ms, but at `k` 4096 with one slot filled it takes hundreds
+of milliseconds. A sketch pays it once, on the first `jaccard`, `signature` or
+index call after it changes. A frame from an untrusted sender can be built to
+cost the most, so accept sketches only at a `k` you choose: check `k` right
+after `fromBytes`, which does not fill the slots, and reject the rest.
+
 MinHash estimates resemblance, not containment: a short document fully quoted
 inside a long one has low Jaccard similarity to it.

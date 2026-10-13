@@ -269,4 +269,8 @@ test("the minhash mapping covers every call a migrating reader makes", () => {
   expect(section).toContain("numbers");
   expect(section).toContain("same factory");
   expect(section).toContain("/bench/results/");
+  // The speedup measured 200x on one machine and 110x on another; only the
+  // order of magnitude holds across them.
+  expect(section).toContain("two orders of magnitude");
+  expect(section).not.toContain("200 times");
 });

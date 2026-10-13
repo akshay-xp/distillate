@@ -81,6 +81,8 @@ function integrate(f: (s: number) => number, a: number, b: number): number {
  * `weights[0] * falsePositive + weights[1] * falseNegative` around
  * `threshold` wins. Balanced weights put the curve's midpoint near the
  * threshold, so pairs just above it are found most of the time, not always.
+ * The search tries every split of `k`, so its cost grows with `k`: about
+ * 10 ms at 128 and a few hundred ms at 4096.
  *
  * @param threshold - Jaccard similarity that should make a pair a candidate.
  * @param k - Slots in each signature.
