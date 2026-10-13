@@ -103,6 +103,60 @@ export class MinHash {
   }
 
   /**
+   * Merges two sketches: the result is the sketch of the union of their key
+   * sets. Neither input changes.
+   *
+   * @param other - The sketch to merge with.
+   * @returns A new sketch holding both key sets.
+   * @throws {@link ParamError} if `k` or the seed differ, since the two would
+   * have sent the same key to different slots or values.
+   */
+  union(other: MinHash): MinHash {
+    this.#assertCompatible(other);
+    const merged = new MinHash({ k: this.#slots.length, seed: this.#seed });
+    const out = merged.#slots;
+    const theirs = other.#slots;
+    let filled = 0;
+    for (let i = 0; i < out.length; i++) {
+      const value = Math.min(this.#slots[i] ?? EMPTY, theirs[i] ?? EMPTY);
+      out[i] = value;
+      if (value !== EMPTY) filled++;
+    }
+    merged.#filled = filled;
+    return merged;
+  }
+
+  /**
+   * Whether two sketches hold the same slots at the same `k` and seed.
+   *
+   * @param other - The sketch to compare against.
+   * @returns `true` if the two would answer every query identically.
+   */
+  equals(other: MinHash): boolean {
+    if (other.#seed !== this.#seed) return false;
+    const mine = this.#slots;
+    const theirs = other.#slots;
+    if (mine.length !== theirs.length) return false;
+    for (let i = 0; i < mine.length; i++) {
+      if (mine[i] !== theirs[i]) return false;
+    }
+    return true;
+  }
+
+  #assertCompatible(other: MinHash): void {
+    if (other.#slots.length !== this.#slots.length) {
+      throw new ParamError(
+        `cannot combine sketches with different k, got ${String(this.#slots.length)} and ${String(other.#slots.length)}`,
+      );
+    }
+    if (other.#seed !== this.#seed) {
+      throw new ParamError(
+        `cannot combine sketches with different seeds, got ${String(this.#seed)} and ${String(other.#seed)}`,
+      );
+    }
+  }
+
+  /**
    * Estimates the Jaccard similarity `|A ∩ B| / |A ∪ B|` of the two key sets,
    * within {@link standardError}.
    *
@@ -111,6 +165,7 @@ export class MinHash {
    * exactly one is empty.
    */
   jaccard(other: MinHash): number {
+    this.#assertCompatible(other);
     if (this.isEmpty || other.isEmpty) {
       return this.isEmpty && other.isEmpty ? 1 : 0;
     }
