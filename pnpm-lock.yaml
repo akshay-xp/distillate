@@ -75,6 +75,9 @@ importers:
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
+      minhash:
+        specifier: 0.0.9
+        version: 0.0.9
       mitata:
         specifier: ^1.0.34
         version: 1.0.34
@@ -3181,6 +3184,9 @@ packages:
 
   micromark@4.0.2:
     resolution: {integrity: sha512-zpe98Q6kvavpCr1NPVSCMebCKfD7CA2NqZ+rykeNhONIJBpc1tFKt9hucLGwha3jNTNI8lHpctWJWoimVF4PfA==}
+
+  minhash@0.0.9:
+    resolution: {integrity: sha512-Rs0iOE6oJwvMN2CrsNvdCMkpo0Lzh7wmTZAVH6j550n0VeqxfVhQe0lV8Ay4bmXC5ATZmihq9YbZ/n6cf6kP7A==}
 
   minimatch@10.2.3:
     resolution: {integrity: sha512-Rwi3pnapEqirPSbWbrZaa6N3nmqq4Xer/2XooiOKyV3q12ML06f7MOuc5DVH8ONZIFhwIYQ3yzPH4nt7iWHaTg==}
@@ -7288,6 +7294,8 @@ snapshots:
       micromark-util-types: 2.0.2
     transitivePeerDependencies:
       - supports-color
+
+  minhash@0.0.9: {}
 
   minimatch@10.2.3:
     dependencies:

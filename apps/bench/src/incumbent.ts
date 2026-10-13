@@ -6,7 +6,9 @@ export const {
   BloomFilter,
   CountMinSketch,
   CuckooFilter,
+  Hashing,
   HyperLogLog,
+  MinHashFactory,
   ScalableBloomFilter,
   TopK,
 } = bloomFilters;
