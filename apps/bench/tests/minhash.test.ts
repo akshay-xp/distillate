@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { similarityAdapters } from "../src/minhash.js";
+import { minHashRows, similarityAdapters } from "../src/minhash.js";
 
 const items = (prefix: string, n: number): string[] =>
   Array.from({ length: n }, (_, i) => `${prefix}:${String(i)}`);
@@ -29,5 +29,24 @@ test("similarity adapters estimate at equal k from a shared family", () => {
       adapter.name,
     ).toBeLessThan(0.15);
     expect(a.bytes(), adapter.name).toBeGreaterThan(0);
+  }
+});
+
+test("minhash rows measure add rate, Jaccard error and size", () => {
+  const rows = minHashRows([1_000]);
+
+  expect(rows.map((r) => r.name)).toEqual([
+    "distillate/minhash",
+    "bloom-filters",
+    "minhash",
+  ]);
+  for (const r of rows) {
+    expect(r.items, r.name).toBe(1_000);
+    expect(Number.isFinite(r.addOpsPerSec) && r.addOpsPerSec > 0, r.name).toBe(
+      true,
+    );
+    expect(r.meanAbsError, r.name).toBeLessThanOrEqual(r.maxAbsError);
+    expect(r.maxAbsError, r.name).toBeLessThanOrEqual(1);
+    expect(r.bytes, r.name).toBeGreaterThan(0);
   }
 });
