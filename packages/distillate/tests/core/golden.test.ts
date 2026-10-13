@@ -7,6 +7,7 @@ import { hash128Key, reduce } from "../../src/core/hasher.js";
 import { bytesEqual, UnknownVersionError } from "../../src/core/serialize.js";
 import { BinaryFuse8, BinaryFuse16 } from "../../src/fuse/index.js";
 import { HyperLogLog } from "../../src/hll/hll.js";
+import { MinHash } from "../../src/minhash/minhash.js";
 import { CountMinSketch } from "../../src/countmin/countmin.js";
 import { CuckooFilter } from "../../src/cuckoo/cuckoo.js";
 import { DDSketch } from "../../src/ddsketch/ddsketch.js";
@@ -31,6 +32,7 @@ interface GoldenEntry {
   values?: number[];
   maxBins?: number;
   mapping?: string;
+  k?: number;
   frame?: string;
 }
 
@@ -96,6 +98,12 @@ const build = (entry: GoldenEntry): Serializable => {
         ...(mapping === "log" ? { mapping: logMapping } : {}),
       });
     }
+    case "minhash": {
+      const { k, seed } = entry;
+      const sketch = new MinHash({ k, seed });
+      for (const key of keys) sketch.add(key);
+      return sketch;
+    }
     default:
       throw new Error(`unknown kind ${kind}`);
   }
@@ -123,6 +131,8 @@ const parse = (kind: string, bytes: Uint8Array): Serializable => {
       return TopK.fromBytes(bytes);
     case "ddsketch":
       return DDSketch.fromBytes(bytes);
+    case "minhash":
+      return MinHash.fromBytes(bytes);
     default:
       throw new Error(`unknown kind ${kind}`);
   }
@@ -156,6 +166,8 @@ describe.each(structures)("golden fixture $name", (entry) => {
       expect(parsed.equals(build(entry) as TopK)).toBe(true);
     } else if (parsed instanceof DDSketch) {
       expect(parsed.equals(build(entry) as DDSketch)).toBe(true);
+    } else if (parsed instanceof MinHash) {
+      expect(parsed.equals(build(entry) as MinHash)).toBe(true);
     } else {
       // A deleted key may still answer true (a false positive), so only the
       // keys still held are asserted.
