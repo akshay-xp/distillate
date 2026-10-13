@@ -8,7 +8,7 @@ Static and mutable filters have honestly different lifecycles, and sketches answ
 
 - Mutable: `add` (and sometimes `delete`) after construction. Bloom, Blocked Bloom, Counting Bloom, Scalable Bloom, Cuckoo.
 - Static: `build(keys)` once, then immutable and queried. Binary Fuse, XOR. Smaller and faster; can fail-and-retry on build.
-- Sketches: `add` then ask an aggregate question rather than a membership one. HyperLogLog (cardinality), Count-Min (frequency of a named key), Top-K (heavy hitters) and DDSketch (quantiles of numbers, not keys); MinHash (similarity) is the same family, not yet shipped.
+- Sketches: `add` then ask an aggregate question rather than a membership one. HyperLogLog (cardinality), Count-Min (frequency of a named key), Top-K (heavy hitters), DDSketch (quantiles of numbers, not keys) and MinHash (similarity of two sets).
 
 ### Why a sketch is not a `Filter`
 
@@ -58,7 +58,17 @@ interface QuantileSketch extends Omit<Sketch<QuantileSketch>, "add"> {
   quantile(q: number): number; // within relativeAccuracy of the true value
   readonly relativeAccuracy: number;
 }
+
+// Two sets at once: the question is about a pair, so the answer takes one
+interface SimilaritySketch extends Sketch<SimilaritySketch> {
+  jaccard(other: SimilaritySketch): number; // within standardError of the truth
+  readonly standardError: number; // 0.5 / sqrt(k), the worst case at J = 0.5
+}
 ```
+
+MinHash's index, `MinHashLSH`, is not a sketch: it holds keys under band hashes of
+sketches and answers `query(sketch)` with candidate keys. It lives on the sketch's
+subpath because it takes nothing else, and it is not serialized; the sketches are.
 
 Each structure also exposes `fromBytes(bytes: Uint8Array): Filter` (static method).
 
@@ -110,6 +120,9 @@ src/
                     # index mappings, store.ts for the four stores
     protobuf/       # distillate/ddsketch/protobuf: Datadog's message, its own
                     # subpath so the sketch alone never bundles the codec
+  minhash/          # MinHash: minhash.ts (frame type 11, one-permutation slots,
+                    # densified on read), lsh.ts for MinHashLSH, and sizing.ts for
+                    # minHashSizing, lshSizing and the k bounds both share
   frame/            # distillate/frame: readFrameAt for walking a stream of frames
   index.ts          # root barrel (VERSION only)
 ```
