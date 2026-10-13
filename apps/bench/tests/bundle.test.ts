@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { bundleSize, ddSketchBundles } from "../src/bundle.js";
+import { bundleSize, ddSketchBundles, minHashBundles } from "../src/bundle.js";
 
 test("bundleSize is the gzipped size of a minified bundle", async () => {
   const size = await bundleSize("export const answer = 42;");
@@ -21,4 +21,19 @@ test("each library's DDSketch bundle is measured alone and with protobuf", async
   expect(theirs?.withProtobuf).toBeGreaterThanOrEqual(
     theirs?.sketch ?? Infinity,
   );
+});
+
+test("each library's MinHash bundle is measured alone and with its LSH index", async () => {
+  const rows = await minHashBundles();
+  expect(rows.map((r) => r.name)).toEqual([
+    "distillate/minhash",
+    "bloom-filters",
+    "minhash",
+  ]);
+  for (const r of rows) expect(r.sketch, r.name).toBeGreaterThan(0);
+  const [ours, incumbent, pkg] = rows;
+  expect(ours?.withLsh).toBeGreaterThan(0);
+  // bloom-filters has no LSH index to bundle.
+  expect(incumbent?.withLsh).toBeNull();
+  expect(pkg?.withLsh).toBeGreaterThan(0);
 });
