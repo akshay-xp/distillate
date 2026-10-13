@@ -310,6 +310,64 @@ filter.has("alice"); // false
 Both delete one copy of a key per call, and in both a delete of a key you never
 added can remove another key's fingerprint, so only delete keys you added.
 
+### The similarity sketch
+
+`bloom-filters`' MinHash takes numbers, not strings, each at most its factory's
+`maxValue`, so you hash every item to an integer before adding it. Its hash
+functions are drawn at random when a factory is built, so two sketches compare
+only if they came from the same factory, and a sketch saved today cannot be
+compared with one from a factory built tomorrow. distillate's `add` takes the
+string or bytes directly, and any two sketches of the same `k` and seed
+compare, in any process.
+
+| `bloom-filters`                                 | distillate                                            |
+| ----------------------------------------------- | ----------------------------------------------------- |
+| `require("bloom-filters")`                      | `import ... from "distillate/minhash"`                |
+| `new MinHashFactory(nbHashes, maxValue)`        | no factory: sketches of the same `k` and seed compare |
+| `factory.create()`                              | `new MinHash({ k })` or `MinHash.create(maxError)`    |
+| `sketch.add(number)`, at most `maxValue`        | `sketch.add(key)`, a string or bytes                  |
+| `sketch.bulkLoad(numbers)`                      | `MinHash.from(keys, maxError)`                        |
+| `a.compareWith(b)`, throws when either is empty | `a.jaccard(b)`: 1 for two empty sketches, 0 for one   |
+| `sketch.isEmpty()`                              | `sketch.isEmpty`, a getter                            |
+| `sketch.nbHashes`                               | `sketch.k`                                            |
+| `sketch.saveAsJSON()` / `MinHash.fromJSON()`    | `sketch.toJSON()` / `MinHash.fromJSON()`              |
+
+Before:
+
+```js
+const { Hashing, MinHashFactory } = require("bloom-filters");
+
+const early = Array.from({ length: 1000 }, (_, i) => `user:${String(i)}`);
+const late = Array.from({ length: 1000 }, (_, i) => `user:${String(i + 500)}`);
+
+const factory = new MinHashFactory(100, 2 ** 32 - 1);
+const hashing = new Hashing();
+const a = factory.create();
+const b = factory.create();
+for (const user of early) a.add(hashing.hashAsInt(user) % 2 ** 32);
+for (const user of late) b.add(hashing.hashAsInt(user) % 2 ** 32);
+a.compareWith(b);
+```
+
+After:
+
+```ts
+import { MinHash } from "distillate/minhash";
+
+const early = Array.from({ length: 1000 }, (_, i) => `user:${String(i)}`);
+const late = Array.from({ length: 1000 }, (_, i) => `user:${String(i + 500)}`);
+
+const a = MinHash.from(early, 0.05); // k = 100
+const b = MinHash.from(late, 0.05);
+a.jaccard(b); // ~0.38
+```
+
+The two sets share 500 of 1,500 users, so the true similarity is 1/3. distillate also ships the index `bloom-filters`
+lacks, `MinHashLSH`, for finding near-duplicates among many sketches; see the
+[MinHash guide](/guides/minhash/). Each item costs one hash rather than `k`,
+which the [benchmark results](/bench/results/) measure at over 200 times the
+incumbent's add rate from 10k items up.
+
 ### Serialized filters do not carry over
 
 The two formats are unrelated. distillate cannot read a `bloom-filters`

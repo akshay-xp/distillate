@@ -240,3 +240,33 @@ test("the cuckoo bug section quotes the lost keys RESULTS.md measured", () => {
   }
   expect(section).toContain("/bench/results/");
 });
+
+test("the minhash mapping covers every call a migrating reader makes", () => {
+  const rows = parseTable(GUIDE, "The similarity sketch");
+
+  const incumbent = rows.map(([from]) => from);
+  for (const call of [
+    "new MinHashFactory(nbHashes, maxValue)",
+    "factory.create()",
+    "add(number)",
+    "bulkLoad",
+    "compareWith",
+    "isEmpty",
+    "saveAsJSON",
+  ]) {
+    expect(
+      incumbent.some((cell) => cell.includes(call)),
+      `no row maps ${call}`,
+    ).toBe(true);
+  }
+  for (const [from, to] of rows) {
+    expect(to.trim(), `${from} maps to nothing`).not.toBe("");
+  }
+
+  // The two traps a migrating reader hits: strings need hashing first, and
+  // sketches only compare within one factory.
+  const section = subsection("The similarity sketch");
+  expect(section).toContain("numbers");
+  expect(section).toContain("same factory");
+  expect(section).toContain("/bench/results/");
+});
