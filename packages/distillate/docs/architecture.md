@@ -2,13 +2,14 @@
 
 Deep modules, one narrow interface. Every structure feels identical to use.
 
-## Three families
+## Four families
 
 Static and mutable filters have honestly different lifecycles, and sketches answer a different question entirely. Do not pretend everything is a Bloom filter (the mistake incumbents make).
 
 - Mutable: `add` (and sometimes `delete`) after construction. Bloom, Blocked Bloom, Counting Bloom, Scalable Bloom, Cuckoo.
 - Static: `build(keys)` once, then immutable and queried. Binary Fuse, XOR. Smaller and faster; can fail-and-retry on build.
 - Sketches: `add` then ask an aggregate question rather than a membership one. HyperLogLog (cardinality), Count-Min (frequency of a named key), Top-K (heavy hitters), DDSketch (quantiles of numbers, not keys) and MinHash (similarity of two sets).
+- Reconciliation: two parties, one set each, and the exact keys that differ. RIBLT.
 
 ### Why a sketch is not a `Filter`
 
@@ -17,6 +18,12 @@ The split is structural, not taxonomic. `Filter` promises `has(key)` and `bitsPe
 A HyperLogLog does not store membership: it keeps `2^p` registers holding the longest run of leading zeros hashed to each, from which a cardinality is inferred. Nothing in there answers "did I see this key". And `bitsPerKey` has no denominator, because a sketch's size is fixed by `p` before it sees a single key. That fixed size is the entire point: 12 KiB counts a thousand distinct keys or a billion.
 
 So sketches get their own narrow interface rather than a widened `Filter` with methods that throw. The union operation is shared in spirit but not in type: filters merge only at identical parameters, while sketches fold to the coarser precision.
+
+### Why reconciliation is neither
+
+A filter and a sketch are each one structure, built, queried and serialized whole. Reconciliation is a protocol between two of them: the question ("which keys do we not share?") is about two sets that never meet in one process, and the thing that crosses the wire is a stream, not a structure. So it is two halves, not one class: `RibltEncoder` turns a set into an endless stream of coded symbols (`take(n)` returns the next `n` as a frame), and `RibltDecoder` subtracts its own set from them (`push(frame)`) until it peels the difference. Neither half has `has`, `union` or `fromBytes`; a frame is a batch of the stream, read only by `push`.
+
+Symbols are 64-bit key hashes, not keys, so every symbol is 20 bytes whatever the keys' length; `local()` maps decoded hashes back to the caller's keys by re-hashing them once, and `remote()` returns hashes for the other side to resolve with `hashOf`. A key's checksum and its index sequence are functions of its symbol alone, because the decoder only ever holds a remote symbol, never its key; the sequence's PRNG is seeded from the whole 64-bit checksum, since a 32-bit seed repeats across about n^2 / 2^33 pairs and a pair sharing a sequence never peels. Symbol words travel through `R64` and typed arrays rather than arguments, so they are not boxed when a call is not inlined.
 
 ## Interfaces
 
@@ -130,6 +137,9 @@ src/
   minhash/          # MinHash: minhash.ts (frame type 11, one-permutation slots,
                     # densified on read, cached), lsh.ts for MinHashLSH, sizing.ts for
                     # minHashSizing, lshSizing and the k bounds both share
+  riblt/            # RIBLT: encoder.ts, decoder.ts (peeling, local/remote), window.ts
+                    # (typed-array min-heap of symbols on next index), mapping.ts (checksum,
+                    # xoroshiro64** index sequence), frame.ts (frame type 12, columns)
   frame/            # distillate/frame: readFrameAt for walking a stream of frames
   index.ts          # root barrel (VERSION only)
 ```
