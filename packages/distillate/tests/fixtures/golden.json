@@ -1499,6 +1499,15 @@
     "frame": "RFNUTAULAAAIAQAAAAAAAAAAAABAAAAAlMqSXv////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8R5Wd9//////UCBzX//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////9NpYgo="
   },
   {
+    "name": "riblt",
+    "kind": "riblt",
+    "keys": ["alpha", "bravo", "charlie", "delta", "echo"],
+    "seed": 7,
+    "skip": 3,
+    "symbols": 7,
+    "frame": "RFNUTAUMAACcAAAAAAAAAAcAAAADAAAABwAAAAAAAACNP8BGkyaKMAAAAAAAAAAAd0UnStgpqqYAAAAAAAAAAN133o8rAeKC3XfejysB4oInkMY9AKpUi0ESuQAp5ZUJAAAAAAAAAADsVjTUnhEyuwAAAAAAAAAAzCOdlDKbnR/MI52UMpudH15+9cTWNxF9AQAAAAAAAAACAAAAAAAAAAEAAAABAAAAAQAAALKKL4E="
+  },
+  {
     "name": "v2-reject",
     "kind": "v2",
     "keys": [],
