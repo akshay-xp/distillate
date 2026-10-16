@@ -16,7 +16,11 @@ export const R64: Uint32Array = new Uint32Array(2);
 // as R64. computeLanes writes it; the allocating wrappers copy it out.
 const LANES: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
 
-function mul64(alo: number, ahi: number, blo: number, bhi: number): void {
+// Multiplies the word in R64 by (bhi:blo) in place. The operand stays in R64
+// for fmix64's reason; the multipliers are constants, which never box.
+function mul64(blo: number, bhi: number): void {
+  const alo = R64[0] ?? 0;
+  const ahi = R64[1] ?? 0;
   const a0 = alo & 0xffff;
   const a1 = alo >>> 16;
   const a2 = ahi & 0xffff;
@@ -57,18 +61,17 @@ function mul64(alo: number, ahi: number, blo: number, bhi: number): void {
 // Reads and writes R64 rather than taking arguments: words past 2^30 passed
 // to a call that is not inlined are boxed.
 export function fmix64(): void {
-  let l = R64[0] ?? 0;
-  let h = R64[1] ?? 0;
-  // k ^= k >>> 33: since 33 >= 32, the shifted low word is (hi >>> 1), high 0.
-  l = (l ^ (h >>> 1)) >>> 0;
-  mul64(l, h, 0xed558ccd, 0xff51afd7);
-  l = R64[0] ?? 0;
-  h = R64[1] ?? 0;
-  l = (l ^ (h >>> 1)) >>> 0;
-  mul64(l, h, 0x1a85ec53, 0xc4ceb9fe);
-  l = R64[0] ?? 0;
-  h = R64[1] ?? 0;
-  R64[0] = (l ^ (h >>> 1)) >>> 0;
+  shiftXor();
+  mul64(0xed558ccd, 0xff51afd7);
+  shiftXor();
+  mul64(0x1a85ec53, 0xc4ceb9fe);
+  shiftXor();
+}
+
+// k ^= k >>> 33 on the word in R64: since 33 >= 32, the shifted low word is
+// (hi >>> 1) and the high word 0.
+function shiftXor(): void {
+  R64[0] = ((R64[0] ?? 0) ^ ((R64[1] ?? 0) >>> 1)) >>> 0;
 }
 
 function rotl32(x: number, r: number): number {
