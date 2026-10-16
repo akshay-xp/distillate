@@ -1,7 +1,8 @@
 import type { BytesLike } from "../core/bytes.js";
 import { hash128KeyInto, type Hash128 } from "../core/hasher.js";
 import { forEachItem } from "../core/iterable.js";
-import { assertUint32, ParamError } from "../core/params.js";
+import { assertPositiveInt, assertUint32, ParamError } from "../core/params.js";
+import { writeSymbols } from "./frame.js";
 import { CodingWindow } from "./window.js";
 
 /** Construction parameters shared by {@link RibltEncoder} and its decoder. */
@@ -82,6 +83,19 @@ export class RibltEncoder {
     this.#symbol[0] = this.#hash.w0;
     this.#symbol[1] = this.#hash.w1;
     this.#window.add(this.#symbol, 0, 0);
+  }
+
+  /**
+   * Produces the next `n` coded symbols as one frame, for the peer's
+   * {@link RibltDecoder.push}. Frames must reach the decoder in order.
+   *
+   * @throws {@link ParamError} If `n` is not a positive integer.
+   */
+  take(n: number): Uint8Array {
+    assertPositiveInt(n, "n");
+    return writeSymbols(this.#seed, this.#index, n, (out) => {
+      this.#next(out);
+    });
   }
 
   #next(out: Uint32Array): void {
