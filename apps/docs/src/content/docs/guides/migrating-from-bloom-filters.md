@@ -368,6 +368,60 @@ lacks, `MinHashLSH`, for finding near-duplicates among many sketches; see the
 which the [benchmark results](/bench/results/) measure at about
 two orders of magnitude above the incumbent's add rate from 10k items up.
 
+### The invertible Bloom filter
+
+`bloom-filters`' `InvertibleBloomFilter` finds the difference between two sets,
+but its table must be sized in advance for a difference nobody knows yet. Size
+it too small and `decode` reports `success: false`, and both sides rebuild a
+larger table and send it again; size it generously and every sync pays for
+cells it never needed. Each side also ships its whole table, however few keys
+differ. distillate's RIBLT is rateless: the encoder produces coded symbols for
+as long as the decoder needs them, so nobody picks a size, and the bytes sent
+follow the difference actually found.
+
+| `bloom-filters`                              | distillate                                                       |
+| -------------------------------------------- | ---------------------------------------------------------------- |
+| `require("bloom-filters")`                   | `import ... from "distillate/riblt"`                             |
+| `new InvertibleBloomFilter(size, hashCount)` | `RibltEncoder.from(keys)` and `RibltDecoder.from(keys)`, no size |
+| `iblt.add(buffer)`                           | `add(key)`, a string or bytes                                    |
+| `iblt.remove(buffer)`                        | build from the current set; the encoder is cheap to rebuild      |
+| `a.substract(b)` on two whole tables         | `decoder.push(encoder.take(n))`, frame by frame                  |
+| `decode()`, `success: false` when undersized | `push` returns `decoded`; keep pushing until it is true          |
+| `additional` and `missing`, as Buffers       | `remote()` as 64-bit hashes and `local()` as your own keys       |
+| `saveAsJSON()` to ship a table               | `take(n)` frames, sent as they are, in order                     |
+
+Before:
+
+```js
+const { InvertibleBloomFilter } = require("bloom-filters");
+
+// Sized for the difference before anyone knows it.
+const server = new InvertibleBloomFilter(1000, 4);
+const client = new InvertibleBloomFilter(1000, 4);
+for (const key of ["alice", "bob", "dave"]) server.add(Buffer.from(key));
+for (const key of ["alice", "carol"]) client.add(Buffer.from(key));
+const result = server.substract(client).decode();
+result.success; // false when 1000 cells were too few
+```
+
+After:
+
+```ts
+import { RibltDecoder, RibltEncoder } from "distillate/riblt";
+
+const server = RibltEncoder.from(["alice", "bob", "dave"]);
+const client = RibltDecoder.from(["alice", "carol"]);
+
+let decoded = false;
+while (!decoded) decoded = client.push(server.take(4));
+client.local().join(); // "carol"
+client.remote().length; // 2
+```
+
+`remote()` reports the server's keys as hashes, since the client never saw
+them; the server resolves them with `RibltDecoder.hashOf`. See the
+[RIBLT guide](/guides/riblt/) for syncing over `fetch` or a `WebSocket`.
+
 ### Serialized filters do not carry over
 
 The two formats are unrelated. distillate cannot read a `bloom-filters`
