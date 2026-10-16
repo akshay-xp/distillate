@@ -1,4 +1,10 @@
 import { RibltDecoder, RibltEncoder } from "distillate/riblt";
+import {
+  BloomDiff,
+  BloomStream,
+  deserializeCellBatch,
+  serializeCellBatch,
+} from "ribbit-riblt";
 
 import { InvertibleBloomFilter } from "./incumbent.js";
 import { median } from "./keylength.js";
@@ -63,6 +69,49 @@ export const distillateReconcileAdapter: ReconcileAdapter = {
 };
 
 /**
+ * `ribbit-riblt`, the same scheme. The receiver streams cells from its own
+ * keys and diffs them against the sender's, rather than holding a decoder
+ * over its set; the sender ships each batch through `serializeCellBatch`. It
+ * returns the keys themselves, where distillate returns the sender's as hashes.
+ */
+export const ribbitReconcileAdapter: ReconcileAdapter = {
+  name: "ribbit-riblt",
+  run(a, b) {
+    let started = performance.now();
+    const sender = new BloomStream(a);
+    let sendMs = performance.now() - started;
+    started = performance.now();
+    const receiver = new BloomStream(b);
+    const diff = new BloomDiff();
+    let receiveMs = performance.now() - started;
+
+    let bytes = 0;
+    let symbols = 0;
+    while (diff.status !== "peelable") {
+      started = performance.now();
+      const batch = serializeCellBatch([...sender.next(RIBLT_FRAME)], symbols);
+      sendMs += performance.now() - started;
+      bytes += batch.length;
+      symbols += RIBLT_FRAME;
+      started = performance.now();
+      diff.addCells(deserializeCellBatch(batch).cells, [
+        ...receiver.next(RIBLT_FRAME),
+      ]);
+      receiveMs += performance.now() - started;
+    }
+    return {
+      sendMs,
+      receiveMs,
+      bytes,
+      symbols,
+      decoded: diff.status === "peelable",
+      onlyA: diff.left.length,
+      onlyB: diff.right.length,
+    };
+  },
+};
+
+/**
  * `bloom-filters` v3's IBLT, sized by its own `create(d, 0.01)` from the true
  * difference, which no real caller knows. Keys go in as `Buffer`s, as it
  * requires. The sender ships its whole table, as `saveAsJSON`.
@@ -95,6 +144,7 @@ export const incumbentReconcileAdapter: ReconcileAdapter = {
 
 export const reconcileAdapters: ReconcileAdapter[] = [
   distillateReconcileAdapter,
+  ribbitReconcileAdapter,
   incumbentReconcileAdapter,
 ];
 

@@ -12,7 +12,8 @@
   "dependencies": {
     "bloom-filters": "^3.0.4",
     "bloomfilter": "^1.1.2",
-    "distillate": "workspace:*"
+    "distillate": "workspace:*",
+    "ribbit-riblt": "^1.1.1"
   },
   "devDependencies": {
     "@datadog/sketches-js": "^2.1.1",
