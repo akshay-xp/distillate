@@ -26,6 +26,7 @@ import {
 } from "../dist/ddsketch/index.js";
 import { fromProtobuf, toProtobuf } from "../dist/ddsketch/protobuf/index.js";
 import { MinHash, MinHashLSH, minHashSizing } from "../dist/minhash/index.js";
+import { RibltDecoder, RibltEncoder } from "../dist/riblt/index.js";
 
 if (typeof VERSION !== "string") {
   console.error(
@@ -334,6 +335,15 @@ if (
   process.exit(1);
 }
 
+// The hand-off between them is module-internal until frames ship, so the
+// built subpath is checked for construction and the key hash alone.
+RibltEncoder.from(["alice", "bob"]);
+const ribltDecoder = RibltDecoder.from(["alice", "carol"]);
+if (ribltDecoder.decoded || typeof RibltDecoder.hashOf("alice") !== "bigint") {
+  console.error("smoke: RIBLT decoder built decoded, or hashOf is no bigint");
+  process.exit(1);
+}
+
 // A log of concatenated frames must walk by declared length alone.
 const log = [
   golden.find((g) => g.name === "bloom"),
@@ -357,5 +367,5 @@ if (walked.join() !== "1,5" || at !== stream.length) {
 }
 
 console.log(
-  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo + distillate/countmin + distillate/topk + distillate/ddsketch + distillate/ddsketch/protobuf + distillate/minhash work (filters, sketches, sizing helpers, frame walk, growth, delete, counting, heavy hitters, quantiles, similarity), toBytes byte-identical to golden`,
+  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo + distillate/countmin + distillate/topk + distillate/ddsketch + distillate/ddsketch/protobuf + distillate/minhash + distillate/riblt work (filters, sketches, sizing helpers, frame walk, growth, delete, counting, heavy hitters, quantiles, similarity, reconciliation), toBytes byte-identical to golden`,
 );
