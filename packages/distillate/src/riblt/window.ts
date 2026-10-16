@@ -11,7 +11,8 @@ export class CodingWindow {
   #hi = new Uint32Array(16);
   #checkLo = new Uint32Array(16);
   #checkHi = new Uint32Array(16);
-  #state = new Uint32Array(16);
+  // Two lanes per symbol: its PRNG, seeded with its checksum.
+  #state = new Uint32Array(32);
   // Float64: a gap can carry an index past 2^32, where it never comes round.
   #next = new Float64Array(16);
   // Min-heap of entries on #next.
@@ -27,7 +28,8 @@ export class CodingWindow {
     checksumOf(lo, hi);
     this.#checkLo[at] = R64[0] ?? 0;
     this.#checkHi[at] = R64[1] ?? 0;
-    this.#state[at] = R64[0] ?? 0;
+    this.#state[2 * at] = R64[0] ?? 0;
+    this.#state[2 * at + 1] = R64[1] ?? 0;
     let index = 0;
     while (index < from) index = nextIndex(this.#state, at, index);
     this.#next[at] = index;
@@ -72,7 +74,7 @@ export class CodingWindow {
     this.#hi = grow(this.#hi, new Uint32Array(size));
     this.#checkLo = grow(this.#checkLo, new Uint32Array(size));
     this.#checkHi = grow(this.#checkHi, new Uint32Array(size));
-    this.#state = grow(this.#state, new Uint32Array(size));
+    this.#state = grow(this.#state, new Uint32Array(2 * size));
     this.#next = grow(this.#next, new Float64Array(size));
     this.#heap = grow(this.#heap, new Int32Array(size));
   }
