@@ -47,11 +47,17 @@ export default defineConfig({
         // maxWorkers 1 puts this project in vitest's sequential group, which is
         // ordered after every other group, so it runs on its own at the end
         // while the rest of the suite still runs in parallel.
+        //
+        // The probes count collections, so they see only allocation that
+        // fills the young generation. Once a test has built large inputs V8
+        // has grown it to many MB: 100k RIBLT hand-offs allocating an object
+        // each read 0. Pinned at 1 MB, 45k read 1 or 2.
         test: {
           ...shared,
           name: "allocation",
           include: PROBES,
           maxWorkers: 1,
+          execArgv: ["--max-semi-space-size=1"],
         },
       },
     ],
