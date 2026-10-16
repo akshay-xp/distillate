@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 
 import { hash128Key } from "../../src/core/hasher.js";
+import { ParamError } from "../../src/core/params.js";
 import { pushSymbol, RibltDecoder } from "../../src/riblt/decoder.js";
 import { nextSymbol, RibltEncoder } from "../../src/riblt/encoder.js";
 
@@ -61,3 +62,64 @@ test.each([1, 10, 1000])(
     expect(decoder.local()).toEqual([]);
   },
 );
+
+const sortedKeys = (keys: string[]): string[] => [...keys].sort();
+
+test("identical sets decode on the first symbol with nothing to report", () => {
+  const keys = keysOf("k", 10_000);
+  const decoder = RibltDecoder.from(keys);
+
+  expect(reconcile(RibltEncoder.from(keys), decoder, 0)).toBe(1);
+  expect(decoder.local()).toEqual([]);
+  expect(decoder.remote()).toEqual([]);
+});
+
+test("against an empty remote, local returns the decoder's own keys", () => {
+  const keys = keysOf("b", 100);
+  const decoder = RibltDecoder.from(keys);
+
+  reconcile(new RibltEncoder(), decoder, 100);
+
+  expect(sortedKeys(decoder.local())).toEqual(sortedKeys(keys));
+  expect(decoder.remote()).toEqual([]);
+});
+
+test("disjoint sets recover both sides", () => {
+  const a = keysOf("a", 500);
+  const b = keysOf("b", 500);
+  const decoder = RibltDecoder.from(b);
+
+  reconcile(RibltEncoder.from(a), decoder, 1000);
+
+  expect(sortedKeys(decoder.local())).toEqual(sortedKeys(b));
+  expect(sorted(decoder.remote())).toEqual(
+    sorted(a.map((k) => RibltDecoder.hashOf(k))),
+  );
+});
+
+test.each([1, 10, 1000])(
+  "a difference of %i over 10k shared keys decodes exactly",
+  (d) => {
+    const shared = keysOf("s", 10_000);
+    const onlyA = keysOf("a", Math.ceil(d / 2));
+    const onlyB = keysOf("b", Math.floor(d / 2));
+    const decoder = new RibltDecoder<string>();
+    for (const key of [...shared, ...onlyB]) decoder.add(key);
+
+    reconcile(RibltEncoder.from([...onlyA, ...shared]), decoder, d);
+
+    expect(sortedKeys(decoder.local())).toEqual(sortedKeys(onlyB));
+    expect(sorted(decoder.remote())).toEqual(
+      sorted(onlyA.map((k) => RibltDecoder.hashOf(k))),
+    );
+  },
+);
+
+test("adding a local key after the first symbol is rejected", () => {
+  const decoder = new RibltDecoder<string>();
+  pushSymbol(decoder, new Uint32Array(5));
+
+  expect(() => {
+    decoder.add("late");
+  }).toThrow(ParamError);
+});
