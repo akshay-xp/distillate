@@ -9,6 +9,7 @@ import { toBase64 } from "../src/core/base64.js";
 import { BinaryFuse8, BinaryFuse16 } from "../src/fuse/index.js";
 import { HyperLogLog } from "../src/hll/hll.js";
 import { MinHash } from "../src/minhash/minhash.js";
+import { RibltEncoder } from "../src/riblt/encoder.js";
 import { CountMinSketch } from "../src/countmin/countmin.js";
 import { CuckooFilter } from "../src/cuckoo/cuckoo.js";
 import { DDSketch } from "../src/ddsketch/ddsketch.js";
@@ -33,6 +34,8 @@ interface Entry {
   maxBins?: number;
   mapping?: string;
   k?: number;
+  skip?: number;
+  symbols?: number;
   frame?: string;
 }
 
@@ -104,6 +107,13 @@ const bytes = (entry: Entry): Uint8Array => {
       const sketch = new MinHash({ k, seed });
       for (const key of keys) sketch.add(key);
       return sketch.toBytes();
+    }
+    case "riblt": {
+      // The second batch, so the fixture pins a non-zero start index.
+      const { seed, skip = 0, symbols = 0 } = entry;
+      const encoder = RibltEncoder.from(keys, { seed });
+      encoder.take(skip);
+      return encoder.take(symbols);
     }
     case "v2": {
       // A well-formed current-version Bloom frame with the version byte forced

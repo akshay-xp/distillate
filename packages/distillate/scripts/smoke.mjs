@@ -155,6 +155,8 @@ const rebuild = ({
   maxBins,
   mapping,
   k,
+  skip,
+  symbols,
 }) => {
   switch (kind) {
     case "bloom":
@@ -204,6 +206,12 @@ const rebuild = ({
       const sketch = new MinHash({ k, seed });
       for (const key of keys) sketch.add(key);
       return sketch;
+    }
+    case "riblt": {
+      const encoder = RibltEncoder.from(keys, { seed });
+      encoder.take(skip);
+      const frame = encoder.take(symbols);
+      return { toBytes: () => frame };
     }
     default:
       console.error(`smoke: unknown golden kind ${kind}`);
@@ -335,12 +343,26 @@ if (
   process.exit(1);
 }
 
-// The hand-off between them is module-internal until frames ship, so the
-// built subpath is checked for construction and the key hash alone.
-RibltEncoder.from(["alice", "bob"]);
+// Two peers reconcile over frames from the built package: the decoder must
+// report exactly the keys each side alone holds.
+const ribltEncoder = RibltEncoder.from(["alice", "bob", "dave"]);
 const ribltDecoder = RibltDecoder.from(["alice", "carol"]);
-if (ribltDecoder.decoded || typeof RibltDecoder.hashOf("alice") !== "bigint") {
-  console.error("smoke: RIBLT decoder built decoded, or hashOf is no bigint");
+let ribltFrames = 0;
+while (!ribltDecoder.push(ribltEncoder.take(4))) {
+  if (++ribltFrames > 100) {
+    console.error("smoke: RIBLT did not decode within 100 frames");
+    process.exit(1);
+  }
+}
+const ribltRemote = ribltDecoder.remote().sort();
+const ribltExpected = ["bob", "dave"].map((k) => RibltDecoder.hashOf(k)).sort();
+if (
+  ribltDecoder.local().join() !== "carol" ||
+  ribltRemote.join() !== ribltExpected.join()
+) {
+  console.error(
+    `smoke: RIBLT decoded local [${ribltDecoder.local()}] and remote [${ribltRemote}]`,
+  );
   process.exit(1);
 }
 

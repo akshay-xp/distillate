@@ -5,8 +5,23 @@
 ```ts
 
 // @public
+export class BadMagicError extends SerializationError {
+    override readonly name = "BadMagicError";
+}
+
+// @public
+export class ChecksumError extends SerializationError {
+    override readonly name = "ChecksumError";
+}
+
+// @public
 export class ParamError extends RangeError {
     override readonly name = "ParamError";
+}
+
+// @public
+export class ReservedBitsError extends SerializationError {
+    override readonly name = "ReservedBitsError";
 }
 
 // @public
@@ -17,6 +32,7 @@ export class RibltDecoder<K extends BytesLike = BytesLike> {
     static from<K extends BytesLike>(keys: Iterable<K>, params?: RibltParams): RibltDecoder<K>;
     static hashOf(key: BytesLike, seed?: number): bigint;
     local(): K[];
+    push(frame: Uint8Array): boolean;
     remote(): bigint[];
 }
 
@@ -25,11 +41,38 @@ export class RibltEncoder {
     constructor(params?: RibltParams);
     add(key: BytesLike): void;
     static from(keys: Iterable<BytesLike>, params?: RibltParams): RibltEncoder;
+    stream(n: number): Generator<Uint8Array, never, undefined>;
+    take(n: number): Uint8Array;
+}
+
+// @public
+export class RibltParamMismatchError extends Error {
+    override readonly name = "RibltParamMismatchError";
 }
 
 // @public
 export interface RibltParams {
     seed?: number;
+}
+
+// @public
+export class SerializationError extends Error {
+    override readonly name: string;
+}
+
+// @public
+export class TruncatedError extends SerializationError {
+    override readonly name = "TruncatedError";
+}
+
+// @public
+export class UnknownHashVariantError extends SerializationError {
+    override readonly name = "UnknownHashVariantError";
+}
+
+// @public
+export class UnknownVersionError extends SerializationError {
+    override readonly name = "UnknownVersionError";
 }
 
 // (No @packageDocumentation comment for this package)

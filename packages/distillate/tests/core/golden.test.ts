@@ -8,6 +8,8 @@ import { bytesEqual, UnknownVersionError } from "../../src/core/serialize.js";
 import { BinaryFuse8, BinaryFuse16 } from "../../src/fuse/index.js";
 import { HyperLogLog } from "../../src/hll/hll.js";
 import { MinHash } from "../../src/minhash/minhash.js";
+import { RibltDecoder } from "../../src/riblt/decoder.js";
+import { RibltEncoder } from "../../src/riblt/encoder.js";
 import { CountMinSketch } from "../../src/countmin/countmin.js";
 import { CuckooFilter } from "../../src/cuckoo/cuckoo.js";
 import { DDSketch } from "../../src/ddsketch/ddsketch.js";
@@ -33,6 +35,8 @@ interface GoldenEntry {
   maxBins?: number;
   mapping?: string;
   k?: number;
+  skip?: number;
+  symbols?: number;
   frame?: string;
 }
 
@@ -146,7 +150,9 @@ const frameBytes = (entry: GoldenEntry): Uint8Array => {
   return fromBase64(frame);
 };
 
-const structures = golden.filter((g) => g.kind !== "v2");
+// A RIBLT frame is a batch of a stream, not a structure: nothing parses it
+// back to re-serialize, so it has its own test below.
+const structures = golden.filter((g) => g.kind !== "v2" && g.kind !== "riblt");
 
 describe.each(structures)("golden fixture $name", (entry) => {
   test("parses to the recipe's exact state", () => {
@@ -181,6 +187,25 @@ describe.each(structures)("golden fixture $name", (entry) => {
     expect(bytesEqual(parsed.toBytes(), bytes)).toBe(true);
     expect(bytesEqual(build(entry).toBytes(), bytes)).toBe(true);
   });
+});
+
+// The fixture is the encoder's second batch, so its start index is not zero.
+test("the riblt fixture pins a batch of coded symbols", () => {
+  const entry = golden.find((g) => g.kind === "riblt");
+  if (!entry) throw new Error("riblt fixture missing from golden.json");
+  const { keys, seed = 0, skip = 0, symbols = 0 } = entry;
+  const bytes = frameBytes(entry);
+  const encoder = RibltEncoder.from(keys, { seed });
+  const first = encoder.take(skip);
+
+  expect(skip).toBeGreaterThan(0);
+  expect(bytesEqual(encoder.take(symbols), bytes)).toBe(true);
+  const decoder = new RibltDecoder({ seed });
+  decoder.push(first);
+  expect(decoder.push(bytes)).toBe(true);
+  expect(decoder.remote().sort()).toEqual(
+    keys.map((k) => RibltDecoder.hashOf(k, seed)).sort(),
+  );
 });
 
 test("v2 frame is rejected on version", () => {
