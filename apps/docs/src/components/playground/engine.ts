@@ -5,6 +5,7 @@ import { CuckooFilter, CuckooFullError } from "distillate/cuckoo";
 import { DDSketch, denseStore } from "distillate/ddsketch";
 import { BinaryFuse8, BinaryFuseBuildError } from "distillate/fuse";
 import { MinHash } from "distillate/minhash";
+import { RibltDecoder, RibltEncoder } from "distillate/riblt";
 import { ScalableBloomFilter } from "distillate/scalable";
 import { TopK } from "distillate/topk";
 
@@ -175,6 +176,27 @@ export type SetResult =
   | { ok: true; side: "a" | "b"; sizeA: number; sizeB: number }
   | { ok: false; message: string };
 
+/** One reconcile between the page's keys and a client that differs by `d`. */
+export interface ReconcileReport {
+  ok: true;
+  d: number;
+  /** Frames the server sent before the client decoded. */
+  frames: number;
+  symbols: number;
+  /** Every frame byte sent, headers included. */
+  bytes: number;
+  /** The server's keys as UTF-8, no separators: the least sending the set costs. */
+  rawBytes: number;
+  /** False only if the cap was reached first. */
+  decoded: boolean;
+  /** Keys only the server holds, resolved from the hashes the client reports. */
+  serverOnly: string[];
+  /** Keys only the client holds. */
+  clientOnly: string[];
+}
+
+export type ReconcileResult = ReconcileReport | { ok: false; message: string };
+
 export type RemoveResult =
   | {
       ok: true;
@@ -289,6 +311,10 @@ export function latencies(count: number): number[] {
 
 // Top-K returns keys as the bytes it stored; the page shows them as text.
 const decoder = new TextDecoder();
+const utf8 = new TextEncoder();
+
+/** Symbols per frame, the RIBLT guide's suggestion. */
+const RECONCILE_FRAME = 64;
 
 interface Filters {
   bloom: BloomFilter;
@@ -728,6 +754,51 @@ export class Playground {
       standardError,
       low: Math.max(0, exact - 2 * standardError),
       high: Math.min(1, exact + 2 * standardError),
+    };
+  }
+
+  /**
+   * Reconciles the page's keys, held by a server, with a client that lacks
+   * `ceil(d / 2)` of them and holds `floor(d / 2)` of its own. Each run builds
+   * both sides, since an encoder's stream serves one peer.
+   */
+  reconcile(d: number): ReconcileResult {
+    const server = this.#keys;
+    const half = Math.ceil(d / 2);
+    const own: string[] = [];
+    for (let i = 0; own.length < d - half; i += 1) {
+      const key = `client-${String(i)}`;
+      if (!this.#inserted.has(key)) own.push(key);
+    }
+    const client = RibltDecoder.from([...server.slice(half), ...own]);
+    const sender = RibltEncoder.from(server);
+
+    // The guide's advice to every caller: cap what you will accept.
+    const cap = 4 * d + 256;
+    let frames = 0;
+    let bytes = 0;
+    let decoded = false;
+    while (!decoded && frames * RECONCILE_FRAME < cap) {
+      const frame = sender.take(RECONCILE_FRAME);
+      frames += 1;
+      bytes += frame.length;
+      decoded = client.push(frame);
+    }
+
+    // What a server does with the hashes the client reports.
+    const remote = new Set(client.remote());
+    let rawBytes = 0;
+    for (const key of server) rawBytes += utf8.encode(key).length;
+    return {
+      ok: true,
+      d,
+      frames,
+      symbols: frames * RECONCILE_FRAME,
+      bytes,
+      rawBytes,
+      decoded,
+      serverOnly: server.filter((k) => remote.has(RibltDecoder.hashOf(k))),
+      clientOnly: client.local(),
     };
   }
 
