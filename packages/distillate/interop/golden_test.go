@@ -29,6 +29,8 @@ type entry struct {
 	MaxBins uint32
 	K       int
 	Seed    uint32
+	Skip    int
+	Symbols int
 	Frame   string
 }
 
@@ -2067,5 +2069,131 @@ func TestMinHashDamaged(t *testing.T) {
 		if _, err := parseMinHash(f); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: want an error mentioning %q, got %v", c.name, c.want, err)
 		}
+	}
+}
+
+// RIBLT, frame type 12: seed (u32), start (u32), count (u32), four bytes of
+// padding, then three columns of count entries each: symbol sums (u64), checksum
+// sums (u64) and counts (i32). A frame is a batch of an endless stream of coded
+// symbols, starting at index start. A key's symbol is its murmur words w1:w0;
+// its checksum and the indices it reaches are functions of that symbol alone.
+type riblt struct {
+	seed, start  uint32
+	sums, checks []uint64
+	counts       []int32
+}
+
+const ribltParams = 16
+
+func parseRiblt(f frame) (riblt, error) {
+	if len(f.body) < ribltParams {
+		return riblt{}, fmt.Errorf("body of %d bytes is shorter than the params block", len(f.body))
+	}
+	for at := 12; at < ribltParams; at++ {
+		if f.body[at] != 0 {
+			return riblt{}, fmt.Errorf("params padding at byte %d is not zero", at)
+		}
+	}
+	r := riblt{seed: le.Uint32(f.body), start: le.Uint32(f.body[4:])}
+	count := int(le.Uint32(f.body[8:]))
+	if want := ribltParams + 20*count; len(f.body) != want {
+		return riblt{}, fmt.Errorf("body of %d bytes disagrees with count %d (want %d)", len(f.body), count, want)
+	}
+	r.sums = make([]uint64, count)
+	r.checks = make([]uint64, count)
+	r.counts = make([]int32, count)
+	for i := range count {
+		r.sums[i] = le.Uint64(f.body[ribltParams+8*i:])
+		r.checks[i] = le.Uint64(f.body[ribltParams+8*count+8*i:])
+		r.counts[i] = int32(le.Uint32(f.body[ribltParams+16*count+4*i:]))
+	}
+	return r, nil
+}
+
+// ribltSymbol is a key's 64-bit symbol and the checksum derived from it.
+func ribltSymbol(key string, seed uint32) (symbol, checksum uint64) {
+	w := murmur3x86_128([]byte(key), seed)
+	symbol = uint64(w[1])<<32 | uint64(w[0])
+	return symbol, fmix64(symbol ^ 0x9e3779b97f4a7c15)
+}
+
+// ribltNext advances a symbol's xoroshiro64** state, seeded with its checksum's
+// low and high words, and returns the index after last.
+func ribltNext(s0, s1 *uint32, last uint64) uint64 {
+	out := bits.RotateLeft32(*s0*0x9e3779bb, 5) * 5
+	x := *s1 ^ *s0
+	*s0 = bits.RotateLeft32(*s0, 26) ^ x ^ (x << 9)
+	*s1 = bits.RotateLeft32(x, 13)
+	u := (float64(out) + 0.5) / 4294967296
+	return last + uint64(math.Ceil((float64(last)+1.5)*(1/math.Sqrt(u)-1)))
+}
+
+// buildRiblt writes coded symbols skip to skip+symbols of the stream over keys.
+func buildRiblt(seed uint32, keys []string, skip, symbols int) []byte {
+	sums := make([]uint64, symbols)
+	checks := make([]uint64, symbols)
+	counts := make([]int32, symbols)
+	first, end := uint64(skip), uint64(skip+symbols)
+	for _, key := range keys {
+		symbol, checksum := ribltSymbol(key, seed)
+		s0, s1 := uint32(checksum), uint32(checksum>>32)
+		for at := uint64(0); at < end; at = ribltNext(&s0, &s1, at) {
+			if at >= first {
+				sums[at-first] ^= symbol
+				checks[at-first] ^= checksum
+				counts[at-first]++
+			}
+		}
+	}
+	params := make([]byte, ribltParams)
+	le.PutUint32(params, seed)
+	le.PutUint32(params[4:], uint32(skip))
+	le.PutUint32(params[8:], uint32(symbols))
+	payload := make([]byte, 20*symbols)
+	for i := range symbols {
+		le.PutUint64(payload[8*i:], sums[i])
+		le.PutUint64(payload[8*symbols+8*i:], checks[i])
+		le.PutUint32(payload[16*symbols+4*i:], uint32(counts[i]))
+	}
+	return writeFrame(12, params, payload)
+}
+
+func TestRiblt(t *testing.T) {
+	offset := false
+	for _, e := range golden(t) {
+		if e.Kind != "riblt" {
+			continue
+		}
+		f, err := readFrame(frameOf(t, e))
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, err := parseRiblt(f)
+		if err != nil {
+			t.Fatalf("%s: %v", e.Name, err)
+		}
+		if r.seed != e.Seed || int(r.start) != e.Skip || len(r.counts) != e.Symbols {
+			t.Errorf("%s: seed %d start %d count %d, recipe says seed %d skip %d symbols %d",
+				e.Name, r.seed, r.start, len(r.counts), e.Seed, e.Skip, e.Symbols)
+		}
+		if len(r.sums) != len(r.counts) || len(r.checks) != len(r.counts) {
+			t.Errorf("%s: columns of %d, %d and %d symbols", e.Name, len(r.sums), len(r.checks), len(r.counts))
+		}
+		for i, c := range r.counts {
+			if c < -int32(len(e.Keys)) || c > int32(len(e.Keys)) {
+				t.Errorf("%s: symbol %d counts %d keys of %d", e.Name, i, c, len(e.Keys))
+			}
+		}
+		if len(r.counts) > 0 && r.counts[0] == 0 {
+			t.Errorf("%s: the first symbol folds in no key", e.Name)
+		}
+		offset = offset || r.start != 0
+		rebuilt := buildRiblt(e.Seed, e.Keys, e.Skip, e.Symbols)
+		if golden := frameOf(t, e); !bytes.Equal(rebuilt, golden) {
+			t.Errorf("%s: rebuilt frame differs:\n got %x\nwant %x", e.Name, rebuilt, golden)
+		}
+	}
+	if !offset {
+		t.Error("no riblt fixture starts past symbol 0")
 	}
 }
