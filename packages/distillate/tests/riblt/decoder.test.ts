@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import { hash128Key } from "../../src/core/hasher.js";
 import { ParamError } from "../../src/core/params.js";
@@ -122,4 +122,54 @@ test("adding a local key after the first symbol is rejected", () => {
   expect(() => {
     decoder.add("late");
   }).toThrow(ParamError);
+});
+
+function reconcileFrames(
+  encoder: RibltEncoder,
+  decoder: RibltDecoder<string>,
+  batch: number,
+): number {
+  for (let frames = 1; frames <= 10_000; frames++) {
+    if (decoder.push(encoder.take(batch))) return frames;
+  }
+  throw new Error("no decode within 10k frames");
+}
+
+test.each([1, 64])(
+  "identical sets decode on the first frame of %i",
+  (batch) => {
+    const keys = keysOf("k", 1000);
+    const decoder = RibltDecoder.from(keys);
+
+    expect(reconcileFrames(RibltEncoder.from(keys), decoder, batch)).toBe(1);
+  },
+);
+
+describe.each([1, 64])("over frames of %i symbols", (batch) => {
+  test("disjoint sets recover both sides", () => {
+    const a = keysOf("a", 500);
+    const b = keysOf("b", 500);
+    const decoder = RibltDecoder.from(b);
+
+    reconcileFrames(RibltEncoder.from(a), decoder, batch);
+
+    expect(sortedKeys(decoder.local())).toEqual(sortedKeys(b));
+    expect(sorted(decoder.remote())).toEqual(
+      sorted(a.map((k) => RibltDecoder.hashOf(k))),
+    );
+  });
+
+  test.each([1, 10, 1000])("a difference of %i decodes exactly", (d) => {
+    const shared = keysOf("s", 10_000);
+    const onlyA = keysOf("a", Math.ceil(d / 2));
+    const onlyB = keysOf("b", Math.floor(d / 2));
+    const decoder = RibltDecoder.from([...shared, ...onlyB]);
+
+    reconcileFrames(RibltEncoder.from([...onlyA, ...shared]), decoder, batch);
+
+    expect(sortedKeys(decoder.local())).toEqual(sortedKeys(onlyB));
+    expect(sorted(decoder.remote())).toEqual(
+      sorted(onlyA.map((k) => RibltDecoder.hashOf(k))),
+    );
+  });
 });

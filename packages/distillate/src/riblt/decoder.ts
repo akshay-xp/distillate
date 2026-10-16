@@ -8,6 +8,7 @@ import {
 import { forEachItem } from "../core/iterable.js";
 import { assertUint32, ParamError } from "../core/params.js";
 import type { RibltParams } from "./encoder.js";
+import { readSymbolAt, readSymbols } from "./frame.js";
 import { checksum, nextIndex } from "./mapping.js";
 import { CodingWindow } from "./window.js";
 
@@ -57,6 +58,8 @@ export class RibltDecoder<K extends BytesLike = BytesLike> {
   // Reused across add() so hashing a key allocates nothing per call.
   readonly #hash: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
   readonly #symbol = new Uint32Array(2);
+  // One coded symbol read out of a frame.
+  readonly #register = new Uint32Array(5);
 
   /**
    * @throws {@link ParamError} If `seed` is not a uint32.
@@ -155,6 +158,19 @@ export class RibltDecoder<K extends BytesLike = BytesLike> {
       if (wanted.get(hash.w0)?.includes(hash.w1)) out.push(key);
     }
     return out;
+  }
+
+  /**
+   * Ingests a frame from the peer's {@link RibltEncoder.take} and reports
+   * whether the difference is now decoded. Frames must arrive in order.
+   */
+  push(frame: Uint8Array): boolean {
+    const { count, view } = readSymbols(frame);
+    for (let i = 0; i < count; i++) {
+      readSymbolAt(view, count, i, this.#register);
+      this.#push(this.#register);
+    }
+    return this.decoded;
   }
 
   #push(symbol: Uint32Array): boolean {
