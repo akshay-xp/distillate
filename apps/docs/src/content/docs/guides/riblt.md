@@ -24,7 +24,9 @@ const server = RibltEncoder.from(["alice", "bob", "dave"]);
 const client = RibltDecoder.from(["alice", "carol"]);
 
 let decoded = false;
-while (!decoded) decoded = client.push(server.take(4));
+for (let sent = 0; !decoded && sent < 1024; sent += 4) {
+  decoded = client.push(server.take(4));
+}
 
 client.local().join(); // "carol"
 client.remote().length; // 2
@@ -161,10 +163,11 @@ for each key it peels.
 
 ## Limits
 
-Keys must be distinct. A key added twice cancels itself out of every symbol,
-as a duplicate does under XOR, and that key silently drops out of the
-reconciliation. Deduplicate before `from` or `add`. Add every key before the
-first frame: an encoder or decoder refuses `add` once symbols have moved.
+Keys must be distinct. A key added twice cancels in the sums but adds in the
+count, so its cells never peel and the decode would never finish. Instead the
+first `take` or `push` on the side holding it throws `ParamError`. Deduplicate
+before `from` or `add`. Add every key before the first frame: an encoder or
+decoder refuses `add` once symbols have moved.
 
 The hash is seeded, not keyed: anyone who knows the seed can choose keys whose
 symbols travel together, and crafted keys can stop a decode from ever
@@ -174,5 +177,7 @@ set.
 
 Keys are reduced to 64-bit hashes, so two distinct keys can collide. At a
 million keys on the two sides together the odds of any collision are about
-n^2 / 2^65, or 2.7e-8. A colliding pair looks like one key, so a difference
-between them is missed.
+n^2 / 2^65, or 2.7e-8. Two colliding keys on one side look like a repeated key,
+and the first frame throws as it would for one; another `seed` resolves it. Two
+colliding keys on opposite sides look like one shared key, so the difference
+between them is missed, silently.

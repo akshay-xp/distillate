@@ -81,7 +81,8 @@ export class RibltDecoder<K extends BytesLike = BytesLike> {
   }
 
   /**
-   * Builds a decoder over this side's `keys`, which must hold no duplicates.
+   * Builds a decoder over this side's `keys`, which must be distinct:
+   * {@link RibltDecoder.push} refuses the first frame otherwise.
    *
    * @throws {@link ParamError} If `seed` is not a uint32.
    */
@@ -177,7 +178,9 @@ export class RibltDecoder<K extends BytesLike = BytesLike> {
    *
    * @throws {@link RibltParamMismatchError} If the frame's seed differs.
    * @throws {@link ParamError} If the frame does not start at the next
-   * symbol this decoder expects.
+   * symbol this decoder expects. On the first frame, if two local keys hash
+   * alike under the seed: a repeated key, or a 64-bit collision that another
+   * seed resolves.
    */
   push(frame: Uint8Array): boolean {
     const { seed, start, count, view } = readSymbols(frame);
