@@ -311,24 +311,25 @@ distillate streams frames of 64 coded symbols until the receiver decodes. `send`
 `ribbit-riblt` streams the same 64-cell batches, through `serializeCellBatch`. Its receiver streams cells from its own keys and diffs them against the sender's, so `receive` counts that stream as well. It returns both sides' keys themselves; distillate returns the receiver's own as keys but the sender's as 64-bit hashes, which the sender resolves with `RibltDecoder.hashOf`: one more message if the receiver needs those keys.
 `bloom-filters` must be sized before anyone knows the difference. It is given the true d through its own sizing, `InvertibleBloomFilter.create(d, 0.01)`, an advantage no real caller has, and takes keys as `Buffer`s. `send` builds the sender's table; `receive` builds the receiver's, then runs `substract` and `decode`. Its bytes are the sender's `saveAsJSON`, the form it ships, and `decoded` is its `success`.
 Each time is the median of 3 timed passes after 1 untimed, each library in its own process.
+`ribbit-riblt` and `bloom-filters` are not run at 1M keys: there `bloom-filters` takes 13 to 14 s a side and runs out of memory at d = 100k, and `ribbit-riblt` had not finished d = 100k after 35 minutes.
 
-| Reconciler       | keys | d    | send                     | receive                  | symbols | bytes per differing key  | decoded                  |
-| ---------------- | ---- | ---- | ------------------------ | ------------------------ | ------- | ------------------------ | ------------------------ |
-| distillate/riblt | 10k  | 10   | 5 ms                     | 5 ms                     | 64      | 131.6                    | yes                      |
-| ribbit-riblt     | 10k  | 10   | 15 ms                    | 15 ms                    | 64      | 166.4                    | yes                      |
-| bloom-filters    | 10k  | 10   | 107 ms                   | 108 ms                   | n/a     | 981.7                    | yes                      |
-| distillate/riblt | 10k  | 1k   | 9 ms                     | 10 ms                    | 1344    | 27.6                     | yes                      |
-| ribbit-riblt     | 10k  | 1k   | 27 ms                    | 33 ms                    | 1472    | 37.1                     | yes                      |
-| bloom-filters    | 10k  | 1k   | 146 ms                   | 269 ms                   | n/a     | 976.1                    | yes                      |
-| distillate/riblt | 1M   | 10   | 620 ms                   | 673 ms                   | 64      | 131.6                    | yes                      |
-| ribbit-riblt     | 1M   | 10   | 2.44 s                   | 2.25 s                   | 64      | 185.4                    | yes                      |
-| bloom-filters    | 1M   | 10   | 12.91 s                  | 12.95 s                  | n/a     | 1019.6                   | yes                      |
-| distillate/riblt | 1M   | 1k   | 1.51 s                   | 1.54 s                   | 1344    | 27.6                     | yes                      |
-| ribbit-riblt     | 1M   | 1k   | 4.01 s                   | 3.82 s                   | 1472    | 41.5                     | yes                      |
-| bloom-filters    | 1M   | 1k   | 14.27 s                  | 14.43 s                  | n/a     | 1027.0                   | yes                      |
-| distillate/riblt | 1M   | 100k | 3.51 s                   | 3.58 s                   | 135296  | 27.8                     | yes                      |
-| ribbit-riblt     | 1M   | 100k | did not finish in 10 min | did not finish in 10 min | n/a     | did not finish in 10 min | did not finish in 10 min |
-| bloom-filters    | 1M   | 100k | out of memory            | out of memory            | n/a     | out of memory            | out of memory            |
+| Reconciler       | keys | d    | send    | receive | symbols | bytes per differing key | decoded |
+| ---------------- | ---- | ---- | ------- | ------- | ------- | ----------------------- | ------- |
+| distillate/riblt | 10k  | 10   | 5 ms    | 5 ms    | 64      | 131.6                   | yes     |
+| ribbit-riblt     | 10k  | 10   | 15 ms   | 15 ms   | 64      | 166.4                   | yes     |
+| bloom-filters    | 10k  | 10   | 106 ms  | 107 ms  | n/a     | 981.7                   | yes     |
+| distillate/riblt | 10k  | 1k   | 9 ms    | 10 ms   | 1344    | 27.6                    | yes     |
+| ribbit-riblt     | 10k  | 1k   | 26 ms   | 33 ms   | 1472    | 37.1                    | yes     |
+| bloom-filters    | 10k  | 1k   | 143 ms  | 265 ms  | n/a     | 976.1                   | yes     |
+| distillate/riblt | 1M   | 10   | 566 ms  | 589 ms  | 64      | 131.6                   | yes     |
+| ribbit-riblt     | 1M   | 10   | not run | -       | n/a     | -                       | -       |
+| bloom-filters    | 1M   | 10   | not run | -       | n/a     | -                       | -       |
+| distillate/riblt | 1M   | 1k   | 1.44 s  | 1.49 s  | 1344    | 27.6                    | yes     |
+| ribbit-riblt     | 1M   | 1k   | not run | -       | n/a     | -                       | -       |
+| bloom-filters    | 1M   | 1k   | not run | -       | n/a     | -                       | -       |
+| distillate/riblt | 1M   | 100k | 3.16 s  | 3.22 s  | 135296  | 27.8                    | yes     |
+| ribbit-riblt     | 1M   | 100k | not run | -       | n/a     | -                       | -       |
+| bloom-filters    | 1M   | 100k | not run | -       | n/a     | -                       | -       |
 
 Bundle sizes are measured, not quoted: everything both sides need, bundled by esbuild for the browser, minified and gzipped.
 

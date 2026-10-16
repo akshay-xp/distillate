@@ -26,6 +26,8 @@ export interface ReconcileResult {
 
 export interface ReconcileAdapter {
   name: string;
+  /** Above this many keys per side the library is too slow to run; not run. */
+  maxKeys?: number;
   /** Reconciles sender `a` into receiver `b`, which differ by `d` keys. */
   run(a: string[], b: string[], d: number): ReconcileResult;
 }
@@ -76,6 +78,8 @@ export const distillateReconcileAdapter: ReconcileAdapter = {
  */
 export const ribbitReconcileAdapter: ReconcileAdapter = {
   name: "ribbit-riblt",
+  // At 1M keys and d = 100k it did not finish in 35 minutes.
+  maxKeys: 10_000,
   run(a, b) {
     let started = performance.now();
     const sender = new BloomStream(a);
@@ -118,6 +122,8 @@ export const ribbitReconcileAdapter: ReconcileAdapter = {
  */
 export const incumbentReconcileAdapter: ReconcileAdapter = {
   name: "bloom-filters",
+  // At 1M keys it takes 13 to 14 s a side, and runs out of memory at d = 100k.
+  maxKeys: 10_000,
   run(a, b, d) {
     let started = performance.now();
     const sender = InvertibleBloomFilter.create(d, 0.01);
@@ -159,8 +165,6 @@ export const RIBLT_CASES: [number, number][] = [
 
 export const RIBLT_WARM_PASSES = 1;
 export const RIBLT_TIMED_PASSES = 3;
-/** Past this a case is reported as unfinished rather than stalling the run. */
-export const RIBLT_CASE_TIMEOUT_MS = 10 * 60_000;
 
 export interface RibltRow {
   name: string;
@@ -171,8 +175,8 @@ export interface RibltRow {
   symbols: number | null;
   bytes: number;
   decoded: boolean;
-  /** Why the case did not finish, such as running out of memory. */
-  failure?: string;
+  /** Past the library's `maxKeys`, so not measured. */
+  notRun?: true;
 }
 
 const keysOf = (prefix: string, n: number): string[] =>
@@ -191,6 +195,20 @@ export function ribltRows(
     const b = [...shared, ...keysOf("b", Math.floor(d / 2))];
 
     for (const adapter of adapters) {
+      if (adapter.maxKeys !== undefined && keys > adapter.maxKeys) {
+        rows.push({
+          name: adapter.name,
+          keys,
+          d,
+          sendMs: Number.NaN,
+          receiveMs: Number.NaN,
+          symbols: null,
+          bytes: Number.NaN,
+          decoded: false,
+          notRun: true,
+        });
+        continue;
+      }
       for (let p = 0; p < RIBLT_WARM_PASSES; p++) adapter.run(a, b, d);
       const timed = Array.from({ length: RIBLT_TIMED_PASSES }, () =>
         adapter.run(a, b, d),

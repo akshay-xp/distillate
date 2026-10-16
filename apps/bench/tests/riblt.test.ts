@@ -1,9 +1,11 @@
 import { expect, test } from "vitest";
 
 import {
+  incumbentReconcileAdapter,
   RIBLT_CASES,
   RIBLT_FRAME,
   reconcileAdapters,
+  ribbitReconcileAdapter,
   ribltRows,
 } from "../src/riblt.js";
 
@@ -66,4 +68,16 @@ test("riblt rows time each reconciler over a case", () => {
     expect(Number.isFinite(r.sendMs) && r.sendMs > 0, r.name).toBe(true);
     expect(Number.isFinite(r.receiveMs) && r.receiveMs > 0, r.name).toBe(true);
   }
+});
+
+test("the slow reconcilers are not run past 10k keys", () => {
+  const rows = ribltRows(
+    [[20_000, 10]],
+    [ribbitReconcileAdapter, incumbentReconcileAdapter],
+  );
+
+  expect(rows.map((r) => [r.name, r.notRun])).toEqual([
+    ["ribbit-riblt", true],
+    ["bloom-filters", true],
+  ]);
 });

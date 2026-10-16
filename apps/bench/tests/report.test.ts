@@ -1015,7 +1015,7 @@ test("the riblt table renders each side's time, what was sent and whether it dec
   );
 });
 
-test("a case a library could not finish reads as its failure in every measured column", () => {
+test("a case a library was not run for reads as not run", () => {
   const table = ribltTable([
     {
       name: "bloom-filters",
@@ -1026,12 +1026,12 @@ test("a case a library could not finish reads as its failure in every measured c
       symbols: null,
       bytes: NaN,
       decoded: false,
-      failure: "out of memory",
+      notRun: true,
     },
   ]);
 
   expect(table).toContain(
-    "| bloom-filters | 1M | 100k | out of memory | out of memory | n/a | out of memory | out of memory |",
+    "| bloom-filters | 1M | 100k | not run | - | n/a | - | - |",
   );
 });
 
@@ -1048,6 +1048,7 @@ test("the riblt section states its method and carries both tables", () => {
   expect(section).toContain("create(d, 0.01)");
   expect(section).toContain("`ribbit-riblt`");
   expect(section).toContain("serializeCellBatch");
+  expect(section).toContain("not run at 1M keys");
   expect(section).toContain("the sender's as 64-bit hashes");
   expect(section).toContain("RIBLT_TBL");
   expect(section).toContain(bundles);

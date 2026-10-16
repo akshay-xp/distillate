@@ -337,6 +337,11 @@ Each case gives both sides `keys` keys, of which `d / 2` are each side's own, at
 cannot occur at 10,000 keys, so that pair is not run. The keys are the same
 strings for every library, as `Buffer`s for `bloom-filters`, which requires them.
 
+`ribbit-riblt` and `bloom-filters` stop at 10,000 keys, and their 1 million rows
+are marked not run. At 1 million keys `bloom-filters` took 13 to 14 s a side and
+ran out of memory at d of 100,000; `ribbit-riblt` took about 4 s a side at d of
+1,000 and had not finished d of 100,000 after 35 minutes.
+
 `bloom-filters`' table must be sized before the difference is known, and too
 small a table fails to decode. It is given the true d through its own sizing,
 `InvertibleBloomFilter.create(d, 0.01)`, an advantage no real caller has; a
@@ -362,8 +367,4 @@ Time is reported per side, building included: an encoder's stream is consumed
 by the one peer it serves, so every sync builds both sides from their keys. For
 `bloom-filters`, the sender builds its table, and the receiver builds its own and
 then subtracts and decodes. Each time is the median of 3 timed passes after 1
-untimed one. Each case runs for each library in its own process, at Node's
-default heap limit, so a case a library cannot finish costs that row alone: the
-row reads "out of memory" where the process ran out, rather than the run ending
-or the row being dropped. A process still running after 10 minutes is stopped
-and its row reads "did not finish in 10 min".
+untimed one, each library in its own process.
