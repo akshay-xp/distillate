@@ -315,19 +315,19 @@ Each time is the median of 3 timed passes after 1 untimed, each library in its o
 
 | Reconciler       | keys | d    | send    | receive | symbols | bytes per differing key | decoded |
 | ---------------- | ---- | ---- | ------- | ------- | ------- | ----------------------- | ------- |
-| distillate/riblt | 10k  | 10   | 5 ms    | 5 ms    | 64      | 131.6                   | yes     |
+| distillate/riblt | 10k  | 10   | 2 ms    | 2 ms    | 64      | 131.6                   | yes     |
 | ribbit-riblt     | 10k  | 10   | 15 ms   | 15 ms   | 64      | 166.4                   | yes     |
 | bloom-filters    | 10k  | 10   | 106 ms  | 107 ms  | n/a     | 981.7                   | yes     |
-| distillate/riblt | 10k  | 1k   | 9 ms    | 10 ms   | 1344    | 27.6                    | yes     |
+| distillate/riblt | 10k  | 1k   | 3 ms    | 4 ms    | 1344    | 27.6                    | yes     |
 | ribbit-riblt     | 10k  | 1k   | 26 ms   | 33 ms   | 1472    | 37.1                    | yes     |
 | bloom-filters    | 10k  | 1k   | 143 ms  | 265 ms  | n/a     | 976.1                   | yes     |
-| distillate/riblt | 1M   | 10   | 566 ms  | 589 ms  | 64      | 131.6                   | yes     |
+| distillate/riblt | 1M   | 10   | 264 ms  | 277 ms  | 64      | 131.6                   | yes     |
 | ribbit-riblt     | 1M   | 10   | not run | -       | n/a     | -                       | -       |
 | bloom-filters    | 1M   | 10   | not run | -       | n/a     | -                       | -       |
-| distillate/riblt | 1M   | 1k   | 1.44 s  | 1.49 s  | 1344    | 27.6                    | yes     |
+| distillate/riblt | 1M   | 1k   | 529 ms  | 549 ms  | 1344    | 27.6                    | yes     |
 | ribbit-riblt     | 1M   | 1k   | not run | -       | n/a     | -                       | -       |
 | bloom-filters    | 1M   | 1k   | not run | -       | n/a     | -                       | -       |
-| distillate/riblt | 1M   | 100k | 3.16 s  | 3.22 s  | 135296  | 27.8                    | yes     |
+| distillate/riblt | 1M   | 100k | 1.03 s  | 1.13 s  | 135296  | 27.8                    | yes     |
 | ribbit-riblt     | 1M   | 100k | not run | -       | n/a     | -                       | -       |
 | bloom-filters    | 1M   | 100k | not run | -       | n/a     | -                       | -       |
 
@@ -335,7 +335,7 @@ Bundle sizes are measured, not quoted: everything both sides need, bundled by es
 
 | Library          | encoder and decoder |
 | ---------------- | ------------------- |
-| distillate/riblt | 4.9 KB              |
+| distillate/riblt | 5.0 KB              |
 | ribbit-riblt     | 2.2 KB              |
 | bloom-filters    | 37.4 KB             |
 
