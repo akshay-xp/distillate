@@ -8,7 +8,7 @@ import {
 import { forEachItem } from "../core/iterable.js";
 import { assertUint32, ParamError } from "../core/params.js";
 import type { RibltParams } from "./encoder.js";
-import { checksumOf, nextIndex } from "./mapping.js";
+import { checksum, nextIndex } from "./mapping.js";
 import { CodingWindow } from "./window.js";
 
 /** Lanes per coded symbol: sum lo, sum hi, checksum lo, checksum hi, count. */
@@ -56,6 +56,7 @@ export class RibltDecoder<K extends BytesLike = BytesLike> {
   readonly #state = new Uint32Array(2);
   // Reused across add() so hashing a key allocates nothing per call.
   readonly #hash: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
+  readonly #symbol = new Uint32Array(2);
 
   /**
    * @throws {@link ParamError} If `seed` is not a uint32.
@@ -121,7 +122,9 @@ export class RibltDecoder<K extends BytesLike = BytesLike> {
     }
     hash128KeyInto(key, this.#seed, this.#hash);
     this.#keys.push(key);
-    this.#local.add(this.#hash.w0, this.#hash.w1, 0);
+    this.#symbol[0] = this.#hash.w0;
+    this.#symbol[1] = this.#hash.w1;
+    this.#local.add(this.#symbol, 0, 0);
   }
 
   /** Hashes of the keys only the remote side holds, as {@link RibltDecoder.hashOf} gives them. */
@@ -175,10 +178,11 @@ export class RibltDecoder<K extends BytesLike = BytesLike> {
     const base = LANES * at;
     const count = (cells[base + 4] ?? 0) | 0;
     if (count !== 1 && count !== -1) return false;
-    checksumOf(cells[base] ?? 0, cells[base + 1] ?? 0);
+    R64[0] = cells[base] ?? 0;
+    R64[1] = cells[base + 1] ?? 0;
+    checksum();
     return (
-      (R64[0] ?? 0) === (cells[base + 2] ?? 0) &&
-      (R64[1] ?? 0) === (cells[base + 3] ?? 0)
+      R64[0] === (cells[base + 2] ?? 0) && R64[1] === (cells[base + 3] ?? 0)
     );
   }
 
@@ -217,7 +221,14 @@ export class RibltDecoder<K extends BytesLike = BytesLike> {
           queue[length++] = i;
         }
       }
-      (sign === 1 ? this.#remote : this.#localOnly).add(lo, hi, this.#received);
+      // From the scratch, not the cell: peeling just cleared the cell.
+      this.#symbol[0] = lo;
+      this.#symbol[1] = hi;
+      (sign === 1 ? this.#remote : this.#localOnly).add(
+        this.#symbol,
+        0,
+        this.#received,
+      );
     }
   }
 }

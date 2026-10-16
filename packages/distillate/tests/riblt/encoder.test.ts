@@ -3,7 +3,13 @@ import { expect, test } from "vitest";
 import { hash128Key, R64 } from "../../src/core/hasher.js";
 import { ParamError } from "../../src/core/params.js";
 import { nextSymbol, RibltEncoder } from "../../src/riblt/encoder.js";
-import { checksumOf, nextIndex } from "../../src/riblt/mapping.js";
+import { checksum, nextIndex } from "../../src/riblt/mapping.js";
+
+function checksumOf(lo: number, hi: number): void {
+  R64[0] = lo;
+  R64[1] = hi;
+  checksum();
+}
 
 const keys = Array.from({ length: 500 }, (_, i) => `key:${String(i)}`);
 

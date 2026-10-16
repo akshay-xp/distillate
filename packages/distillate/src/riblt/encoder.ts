@@ -41,6 +41,7 @@ export class RibltEncoder {
   #index = 0;
   // Reused across add() so hashing a key allocates nothing per call.
   readonly #hash: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
+  readonly #symbol = new Uint32Array(2);
 
   /**
    * @throws {@link ParamError} If `seed` is not a uint32.
@@ -78,7 +79,9 @@ export class RibltEncoder {
       );
     }
     hash128KeyInto(key, this.#seed, this.#hash);
-    this.#window.add(this.#hash.w0, this.#hash.w1, 0);
+    this.#symbol[0] = this.#hash.w0;
+    this.#symbol[1] = this.#hash.w1;
+    this.#window.add(this.#symbol, 0, 0);
   }
 
   #next(out: Uint32Array): void {
