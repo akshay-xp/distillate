@@ -810,3 +810,16 @@ test("the client's own keys skip a name the page already holds", () => {
     clientOnly: ["client-1"],
   });
 });
+
+test.each<[string, unknown, number]>([
+  ["a negative difference", -1, KEYS],
+  ["a fractional difference", 2.5, KEYS],
+  ["text", "x", KEYS],
+  ["nothing", null, KEYS],
+  ["more than the keys held", 11, 10],
+])("reconciling %s is refused with a message", (_, d, keys) => {
+  const result = built(keys).reconcile(d);
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.message).toContain("whole number");
+});
