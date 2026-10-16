@@ -2,6 +2,7 @@
 import { bench, do_not_optimize } from "mitata";
 import * as os from "node:os";
 import { performance, PerformanceObserver } from "node:perf_hooks";
+import { getHeapSpaceStatistics } from "node:v8";
 
 export interface Queryable {
   has(key: string): boolean;
@@ -113,11 +114,26 @@ export function benchLookup(
  * grows with every call: 500k RIBLT hand-offs carry a decoder past a 40 MB
  * buffer doubling that the measured window would then be charged for.
  */
-export async function countCollections(
+export interface Allocation {
+  /** Collections that began inside the measured window. */
+  collections: number;
+  /** Young-generation bytes the window allocated, per call. */
+  bytesPerCall: number;
+}
+
+// Bytes in use in the young generation, where every short-lived object starts.
+function youngBytes(): number {
+  return (
+    getHeapSpaceStatistics().find((s) => s.space_name === "new_space")
+      ?.space_used_size ?? 0
+  );
+}
+
+export async function measureAllocation(
   fn: () => void,
   ops: number,
   warmup: number = WARMUP_CALLS,
-): Promise<number> {
+): Promise<Allocation> {
   let collections = 0;
   // Entries are counted only if the collection began inside the measured
   // window. Without the bound, one that fires after the loop, while the ticks
@@ -159,11 +175,19 @@ export async function countCollections(
   await settle();
   collections = 0;
 
+  // Two reads back to back measure what a read itself allocates.
+  const idle = youngBytes();
+  const calibration = youngBytes() - idle;
+  const before = youngBytes();
   from = performance.now();
   for (let i = 0; i < ops; i++) fn();
   to = performance.now();
+  const after = youngBytes();
   await settle();
 
   observer.disconnect();
-  return collections;
+  return {
+    collections,
+    bytesPerCall: (after - before - calibration) / ops,
+  };
 }

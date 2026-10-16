@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { countCollections } from "../../bench/harness.js";
+import { measureAllocation } from "../../bench/harness.js";
 import { TopK } from "../../src/topk/topk.js";
 
 // Alone in its file and in the single-worker project for the same reasons as
@@ -25,7 +25,7 @@ test("count allocates nothing in steady state", async () => {
   const sketch = held();
   let at = 0;
   let sink = 0;
-  const collections = await countCollections(() => {
+  const { collections } = await measureAllocation(() => {
     at = (at + 1) & 2047;
     sink += sketch.count(keys[at] ?? "");
   }, 5_000_000);
@@ -36,7 +36,7 @@ test("count allocates nothing in steady state", async () => {
 test("add of a held key allocates nothing in steady state", async () => {
   const sketch = held();
   let at = 0;
-  const collections = await countCollections(() => {
+  const { collections } = await measureAllocation(() => {
     at = (at + 1) & 2047;
     sketch.add(keys[at] ?? "");
   }, 5_000_000);
@@ -51,7 +51,7 @@ test("a stream of new keys allocates nothing once the sketch is full", async () 
   const sketch = TopK.create(0.01);
   for (const key of keys) sketch.add(key);
   let at = 0;
-  const collections = await countCollections(() => {
+  const { collections } = await measureAllocation(() => {
     at = (at + 1) & 65_535;
     sketch.add(keys[at] ?? "");
   }, 600_000);

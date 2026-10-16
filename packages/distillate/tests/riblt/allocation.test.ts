@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { countCollections } from "../../bench/harness.js";
+import { measureAllocation } from "../../bench/harness.js";
 import { pushSymbol, RibltDecoder } from "../../src/riblt/decoder.js";
 import { nextSymbol, RibltEncoder } from "../../src/riblt/encoder.js";
 
@@ -31,7 +31,7 @@ test("handing coded symbols to a peeling decoder allocates nothing", async () =>
     nextSymbol(encoder, symbol);
     if (pushSymbol(decoder, symbol)) decoded++;
   }
-  await countCollections(
+  await measureAllocation(
     () => {
       nextSymbol(encoder, symbol);
       if (pushSymbol(decoder, symbol)) decoded++;
@@ -39,7 +39,7 @@ test("handing coded symbols to a peeling decoder allocates nothing", async () =>
     5000,
     5000,
   );
-  const collections = await countCollections(
+  const { collections } = await measureAllocation(
     () => {
       nextSymbol(encoder, symbol);
       if (pushSymbol(decoder, symbol)) decoded++;
