@@ -629,3 +629,34 @@ test("the similarity panel shows the estimate beside exact and records into eith
   );
   expect(errors).toEqual([]);
 });
+
+test("the reconciliation panel decodes a difference and runs again at any d", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  const panel = page.locator("[data-pg-riblt]");
+  const field = (name: string) => panel.locator(`[data-rb='${name}']`);
+  await expect(field("symbols")).toHaveText("128");
+  await expect(field("frames")).toHaveText("2");
+  await expect(field("sent")).toHaveText("2,632 bytes");
+  await expect(field("raw")).toHaveText("78,890 bytes");
+  await expect(field("decoded")).toHaveText("yes");
+  await expect(field("server")).toHaveText(/^key-0, .* and 44 more$/);
+  await expect(field("client")).toHaveText(/^client-0, .* and 44 more$/);
+
+  const form = page.locator("[data-pg-reconcile]");
+  await form.locator("input[name='d']").fill("0");
+  await form.locator("button[type='submit']").click();
+
+  await expect(field("symbols")).toHaveText("64");
+  await expect(field("server")).toHaveText("none");
+  await expect(field("client")).toHaveText("none");
+
+  // Without JavaScript the form could only submit to nowhere.
+  expect(await page.content()).toMatch(
+    /<noscript><style>[^<]*\[data-pg-reconcile\]/,
+  );
+  expect(errors).toEqual([]);
+});

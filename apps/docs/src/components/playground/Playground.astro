@@ -21,6 +21,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     [data-pg-delete],
     [data-pg-values],
     [data-pg-sets],
+    [data-pg-reconcile],
     [data-pg-query],
     [data-pg-status],
     [data-pg-results],
@@ -424,6 +425,81 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   </p>
 </section>
 
+<section class="dstl-panel" data-pg-riblt>
+  <h3>Which keys differ between two sets, at the cost of the difference</h3>
+
+  <p class="dstl-hint">
+    Rateless set reconciliation tells a client exactly which keys it and a
+    server do not share. The server holds the keys above; the client lacks some
+    of them and holds as many of its own, <em>d</em> in all. The server streams
+    frames of 64 coded symbols, and the client stops it once it decodes. Each
+    run builds both sides fresh, since a stream serves one peer.
+  </p>
+
+  <form class="dstl-form-stack" data-pg-reconcile novalidate>
+    <div class="dstl-field">
+      <label for="pg-reconcile-d">
+        Keys that differ, <em>d</em>:{" "}
+        <output for="pg-reconcile-d" data-rb="d">
+          100
+        </output>
+      </label>
+      <input
+        id="pg-reconcile-d"
+        name="d"
+        type="range"
+        min="0"
+        max="2000"
+        step="10"
+        value="100"
+      />
+    </div>
+    <button class="dstl-btn" type="submit">
+      Reconcile
+    </button>
+  </form>
+
+  <dl class="dstl-readout">
+    <div>
+      <dt>Frames</dt>
+      <dd data-rb="frames"></dd>
+    </div>
+    <div>
+      <dt>Symbols</dt>
+      <dd data-rb="symbols"></dd>
+    </div>
+    <div>
+      <dt>Sent</dt>
+      <dd data-rb="sent"></dd>
+    </div>
+    <div>
+      <dt>Sending the set</dt>
+      <dd data-rb="raw"></dd>
+    </div>
+    <div>
+      <dt>Decoded</dt>
+      <dd data-rb="decoded"></dd>
+    </div>
+    <div>
+      <dt>Only the server</dt>
+      <dd data-rb="server"></dd>
+    </div>
+    <div>
+      <dt>Only the client</dt>
+      <dd data-rb="client"></dd>
+    </div>
+  </dl>
+
+  <p class="dstl-hint">
+    <strong>What is sent follows d, not the size of the set.</strong> Each
+    symbol is 20 bytes whatever the keys, and about 1.4 symbols per differing
+    key decode a large difference; a small one still pays for a whole frame.
+    Sending the set means its keys as UTF-8, the least that could cost. The
+    client learns the server's keys as 64-bit hashes; the server maps them back
+    by hashing its own, as shown here.
+  </p>
+</section>
+
 <div data-pg-notes>
   <p class="dstl-hint">
     <strong>A false positive is the filter working, not a bug.</strong> These
@@ -452,6 +528,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     PlaygroundReport,
     StructureKey,
     QuantileReport,
+    ReconcileReport,
     SimilarityReport,
     TopKReport,
   } from "./engine.js";
@@ -482,6 +559,9 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   const valuesForm =
     document.querySelector<HTMLFormElement>("[data-pg-values]");
   const setsForm = document.querySelector<HTMLFormElement>("[data-pg-sets]");
+  const reconcileForm = document.querySelector<HTMLFormElement>(
+    "[data-pg-reconcile]",
+  );
   const status = document.querySelector<HTMLElement>("[data-pg-status]");
 
   // Held between events. `report()` walks every key it holds, so a query must
@@ -572,6 +652,45 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     }
   }
 
+  /** Keys the reconcile panel lists per side before summing up the rest. */
+  const SHOWN_KEYS = 6;
+
+  function listKeys(keys: string[]): string {
+    if (keys.length === 0) return "none";
+    const shown = keys.slice(0, SHOWN_KEYS).join(", ");
+    const rest = keys.length - SHOWN_KEYS;
+    return rest > 0
+      ? `${shown} and ${rest.toLocaleString("en-US")} more`
+      : shown;
+  }
+
+  function renderReconcile(report: ReconcileReport): void {
+    const fields: Record<string, string> = {
+      frames: report.frames.toLocaleString("en-US"),
+      symbols: report.symbols.toLocaleString("en-US"),
+      sent: `${report.bytes.toLocaleString("en-US")} bytes`,
+      raw: `${report.rawBytes.toLocaleString("en-US")} bytes`,
+      decoded: report.decoded ? "yes" : "no, stopped at the cap",
+      server: listKeys(report.serverOnly),
+      client: listKeys(report.clientOnly),
+    };
+    for (const [field, text] of Object.entries(fields)) {
+      const cell = document.querySelector(`[data-rb='${field}']`);
+      if (cell) cell.textContent = text;
+    }
+  }
+
+  function reconcile(): void {
+    if (!reconcileForm || !current) return;
+    const result = current.reconcile(new FormData(reconcileForm).get("d"));
+    if (!result.ok) {
+      if (status) status.textContent = result.message;
+      return;
+    }
+    if (status) status.textContent = "";
+    renderReconcile(result);
+  }
+
   function renderQuantiles(report: QuantileReport): void {
     const count = document.querySelector("[data-dd='count']");
     const accuracy = document.querySelector("[data-dd='accuracy']");
@@ -625,6 +744,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     renderEstimate(current.estimate(recordKey()));
     renderQuantiles(current.quantiles());
     renderSimilarity(current.similarity());
+    reconcile();
   }
 
   /** The key the sketch panel is currently pointed at. */
@@ -738,5 +858,14 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   onSubmit(recordForm, record);
   onSubmit(valuesForm, recordValue);
   onSubmit(setsForm, recordSetItem);
+  onSubmit(reconcileForm, reconcile);
+  reconcileForm
+    ?.querySelector<HTMLInputElement>("input[name='d']")
+    ?.addEventListener("input", (event) => {
+      const output = reconcileForm.querySelector("output");
+      if (output && event.target instanceof HTMLInputElement) {
+        output.textContent = event.target.value;
+      }
+    });
   build();
 </script>
