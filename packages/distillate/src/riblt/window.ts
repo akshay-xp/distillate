@@ -35,23 +35,32 @@ export class CodingWindow {
   }
 
   /**
-   * Folds every symbol mapped to `index` into `cell` (sum lo, sum hi, checksum
-   * lo, checksum hi, count) and adds `sign` to the count per symbol. Indices
-   * must be applied in increasing order.
+   * Folds every symbol mapped to `index` into the coded symbol at `cells[at]`
+   * (sum lo, sum hi, checksum lo, checksum hi, count) and adds `sign` to the
+   * count per symbol. Indices must be applied in increasing order.
    */
-  applyTo(cell: Uint32Array, index: number, sign: number): void {
+  applyTo(cells: Uint32Array, at: number, index: number, sign: number): void {
     const heap = this.#heap;
     while (this.#size > 0) {
       const top = heap[0] ?? 0;
       if (this.#next[top] !== index) return;
-      cell[0] = (cell[0] ?? 0) ^ (this.#lo[top] ?? 0);
-      cell[1] = (cell[1] ?? 0) ^ (this.#hi[top] ?? 0);
-      cell[2] = (cell[2] ?? 0) ^ (this.#checkLo[top] ?? 0);
-      cell[3] = (cell[3] ?? 0) ^ (this.#checkHi[top] ?? 0);
-      cell[4] = (cell[4] ?? 0) + sign;
+      cells[at] = (cells[at] ?? 0) ^ (this.#lo[top] ?? 0);
+      cells[at + 1] = (cells[at + 1] ?? 0) ^ (this.#hi[top] ?? 0);
+      cells[at + 2] = (cells[at + 2] ?? 0) ^ (this.#checkLo[top] ?? 0);
+      cells[at + 3] = (cells[at + 3] ?? 0) ^ (this.#checkHi[top] ?? 0);
+      cells[at + 4] = (cells[at + 4] ?? 0) + sign;
       this.#next[top] = nextIndex(this.#state, top, index);
       this.#siftDown();
     }
+  }
+
+  /** Every symbol in the window as a 64-bit `bigint`. */
+  symbols(): bigint[] {
+    const out: bigint[] = [];
+    for (let i = 0; i < this.#size; i++) {
+      out.push((BigInt(this.#hi[i] ?? 0) << 32n) | BigInt(this.#lo[i] ?? 0));
+    }
+    return out;
   }
 
   #grow(): void {
