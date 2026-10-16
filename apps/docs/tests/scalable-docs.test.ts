@@ -83,6 +83,7 @@ const NUMBERS = [
   "sixteen",
   "seventeen",
   "eighteen",
+  "nineteen",
 ];
 
 test("the errors reference documents ScalableParamMismatchError", () => {
@@ -104,7 +105,7 @@ test("the errors reference says which subpaths export what", () => {
   const page = errors();
   const at = page.indexOf("serialization errors are exported");
   const paragraph = page.slice(at, page.indexOf("\n\n", at));
-  expect(paragraph).toContain("ten structure subpaths");
+  expect(paragraph).toContain("eleven structure subpaths");
   expect(paragraph).toContain("distillate/scalable");
   for (const subpath of [
     "bloom",
@@ -116,13 +117,14 @@ test("the errors reference says which subpaths export what", () => {
     "topk",
     "ddsketch",
     "minhash",
+    "riblt",
   ]) {
     expect(paragraph, subpath).toContain(`\`distillate/${subpath}\``);
   }
 
   // ParamError's list ends the paragraph, after "except".
   const params = paragraph.slice(paragraph.indexOf("`ParamError`"));
-  for (const subpath of ["ddsketch", "minhash"]) {
+  for (const subpath of ["ddsketch", "minhash", "riblt"]) {
     expect(params, subpath).toContain(`\`distillate/${subpath}\``);
   }
 });
