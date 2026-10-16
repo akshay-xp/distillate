@@ -21,8 +21,15 @@ import { COUNTMIN_KEY_COUNTS, countMinAdapters } from "./countmin.js";
 import type { CountMinRow } from "./countmin.js";
 import { TOPK_EVENT_COUNTS, topKAdapters } from "./topk.js";
 import type { TopKRow } from "./topk.js";
-import { ddSketchBundles, minHashBundles } from "./bundle.js";
-import type { BundleRow, LshBundleRow } from "./bundle.js";
+import { ddSketchBundles, minHashBundles, ribltBundles } from "./bundle.js";
+import type { BundleRow, LshBundleRow, ReconcileBundleRow } from "./bundle.js";
+import {
+  RIBLT_CASES,
+  RIBLT_TIMED_PASSES,
+  RIBLT_WARM_PASSES,
+  reconcileAdapters,
+} from "./riblt.js";
+import type { RibltRow } from "./riblt.js";
 import {
   lshAdapters,
   MINHASH_K,
@@ -191,6 +198,25 @@ export function minHashBundleTable(rows: LshBundleRow[]): string {
   return [header, ...body].join("\n");
 }
 
+export function ribltTable(rows: RibltRow[]): string {
+  const header =
+    "| Reconciler | keys | d | send | receive | symbols | bytes per differing key | decoded |\n" +
+    "| --- | --- | --- | --- | --- | --- | --- | --- |";
+  const body = rows.map(
+    (r) =>
+      `| ${r.name} | ${capacityLabel(r.keys)} | ${capacityLabel(r.d)} | ${duration(r.sendMs)} | ${duration(r.receiveMs)} | ${r.symbols === null ? "n/a" : String(r.symbols)} | ${(r.bytes / r.d).toFixed(1)} | ${r.decoded ? "yes" : "failed"} |`,
+  );
+  return [header, ...body].join("\n");
+}
+
+export function ribltBundleTable(rows: ReconcileBundleRow[]): string {
+  const header = "| Library | encoder and decoder |\n| --- | --- |";
+  const body = rows.map(
+    (r) => `| ${r.name} | ${(r.bytes / 1024).toFixed(1)} KB |`,
+  );
+  return [header, ...body].join("\n");
+}
+
 export interface ResultsOptions {
   banner: string;
   version: string;
@@ -209,6 +235,8 @@ export interface ResultsOptions {
   minHashTable?: string;
   minHashLshTable?: string;
   minHashBundleTable?: string;
+  ribltTable?: string;
+  ribltBundleTable?: string;
   keyLengthTable?: string;
 }
 
@@ -367,6 +395,25 @@ export function minHashSection(
   ];
 }
 
+export function ribltSection(table: string, bundles: string): string[] {
+  return [
+    "## RIBLT",
+    "",
+    "Compared with `bloom-filters`' `InvertibleBloomFilter` (v3), the one invertible Bloom filter in common JS use. Each side holds `keys` keys, `d / 2` of them its own, and the sender reconciles into the receiver.",
+    "",
+    "distillate streams frames of 64 coded symbols until the receiver decodes. `send` is `RibltEncoder.from` plus every `take`; `receive` is `RibltDecoder.from` plus every `push`. `symbols` is how many were sent. `bytes per differing key` counts every frame byte, headers and the unused tail of the last frame included, so a small d pays for a frame it did not fill.",
+    "`bloom-filters` must be sized before anyone knows the difference. It is given the true d through its own sizing, `InvertibleBloomFilter.create(d, 0.01)`, an advantage no real caller has, and takes keys as `Buffer`s. `send` builds the sender's table; `receive` builds the receiver's, then runs `substract` and `decode`. Its bytes are the sender's `saveAsJSON`, the form it ships, and `decoded` is its `success`.",
+    `Each time is the median of ${String(RIBLT_TIMED_PASSES)} timed passes after ${String(RIBLT_WARM_PASSES)} untimed, each library in its own process.`,
+    "",
+    table,
+    "",
+    "Bundle sizes are measured, not quoted: everything both sides need, bundled by esbuild for the browser, minified and gzipped.",
+    "",
+    bundles,
+    "",
+  ];
+}
+
 export function keyLengthTable(rows: KeyLengthRow[]): string {
   const header =
     "| Filter | key length | keys | add | has |\n| --- | --- | --- | --- | --- |";
@@ -421,6 +468,9 @@ export function renderResults(opts: ResultsOptions): string {
           opts.minHashLshTable ?? "",
           opts.minHashBundleTable ?? "",
         )
+      : []),
+    ...(opts.ribltTable
+      ? ribltSection(opts.ribltTable, opts.ribltBundleTable ?? "")
       : []),
     `## Throughput (n = ${capacityLabel(opts.throughputCapacity)})`,
     "",
@@ -507,6 +557,11 @@ async function main(): Promise<void> {
   );
   const mhBundles = minHashBundleTable(await minHashBundles());
 
+  const rbTable = ribltTable(
+    isolatedRows<RibltRow>("riblt", names(reconcileAdapters), [RIBLT_CASES]),
+  );
+  const rbBundles = ribltBundleTable(await ribltBundles());
+
   console.log(banner);
   console.log("\n" + spaceTable);
   console.log("\n" + cardTable);
@@ -519,6 +574,8 @@ async function main(): Promise<void> {
   console.log("\n" + mhTable);
   console.log("\n" + mhLshTable);
   console.log("\n" + mhBundles);
+  console.log("\n" + rbTable);
+  console.log("\n" + rbBundles);
   console.log("\n" + tput);
   console.log("\n" + klTable);
 
@@ -539,6 +596,8 @@ async function main(): Promise<void> {
     minHashTable: mhTable,
     minHashLshTable: mhLshTable,
     minHashBundleTable: mhBundles,
+    ribltTable: rbTable,
+    ribltBundleTable: rbBundles,
     throughputTable: tput,
     keyLengthTable: klTable,
   });
