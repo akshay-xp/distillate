@@ -2,11 +2,11 @@ import { expect, test } from "vitest";
 
 import { BloomFilter } from "../../src/bloom/bloom.js";
 import {
-  countCollections,
   cycle,
   envBanner,
   hitMissPools,
   lookupThunk,
+  measureAllocation,
   measureFpr,
 } from "../../bench/harness.js";
 
@@ -70,31 +70,45 @@ test("lookupThunk queries successive cycling keys", () => {
 //
 // The flat loop's counter is asserted too, so an implementation that returns 0
 // without ever running the loop cannot pass.
-test("countCollections tells an allocating loop from a flat one", async () => {
+test("measureAllocation tells an allocating loop from a flat one", async () => {
   const sink: object[] = [];
-  const allocating = await countCollections(() => {
+  const allocating = await measureAllocation(() => {
     sink.length = 0;
     sink.push({ a: 1, b: 2 });
   }, 1_000_000);
 
   let total = 0;
-  const flat = await countCollections(() => {
+  const flat = await measureAllocation(() => {
     total = (total + 1) | 0;
   }, 1_000_000);
 
-  expect(allocating).toBeGreaterThan(0);
-  expect(flat).toBe(0);
+  expect(allocating.collections).toBeGreaterThan(0);
+  expect(flat.collections).toBe(0);
+  expect(flat.bytesPerCall).toBeLessThan(0.1);
   expect(total).toBeGreaterThanOrEqual(1_000_000);
+});
+
+// Too little garbage to fill the young generation, so no collection, but every
+// call still allocates an object: the shape a collection count cannot see.
+test("measureAllocation reports bytes a loop allocates without a collection", async () => {
+  const sink: object[] = [];
+  let calls = 0;
+  const result = await measureAllocation(() => {
+    if (++calls % 1000 === 0) sink.length = 0;
+    sink.push({ a: calls });
+  }, 50_000);
+
+  expect(result.bytesPerCall).toBeGreaterThanOrEqual(12);
 });
 
 // A loop allocates while V8 is still optimising it, and that is not the loop's
 // steady-state cost. This is the shape that failed CI: `add` allocates one
 // object per key until the hash path is inlined, and a probe that starts
 // counting before then measures the warm-up rather than the code.
-test("countCollections excludes what a loop allocates while warming", async () => {
+test("measureAllocation excludes what a loop allocates while warming", async () => {
   const sink: object[] = [];
   let calls = 0;
-  const settles = await countCollections(() => {
+  const settles = await measureAllocation(() => {
     calls++;
     if (calls <= 400_000) {
       sink.length = 0;
@@ -102,6 +116,6 @@ test("countCollections excludes what a loop allocates while warming", async () =
     }
   }, 1_000_000);
 
-  expect(settles).toBe(0);
+  expect(settles.collections).toBe(0);
   expect(calls).toBeGreaterThan(1_400_000);
 });

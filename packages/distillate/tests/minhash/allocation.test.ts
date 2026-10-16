@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { countCollections } from "../../bench/harness.js";
+import { measureAllocation } from "../../bench/harness.js";
 import { MinHashLSH } from "../../src/minhash/lsh.js";
 import { MinHash } from "../../src/minhash/minhash.js";
 
@@ -13,7 +13,7 @@ test("add allocates nothing in steady state", async () => {
   for (const key of keys) sketch.add(key);
 
   let at = 0;
-  const collections = await countCollections(() => {
+  const { collections } = await measureAllocation(() => {
     at = (at + 1) & 4095;
     sketch.add(keys[at] ?? "");
   }, 600_000);
@@ -43,10 +43,10 @@ test("jaccard, equals and has allocate nothing on unchanged inputs", async () =>
     if (lsh.has("a")) sink++;
   };
   for (let i = 0; i < 10_000; i++) read();
-  await countCollections(() => {
+  await measureAllocation(() => {
     read();
   }, 200_000);
-  const collections = await countCollections(() => {
+  const { collections } = await measureAllocation(() => {
     read();
   }, 200_000);
 

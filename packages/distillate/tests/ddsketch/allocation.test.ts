@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { countCollections } from "../../bench/harness.js";
+import { measureAllocation } from "../../bench/harness.js";
 import { DDSketch } from "../../src/ddsketch/ddsketch.js";
 import { logMapping } from "../../src/ddsketch/mapping.js";
 import { lognormalValues } from "../helpers/quantile.js";
@@ -12,7 +12,7 @@ import { lognormalValues } from "../helpers/quantile.js";
 // Values are pre-generated, of both signs, and cycled through first so the
 // bins they need exist: growing the store is allowed to allocate, a
 // steady-state add is not. The cycling runs far longer than the bins need.
-// The bitwise add is fast enough that countCollections' own warm-up ends
+// The bitwise add is fast enough that measureAllocation' own warm-up ends
 // before V8's background compile does, and finishing that compile inside the
 // window costs one collection that a second window never repeats. A longer
 // pre-warm alone did not hold under load (3 of 5 full runs failed on a
@@ -32,11 +32,11 @@ test.each([
     let at = 0;
     // Two closures, not one passed twice: on Node 22 a shared one measured
     // 11 to 23 collections on the log mapping, every run.
-    await countCollections(() => {
+    await measureAllocation(() => {
       at = (at + 1) & 4095;
       sketch.add(values[at] ?? 0);
     }, 6_000_000);
-    const collections = await countCollections(() => {
+    const { collections } = await measureAllocation(() => {
       at = (at + 1) & 4095;
       sketch.add(values[at] ?? 0);
     }, 6_000_000);
