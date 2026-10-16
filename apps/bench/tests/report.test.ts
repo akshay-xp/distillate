@@ -1015,6 +1015,26 @@ test("the riblt table renders each side's time, what was sent and whether it dec
   );
 });
 
+test("a case a library could not finish reads as its failure in every measured column", () => {
+  const table = ribltTable([
+    {
+      name: "bloom-filters",
+      keys: 1_000_000,
+      d: 100_000,
+      sendMs: NaN,
+      receiveMs: NaN,
+      symbols: null,
+      bytes: NaN,
+      decoded: false,
+      failure: "out of memory",
+    },
+  ]);
+
+  expect(table).toContain(
+    "| bloom-filters | 1M | 100k | out of memory | out of memory | n/a | out of memory | out of memory |",
+  );
+});
+
 test("the riblt section states its method and carries both tables", () => {
   const bundles = ribltBundleTable([
     { name: "distillate/riblt", bytes: 7936 },

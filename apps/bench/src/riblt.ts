@@ -119,6 +119,8 @@ export interface RibltRow {
   symbols: number | null;
   bytes: number;
   decoded: boolean;
+  /** Why the case did not finish, such as running out of memory. */
+  failure?: string;
 }
 
 const keysOf = (prefix: string, n: number): string[] =>

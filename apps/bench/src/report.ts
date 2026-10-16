@@ -50,7 +50,7 @@ import type { KeyLengthRow } from "./keylength.js";
 import type { ComparisonRow } from "./compare.js";
 import { adapters, TARGET_FPR } from "./adapters.js";
 import { envBanner } from "./harness.js";
-import { isolatedRows, isolatedThroughput } from "./isolate.js";
+import { isolatedRows, isolatedThroughput, runIsolated } from "./isolate.js";
 
 function capacityLabel(n: number): string {
   if (n >= 1_000_000) return `${String(n / 1_000_000)}M`;
@@ -202,10 +202,15 @@ export function ribltTable(rows: RibltRow[]): string {
   const header =
     "| Reconciler | keys | d | send | receive | symbols | bytes per differing key | decoded |\n" +
     "| --- | --- | --- | --- | --- | --- | --- | --- |";
-  const body = rows.map(
-    (r) =>
-      `| ${r.name} | ${capacityLabel(r.keys)} | ${capacityLabel(r.d)} | ${duration(r.sendMs)} | ${duration(r.receiveMs)} | ${r.symbols === null ? "n/a" : String(r.symbols)} | ${(r.bytes / r.d).toFixed(1)} | ${r.decoded ? "yes" : "failed"} |`,
-  );
+  const body = rows.map((r) => {
+    const symbols = r.symbols === null ? "n/a" : String(r.symbols);
+    const head = `| ${r.name} | ${capacityLabel(r.keys)} | ${capacityLabel(r.d)} |`;
+    if (r.failure !== undefined) {
+      const f = r.failure;
+      return `${head} ${f} | ${f} | ${symbols} | ${f} | ${f} |`;
+    }
+    return `${head} ${duration(r.sendMs)} | ${duration(r.receiveMs)} | ${symbols} | ${(r.bytes / r.d).toFixed(1)} | ${r.decoded ? "yes" : "failed"} |`;
+  });
   return [header, ...body].join("\n");
 }
 
@@ -395,6 +400,35 @@ export function minHashSection(
   ];
 }
 
+/**
+ * Each case for each library in its own process, so one that runs out of
+ * memory costs that row alone and is reported rather than ending the run.
+ */
+export function isolatedRibltRows(cases: [number, number][]): RibltRow[] {
+  return cases.flatMap(([keys, d]) =>
+    reconcileAdapters.map(({ name }) => {
+      try {
+        const [row] = runIsolated<RibltRow>("riblt", name, [[[keys, d]]]).rows;
+        if (row) return row;
+        throw new Error(`riblt job for ${name} returned no row`);
+      } catch (error) {
+        if (!String(error).includes("heap out of memory")) throw error;
+        return {
+          name,
+          keys,
+          d,
+          sendMs: NaN,
+          receiveMs: NaN,
+          symbols: null,
+          bytes: NaN,
+          decoded: false,
+          failure: "out of memory",
+        };
+      }
+    }),
+  );
+}
+
 export function ribltSection(table: string, bundles: string): string[] {
   return [
     "## RIBLT",
@@ -557,9 +591,7 @@ async function main(): Promise<void> {
   );
   const mhBundles = minHashBundleTable(await minHashBundles());
 
-  const rbTable = ribltTable(
-    isolatedRows<RibltRow>("riblt", names(reconcileAdapters), [RIBLT_CASES]),
-  );
+  const rbTable = ribltTable(isolatedRibltRows(RIBLT_CASES));
   const rbBundles = ribltBundleTable(await ribltBundles());
 
   console.log(banner);
