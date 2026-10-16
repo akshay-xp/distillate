@@ -191,6 +191,7 @@ export class RibltDecoder<K extends BytesLike = BytesLike> {
         `frame starts at symbol ${String(start)}, but the decoder expects ${String(this.#received)}; frames must arrive in order`,
       );
     }
+    if (this.#received === 0) this.#local.assertDistinct(this.#seed);
     for (let i = 0; i < count; i++) {
       readSymbolAt(view, count, i, this.#register);
       this.#push(this.#register);
