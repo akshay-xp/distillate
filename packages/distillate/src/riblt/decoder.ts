@@ -26,6 +26,16 @@ export let pushSymbol!: <K extends BytesLike>(
 ) => boolean;
 
 /**
+ * Thrown when a frame was encoded under a different seed than the decoder's.
+ * The two sides hash keys differently, so no prefix of that stream can ever
+ * decode; both peers must agree on the seed.
+ */
+export class RibltParamMismatchError extends Error {
+  /** Discriminates this error from other `Error`s. */
+  override readonly name = "RibltParamMismatchError";
+}
+
+/**
  * The receiving side of rateless set reconciliation: fed a peer's coded
  * symbols in order, it peels them until it holds exactly the keys that differ
  * between the two sets.
@@ -163,9 +173,24 @@ export class RibltDecoder<K extends BytesLike = BytesLike> {
   /**
    * Ingests a frame from the peer's {@link RibltEncoder.take} and reports
    * whether the difference is now decoded. Frames must arrive in order.
+   * A rejected frame leaves the decoder as it was.
+   *
+   * @throws {@link RibltParamMismatchError} If the frame's seed differs.
+   * @throws {@link ParamError} If the frame does not start at the next
+   * symbol this decoder expects.
    */
   push(frame: Uint8Array): boolean {
-    const { count, view } = readSymbols(frame);
+    const { seed, start, count, view } = readSymbols(frame);
+    if (seed !== this.#seed) {
+      throw new RibltParamMismatchError(
+        `frame seed ${String(seed)} differs from the decoder's ${String(this.#seed)}`,
+      );
+    }
+    if (start !== this.#received) {
+      throw new ParamError(
+        `frame starts at symbol ${String(start)}, but the decoder expects ${String(this.#received)}; frames must arrive in order`,
+      );
+    }
     for (let i = 0; i < count; i++) {
       readSymbolAt(view, count, i, this.#register);
       this.#push(this.#register);

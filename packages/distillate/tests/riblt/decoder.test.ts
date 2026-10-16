@@ -2,7 +2,11 @@ import { describe, expect, test } from "vitest";
 
 import { hash128Key } from "../../src/core/hasher.js";
 import { ParamError } from "../../src/core/params.js";
-import { pushSymbol, RibltDecoder } from "../../src/riblt/decoder.js";
+import {
+  pushSymbol,
+  RibltDecoder,
+  RibltParamMismatchError,
+} from "../../src/riblt/decoder.js";
 import { nextSymbol, RibltEncoder } from "../../src/riblt/encoder.js";
 
 const keysOf = (prefix: string, n: number): string[] =>
@@ -171,5 +175,54 @@ describe.each([1, 64])("over frames of %i symbols", (batch) => {
     expect(sorted(decoder.remote())).toEqual(
       sorted(onlyA.map((k) => RibltDecoder.hashOf(k))),
     );
+  });
+});
+
+describe("a frame the decoder cannot use is rejected and changes nothing", () => {
+  const shared = keysOf("s", 1000);
+  const onlyA = keysOf("a", 20);
+  const fresh = (): {
+    encoder: RibltEncoder;
+    decoder: RibltDecoder<string>;
+  } => ({
+    encoder: RibltEncoder.from([...shared, ...onlyA]),
+    decoder: RibltDecoder.from(shared),
+  });
+  const expectDecodes = (
+    encoder: RibltEncoder,
+    decoder: RibltDecoder<string>,
+  ): void => {
+    reconcileFrames(encoder, decoder, 4);
+    expect(sorted(decoder.remote())).toEqual(
+      sorted(onlyA.map((k) => RibltDecoder.hashOf(k))),
+    );
+  };
+
+  test("from another seed", () => {
+    const { encoder, decoder } = fresh();
+    const foreign = RibltEncoder.from([...shared, ...onlyA], { seed: 1 });
+
+    expect(() => decoder.push(foreign.take(4))).toThrow(
+      RibltParamMismatchError,
+    );
+    expectDecodes(encoder, decoder);
+  });
+
+  test("ahead of the next expected symbol", () => {
+    const { encoder, decoder } = fresh();
+    const twin = RibltEncoder.from([...shared, ...onlyA]);
+    twin.take(4);
+
+    expect(() => decoder.push(twin.take(4))).toThrow(ParamError);
+    expectDecodes(encoder, decoder);
+  });
+
+  test("a frame already ingested", () => {
+    const { encoder, decoder } = fresh();
+    const first = encoder.take(4);
+    decoder.push(first);
+
+    expect(() => decoder.push(first)).toThrow(ParamError);
+    expectDecodes(encoder, decoder);
   });
 });
