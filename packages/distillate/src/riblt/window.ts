@@ -1,5 +1,5 @@
 import { R64 } from "../core/hasher.js";
-import { checksumOf, nextIndex } from "./mapping.js";
+import { checksum, nextIndex } from "./mapping.js";
 
 /**
  * Symbols with their checksums and index sequences, ordered by the next index
@@ -19,17 +19,23 @@ export class CodingWindow {
   #heap = new Int32Array(16);
   #size = 0;
 
-  /** Adds a symbol whose index sequence is advanced to the first index at or past `from`. */
-  add(lo: number, hi: number, from: number): void {
+  /**
+   * Adds the symbol at `lanes[offset]` (lo, hi), passed as a typed array so
+   * its words are never boxed, whose index sequence is advanced to the first index at or past `from`. */
+  add(lanes: Uint32Array, offset: number, from: number): void {
     if (this.#size === this.#lo.length) this.#grow();
     const at = this.#size++;
+    const lo = lanes[offset] ?? 0;
+    const hi = lanes[offset + 1] ?? 0;
     this.#lo[at] = lo;
     this.#hi[at] = hi;
-    checksumOf(lo, hi);
-    this.#checkLo[at] = R64[0] ?? 0;
-    this.#checkHi[at] = R64[1] ?? 0;
-    this.#state[2 * at] = R64[0] ?? 0;
-    this.#state[2 * at + 1] = R64[1] ?? 0;
+    R64[0] = lo;
+    R64[1] = hi;
+    checksum();
+    this.#checkLo[at] = R64[0];
+    this.#checkHi[at] = R64[1];
+    this.#state[2 * at] = R64[0];
+    this.#state[2 * at + 1] = R64[1];
     let index = 0;
     while (index < from) index = nextIndex(this.#state, at, index);
     this.#next[at] = index;

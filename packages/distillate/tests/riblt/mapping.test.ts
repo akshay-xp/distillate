@@ -1,7 +1,13 @@
 import { expect, test } from "vitest";
 
 import { R64 } from "../../src/core/hasher.js";
-import { checksumOf, nextIndex } from "../../src/riblt/mapping.js";
+import { checksum, nextIndex } from "../../src/riblt/mapping.js";
+
+function checksumOf(lo: number, hi: number): void {
+  R64[0] = lo;
+  R64[1] = hi;
+  checksum();
+}
 
 function walk(state: Uint32Array, length: number): number[] {
   const out = [0];

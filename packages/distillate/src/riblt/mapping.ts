@@ -1,13 +1,16 @@
 import { fmix64, R64 } from "../core/hasher.js";
 
 /**
- * Writes the 64-bit checksum of a symbol into `R64`. A function of the symbol
- * alone, because the decoder only ever holds a remote symbol, never its key.
- * The XOR keeps the zero symbol, which fmix64 fixes, off a zero checksum.
+ * Replaces the symbol in `R64` with its 64-bit checksum. A function of the
+ * symbol alone, because the decoder only ever holds a remote symbol, never its
+ * key. The XOR keeps the zero symbol, which fmix64 fixes, off a zero checksum.
+ * Lanes go through `R64` rather than arguments for fmix64's reason: words past
+ * 2^30 passed to a call that is not inlined are boxed, and under coverage
+ * instrumentation it is not.
  */
-export function checksumOf(lo: number, hi: number): void {
-  R64[0] = (lo ^ 0x7f4a7c15) >>> 0;
-  R64[1] = (hi ^ 0x9e3779b9) >>> 0;
+export function checksum(): void {
+  R64[0] = ((R64[0] ?? 0) ^ 0x7f4a7c15) >>> 0;
+  R64[1] = ((R64[1] ?? 0) ^ 0x9e3779b9) >>> 0;
   fmix64();
 }
 
