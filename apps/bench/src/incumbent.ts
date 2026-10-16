@@ -8,6 +8,7 @@ export const {
   CuckooFilter,
   Hashing,
   HyperLogLog,
+  InvertibleBloomFilter,
   MinHashFactory,
   ScalableBloomFilter,
   TopK,
