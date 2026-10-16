@@ -40,3 +40,47 @@ test("the errors page documents the seed mismatch beside the merge errors", () =
 
   expect(subsection(page, "`ParamError`")).toContain("in order");
 });
+
+const guide = (): string => read("../src/content/docs/guides/riblt.md");
+
+test("the RIBLT guide covers what a reader needs to choose and use it", () => {
+  const page = guide();
+  for (const heading of [
+    "Reconcile two sets",
+    "When to pick it",
+    "Sync over the network",
+    "Resolve the remote side",
+    "What it costs",
+    "Limits",
+  ]) {
+    section(page, heading);
+  }
+
+  const pick = section(page, "When to pick it");
+  expect(pick).toContain("Bloom");
+  expect(pick).toContain("/guides/choosing-a-structure/");
+
+  const network = section(page, "Sync over the network");
+  expect(network).toContain("fetch");
+  expect(network).toContain("WebSocket");
+
+  expect(section(page, "Resolve the remote side")).toContain("hashOf");
+
+  // What the overhead gate measured.
+  const cost = section(page, "What it costs");
+  expect(cost).toContain("1.36");
+  expect(cost).toContain("1.81");
+  expect(cost).toContain("20 bytes");
+
+  const limits = section(page, "Limits");
+  expect(limits).toContain("duplicate");
+  expect(limits).toContain("crafted");
+  expect(limits).toContain("seed");
+  expect(limits).toContain("2.7e-8");
+});
+
+test("the sidebar links the RIBLT guide", () => {
+  expect(read("../astro.config.mjs")).toContain(
+    '{ label: "RIBLT", link: "/guides/riblt/" }',
+  );
+});
