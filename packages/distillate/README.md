@@ -54,13 +54,15 @@ Each structure ships as its own subpath, so you only bundle what you import.
 | `distillate/topk`     | Top-K          | which are heaviest? | Finding the most frequent keys in fixed space            |
 | `distillate/ddsketch` | DDSketch       | what is the p99?    | Latency and size percentiles, mergeable, in fixed space  |
 | `distillate/minhash`  | MinHash        | how similar?        | Near-duplicate documents and set overlap, with an index  |
+| `distillate/riblt`    | RIBLT          | which keys differ?  | Syncing two sets that mostly agree, exactly              |
 
 The filters are mutable except Binary Fuse, which is built once from the whole
 key set. HyperLogLog, Count-Min, Top-K, DDSketch and MinHash are sketches rather
 than filters: none reports whether it saw any particular key. HyperLogLog counts
 distinct keys, Count-Min counts how often each key appeared, Top-K reports which
 keys appeared most, DDSketch reports quantiles of numbers rather than keys, and
-MinHash estimates how much two sets overlap.
+MinHash estimates how much two sets overlap. RIBLT is neither: it reconciles
+two peers' sets, finding exactly the keys each side alone holds.
 
 ### Classic Bloom (`distillate/bloom`)
 
@@ -260,6 +262,27 @@ found[0]; // "early"
 The two sets share 500 of 1,500 users, so the true similarity is 1/3. Candidates from the index are likely matches, not confirmed ones; check each with `jaccard` where it matters. Sets smaller than `k` carry about 1.3 times the error.
 
 Also: `create`, `add`, `union`, `equals`, `signature`, `standardError`, `toBytes` / `fromBytes`, `toJSON` / `fromJSON`, `minHashSizing`, `lshSizing`, and the index's `remove`, `has` and `size`.
+
+### RIBLT (`distillate/riblt`)
+
+**Set reconciliation** between two peers: one encodes its set into an endless stream of 20-byte coded symbols, the other pushes them into a decoder until it decodes, then holds exactly the keys each side alone has. The cost follows the difference, about 27 bytes per differing key when many differ, and nobody estimates its size first. Full API, syncing over `fetch` or a `WebSocket`, and the limits: [RIBLT guide](https://distillate.akxp.net/guides/riblt/).
+
+```ts
+import { RibltDecoder, RibltEncoder } from "distillate/riblt";
+
+const server = RibltEncoder.from(["alice", "bob", "dave"]);
+const client = RibltDecoder.from(["alice", "carol"]);
+
+let decoded = false;
+while (!decoded) decoded = client.push(server.take(4));
+
+client.local().join(); // "carol"
+client.remote().length; // 2
+```
+
+`take(n)` is the next `n` symbols as one `Uint8Array` frame to send. `remote()` reports the other side's keys as 64-bit hashes; that side resolves them with `RibltDecoder.hashOf`. Keys must be distinct, and both peers must share a `seed`.
+
+Also: `add`, `stream`, `decoded`, `RibltDecoder.hashOf`.
 
 ## Performance
 
