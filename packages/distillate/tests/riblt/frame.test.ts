@@ -86,3 +86,16 @@ test("take refuses a batch that is not a positive integer", () => {
   expect(() => encoder.take(0)).toThrow(ParamError);
   expect(() => encoder.take(1.5)).toThrow(ParamError);
 });
+
+test("stream yields the same frames as consecutive takes", () => {
+  const stream = RibltEncoder.from(keys).stream(5);
+  const twin = RibltEncoder.from(keys);
+
+  for (let i = 0; i < 3; i++) {
+    expect(stream.next().value).toEqual(twin.take(5));
+  }
+});
+
+test("stream refuses a batch that is not a positive integer", () => {
+  expect(() => RibltEncoder.from(keys).stream(0).next()).toThrow(ParamError);
+});
