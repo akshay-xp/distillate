@@ -1,7 +1,12 @@
 import {
+  assertBodyLength,
+  assertMinBodyLength,
+  assertParamsPadding,
   FORMAT_VERSION,
   HASH_MURMUR128,
   readHeader,
+  SerializationError,
+  UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
 
@@ -15,6 +20,7 @@ const TYPE = 12;
  * lane starts aligned and a foreign reader can map each as a typed slice.
  */
 const PARAMS_SIZE = 16;
+const PARAMS_FIELDS_END = 12;
 
 // Reused per symbol so writing a frame allocates only the frame.
 const SCRATCH = new Uint32Array(5);
@@ -54,14 +60,31 @@ export interface Symbols {
   view: DataView;
 }
 
-/** Reads a frame written by {@link writeSymbols}. */
+/**
+ * Reads a frame written by {@link writeSymbols}, refusing one of another type
+ * or hash variant, or whose body disagrees with its count.
+ */
 export function readSymbols(bytes: Uint8Array): Symbols {
-  const { body } = readHeader(bytes);
+  const { type, flags, body } = readHeader(bytes);
+  if (type !== TYPE) {
+    throw new SerializationError(
+      `expected DSTL type ${String(TYPE)}, got ${String(type)}`,
+    );
+  }
+  if ((flags & 0x0f) !== HASH_MURMUR128) {
+    throw new UnknownHashVariantError(
+      `unsupported hash variant ${String(flags & 0x0f)}`,
+    );
+  }
+  assertMinBodyLength(body.length, PARAMS_SIZE, "riblt");
+  assertParamsPadding(body, PARAMS_FIELDS_END, PARAMS_SIZE, "riblt");
   const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
+  const count = view.getUint32(8, true);
+  assertBodyLength(body.length, PARAMS_SIZE + 20 * count, "riblt");
   return {
     seed: view.getUint32(0, true),
     start: view.getUint32(4, true),
-    count: view.getUint32(8, true),
+    count,
     view,
   };
 }
