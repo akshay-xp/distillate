@@ -773,3 +773,40 @@ test("a new item into a full set is refused and changes nothing", () => {
   if (!result.ok) expect(result.message).toContain("at most 100,000");
   expect(pg.similarity()).toEqual(before);
 });
+
+const range = (prefix: string, n: number): string[] =>
+  Array.from({ length: n }, (_, i) => `${prefix}-${String(i)}`);
+
+test("reconciling streams frames until the client knows both sides of the difference", () => {
+  const pg = built();
+
+  expect(pg.reconcile(100)).toEqual({
+    ok: true,
+    d: 100,
+    frames: 2,
+    symbols: 128,
+    bytes: 2632,
+    rawBytes: 78890,
+    decoded: true,
+    serverOnly: range("key", 50),
+    clientOnly: range("client", 50),
+  });
+  expect(pg.reconcile(0)).toMatchObject({
+    frames: 1,
+    symbols: 64,
+    decoded: true,
+    serverOnly: [],
+    clientOnly: [],
+  });
+});
+
+test("the client's own keys skip a name the page already holds", () => {
+  const pg = built();
+  pg.insert("client-0");
+
+  expect(pg.reconcile(2)).toMatchObject({
+    decoded: true,
+    serverOnly: ["key-0"],
+    clientOnly: ["client-1"],
+  });
+});
