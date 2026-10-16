@@ -1,6 +1,7 @@
 import {
   FORMAT_VERSION,
   HASH_MURMUR128,
+  readHeader,
   writeFrame,
 } from "../core/serialize.js";
 
@@ -37,17 +38,67 @@ export function writeSymbols(
       view.setUint32(0, seed, true);
       view.setUint32(4, start, true);
       view.setUint32(8, count, true);
-      const sums = PARAMS_SIZE;
-      const checks = sums + 8 * count;
-      const counts = checks + 8 * count;
       for (let i = 0; i < count; i++) {
         next(SCRATCH);
-        view.setUint32(sums + 8 * i, SCRATCH[0] ?? 0, true);
-        view.setUint32(sums + 8 * i + 4, SCRATCH[1] ?? 0, true);
-        view.setUint32(checks + 8 * i, SCRATCH[2] ?? 0, true);
-        view.setUint32(checks + 8 * i + 4, SCRATCH[3] ?? 0, true);
-        view.setUint32(counts + 4 * i, SCRATCH[4] ?? 0, true);
+        writeSymbolAt(view, count, i, SCRATCH);
       }
     },
   );
+}
+
+/** A frame's params and a view over its body, columns at their offsets. */
+export interface Symbols {
+  seed: number;
+  start: number;
+  count: number;
+  view: DataView;
+}
+
+/** Reads a frame written by {@link writeSymbols}. */
+export function readSymbols(bytes: Uint8Array): Symbols {
+  const { body } = readHeader(bytes);
+  const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
+  return {
+    seed: view.getUint32(0, true),
+    start: view.getUint32(4, true),
+    count: view.getUint32(8, true),
+    view,
+  };
+}
+
+// Byte offsets of the three columns in a body of `count` symbols.
+const sumsAt = (i: number): number => PARAMS_SIZE + 8 * i;
+const checksAt = (count: number, i: number): number =>
+  PARAMS_SIZE + 8 * count + 8 * i;
+const countsAt = (count: number, i: number): number =>
+  PARAMS_SIZE + 16 * count + 4 * i;
+
+function writeSymbolAt(
+  view: DataView,
+  count: number,
+  i: number,
+  symbol: Uint32Array,
+): void {
+  view.setUint32(sumsAt(i), symbol[0] ?? 0, true);
+  view.setUint32(sumsAt(i) + 4, symbol[1] ?? 0, true);
+  view.setUint32(checksAt(count, i), symbol[2] ?? 0, true);
+  view.setUint32(checksAt(count, i) + 4, symbol[3] ?? 0, true);
+  view.setUint32(countsAt(count, i), symbol[4] ?? 0, true);
+}
+
+/**
+ * Copies symbol `i` of a `count`-symbol frame into `out` (sum lo, sum hi,
+ * checksum lo, checksum hi, count as u32).
+ */
+export function readSymbolAt(
+  view: DataView,
+  count: number,
+  i: number,
+  out: Uint32Array,
+): void {
+  out[0] = view.getUint32(sumsAt(i), true);
+  out[1] = view.getUint32(sumsAt(i) + 4, true);
+  out[2] = view.getUint32(checksAt(count, i), true);
+  out[3] = view.getUint32(checksAt(count, i) + 4, true);
+  out[4] = view.getUint32(countsAt(count, i), true);
 }
