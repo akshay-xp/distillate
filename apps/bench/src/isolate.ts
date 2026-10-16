@@ -14,6 +14,7 @@ import {
   similarityAdapters,
 } from "./minhash.js";
 import type { Alphabet } from "./keylength.js";
+import { reconcileAdapters, ribltRows } from "./riblt.js";
 import { scalableAdapters, scalableRows } from "./scalable.js";
 import { measureThroughput, throughputNames } from "./throughput.js";
 import { topKAdapters, topKRows } from "./topk.js";
@@ -70,6 +71,8 @@ const JOBS: Record<string, Job> = {
     minHashRows(ns, only(similarityAdapters, name, "minhash")),
   "minhash-lsh": (name, [docs]: [number]) =>
     lshRows(docs, only(lshAdapters, name, "minhash-lsh")),
+  riblt: (name, [cases]: [[number, number][]]) =>
+    ribltRows(cases, only(reconcileAdapters, name, "riblt")),
 };
 
 const SELF = fileURLToPath(import.meta.url);
