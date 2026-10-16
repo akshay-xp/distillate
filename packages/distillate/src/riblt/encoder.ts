@@ -83,6 +83,6 @@ export class RibltEncoder {
 
   #next(out: Uint32Array): void {
     out.fill(0);
-    this.#window.applyTo(out, this.#index++, 1);
+    this.#window.applyTo(out, 0, this.#index++, 1);
   }
 }
