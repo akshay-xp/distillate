@@ -14,6 +14,7 @@ import type { TopKRow } from "../src/topk.js";
 import type { BundleRow, LshBundleRow } from "../src/bundle.js";
 import type { DDSketchRow } from "../src/ddsketch.js";
 import type { LshRow, MinHashRow } from "../src/minhash.js";
+import type { RibltRow } from "../src/riblt.js";
 import {
   cardinalityTable,
   countMinTable,
@@ -23,6 +24,9 @@ import {
   minHashLshTable,
   minHashTable,
   renderResults,
+  ribltBundleTable,
+  ribltSection,
+  ribltTable,
   topKTable,
   ddSketchTable,
   ddSketchBundleTable,
@@ -973,4 +977,71 @@ test("RESULTS carries the measured MinHash section for every library", () => {
   // distillate answers every query; whatever minhash does is reported.
   const ours = index.find((r) => cells(r)[1] === "distillate/minhash") ?? "";
   expect(cells(ours)[7]).toBe("0 of 20000");
+});
+
+test("the riblt table renders each side's time, what was sent and whether it decoded", () => {
+  const rows: RibltRow[] = [
+    {
+      name: "distillate/riblt",
+      keys: 1_000_000,
+      d: 1000,
+      sendMs: 1400,
+      receiveMs: 1460,
+      symbols: 1344,
+      bytes: 27_600,
+      decoded: true,
+    },
+    {
+      name: "bloom-filters",
+      keys: 10_000,
+      d: 10,
+      sendMs: 110,
+      receiveMs: 113,
+      symbols: null,
+      bytes: 9817,
+      decoded: false,
+    },
+  ];
+  const table = ribltTable(rows);
+
+  expect(table.split("\n")[0]).toBe(
+    "| Reconciler | keys | d | send | receive | symbols | bytes per differing key | decoded |",
+  );
+  expect(table).toContain(
+    "| distillate/riblt | 1M | 1k | 1.40 s | 1.46 s | 1344 | 27.6 | yes |",
+  );
+  expect(table).toContain(
+    "| bloom-filters | 10k | 10 | 110 ms | 113 ms | n/a | 981.7 | failed |",
+  );
+});
+
+test("the riblt section states its method and carries both tables", () => {
+  const bundles = ribltBundleTable([
+    { name: "distillate/riblt", bytes: 7936 },
+    { name: "bloom-filters", bytes: 40_000 },
+  ]);
+  expect(bundles).toContain("| distillate/riblt | 7.8 KB |");
+
+  const section = ribltSection("RIBLT_TBL", bundles).join("\n");
+  expect(section.startsWith("## RIBLT")).toBe(true);
+  expect(section).toContain("frames of 64");
+  expect(section).toContain("create(d, 0.01)");
+  expect(section).toContain("RIBLT_TBL");
+  expect(section).toContain(bundles);
+
+  const md = renderResults({
+    banner: "distillate-bench | node v24 | arm64 | Apple M1 | 8 cores",
+    version: "0.17.0",
+    date: "2026-10-16",
+    targetFpr: 0.01,
+    throughputCapacity: 100_000,
+    spaceTable: "SPACE_TBL",
+    throughputTable: "TPUT_TBL",
+    minHashTable: "MH_TBL",
+    ribltTable: "RIBLT_TBL",
+    ribltBundleTable: bundles,
+  });
+  const at = md.indexOf("## RIBLT");
+  expect(at).toBeGreaterThan(md.indexOf("## MinHash"));
+  expect(at).toBeLessThan(md.indexOf("## Throughput"));
 });
