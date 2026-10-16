@@ -108,10 +108,15 @@ export function benchLookup(
  * declines to optimise, which is a real cost rather than noise to average out.
  * It is unnecessary once the loop stops competing for CPU, which is what the
  * dedicated single-worker project in vitest.config.ts is for.
+ *
+ * `warmup` is for a call heavy enough to optimise in fewer calls, whose state
+ * grows with every call: 500k RIBLT hand-offs carry a decoder past a 40 MB
+ * buffer doubling that the measured window would then be charged for.
  */
 export async function countCollections(
   fn: () => void,
   ops: number,
+  warmup: number = WARMUP_CALLS,
 ): Promise<number> {
   let collections = 0;
   // Entries are counted only if the collection began inside the measured
@@ -149,7 +154,7 @@ export async function countCollections(
   // that is what stops `fn` being inlined. The instrument this replaced read
   // 40 bytes/op for a call that allocates nothing precisely because it called
   // `fn` through its own machinery.
-  for (let i = 0; i < WARMUP_CALLS; i++) fn();
+  for (let i = 0; i < warmup; i++) fn();
 
   await settle();
   collections = 0;
