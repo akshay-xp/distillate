@@ -21,6 +21,9 @@ First, which question are you asking?
 - **"How similar are these two sets?"** A similarity sketch:
   [MinHash](/guides/minhash/). It compares two sets at once, and its index
   finds near-duplicates among many without comparing every pair.
+- **"Which keys do we not share?"** Set reconciliation:
+  [RIBLT](/guides/riblt/). Two peers holding similar sets find exactly the keys
+  that differ, at a cost that follows the difference rather than the sets.
 
 There is no best filter, only a best filter for a workload. Answer three
 questions and the choice is usually forced:
@@ -48,6 +51,7 @@ questions and the choice is usually forced:
 | Finding the most frequent keys            | [Top-K](/guides/topk/)                                                          |
 | Latency or size percentiles               | [DDSketch](/guides/ddsketch/)                                                   |
 | Near-duplicates, or how much sets overlap | [MinHash](/guides/minhash/)                                                     |
+| Syncing two sets that mostly agree        | [RIBLT](/guides/riblt/)                                                         |
 
 For the filters, space below is stated as overhead over the
 information-theoretic floor of `log2(1/epsilon)` bits per key: 6.64 bits/key at
@@ -103,6 +107,17 @@ comparing against every one.
 Reach for it for near-duplicate documents, records or chunks, and for "how much
 do these two audiences or baskets overlap" questions. It does not count items
 or report whether one is present.
+
+### [RIBLT](/guides/riblt/) (`distillate/riblt`)
+
+Not a filter or a sketch. Encodes a set into an endless stream of 20-byte coded
+symbols; a peer holding a similar set pushes them into a decoder until it
+decodes, then holds the exact keys each side alone has. A large difference costs
+about 1.36 symbols per differing key, and nobody estimates its size first.
+
+Reach for it when two parties keep sets that mostly agree and must converge:
+offline clients reconnecting, replicas catching up, peers syncing. It answers
+nothing about one set alone.
 
 ### [Binary Fuse 8 and 16](/guides/fuse/) (`distillate/fuse`)
 
