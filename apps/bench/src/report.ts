@@ -24,7 +24,6 @@ import type { TopKRow } from "./topk.js";
 import { ddSketchBundles, minHashBundles, ribltBundles } from "./bundle.js";
 import type { BundleRow, LshBundleRow, ReconcileBundleRow } from "./bundle.js";
 import {
-  RIBLT_CASE_TIMEOUT_MS,
   RIBLT_CASES,
   RIBLT_TIMED_PASSES,
   RIBLT_WARM_PASSES,
@@ -51,7 +50,7 @@ import type { KeyLengthRow } from "./keylength.js";
 import type { ComparisonRow } from "./compare.js";
 import { adapters, TARGET_FPR } from "./adapters.js";
 import { envBanner } from "./harness.js";
-import { isolatedRows, isolatedThroughput, runIsolated } from "./isolate.js";
+import { isolatedRows, isolatedThroughput } from "./isolate.js";
 
 function capacityLabel(n: number): string {
   if (n >= 1_000_000) return `${String(n / 1_000_000)}M`;
@@ -206,10 +205,7 @@ export function ribltTable(rows: RibltRow[]): string {
   const body = rows.map((r) => {
     const symbols = r.symbols === null ? "n/a" : String(r.symbols);
     const head = `| ${r.name} | ${capacityLabel(r.keys)} | ${capacityLabel(r.d)} |`;
-    if (r.failure !== undefined) {
-      const f = r.failure;
-      return `${head} ${f} | ${f} | ${symbols} | ${f} | ${f} |`;
-    }
+    if (r.notRun) return `${head} not run | - | ${symbols} | - | - |`;
     return `${head} ${duration(r.sendMs)} | ${duration(r.receiveMs)} | ${symbols} | ${(r.bytes / r.d).toFixed(1)} | ${r.decoded ? "yes" : "failed"} |`;
   });
   return [header, ...body].join("\n");
@@ -401,47 +397,6 @@ export function minHashSection(
   ];
 }
 
-/**
- * Each case for each library in its own process, so one that runs out of
- * memory or past RIBLT_CASE_TIMEOUT_MS costs that row alone and is reported
- * rather than ending or stalling the run.
- */
-export function isolatedRibltRows(cases: [number, number][]): RibltRow[] {
-  return cases.flatMap(([keys, d]) =>
-    reconcileAdapters.map(({ name }) => {
-      try {
-        const [row] = runIsolated<RibltRow>(
-          "riblt",
-          name,
-          [[[keys, d]]],
-          RIBLT_CASE_TIMEOUT_MS,
-        ).rows;
-        if (row) return row;
-        throw new Error(`riblt job for ${name} returned no row`);
-      } catch (error) {
-        const message = String(error);
-        const failure = message.includes("heap out of memory")
-          ? "out of memory"
-          : message.includes("did not finish in")
-            ? `did not finish in ${String(RIBLT_CASE_TIMEOUT_MS / 60_000)} min`
-            : undefined;
-        if (failure === undefined) throw error;
-        return {
-          name,
-          keys,
-          d,
-          sendMs: NaN,
-          receiveMs: NaN,
-          symbols: null,
-          bytes: NaN,
-          decoded: false,
-          failure,
-        };
-      }
-    }),
-  );
-}
-
 export function ribltSection(table: string, bundles: string): string[] {
   return [
     "## RIBLT",
@@ -452,6 +407,7 @@ export function ribltSection(table: string, bundles: string): string[] {
     "`ribbit-riblt` streams the same 64-cell batches, through `serializeCellBatch`. Its receiver streams cells from its own keys and diffs them against the sender's, so `receive` counts that stream as well. It returns both sides' keys themselves; distillate returns the receiver's own as keys but the sender's as 64-bit hashes, which the sender resolves with `RibltDecoder.hashOf`: one more message if the receiver needs those keys.",
     "`bloom-filters` must be sized before anyone knows the difference. It is given the true d through its own sizing, `InvertibleBloomFilter.create(d, 0.01)`, an advantage no real caller has, and takes keys as `Buffer`s. `send` builds the sender's table; `receive` builds the receiver's, then runs `substract` and `decode`. Its bytes are the sender's `saveAsJSON`, the form it ships, and `decoded` is its `success`.",
     `Each time is the median of ${String(RIBLT_TIMED_PASSES)} timed passes after ${String(RIBLT_WARM_PASSES)} untimed, each library in its own process.`,
+    "`ribbit-riblt` and `bloom-filters` are not run at 1M keys: there `bloom-filters` takes 13 to 14 s a side and runs out of memory at d = 100k, and `ribbit-riblt` had not finished d = 100k after 35 minutes.",
     "",
     table,
     "",
@@ -605,7 +561,9 @@ async function main(): Promise<void> {
   );
   const mhBundles = minHashBundleTable(await minHashBundles());
 
-  const rbTable = ribltTable(isolatedRibltRows(RIBLT_CASES));
+  const rbTable = ribltTable(
+    isolatedRows<RibltRow>("riblt", names(reconcileAdapters), [RIBLT_CASES]),
+  );
   const rbBundles = ribltBundleTable(await ribltBundles());
 
   console.log(banner);
