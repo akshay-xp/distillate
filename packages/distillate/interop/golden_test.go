@@ -2197,3 +2197,42 @@ func TestRiblt(t *testing.T) {
 		t.Error("no riblt fixture starts past symbol 0")
 	}
 }
+
+func TestRibltDamaged(t *testing.T) {
+	e := find(t, "riblt")
+
+	short := frameOf(t, e)
+	if _, err := readFrame(short[:len(short)-1]); err == nil || !strings.Contains(err.Error(), "body length") {
+		t.Errorf("truncated frame: want a body length error, got %v", err)
+	}
+
+	stale := frameOf(t, e)
+	stale[headerSize+ribltParams]++
+	if _, err := readFrame(stale); err == nil || !strings.Contains(err.Error(), "CRC") {
+		t.Errorf("altered sum: want a CRC error, got %v", err)
+	}
+
+	// Resealed, each mutation gets past the trailer and must be caught by the
+	// params checks alone.
+	cases := []struct {
+		name, want string
+		frame      []byte
+	}{
+		{"padding byte set", "padding", func() []byte { b := frameOf(t, e); b[headerSize+13] = 1; return reseal(b) }()},
+		{"count the body cannot hold", "disagrees", func() []byte {
+			b := frameOf(t, e)
+			le.PutUint32(b[headerSize+8:], le.Uint32(b[headerSize+8:])+1)
+			return reseal(b)
+		}()},
+		{"params cut short", "shorter", writeFrame(12, make([]byte, 8), nil)},
+	}
+	for _, c := range cases {
+		f, err := readFrame(c.frame)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if _, err := parseRiblt(f); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: want an error mentioning %q, got %v", c.name, c.want, err)
+		}
+	}
+}
