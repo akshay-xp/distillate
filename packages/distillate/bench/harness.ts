@@ -114,6 +114,14 @@ export function benchLookup(
  * grows with every call: 500k RIBLT hand-offs carry a decoder past a 40 MB
  * buffer doubling that the measured window would then be charged for.
  */
+/**
+ * Most young-generation bytes a probed call may allocate in steady state: one
+ * 16-byte object every 8 calls. Clean code reads at most 0.45 (`fuse.has` over
+ * keys of varying length) and amortised growth 0.20 (RIBLT); the boxing fixed in
+ * 76bc6c3 reads 7 to 16.
+ */
+export const ALLOCATION_LIMIT = 2;
+
 export interface Allocation {
   /** Collections that began inside the measured window. */
   collections: number;

@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { measureAllocation } from "../../bench/harness.js";
+import { ALLOCATION_LIMIT, measureAllocation } from "../../bench/harness.js";
 import { BinaryFuse8 } from "../../src/fuse/fuse.js";
 
 // Alone in its file and in the single-worker project for the same reasons as
@@ -24,11 +24,12 @@ test.skipIf(NODE_MAJOR < 24)(
     const filter = BinaryFuse8.from(keys.slice(0, 4096));
     let at = 0;
     let hits = 0;
-    const { collections } = await measureAllocation(() => {
+    const { collections, bytesPerCall } = await measureAllocation(() => {
       at = (at + 1) & 8191;
       if (filter.has(keys[at] ?? "")) hits++;
     }, 600_000);
     expect(hits).toBeGreaterThan(0);
     expect(collections).toBe(0);
+    expect(bytesPerCall).toBeLessThan(ALLOCATION_LIMIT);
   },
 );

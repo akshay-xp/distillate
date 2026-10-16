@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { measureAllocation } from "../../bench/harness.js";
+import { ALLOCATION_LIMIT, measureAllocation } from "../../bench/harness.js";
 import { DDSketch } from "../../src/ddsketch/ddsketch.js";
 import { logMapping } from "../../src/ddsketch/mapping.js";
 import { lognormalValues } from "../helpers/quantile.js";
@@ -36,11 +36,13 @@ test.each([
       at = (at + 1) & 4095;
       sketch.add(values[at] ?? 0);
     }, 6_000_000);
-    const { collections } = await measureAllocation(() => {
+    const { collections, bytesPerCall } = await measureAllocation(() => {
       at = (at + 1) & 4095;
       sketch.add(values[at] ?? 0);
     }, 6_000_000);
 
     expect(collections).toBe(0);
+
+    expect(bytesPerCall).toBeLessThan(ALLOCATION_LIMIT);
   },
 );

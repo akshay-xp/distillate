@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { measureAllocation } from "../../bench/harness.js";
+import { ALLOCATION_LIMIT, measureAllocation } from "../../bench/harness.js";
 import { MinHashLSH } from "../../src/minhash/lsh.js";
 import { MinHash } from "../../src/minhash/minhash.js";
 
@@ -13,12 +13,14 @@ test("add allocates nothing in steady state", async () => {
   for (const key of keys) sketch.add(key);
 
   let at = 0;
-  const { collections } = await measureAllocation(() => {
+  const { collections, bytesPerCall } = await measureAllocation(() => {
     at = (at + 1) & 4095;
     sketch.add(keys[at] ?? "");
   }, 600_000);
 
   expect(collections).toBe(0);
+
+  expect(bytesPerCall).toBeLessThan(ALLOCATION_LIMIT);
 });
 
 // The reads a caller repeats while confirming LSH candidates. A sparse sketch
@@ -46,10 +48,12 @@ test("jaccard, equals and has allocate nothing on unchanged inputs", async () =>
   await measureAllocation(() => {
     read();
   }, 200_000);
-  const { collections } = await measureAllocation(() => {
+  const { collections, bytesPerCall } = await measureAllocation(() => {
     read();
   }, 200_000);
 
   expect(collections).toBe(0);
+
+  expect(bytesPerCall).toBeLessThan(ALLOCATION_LIMIT);
   expect(sink).toBeGreaterThan(0);
 });
