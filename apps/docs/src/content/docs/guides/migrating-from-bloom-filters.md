@@ -413,7 +413,9 @@ const server = RibltEncoder.from(["alice", "bob", "dave"]);
 const client = RibltDecoder.from(["alice", "carol"]);
 
 let decoded = false;
-while (!decoded) decoded = client.push(server.take(4));
+for (let sent = 0; !decoded && sent < 1024; sent += 4) {
+  decoded = client.push(server.take(4));
+}
 client.local().join(); // "carol"
 client.remote().length; // 2
 ```

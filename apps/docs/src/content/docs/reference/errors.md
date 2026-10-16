@@ -62,6 +62,10 @@ its valid range. Specifically:
 - `RibltDecoder.push` is handed a frame that does not start at the next symbol
   it expects. Frames must reach it in order, each once; the decoder is left as
   it was, so the right frame can still follow.
+- `RibltEncoder.take` or `RibltDecoder.push` meets two keys that hash alike on
+  its own side, on the first frame: a repeated key, or a 64-bit collision. The
+  decode could never finish. Deduplicate the keys; for a collision, pick another
+  `seed` on both peers.
 
 **What to do:** this is a programming error, not a runtime condition. The
 message names the offending parameter and its value. Validate at your own

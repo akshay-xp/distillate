@@ -54,8 +54,8 @@ export class RibltEncoder {
   }
 
   /**
-   * Builds an encoder over `keys`, which must hold no duplicates: a repeated
-   * key cancels itself out of every coded symbol.
+   * Builds an encoder over `keys`, which must be distinct:
+   * {@link RibltEncoder.take} refuses the first frame otherwise.
    *
    * @throws {@link ParamError} If `seed` is not a uint32.
    */
@@ -89,7 +89,9 @@ export class RibltEncoder {
    * Produces the next `n` coded symbols as one frame, for the peer's
    * {@link RibltDecoder.push}. Frames must reach the decoder in order.
    *
-   * @throws {@link ParamError} If `n` is not a positive integer.
+   * @throws {@link ParamError} If `n` is not a positive integer. On the first
+   * frame, if two keys hash alike under the seed: a repeated key, or a 64-bit
+   * collision that another seed resolves.
    */
   take(n: number): Uint8Array {
     assertPositiveInt(n, "n");
@@ -103,8 +105,8 @@ export class RibltEncoder {
    * Yields consecutive {@link RibltEncoder.take} frames of `n` symbols
    * forever; the caller stops once the peer reports it has decoded.
    *
-   * @throws {@link ParamError} If `n` is not a positive integer, on the first
-   * `next()`.
+   * @throws {@link ParamError} On the first `next()`, if `n` is not a positive
+   * integer or the keys are not distinct, as {@link RibltEncoder.take} does.
    */
   *stream(n: number): Generator<Uint8Array, never, undefined> {
     for (;;) yield this.take(n);
