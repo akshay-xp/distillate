@@ -127,6 +127,14 @@
       "import": "./dist/minhash/index.js",
       "require": "./dist/minhash/index.cjs"
     },
+    "./riblt": {
+      "types": {
+        "import": "./dist/riblt/index.d.ts",
+        "require": "./dist/riblt/index.d.cts"
+      },
+      "import": "./dist/riblt/index.js",
+      "require": "./dist/riblt/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",
