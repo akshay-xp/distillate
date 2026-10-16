@@ -116,3 +116,13 @@ test("the ddsketch job measures only the named library", () => {
     ["@datadog/sketches-js", 1000],
   ]);
 });
+
+test("the riblt job resolves each reconciler by name", () => {
+  const rows = runIsolated<{ name: string }>("riblt", "distillate/riblt", [
+    [[1000, 10]],
+  ]);
+  expect(rows.rows.map((r) => r.name)).toEqual(["distillate/riblt"]);
+  expect(() =>
+    runIsolated("riblt", "no-such-reconciler", [[[1000, 10]]]),
+  ).toThrow(/no-such-reconciler/);
+});
