@@ -1,6 +1,11 @@
 import { expect, test } from "vitest";
 
-import { bundleSize, ddSketchBundles, minHashBundles } from "../src/bundle.js";
+import {
+  bundleSize,
+  ddSketchBundles,
+  minHashBundles,
+  ribltBundles,
+} from "../src/bundle.js";
 
 test("bundleSize is the gzipped size of a minified bundle", async () => {
   const size = await bundleSize("export const answer = 42;");
@@ -36,4 +41,13 @@ test("each library's MinHash bundle is measured alone and with its LSH index", a
   // bloom-filters has no LSH index to bundle.
   expect(incumbent?.withLsh).toBeNull();
   expect(pkg?.withLsh).toBeGreaterThan(0);
+});
+
+test("each reconciler's bundle is measured", async () => {
+  const rows = await ribltBundles();
+  expect(rows.map((r) => r.name)).toEqual([
+    "distillate/riblt",
+    "bloom-filters",
+  ]);
+  for (const r of rows) expect(r.bytes, r.name).toBeGreaterThan(0);
 });

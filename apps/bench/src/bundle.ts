@@ -93,3 +93,26 @@ export async function minHashBundles(): Promise<LshBundleRow[]> {
     },
   ];
 }
+
+export interface ReconcileBundleRow {
+  name: string;
+  bytes: number;
+}
+
+/** Everything a reconcile needs on both sides, as one import per library. */
+export async function ribltBundles(): Promise<ReconcileBundleRow[]> {
+  return [
+    {
+      name: "distillate/riblt",
+      bytes: await bundleSize(
+        'import { RibltDecoder, RibltEncoder } from "distillate/riblt"; globalThis.x = [RibltEncoder, RibltDecoder];',
+      ),
+    },
+    {
+      name: "bloom-filters",
+      bytes: await bundleSize(
+        'import { InvertibleBloomFilter } from "bloom-filters"; globalThis.x = InvertibleBloomFilter;',
+      ),
+    },
+  ];
+}
