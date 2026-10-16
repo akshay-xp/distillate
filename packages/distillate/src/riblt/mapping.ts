@@ -12,8 +12,11 @@ export function checksumOf(lo: number, hi: number): void {
 }
 
 /**
- * Advances `state[slot]`, which starts at the symbol's checksum low lane, one
- * mulberry32 step and returns the index after `last`. The gap is the Go
+ * Advances the symbol's PRNG at `state[2 * slot]` and `state[2 * slot + 1]`,
+ * seeded with its checksum lanes, one xoroshiro64** step and returns the index
+ * after `last`. The state is the whole 64-bit checksum because a 32-bit seed
+ * repeats across about n^2 / 2^33 pairs of symbols, and a pair sharing a
+ * sequence shares every coded symbol, so neither ever peels. The gap is the Go
  * reference's, `(last + 1.5) * (1 / sqrt(u) - 1)` rounded up, with a 32-bit
  * uniform `u` where Go draws 64 bits: index i is then reached with probability
  * about `1 / (1 + i/2)`.
@@ -23,10 +26,13 @@ export function nextIndex(
   slot: number,
   last: number,
 ): number {
-  let t = ((state[slot] ?? 0) + 0x6d2b79f5) | 0;
-  state[slot] = t;
-  t = Math.imul(t ^ (t >>> 15), t | 1);
-  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-  const u = (((t ^ (t >>> 14)) >>> 0) + 0.5) / 4294967296;
+  const s0 = state[2 * slot] ?? 0;
+  let s1 = state[2 * slot + 1] ?? 0;
+  const x = Math.imul(s0, 0x9e3779bb);
+  const out = Math.imul((x << 5) | (x >>> 27), 5) >>> 0;
+  s1 ^= s0;
+  state[2 * slot] = ((s0 << 26) | (s0 >>> 6)) ^ s1 ^ (s1 << 9);
+  state[2 * slot + 1] = (s1 << 13) | (s1 >>> 19);
+  const u = (out + 0.5) / 4294967296;
   return last + Math.ceil((last + 1.5) * (1 / Math.sqrt(u) - 1));
 }

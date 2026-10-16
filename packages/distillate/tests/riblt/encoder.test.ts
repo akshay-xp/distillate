@@ -16,7 +16,7 @@ function oracle(input: string[], seed: number, length: number): number[][] {
     checksumOf(w0, w1);
     const c0 = R64[0] ?? 0;
     const c1 = R64[1] ?? 0;
-    const state = new Uint32Array([c0]);
+    const state = new Uint32Array([c0, c1]);
     for (let i = 0; i < length; i = nextIndex(state, 0, i)) {
       const cell = out[i] ?? [];
       cell[0] = ((cell[0] ?? 0) ^ w0) >>> 0;

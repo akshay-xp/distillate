@@ -53,7 +53,7 @@ export class RibltDecoder<K extends BytesLike = BytesLike> {
   // Indices of cells that may be pure; rechecked when taken.
   #queue = new Int32Array(64);
   // Reused per symbol so a peeled symbol's index sequence allocates nothing.
-  readonly #state = new Uint32Array(1);
+  readonly #state = new Uint32Array(2);
   // Reused across add() so hashing a key allocates nothing per call.
   readonly #hash: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
 
@@ -199,6 +199,7 @@ export class RibltDecoder<K extends BytesLike = BytesLike> {
       const sign = (cells[base + 4] ?? 0) | 0;
       const state = this.#state;
       state[0] = checkLo;
+      state[1] = checkHi;
       for (let i = 0; i < this.#received; i = nextIndex(state, 0, i)) {
         const b = LANES * i;
         cells[b] = (cells[b] ?? 0) ^ lo;
