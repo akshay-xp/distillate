@@ -148,6 +148,7 @@ const NUMERALS = [
   "eight",
   "nine",
   "ten",
+  "eleven",
 ];
 
 /** The structures the hash-variant section lists, and the count it claims. */
@@ -527,7 +528,7 @@ test("the layout table names type 10 as DDSketch", () => {
   expect(reserved).not.toContain("DDSketch");
 });
 
-test("the layout table names type 11 as MinHash and reserves from 12", () => {
+test("the layout table names type 11 as MinHash", () => {
   const { types, reserved } = typeRows();
   const named = new Map(
     [...types.matchAll(/(\d+)=([A-Za-z0-9]+)/g)].map(([, n, name]) => [
@@ -537,8 +538,61 @@ test("the layout table names type 11 as MinHash and reserves from 12", () => {
   );
 
   expect(named.get(11)).toBe("MinHash");
-  expect(reserved).toContain("12+");
   expect(reserved).not.toContain("MinHash");
+});
+
+test("the layout table names type 12 as RIBLT and reserves from 13", () => {
+  const { types, reserved } = typeRows();
+  const named = new Map(
+    [...types.matchAll(/(\d+)=([A-Za-z0-9]+)/g)].map(([, n, name]) => [
+      Number(n),
+      name,
+    ]),
+  );
+
+  expect(named.get(12)).toBe("RIBLT");
+  expect(reserved).toContain("13+");
+  expect(reserved).not.toContain("RIBLT");
+});
+
+test("the hash variant section lists RIBLT among the variant 0 writers", () => {
+  expect(hashVariant().families).toContain("RIBLT");
+});
+
+const ribltSection = (): string =>
+  sectionFrom(
+    "RIBLT (type 12), little-endian",
+    "\n### ",
+    "serialization.md has no RIBLT section",
+  );
+
+test("the RIBLT section states the columns, the checksum and what a reader rejects", () => {
+  const section = ribltSection();
+  for (const phrase of ["start", "column", "checksum", "A reader rejects"]) {
+    expect(section, phrase).toContain(phrase);
+  }
+});
+
+// Decoded from the page's offsets alone, so a wrong row fails here rather
+// than in the Go reader. The fixture is the encoder's second batch.
+test("the documented RIBLT layout decodes the golden frame", () => {
+  const rows = paramsTable("RIBLT (type 12), little-endian");
+  const body = frameBody(golden("riblt").frame);
+  const at = (field: string): number => rows.get(field)?.offset ?? NaN;
+
+  expect(body.getUint32(at("seed"), true)).toBe(7);
+  expect(body.getUint32(at("start"), true)).toBe(3);
+  const count = body.getUint32(at("count"), true);
+  expect(count).toBe(7);
+  expect(body.getUint32(at("reserved"), true)).toBe(0);
+  expect(body.byteLength).toBe(at("sums") + 20 * count);
+  // Counts follow the two u64 columns; each is a signed key count, and five
+  // keys can put no more than five in one symbol.
+  const counts = at("sums") + 16 * count;
+  for (let i = 0; i < count; i++) {
+    const c = body.getInt32(counts + 4 * i, true);
+    expect(Math.abs(c), `count ${String(i)}`).toBeLessThanOrEqual(5);
+  }
 });
 
 test("the hash variant section lists MinHash among the variant 0 writers", () => {
