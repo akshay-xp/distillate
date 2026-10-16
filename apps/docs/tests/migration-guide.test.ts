@@ -274,3 +274,34 @@ test("the minhash mapping covers every call a migrating reader makes", () => {
   expect(section).toContain("two orders of magnitude");
   expect(section).not.toContain("200 times");
 });
+
+test("the guide maps every call of the incumbent's invertible Bloom filter", () => {
+  const rows = parseTable(GUIDE, "The invertible Bloom filter");
+
+  const incumbent = rows.map(([from]) => from);
+  for (const call of [
+    "new InvertibleBloomFilter(size, hashCount)",
+    "add(buffer)",
+    "substract",
+    "decode",
+    "additional",
+    "missing",
+  ]) {
+    expect(
+      incumbent.some((cell) => cell.includes(call)),
+      `no row maps ${call}`,
+    ).toBe(true);
+  }
+  for (const [from, to] of rows) {
+    expect(to.trim(), `${from} maps to nothing`).not.toBe("");
+  }
+
+  // The trap a migrating reader hits: the incumbent's table must be sized for
+  // a difference nobody knows yet, and fails when it is too small.
+  const section = subsection("The invertible Bloom filter");
+  expect(section).toContain("InvertibleBloomFilter");
+  expect(section).toContain("RibltEncoder");
+  expect(section).toContain("RibltDecoder");
+  expect(section).toContain("sized");
+  expect(section).toContain("in advance");
+});
