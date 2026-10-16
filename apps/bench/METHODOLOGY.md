@@ -323,3 +323,37 @@ threshold and runs at its default band size of 4. Each indexes 10k documents of
 100 items, then queries each one's near-duplicate (89 shared items of 100, J
 about 0.8) and an unrelated document. Queries that throw are caught and counted
 rather than ending the run. Each library runs in its own process.
+
+## Configuration for RIBLT
+
+RIBLT is compared with `bloom-filters`' `InvertibleBloomFilter`, version 3, the
+one invertible Bloom filter in common JS use; version 4 dropped it. Both answer
+the same question exactly: which keys does the sender hold that the receiver
+does not, and the reverse.
+
+Each case gives both sides `keys` keys, of which `d / 2` are each side's own, at
+1 million and 10,000 keys per side and d of 10, 1,000 and 100,000. d of 100,000
+cannot occur at 10,000 keys, so that pair is not run. The keys are the same
+strings for both libraries, as `Buffer`s for the incumbent, which requires them.
+
+The incumbent's table must be sized before the difference is known, and too
+small a table fails to decode. It is given the true d through its own sizing,
+`InvertibleBloomFilter.create(d, 0.01)`, an advantage no real caller has; a
+caller guessing low would fail and resend, and one guessing high would ship a
+larger table. Its bytes are the sender's `saveAsJSON`, the form it ships. A
+failed decode is reported as such rather than dropped.
+
+distillate is not sized: the sender streams frames of 64 coded symbols, the
+guide's suggestion, until the receiver decodes. Its bytes count every frame byte
+sent, headers and the unused tail of the last frame included, so a small d pays
+for most of a frame it did not need. The minimal symbol counts, without that
+tail, are gated in the package's tests and quoted in the RIBLT guide.
+
+Time is reported per side, building included: an encoder's stream is consumed
+by the one peer it serves, so every sync builds both sides from their keys. For
+the incumbent, the sender builds its table, and the receiver builds its own and
+then subtracts and decodes. Each time is the median of 3 timed passes after 1
+untimed one. Each case runs for each library in its own process, at Node's
+default heap limit, so a case a library cannot finish costs that row alone: the
+row reads "out of memory" where the process ran out, rather than the run ending
+or the row being dropped.

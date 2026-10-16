@@ -14,6 +14,11 @@ unreleased build that adds `distillate/minhash` on top of 0.15.2, against
 `bloom-filters@3.0.4` and `minhash@0.0.9`. Every other section keeps the
 numbers it was published with.
 
+The RIBLT section was measured on 2026-10-16, on the same machine, from the
+unreleased build that adds `distillate/riblt` on top of 0.16.0, against
+`bloom-filters@3.0.4`. Every other section keeps the numbers it was published
+with.
+
 All filters are configured at the same target FPR (1%) and measured by identical code.
 See [METHODOLOGY.md](./METHODOLOGY.md) for how these benches are run.
 
@@ -297,6 +302,34 @@ Bundle sizes are measured, not quoted: each import bundled by esbuild for the br
 | distillate/minhash | 4.0 KB  | 4.9 KB   |
 | bloom-filters      | 37.5 KB | none     |
 | minhash            | 1.2 KB  | 1.2 KB   |
+
+## RIBLT
+
+Compared with `bloom-filters`' `InvertibleBloomFilter` (v3), the one invertible Bloom filter in common JS use. Each side holds `keys` keys, `d / 2` of them its own, and the sender reconciles into the receiver.
+
+distillate streams frames of 64 coded symbols until the receiver decodes. `send` is `RibltEncoder.from` plus every `take`; `receive` is `RibltDecoder.from` plus every `push`. `symbols` is how many were sent. `bytes per differing key` counts every frame byte, headers and the unused tail of the last frame included, so a small d pays for a frame it did not fill.
+`bloom-filters` must be sized before anyone knows the difference. It is given the true d through its own sizing, `InvertibleBloomFilter.create(d, 0.01)`, an advantage no real caller has, and takes keys as `Buffer`s. `send` builds the sender's table; `receive` builds the receiver's, then runs `substract` and `decode`. Its bytes are the sender's `saveAsJSON`, the form it ships, and `decoded` is its `success`.
+Each time is the median of 3 timed passes after 1 untimed, each library in its own process.
+
+| Reconciler       | keys | d    | send          | receive       | symbols | bytes per differing key | decoded       |
+| ---------------- | ---- | ---- | ------------- | ------------- | ------- | ----------------------- | ------------- |
+| distillate/riblt | 10k  | 10   | 4 ms          | 5 ms          | 64      | 131.6                   | yes           |
+| bloom-filters    | 10k  | 10   | 109 ms        | 109 ms        | n/a     | 981.7                   | yes           |
+| distillate/riblt | 10k  | 1k   | 9 ms          | 10 ms         | 1344    | 27.6                    | yes           |
+| bloom-filters    | 10k  | 1k   | 147 ms        | 272 ms        | n/a     | 976.1                   | yes           |
+| distillate/riblt | 1M   | 10   | 564 ms        | 580 ms        | 64      | 131.6                   | yes           |
+| bloom-filters    | 1M   | 10   | 10.86 s       | 10.94 s       | n/a     | 1019.6                  | yes           |
+| distillate/riblt | 1M   | 1k   | 1.35 s        | 1.38 s        | 1344    | 27.6                    | yes           |
+| bloom-filters    | 1M   | 1k   | 12.16 s       | 12.40 s       | n/a     | 1027.0                  | yes           |
+| distillate/riblt | 1M   | 100k | 3.11 s        | 3.23 s        | 135296  | 27.8                    | yes           |
+| bloom-filters    | 1M   | 100k | out of memory | out of memory | n/a     | out of memory           | out of memory |
+
+Bundle sizes are measured, not quoted: everything both sides need, bundled by esbuild for the browser, minified and gzipped.
+
+| Library          | encoder and decoder |
+| ---------------- | ------------------- |
+| distillate/riblt | 4.8 KB              |
+| bloom-filters    | 37.4 KB             |
 
 ## Throughput (n = 100k)
 
