@@ -88,17 +88,37 @@ test("measureAllocation tells an allocating loop from a flat one", async () => {
   expect(total).toBeGreaterThanOrEqual(1_000_000);
 });
 
-// Too little garbage to fill the young generation, so no collection, but every
-// call still allocates an object: the shape a collection count cannot see.
+// Too little garbage to fill the young generation, so usually no collection,
+// but every call still allocates an object: the shape a collection count
+// cannot see. Outside the allocation project the young generation is not
+// pinned, so a window can still collect; that one is retried.
 test("measureAllocation reports bytes a loop allocates without a collection", async () => {
   const sink: object[] = [];
   let calls = 0;
-  const result = await measureAllocation(() => {
+  const allocate = () => {
     if (++calls % 1000 === 0) sink.length = 0;
     sink.push({ a: calls });
-  }, 50_000);
+  };
+  let result = await measureAllocation(allocate, 5000);
+  for (let attempt = 1; attempt < 5 && result.collections > 0; attempt++) {
+    result = await measureAllocation(allocate, 5000);
+  }
 
+  expect(result.collections).toBe(0);
   expect(result.bytesPerCall).toBeGreaterThanOrEqual(12);
+});
+
+// A collection frees memory mid-window, so the byte reading would come out low
+// or negative: a number that looks like a pass.
+test("measureAllocation reads no bytes from a window that collected", async () => {
+  const sink: object[] = [];
+  const result = await measureAllocation(() => {
+    sink.length = 0;
+    sink.push({ a: 1, b: 2 });
+  }, 1_000_000);
+
+  expect(result.collections).toBeGreaterThan(0);
+  expect(result.bytesPerCall).toBeNaN();
 });
 
 // A loop allocates while V8 is still optimising it, and that is not the loop's
