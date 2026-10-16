@@ -6,7 +6,7 @@ Modern probabilistic data structures for JavaScript. Successor to aging Bloom fi
 
 Probabilistic structures trade a bounded, tunable error for a fraction of the space an exact answer would need. `distillate` ships the right structure per workload (not just a Bloom filter), TS-first, dependency-free, universal.
 
-Five questions so far, each with its own family:
+Six questions so far, each with its own family:
 
 - **Have I seen this key?** Approximate-membership filters: a tunable false-positive rate and zero false negatives. Bloom, Blocked Bloom, Scalable Bloom, Binary Fuse, Cuckoo.
 - **How many distinct keys have I seen?** Cardinality sketches: a count in space fixed by precision rather than by the answer. HyperLogLog, in 12 KiB at about 0.8% relative error whether the true count is a thousand or a billion.
@@ -14,8 +14,9 @@ Five questions so far, each with its own family:
 
 - **What is the p99 of these values?** Quantile sketches: every quantile within a relative error of the true value, tails included, in space fixed by the accuracy and the range of values. DDSketch takes numbers rather than keys, merges exactly, and reads and writes Datadog's protobuf on its own subpath.
 - **How similar are two sets?** Similarity sketches: a Jaccard estimate from fixed-size signatures, within `0.5 / sqrt(k)`. MinHash updates in one hash per item, and `MinHashLSH` finds near-duplicates among many sketches without comparing every pair.
+- **Which keys do two peers not share?** Set reconciliation: exact, at a cost that follows the difference rather than the sets. RIBLT streams coded symbols until the peer decodes, about 1.36 per differing key, with no estimate of the difference up front.
 
-See [architecture.md](architecture.md) for why a sketch cannot satisfy the filter interface.
+See [architecture.md](architecture.md) for why a sketch cannot satisfy the filter interface, and why reconciliation is neither.
 
 ## Why (market gap, 2026)
 
