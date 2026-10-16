@@ -3,7 +3,7 @@ title: Errors
 description: Every error class distillate exports, when it is thrown, and what to do about it.
 ---
 
-distillate exports eighteen error classes. Each has a `name` that discriminates it
+distillate exports nineteen error classes. Each has a `name` that discriminates it
 from a plain `Error`, so you can narrow with `instanceof` or switch on `name`.
 
 They fall into five groups by cause: bad parameters, an operation two structures
@@ -19,6 +19,7 @@ and a frame that will not decode.
 | [`CountMinParamMismatchError`](/api/countmin/classes/countminparammismatcherror/)        | `CountMinSketch.union`                                    | Sketches disagree on geometry or seed                 |
 | [`TopKParamMismatchError`](/api/topk/classes/topkparammismatcherror/)                    | `TopK.union`                                              | Sketches disagree on capacity                         |
 | [`DDSketchParamMismatchError`](/api/ddsketch/classes/ddsketchparammismatcherror/)        | `DDSketch.union`                                          | Sketches bin values differently                       |
+| [`RibltParamMismatchError`](/api/riblt/classes/ribltparammismatcherror/)                 | `RibltDecoder.push`                                       | Peers hash under different seeds                      |
 | [`BinaryFuseBuildError`](/api/fuse/classes/binaryfusebuilderror/)                        | `BinaryFuse8.from`, `BinaryFuse16.from`                   | The peel stalled on every seed                        |
 | [`CuckooFullError`](/api/cuckoo/classes/cuckoofullerror/)                                | `CuckooFilter.add`                                        | No room for the key after 500 moves                   |
 | [`CountMinOverflowError`](/api/countmin/classes/countminoverflowerror/)                  | `CountMinSketch.add`, `union`                             | A counter would pass `2^32 - 1`                       |
@@ -31,16 +32,18 @@ and a frame that will not decode.
 | [`ReservedBitsError`](/api/bloom/classes/reservedbitserror/)                             | `fromBytes`                                               | A newer frame sets reserved header bits               |
 | [`ChecksumError`](/api/bloom/classes/checksumerror/)                                     | `fromBytes`                                               | CRC32 does not match                                  |
 
-The seven serialization errors are exported from all ten structure subpaths
+The seven serialization errors are exported from all eleven structure subpaths
 (`distillate/bloom`, `distillate/blocked`, `distillate/fuse`, `distillate/hll`,
 `distillate/scalable`, `distillate/cuckoo`, `distillate/countmin`,
-`distillate/topk`, `distillate/ddsketch` and `distillate/minhash`);
+`distillate/topk`, `distillate/ddsketch`, `distillate/minhash` and
+`distillate/riblt`);
 `distillate/frame` exports the six a frame read can throw (all but
 `UnknownHashVariantError`). The rest are exported from the subpath of the
 structure that throws them, except `ParamError`, which is exported from
 `distillate/bloom`, `distillate/blocked`, `distillate/hll`,
 `distillate/scalable`, `distillate/cuckoo`, `distillate/countmin`,
-`distillate/topk`, `distillate/ddsketch` and `distillate/minhash`.
+`distillate/topk`, `distillate/ddsketch`, `distillate/minhash` and
+`distillate/riblt`.
 
 ## Parameter errors
 
@@ -56,6 +59,9 @@ its valid range. Specifically:
 - `seed` is outside the uint32 range, or `k` outside uint16.
 - `blockedBitsPerKey(epsilon)` or `BlockedBloomFilter.create` is asked for a
   rate below the blocked floor near 1e-8.
+- `RibltDecoder.push` is handed a frame that does not start at the next symbol
+  it expects. Frames must reach it in order, each once; the decoder is left as
+  it was, so the right frame can still follow.
 
 **What to do:** this is a programming error, not a runtime condition. The
 message names the offending parameter and its value. Validate at your own
@@ -247,6 +253,38 @@ try {
   error = e;
 }
 error instanceof DDSketchParamMismatchError; // true
+```
+
+### `RibltParamMismatchError`
+
+[API reference](/api/riblt/classes/ribltparammismatcherror/).
+
+**Thrown when** `RibltDecoder.push` is given a frame encoded under a different
+`seed` than the decoder's. The two peers hash every key differently, so no
+prefix of that stream can ever decode. Pushing a peer's frame is the
+reconciliation form of merging with a peer's structure, and it fails the same
+way: the two sides were set up apart. The decoder is left as it was.
+
+**What to do:** give both peers the same `seed`, from configuration or as part
+of the handshake that starts a sync.
+
+```ts
+import {
+  RibltDecoder,
+  RibltEncoder,
+  RibltParamMismatchError,
+} from "distillate/riblt";
+
+const encoder = RibltEncoder.from(["alice", "bob"], { seed: 1 });
+const decoder = RibltDecoder.from(["alice"]); // seed 0
+
+let error: unknown;
+try {
+  decoder.push(encoder.take(4));
+} catch (e) {
+  error = e;
+}
+error instanceof RibltParamMismatchError; // true
 ```
 
 ## Build errors
