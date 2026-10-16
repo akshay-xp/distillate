@@ -109,6 +109,12 @@ export async function ribltBundles(): Promise<ReconcileBundleRow[]> {
       ),
     },
     {
+      name: "ribbit-riblt",
+      bytes: await bundleSize(
+        'import { BloomDiff, BloomStream, deserializeCellBatch, serializeCellBatch } from "ribbit-riblt"; globalThis.x = [BloomStream, BloomDiff, serializeCellBatch, deserializeCellBatch];',
+      ),
+    },
+    {
       name: "bloom-filters",
       bytes: await bundleSize(
         'import { InvertibleBloomFilter } from "bloom-filters"; globalThis.x = InvertibleBloomFilter;',
