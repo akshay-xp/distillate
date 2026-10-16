@@ -138,8 +138,9 @@ src/
                     # densified on read, cached), lsh.ts for MinHashLSH, sizing.ts for
                     # minHashSizing, lshSizing and the k bounds both share
   riblt/            # RIBLT: encoder.ts, decoder.ts (peeling, local/remote), window.ts
-                    # (typed-array min-heap of symbols on next index), mapping.ts (checksum,
-                    # xoroshiro64** index sequence), frame.ts (frame type 12, columns)
+                    # (a bucket per next index, far symbols refiled as the buckets
+                    # double), mapping.ts (checksum, xoroshiro64** index sequence),
+                    # frame.ts (frame type 12, columns)
   frame/            # distillate/frame: readFrameAt for walking a stream of frames
   index.ts          # root barrel (VERSION only)
 ```
