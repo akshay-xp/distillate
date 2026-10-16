@@ -86,12 +86,18 @@ export function runIsolated<T>(
   job: string,
   adapter: string,
   args: unknown[],
+  timeoutMs?: number,
 ): { pid: number; rows: T[] } {
   const r = spawnSync(
     process.execPath,
     ["--import", "tsx", SELF, job, adapter, JSON.stringify(args)],
-    { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+    { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: timeoutMs },
   );
+  if (r.signal === "SIGTERM" && timeoutMs !== undefined) {
+    throw new Error(
+      `job ${job} for ${adapter} did not finish in ${String(timeoutMs)} ms`,
+    );
+  }
   if (r.status !== 0) throw new Error(r.stderr || `job ${job} failed`);
   return JSON.parse(r.stdout) as { pid: number; rows: T[] };
 }

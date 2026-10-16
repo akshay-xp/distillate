@@ -159,6 +159,8 @@ export const RIBLT_CASES: [number, number][] = [
 
 export const RIBLT_WARM_PASSES = 1;
 export const RIBLT_TIMED_PASSES = 3;
+/** Past this a case is reported as unfinished rather than stalling the run. */
+export const RIBLT_CASE_TIMEOUT_MS = 10 * 60_000;
 
 export interface RibltRow {
   name: string;

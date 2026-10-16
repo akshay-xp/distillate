@@ -126,3 +126,9 @@ test("the riblt job resolves each reconciler by name", () => {
     runIsolated("riblt", "no-such-reconciler", [[[1000, 10]]]),
   ).toThrow(/no-such-reconciler/);
 });
+
+test("runIsolated stops a job that runs past its time limit", () => {
+  expect(() =>
+    runIsolated("riblt", "distillate/riblt", [[[1_000_000, 1000]]], 100),
+  ).toThrow(/did not finish in/);
+});

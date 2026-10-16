@@ -24,6 +24,7 @@ import type { TopKRow } from "./topk.js";
 import { ddSketchBundles, minHashBundles, ribltBundles } from "./bundle.js";
 import type { BundleRow, LshBundleRow, ReconcileBundleRow } from "./bundle.js";
 import {
+  RIBLT_CASE_TIMEOUT_MS,
   RIBLT_CASES,
   RIBLT_TIMED_PASSES,
   RIBLT_WARM_PASSES,
@@ -402,17 +403,29 @@ export function minHashSection(
 
 /**
  * Each case for each library in its own process, so one that runs out of
- * memory costs that row alone and is reported rather than ending the run.
+ * memory or past RIBLT_CASE_TIMEOUT_MS costs that row alone and is reported
+ * rather than ending or stalling the run.
  */
 export function isolatedRibltRows(cases: [number, number][]): RibltRow[] {
   return cases.flatMap(([keys, d]) =>
     reconcileAdapters.map(({ name }) => {
       try {
-        const [row] = runIsolated<RibltRow>("riblt", name, [[[keys, d]]]).rows;
+        const [row] = runIsolated<RibltRow>(
+          "riblt",
+          name,
+          [[[keys, d]]],
+          RIBLT_CASE_TIMEOUT_MS,
+        ).rows;
         if (row) return row;
         throw new Error(`riblt job for ${name} returned no row`);
       } catch (error) {
-        if (!String(error).includes("heap out of memory")) throw error;
+        const message = String(error);
+        const failure = message.includes("heap out of memory")
+          ? "out of memory"
+          : message.includes("did not finish in")
+            ? `did not finish in ${String(RIBLT_CASE_TIMEOUT_MS / 60_000)} min`
+            : undefined;
+        if (failure === undefined) throw error;
         return {
           name,
           keys,
@@ -422,7 +435,7 @@ export function isolatedRibltRows(cases: [number, number][]): RibltRow[] {
           symbols: null,
           bytes: NaN,
           decoded: false,
-          failure: "out of memory",
+          failure,
         };
       }
     }),
@@ -433,9 +446,10 @@ export function ribltSection(table: string, bundles: string): string[] {
   return [
     "## RIBLT",
     "",
-    "Compared with `bloom-filters`' `InvertibleBloomFilter` (v3), the one invertible Bloom filter in common JS use. Each side holds `keys` keys, `d / 2` of them its own, and the sender reconciles into the receiver.",
+    "Compared with `ribbit-riblt`, another JS implementation of the same rateless scheme, and with the `InvertibleBloomFilter` of `bloom-filters` 3.0.4, the fixed-size IBLT it replaces. Each side holds `keys` keys, `d / 2` of them its own, and the sender reconciles into the receiver.",
     "",
     "distillate streams frames of 64 coded symbols until the receiver decodes. `send` is `RibltEncoder.from` plus every `take`; `receive` is `RibltDecoder.from` plus every `push`. `symbols` is how many were sent. `bytes per differing key` counts every frame byte, headers and the unused tail of the last frame included, so a small d pays for a frame it did not fill.",
+    "`ribbit-riblt` streams the same 64-cell batches, through `serializeCellBatch`. Its receiver streams cells from its own keys and diffs them against the sender's, so `receive` counts that stream as well. It returns both sides' keys themselves; distillate returns the receiver's own as keys but the sender's as 64-bit hashes, which the sender resolves with `RibltDecoder.hashOf`: one more message if the receiver needs those keys.",
     "`bloom-filters` must be sized before anyone knows the difference. It is given the true d through its own sizing, `InvertibleBloomFilter.create(d, 0.01)`, an advantage no real caller has, and takes keys as `Buffer`s. `send` builds the sender's table; `receive` builds the receiver's, then runs `substract` and `decode`. Its bytes are the sender's `saveAsJSON`, the form it ships, and `decoded` is its `success`.",
     `Each time is the median of ${String(RIBLT_TIMED_PASSES)} timed passes after ${String(RIBLT_WARM_PASSES)} untimed, each library in its own process.`,
     "",

@@ -1046,6 +1046,9 @@ test("the riblt section states its method and carries both tables", () => {
   expect(section.startsWith("## RIBLT")).toBe(true);
   expect(section).toContain("frames of 64");
   expect(section).toContain("create(d, 0.01)");
+  expect(section).toContain("`ribbit-riblt`");
+  expect(section).toContain("serializeCellBatch");
+  expect(section).toContain("the sender's as 64-bit hashes");
   expect(section).toContain("RIBLT_TBL");
   expect(section).toContain(bundles);
 

@@ -326,16 +326,18 @@ rather than ending the run. Each library runs in its own process.
 
 ## Configuration for RIBLT
 
-RIBLT is compared with the `InvertibleBloomFilter` of `bloom-filters` 3.0.4, the
-latest release on npm. Both answer the same question exactly: which keys does
-the sender hold that the receiver does not, and the reverse.
+RIBLT is compared with `ribbit-riblt` 1.1.1, another JS implementation of the
+same rateless scheme, and with the `InvertibleBloomFilter` of `bloom-filters`
+3.0.4, the latest release on npm, the fixed-size IBLT a caller migrates from.
+All three answer the same question exactly: which keys does the sender hold that
+the receiver does not, and the reverse.
 
 Each case gives both sides `keys` keys, of which `d / 2` are each side's own, at
 1 million and 10,000 keys per side and d of 10, 1,000 and 100,000. d of 100,000
 cannot occur at 10,000 keys, so that pair is not run. The keys are the same
-strings for both libraries, as `Buffer`s for the incumbent, which requires them.
+strings for every library, as `Buffer`s for `bloom-filters`, which requires them.
 
-The incumbent's table must be sized before the difference is known, and too
+`bloom-filters`' table must be sized before the difference is known, and too
 small a table fails to decode. It is given the true d through its own sizing,
 `InvertibleBloomFilter.create(d, 0.01)`, an advantage no real caller has; a
 caller guessing low would fail and resend, and one guessing high would ship a
@@ -348,11 +350,20 @@ sent, headers and the unused tail of the last frame included, so a small d pays
 for most of a frame it did not need. The minimal symbol counts, without that
 tail, are gated in the package's tests and quoted in the RIBLT guide.
 
+`ribbit-riblt` is not sized either, and streams the same 64-cell batches through
+its own `serializeCellBatch`, whose bytes are counted the same way. Its receiver
+does not hold a decoder over its set: it streams cells from its own keys and
+diffs them against the sender's, and `receive` counts that stream. It returns
+both sides' keys themselves, where distillate returns the sender's as 64-bit
+hashes the sender resolves, one more message when the receiver needs the keys.
+That message is not counted.
+
 Time is reported per side, building included: an encoder's stream is consumed
 by the one peer it serves, so every sync builds both sides from their keys. For
-the incumbent, the sender builds its table, and the receiver builds its own and
+`bloom-filters`, the sender builds its table, and the receiver builds its own and
 then subtracts and decodes. Each time is the median of 3 timed passes after 1
 untimed one. Each case runs for each library in its own process, at Node's
 default heap limit, so a case a library cannot finish costs that row alone: the
 row reads "out of memory" where the process ran out, rather than the run ending
-or the row being dropped.
+or the row being dropped. A process still running after 10 minutes is stopped
+and its row reads "did not finish in 10 min".
