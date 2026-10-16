@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { measureAllocation } from "../../bench/harness.js";
+import { ALLOCATION_LIMIT, measureAllocation } from "../../bench/harness.js";
 import { HyperLogLog } from "../../src/hll/hll.js";
 
 // Lives alone in its file on purpose. Garbage collections are per-isolate, and
@@ -48,10 +48,12 @@ test("add allocates nothing in steady state", async () => {
   for (const key of keys) sketch.add(key);
 
   let at = 0;
-  const { collections } = await measureAllocation(() => {
+  const { collections, bytesPerCall } = await measureAllocation(() => {
     at = (at + 1) & 4095;
     sketch.add(keys[at] ?? "");
   }, 600_000);
 
   expect(collections).toBe(0);
+
+  expect(bytesPerCall).toBeLessThan(ALLOCATION_LIMIT);
 });

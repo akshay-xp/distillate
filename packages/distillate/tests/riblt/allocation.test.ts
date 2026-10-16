@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { measureAllocation } from "../../bench/harness.js";
+import { ALLOCATION_LIMIT, measureAllocation } from "../../bench/harness.js";
 import { pushSymbol, RibltDecoder } from "../../src/riblt/decoder.js";
 import { nextSymbol, RibltEncoder } from "../../src/riblt/encoder.js";
 
@@ -39,7 +39,7 @@ test("handing coded symbols to a peeling decoder allocates nothing", async () =>
     5000,
     5000,
   );
-  const { collections } = await measureAllocation(
+  const { collections, bytesPerCall } = await measureAllocation(
     () => {
       nextSymbol(encoder, symbol);
       if (pushSymbol(decoder, symbol)) decoded++;
@@ -49,5 +49,7 @@ test("handing coded symbols to a peeling decoder allocates nothing", async () =>
   );
 
   expect(collections).toBe(0);
+
+  expect(bytesPerCall).toBeLessThan(ALLOCATION_LIMIT);
   expect(decoded).toBe(0);
 });
