@@ -95,3 +95,8 @@ test("the choosing guide routes the set-difference question to RIBLT", () => {
   expect(page.slice(0, page.indexOf("## "))).toContain("/guides/riblt/");
   expect(section(page, "What is not shipped yet")).not.toContain("RIBLT");
 });
+
+test("the README shows the reconciler", () => {
+  const readme = read("../../../packages/distillate/README.md");
+  expect(readme).toContain("### RIBLT (`distillate/riblt`)");
+});
