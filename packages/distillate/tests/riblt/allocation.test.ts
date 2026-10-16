@@ -8,29 +8,26 @@ import { nextSymbol, RibltEncoder } from "../../src/riblt/encoder.js";
 // tests/hll/allocation.test.ts gives. The first window is discarded, as
 // tests/ddsketch/allocation.test.ts explains.
 //
-// A difference of 950k keys decodes only past about 1.3M symbols, which keeps
-// both windows peeling, on both sides, rather than measuring the cheap tail
-// after the decode.
+// A difference of 106k keys decodes only past about 143k symbols, so the
+// windows peel, on both sides, rather than measuring the cheap tail after the
+// decode.
 //
-// The received symbols double at powers of two, and the doubling at 2^18 into
-// a 10 MB buffer triggered a major collection under coverage, where the heap
-// runs larger: growth, amortised, not a steady-state cost. So the warm-up
-// runs past 2^18 and both windows end before 2^19. A hand-off is heavy enough
-// to optimise well inside 20k calls, so each window warms for that rather than
-// the default 500k, which would carry it past 2^19.
+// The received symbols double at powers of two, and a doubling inside a window
+// is growth, amortised, not a steady-state cost. So the warm-up runs past 2^16
+// and both windows end before 2^17. The discarded window is short so that the
+// measured one gets 45k calls of that range: 16 bytes per call then fills the
+// young generation the allocation project pins at 1 MB, which 20k did not. A
+// hand-off is heavy enough to optimise well inside 5k calls.
 test("handing coded symbols to a peeling decoder allocates nothing", async () => {
-  const remote = Array.from({ length: 1_000_000 }, (_, i) => `a:${String(i)}`);
-  const local = [
-    ...remote.slice(0, 100_000),
-    ...Array.from({ length: 50_000 }, (_, i) => `b:${String(i)}`),
-  ];
+  const remote = Array.from({ length: 105_000 }, (_, i) => `a:${String(i)}`);
+  const local = Array.from({ length: 1000 }, (_, i) => `b:${String(i)}`);
   const encoder = RibltEncoder.from(remote);
   const decoder = RibltDecoder.from(local);
   const symbol = new Uint32Array(5);
 
   // Counted as an integer, so the probe charges nothing to a boxed sink.
   let decoded = 0;
-  for (let i = 0; i < 270_000; i++) {
+  for (let i = 0; i < 66_000; i++) {
     nextSymbol(encoder, symbol);
     if (pushSymbol(decoder, symbol)) decoded++;
   }
@@ -39,16 +36,16 @@ test("handing coded symbols to a peeling decoder allocates nothing", async () =>
       nextSymbol(encoder, symbol);
       if (pushSymbol(decoder, symbol)) decoded++;
     },
-    100_000,
-    20_000,
+    5000,
+    5000,
   );
   const collections = await countCollections(
     () => {
       nextSymbol(encoder, symbol);
       if (pushSymbol(decoder, symbol)) decoded++;
     },
-    100_000,
-    20_000,
+    45_000,
+    5000,
   );
 
   expect(collections).toBe(0);
