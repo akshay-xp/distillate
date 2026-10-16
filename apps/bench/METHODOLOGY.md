@@ -326,10 +326,9 @@ rather than ending the run. Each library runs in its own process.
 
 ## Configuration for RIBLT
 
-RIBLT is compared with `bloom-filters`' `InvertibleBloomFilter`, version 3, the
-one invertible Bloom filter in common JS use; version 4 dropped it. Both answer
-the same question exactly: which keys does the sender hold that the receiver
-does not, and the reverse.
+RIBLT is compared with the `InvertibleBloomFilter` of `bloom-filters` 3.0.4, the
+latest release on npm. Both answer the same question exactly: which keys does
+the sender hold that the receiver does not, and the reverse.
 
 Each case gives both sides `keys` keys, of which `d / 2` are each side's own, at
 1 million and 10,000 keys per side and d of 10, 1,000 and 100,000. d of 100,000
