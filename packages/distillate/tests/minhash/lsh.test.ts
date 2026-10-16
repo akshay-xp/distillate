@@ -101,18 +101,33 @@ describe("remove", () => {
   });
 
   // Near-duplicates share buckets by design, so a crowded bucket must not
-  // make each removal scan it: 30k identical docs took about 3 s that way.
+  // make each removal scan it. The same removals are timed in two shapes, every
+  // key in one bucket per band and every key in its own, rather than against
+  // the wall clock: load slows both alike, while a scan shows as two orders of
+  // magnitude (a ratio of about 58 at 10k, against under 0.5). Each shape keeps
+  // its fastest of 3.
   test("stays constant per band when every key shares the same buckets", () => {
-    const sketch = sketchOf(keys("s", 200));
-    const lsh = new MinHashLSH<number>({ threshold: 0.5 });
-    for (let i = 0; i < 30_000; i++) lsh.insert(i, sketch);
+    const N = 10_000;
+    const crowded = sketchOf(keys("s", 200));
+    const spread = Array.from({ length: N }, (_, i) =>
+      sketchOf([`u:${String(i)}`]),
+    );
+    const removal = (sketch: (i: number) => MinHash): number => {
+      let fastest = Infinity;
+      for (let run = 0; run < 3; run++) {
+        const lsh = new MinHashLSH<number>({ threshold: 0.5 });
+        for (let i = 0; i < N; i++) lsh.insert(i, sketch(i));
+        const start = performance.now();
+        for (let i = 0; i < N; i++) lsh.remove(i);
+        fastest = Math.min(fastest, performance.now() - start);
+        expect(lsh.size).toBe(0);
+        expect(lsh.query(sketch(0))).toEqual([]);
+      }
+      return fastest;
+    };
 
-    const start = performance.now();
-    for (let i = 0; i < 30_000; i++) lsh.remove(i);
-    const elapsed = performance.now() - start;
+    const ratio = removal(() => crowded) / removal((i) => spread[i] ?? crowded);
 
-    expect(elapsed).toBeLessThan(500);
-    expect(lsh.size).toBe(0);
-    expect(lsh.query(sketch)).toEqual([]);
+    expect(ratio).toBeLessThan(4);
   });
 });
