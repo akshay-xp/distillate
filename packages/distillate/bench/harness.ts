@@ -72,16 +72,48 @@ export function benchLookup(
 }
 
 /**
- * Garbage collections triggered by `ops` calls of `fn`.
+ * Most young-generation bytes a probed call may allocate in steady state: one
+ * 16-byte object every 8 calls. Clean code reads at most 0.45 (`fuse.has` over
+ * keys of varying length) and amortised growth 0.20 (RIBLT); the boxing fixed in
+ * 76bc6c3 reads 7 to 16.
+ */
+export const ALLOCATION_LIMIT = 2;
+
+export interface Allocation {
+  /** Collections that began inside the measured window. */
+  collections: number;
+  /** Young-generation bytes the window allocated, per call. */
+  bytesPerCall: number;
+}
+
+// Bytes in use in the young generation, where every short-lived object starts.
+function youngBytes(): number {
+  return (
+    getHeapSpaceStatistics().find((s) => s.space_name === "new_space")
+      ?.space_used_size ?? 0
+  );
+}
+
+/**
+ * What `ops` calls of `fn` allocate once warm: the collections that began
+ * inside the window, and the young-generation bytes it allocated per call.
  *
- * A loop that allocates nothing triggers none; a loop allocating one small
- * object per call triggers scavenges in proportion. That makes the two cases
- * unambiguous without a median, a threshold, or a stability rule.
+ * Collections alone see only garbage that fills the young generation. How much
+ * that takes depends on how far V8 has grown it, so the same allocating loop
+ * measures 25 collections in a quiet process and 5 in a busy one, and a loop
+ * allocating less than the young generation holds measures none: the boxing
+ * fixed in 76bc6c3, about 7 to 16 bytes per RIBLT hand-off, passed under
+ * coverage with the young generation pinned at 1 MB. So the window also reads
+ * the young generation's used bytes either side of the loop, less what a read
+ * itself allocates. Read `collections` as a binary and `bytesPerCall` against
+ * {@link ALLOCATION_LIMIT}.
  *
- * Read the result as a binary, not a magnitude. How many collections a given
- * amount of garbage causes depends on how far V8 has grown the young
- * generation, so the same allocating loop measures 25 collections in a quiet
- * process and 5 in one that has been working for a while.
+ * The byte reading avoids what sank the `heapUsed` instrument below. It reads
+ * only the young generation, where a call's garbage starts, and the loop is
+ * synchronous, so nothing else runs between the two reads. A collection inside
+ * the window would make it come out low, or negative, which is why
+ * `collections` must also be 0. And it is taken after the warm-up, like the
+ * count.
  *
  * This replaced an instrument that differenced `process.memoryUsage().heapUsed`
  * across a window of calls. Three things went wrong with that, none of them
@@ -114,29 +146,6 @@ export function benchLookup(
  * grows with every call: 500k RIBLT hand-offs carry a decoder past a 40 MB
  * buffer doubling that the measured window would then be charged for.
  */
-/**
- * Most young-generation bytes a probed call may allocate in steady state: one
- * 16-byte object every 8 calls. Clean code reads at most 0.45 (`fuse.has` over
- * keys of varying length) and amortised growth 0.20 (RIBLT); the boxing fixed in
- * 76bc6c3 reads 7 to 16.
- */
-export const ALLOCATION_LIMIT = 2;
-
-export interface Allocation {
-  /** Collections that began inside the measured window. */
-  collections: number;
-  /** Young-generation bytes the window allocated, per call. */
-  bytesPerCall: number;
-}
-
-// Bytes in use in the young generation, where every short-lived object starts.
-function youngBytes(): number {
-  return (
-    getHeapSpaceStatistics().find((s) => s.space_name === "new_space")
-      ?.space_used_size ?? 0
-  );
-}
-
 export async function measureAllocation(
   fn: () => void,
   ops: number,
