@@ -173,7 +173,9 @@ The hash is seeded, not keyed: anyone who knows the seed can choose keys whose
 symbols travel together, and crafted keys can stop a decode from ever
 finishing. Choose a private `seed` when the keys come from people who may want
 that, and cap the frames you will accept before falling back to sending the
-set.
+set. The cap also bounds memory: a decoder holds about 32 bytes per symbol it
+has received, up to twice that just after its buffers double, so a peer that
+never stops sending grows it about 1.6 times as fast as it sends.
 
 Keys are reduced to 64-bit hashes, so two distinct keys can collide. At a
 million keys on the two sides together the odds of any collision are about
