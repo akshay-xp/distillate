@@ -84,3 +84,14 @@ test("the sidebar links the RIBLT guide", () => {
     '{ label: "RIBLT", link: "/guides/riblt/" }',
   );
 });
+
+test("the choosing guide routes the set-difference question to RIBLT", () => {
+  const page = read("../src/content/docs/guides/choosing-a-structure.md");
+  expect(section(page, "Decision matrix")).toContain("[RIBLT](/guides/riblt/)");
+  expect(section(page, "What ships today")).toContain(
+    "### [RIBLT](/guides/riblt/) (`distillate/riblt`)",
+  );
+  // The question list at the top is where a reader is sent first.
+  expect(page.slice(0, page.indexOf("## "))).toContain("/guides/riblt/");
+  expect(section(page, "What is not shipped yet")).not.toContain("RIBLT");
+});
