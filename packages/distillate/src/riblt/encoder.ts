@@ -98,6 +98,17 @@ export class RibltEncoder {
     });
   }
 
+  /**
+   * Yields consecutive {@link RibltEncoder.take} frames of `n` symbols
+   * forever; the caller stops once the peer reports it has decoded.
+   *
+   * @throws {@link ParamError} If `n` is not a positive integer, on the first
+   * `next()`.
+   */
+  *stream(n: number): Generator<Uint8Array, never, undefined> {
+    for (;;) yield this.take(n);
+  }
+
   #next(out: Uint32Array): void {
     out.fill(0);
     this.#window.applyTo(out, 0, this.#index++, 1);
