@@ -47,6 +47,7 @@ test("each reconciler's bundle is measured", async () => {
   const rows = await ribltBundles();
   expect(rows.map((r) => r.name)).toEqual([
     "distillate/riblt",
+    "ribbit-riblt",
     "bloom-filters",
   ]);
   for (const r of rows) expect(r.bytes, r.name).toBeGreaterThan(0);
