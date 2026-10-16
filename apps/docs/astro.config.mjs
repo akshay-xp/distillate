@@ -134,6 +134,7 @@ export default defineConfig({
             { label: "Top-K", link: "/guides/topk/" },
             { label: "DDSketch", link: "/guides/ddsketch/" },
             { label: "MinHash", link: "/guides/minhash/" },
+            { label: "RIBLT", link: "/guides/riblt/" },
             { label: "Sizing and tuning FPR", link: "/guides/sizing/" },
             {
               label: "Sizing calculator",
