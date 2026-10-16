@@ -3,9 +3,11 @@ import { ParamError } from "../core/params.js";
 import { checksum, nextIndex } from "./mapping.js";
 
 /**
- * Symbols with their checksums and index sequences, ordered by the next index
- * each reaches. Struct-of-arrays in typed arrays grown by doubling, so folding
- * a window into a coded symbol allocates nothing.
+ * Symbols with their checksums and index sequences, filed in a bucket per next
+ * index. Indices are applied in increasing order, each once, so the bucket for
+ * the current index holds exactly the symbols due there: O(1) per update where
+ * a heap paid O(log n). Struct-of-arrays in typed arrays grown by doubling, so
+ * folding a window into a coded symbol allocates nothing.
  */
 export class CodingWindow {
   #lo = new Uint32Array(16);
@@ -16,13 +18,22 @@ export class CodingWindow {
   #state = new Uint32Array(32);
   // Float64: a gap can carry an index past 2^32, where it never comes round.
   #next = new Float64Array(16);
-  // Min-heap of entries on #next.
-  #heap = new Int32Array(16);
+  // Next entry in the same bucket, or -1.
+  #link = new Int32Array(16);
+  // First entry of each bucket below #head.length, or -1, by absolute index.
+  // Grows 4 B per symbol streamed; a ring would not bound it, since the gap to
+  // a symbol's next index grows with the index.
+  #head = new Int32Array(64).fill(-1);
+  // Entries due at or past #head.length, filed when the buckets reach them.
+  #far = new Int32Array(16);
+  #farSize = 0;
   #size = 0;
 
   /**
    * Adds the symbol at `lanes[offset]` (lo, hi), passed as a typed array so
-   * its words are never boxed, whose index sequence is advanced to the first index at or past `from`. */
+   * its words are never boxed, whose index sequence is advanced to the first
+   * index at or past `from`.
+   */
   add(lanes: Uint32Array, offset: number, from: number): void {
     if (this.#size === this.#lo.length) this.#grow();
     const at = this.#size++;
@@ -40,7 +51,7 @@ export class CodingWindow {
     let index = 0;
     while (index < from) index = nextIndex(this.#state, at, index);
     this.#next[at] = index;
-    this.#siftUp(at);
+    this.#file(at);
   }
 
   /**
@@ -70,26 +81,61 @@ export class CodingWindow {
   /**
    * Folds every symbol mapped to `index` into the coded symbol at `cells[at]`
    * (sum lo, sum hi, checksum lo, checksum hi, count) and adds `sign` to the
-   * count per symbol. Indices must be applied in increasing order.
+   * count per symbol. Indices must be applied in increasing order, each once.
    */
   applyTo(cells: Uint32Array, at: number, index: number, sign: number): void {
-    const heap = this.#heap;
-    while (this.#size > 0) {
-      const top = heap[0] ?? 0;
-      if (this.#next[top] !== index) return;
-      cells[at] = (cells[at] ?? 0) ^ (this.#lo[top] ?? 0);
-      cells[at + 1] = (cells[at + 1] ?? 0) ^ (this.#hi[top] ?? 0);
-      cells[at + 2] = (cells[at + 2] ?? 0) ^ (this.#checkLo[top] ?? 0);
-      cells[at + 3] = (cells[at + 3] ?? 0) ^ (this.#checkHi[top] ?? 0);
+    if (index >= this.#head.length) this.#widen(index);
+    const head = this.#head;
+    const link = this.#link;
+    let entry = head[index] ?? -1;
+    head[index] = -1;
+    while (entry !== -1) {
+      const following = link[entry] ?? -1;
+      cells[at] = (cells[at] ?? 0) ^ (this.#lo[entry] ?? 0);
+      cells[at + 1] = (cells[at + 1] ?? 0) ^ (this.#hi[entry] ?? 0);
+      cells[at + 2] = (cells[at + 2] ?? 0) ^ (this.#checkLo[entry] ?? 0);
+      cells[at + 3] = (cells[at + 3] ?? 0) ^ (this.#checkHi[entry] ?? 0);
       cells[at + 4] = (cells[at + 4] ?? 0) + sign;
-      this.#next[top] = nextIndex(this.#state, top, index);
-      this.#siftDown();
+      this.#next[entry] = nextIndex(this.#state, entry, index);
+      this.#file(entry);
+      entry = following;
     }
   }
 
   /** Calls `fn` with each symbol's lanes, in insertion order. */
   forEach(fn: (lo: number, hi: number) => void): void {
     for (let i = 0; i < this.#size; i++) fn(this.#lo[i] ?? 0, this.#hi[i] ?? 0);
+  }
+
+  // Puts an entry in the bucket for its next index, or on the far list.
+  #file(entry: number): void {
+    const next = this.#next[entry] ?? 0;
+    const head = this.#head;
+    if (next < head.length) {
+      this.#link[entry] = head[next] ?? -1;
+      head[next] = entry;
+      return;
+    }
+    if (this.#farSize === this.#far.length) {
+      const far = new Int32Array(this.#far.length * 2);
+      far.set(this.#far);
+      this.#far = far;
+    }
+    this.#far[this.#farSize++] = entry;
+  }
+
+  // Doubles the buckets past `index` and files the far entries now in range,
+  // compacting the far list in place.
+  #widen(index: number): void {
+    let length = this.#head.length * 2;
+    while (length <= index) length *= 2;
+    const head = new Int32Array(length).fill(-1);
+    head.set(this.#head);
+    this.#head = head;
+    const far = this.#far;
+    const waiting = this.#farSize;
+    this.#farSize = 0;
+    for (let i = 0; i < waiting; i++) this.#file(far[i] ?? 0);
   }
 
   #grow(): void {
@@ -107,47 +153,6 @@ export class CodingWindow {
     this.#checkHi = grow(this.#checkHi, new Uint32Array(size));
     this.#state = grow(this.#state, new Uint32Array(2 * size));
     this.#next = grow(this.#next, new Float64Array(size));
-    this.#heap = grow(this.#heap, new Int32Array(size));
-  }
-
-  #siftUp(entry: number): void {
-    const heap = this.#heap;
-    const next = this.#next;
-    const key = next[entry] ?? 0;
-    let at = this.#size - 1;
-    while (at > 0) {
-      const parent = (at - 1) >> 1;
-      const above = heap[parent] ?? 0;
-      if ((next[above] ?? 0) <= key) break;
-      heap[at] = above;
-      at = parent;
-    }
-    heap[at] = entry;
-  }
-
-  // Re-seats the root after its index advanced.
-  #siftDown(): void {
-    const heap = this.#heap;
-    const next = this.#next;
-    const size = this.#size;
-    const entry = heap[0] ?? 0;
-    const key = next[entry] ?? 0;
-    let at = 0;
-    for (;;) {
-      let child = 2 * at + 1;
-      if (child >= size) break;
-      const right = child + 1;
-      if (
-        right < size &&
-        (next[heap[right] ?? 0] ?? 0) < (next[heap[child] ?? 0] ?? 0)
-      ) {
-        child = right;
-      }
-      const below = heap[child] ?? 0;
-      if ((next[below] ?? 0) >= key) break;
-      heap[at] = below;
-      at = child;
-    }
-    heap[at] = entry;
+    this.#link = grow(this.#link, new Int32Array(size));
   }
 }
