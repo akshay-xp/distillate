@@ -54,13 +54,9 @@ export class CodingWindow {
     }
   }
 
-  /** Every symbol in the window as a 64-bit `bigint`. */
-  symbols(): bigint[] {
-    const out: bigint[] = [];
-    for (let i = 0; i < this.#size; i++) {
-      out.push((BigInt(this.#hi[i] ?? 0) << 32n) | BigInt(this.#lo[i] ?? 0));
-    }
-    return out;
+  /** Calls `fn` with each symbol's lanes, in insertion order. */
+  forEach(fn: (lo: number, hi: number) => void): void {
+    for (let i = 0; i < this.#size; i++) fn(this.#lo[i] ?? 0, this.#hi[i] ?? 0);
   }
 
   #grow(): void {
