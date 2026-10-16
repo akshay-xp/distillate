@@ -244,6 +244,9 @@ const SET_MESSAGE = `Each set holds at most ${MAX_KEYS.toLocaleString("en-US")} 
 
 const GROW_MESSAGE = `Keys to add must be a whole number of at least 1, and the total held must stay at or under ${MAX_KEYS.toLocaleString("en-US")}. The playground builds real filters in your browser, so it stops there.`;
 
+const RECONCILE_MESSAGE =
+  "The difference must be a whole number from 0 to the number of keys the page holds: the client can lack at most every one of them.";
+
 const DELETE_REFUSAL =
   "Classic, Blocked and Scalable Bloom set bits shared with other keys, so they cannot take one back; Binary Fuse is static. They still hold it.";
 
@@ -762,8 +765,12 @@ export class Playground {
    * `ceil(d / 2)` of them and holds `floor(d / 2)` of its own. Each run builds
    * both sides, since an encoder's stream serves one peer.
    */
-  reconcile(d: number): ReconcileResult {
+  reconcile(difference: unknown): ReconcileResult {
+    const d = toNumber(difference);
     const server = this.#keys;
+    if (!Number.isInteger(d) || d < 0 || d > server.length) {
+      return { ok: false, message: RECONCILE_MESSAGE };
+    }
     const half = Math.ceil(d / 2);
     const own: string[] = [];
     for (let i = 0; own.length < d - half; i += 1) {
