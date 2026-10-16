@@ -13,6 +13,7 @@ const keys = (prefix: string, n: number): string[] =>
 test("each reconciler recovers both sides of a small difference", () => {
   expect(reconcileAdapters.map((a) => a.name)).toEqual([
     "distillate/riblt",
+    "ribbit-riblt",
     "bloom-filters",
   ]);
 
@@ -31,9 +32,13 @@ test("each reconciler recovers both sides of a small difference", () => {
     }
   }
 
-  const [ours, incumbent] = reconcileAdapters.map((r) => r.run(a, b, 10));
-  expect(ours?.symbols).toBeGreaterThan(0);
-  expect((ours?.symbols ?? 1) % RIBLT_FRAME).toBe(0);
+  const [ours, ribbit, incumbent] = reconcileAdapters.map((r) =>
+    r.run(a, b, 10),
+  );
+  for (const streamed of [ours, ribbit]) {
+    expect(streamed?.symbols).toBeGreaterThan(0);
+    expect((streamed?.symbols ?? 1) % RIBLT_FRAME).toBe(0);
+  }
   expect(incumbent?.symbols).toBeNull();
 });
 
@@ -50,6 +55,7 @@ test("riblt rows time each reconciler over a case", () => {
 
   expect(rows.map((r) => r.name)).toEqual([
     "distillate/riblt",
+    "ribbit-riblt",
     "bloom-filters",
   ]);
   for (const r of rows) {

@@ -62,6 +62,9 @@ importers:
       distillate:
         specifier: workspace:*
         version: link:../../packages/distillate
+      ribbit-riblt:
+        specifier: ^1.1.1
+        version: 1.1.1
     devDependencies:
       '@datadog/sketches-js':
         specifier: ^2.1.1
@@ -3497,6 +3500,10 @@ packages:
 
   retext-smartypants@6.2.0:
     resolution: {integrity: sha512-kk0jOU7+zGv//kfjXEBjdIryL1Acl4i9XNkHxtM7Tm5lFiCog576fjNC9hjoR7LTKQ0DsPWy09JummSsH1uqfQ==}
+
+  ribbit-riblt@1.1.1:
+    resolution: {integrity: sha512-rgflZMW3Uah7k9KwSbEttrRW/Vm9N3apqecmxWjLFLuNpU1/zCTgBsk42jTVccTMaoUKzZGwUC/+cC0ZKf/N5g==}
+    engines: {node: '>=22'}
 
   rolldown-plugin-dts@0.28.6:
     resolution: {integrity: sha512-qKrFtBfRfR2hP233m7Ic9zf3wv6MSYdZghWKMdEO6dRYZGlNfINJAa1P5ZVvyHh3mrcd7IJQvIY8L9vnm+v5rQ==}
@@ -7586,6 +7593,8 @@ snapshots:
       '@types/nlcst': 2.0.3
       nlcst-to-string: 4.0.0
       unist-util-visit: 5.1.0
+
+  ribbit-riblt@1.1.1: {}
 
   rolldown-plugin-dts@0.28.6(@volar/typescript@2.4.28)(rolldown@1.2.9)(typescript@5.9.3):
     dependencies:
