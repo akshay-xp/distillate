@@ -1,7 +1,18 @@
 import { expect, test } from "vitest";
 
+import { crc32 } from "../../src/core/crc32.js";
 import { ParamError } from "../../src/core/params.js";
-import { FORMAT_VERSION, readHeader } from "../../src/core/serialize.js";
+import {
+  ChecksumError,
+  FORMAT_VERSION,
+  HASH_MURMUR128,
+  readHeader,
+  SerializationError,
+  TruncatedError,
+  UnknownHashVariantError,
+  writeHeader,
+} from "../../src/core/serialize.js";
+import { RibltDecoder } from "../../src/riblt/decoder.js";
 import { nextSymbol, RibltEncoder } from "../../src/riblt/encoder.js";
 
 const keys = Array.from({ length: 50 }, (_, i) => `key:${String(i)}`);
@@ -98,4 +109,59 @@ test("stream yields the same frames as consecutive takes", () => {
 
 test("stream refuses a batch that is not a positive integer", () => {
   expect(() => RibltEncoder.from(keys).stream(0).next()).toThrow(ParamError);
+});
+
+// Recomputes the trailer so a mutation reaches the check under test instead of
+// stopping at ChecksumError.
+const resealed = (frame: Uint8Array): Uint8Array => {
+  new DataView(frame.buffer).setUint32(
+    frame.length - 4,
+    crc32(frame.subarray(0, frame.length - 4)),
+    true,
+  );
+  return frame;
+};
+
+const BODY = 16;
+
+type Mutation = (frame: Uint8Array, view: DataView) => void;
+
+const lies: [string, Mutation, new (...args: never[]) => Error][] = [
+  ["type 11", (f) => (f[5] = 11), SerializationError],
+  ["hash variant 1", (f) => (f[6] = 1), UnknownHashVariantError],
+  ["a params padding byte set", (f) => (f[BODY + 13] = 1), SerializationError],
+  [
+    "a count the body cannot hold",
+    (_, v) => {
+      v.setUint32(BODY + 8, 5, true);
+    },
+    TruncatedError,
+  ],
+];
+
+test.each(lies)("push rejects %s", (_, mutate, expected) => {
+  const frame = RibltEncoder.from(keys).take(4);
+  mutate(frame, new DataView(frame.buffer));
+
+  expect(() => new RibltDecoder().push(resealed(frame))).toThrow(expected);
+});
+
+test("push rejects a flipped byte and a cut frame", () => {
+  const frame = RibltEncoder.from(keys).take(4);
+  const flipped = frame.slice();
+  flipped[BODY + 20] = (flipped[BODY + 20] ?? 0) ^ 0xff;
+
+  expect(() => new RibltDecoder().push(flipped)).toThrow(ChecksumError);
+  expect(() => new RibltDecoder().push(frame.subarray(0, -1))).toThrow(
+    TruncatedError,
+  );
+});
+
+test("push rejects a body too short for its params", () => {
+  const frame = writeHeader(
+    { version: FORMAT_VERSION, type: 12, flags: HASH_MURMUR128 },
+    new Uint8Array(8),
+  );
+
+  expect(() => new RibltDecoder().push(frame)).toThrow(TruncatedError);
 });
