@@ -48,10 +48,11 @@ export default defineConfig({
         // ordered after every other group, so it runs on its own at the end
         // while the rest of the suite still runs in parallel.
         //
-        // The probes count collections, so they see only allocation that
-        // fills the young generation. Once a test has built large inputs V8
-        // has grown it to many MB: 100k RIBLT hand-offs allocating an object
-        // each read 0. Pinned at 1 MB, 45k read 1 or 2.
+        // The probes assert no collection and a bound on young-generation
+        // bytes per call. Bytes catch allocation too sparse to fill the young
+        // generation; the 1 MB pin keeps that generation small, so a loop that
+        // allocates steadily also collects, rather than V8 growing it to many
+        // MB around large inputs and absorbing a whole window.
         test: {
           ...shared,
           name: "allocation",

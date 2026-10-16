@@ -54,7 +54,7 @@ The "small" claim is enforced, not asserted. `pnpm size:check` (`scripts/size-ch
 
 - Regenerating `apps/bench/RESULTS.md` is a different command: `pnpm --filter distillate-bench bench`, the cross-library harness. It needs a built `distillate` in the same tree, and it must run on an otherwise idle machine, since concurrent load skews the throughput table (the space and accuracy table is seeded and stable). Its raw output is not Prettier-clean, so follow it with `pnpm format` or `format:check` fails.
 
-- Harness (`bench/harness.ts`): shared primitives so every bench measures by identical code: `hitMissPools` (disjoint hit/miss pools), `cycle`, `benchLookup` (cycle keys through `has()`, consume via `do_not_optimize`), `measureFpr` (empirical FPR of a built filter over a disjoint miss set), `countCollections` (garbage collections caused by a loop, see below).
+- Harness (`bench/harness.ts`): shared primitives so every bench measures by identical code: `hitMissPools` (disjoint hit/miss pools), `cycle`, `benchLookup` (cycle keys through `has()`, consume via `do_not_optimize`), `measureFpr` (empirical FPR of a built filter over a disjoint miss set), `measureAllocation` (collections and young-generation bytes per call of a warmed loop, see below), `ALLOCATION_LIMIT`.
 - Metrics, space/accuracy first: `bench/accuracy.bench.ts` reports target vs measured FPR (over a >= 1e6 disjoint miss set) and analytic bits/key (`backing.byteLength * 8 / n`, not `process.memoryUsage`) across a 1e4/1e5/1e6 sweep; then throughput as separate `add` / `has (hit)` / `has (miss)` benches plus build for static filters.
 - Sketch metrics (`bench/hll.bench.ts`, `bench/cardinality.ts`): measured relative error against the analytic `1.04 / sqrt(2^p)` bound across a precision x cardinality sweep, and bytes per sketch in each encoding. Space is the serialized frame length (`toBytes().length`), the sketch equivalent of analytic bits/key: exact, identical across runtimes, and unaffected by when GC last ran. `tests/bench/cardinality.test.ts` turns the same sweep into a CI gate, bounding every point at `3 * targetError` and the _mean signed_ error at 1 percent, so a uniformly biased estimator fails even where each point stays inside its bound.
 - Anti-optimization: distinct-key pools (never a constant key), keys cycled so V8 can't constant-fold, results consumed with `do_not_optimize`, distinct-key inserts.
@@ -107,7 +107,17 @@ The probe gets its own vitest project at `maxWorkers: 1`. Workers competing for 
 
 A project with `maxWorkers: 1` lands in vitest's sequential group, which is ordered after every other group, so the probe runs on its own at the end while the rest of the suite still runs in parallel. Measured over 30 full-suite runs each: 1 failure in 30 with everything parallel, 0 in 30 with the whole suite serialised (5.6s), and 0 in 30 with just the probe split out (2.1s against 1.9s fully parallel).
 
-The gate is `tests/hll/allocation.test.ts` over `countCollections`, which warms 500k calls and then counts only gc entries whose `startTime` falls inside the measured window. It asserts a binary, not a magnitude: the same allocating loop causes 25 collections in a quiet process and 5 in a busy one, because V8 grows the young generation as it goes.
+The gate is `tests/hll/allocation.test.ts` over `measureAllocation`, which warms 500k calls, counts only gc entries whose `startTime` falls inside the measured window, and reads the young generation's used bytes either side of the loop, less what a read itself allocates. Every probe asserts no collection and fewer than `ALLOCATION_LIMIT` (2) bytes per call, one 16-byte object every 8 calls.
+
+Collections alone were not enough. The same allocating loop causes 25 collections in a quiet process and 5 in a busy one, because V8 grows the young generation as it goes, and a loop allocating less than it holds causes none. Pinning the allocation project at `--max-semi-space-size=1` caught one object per call, but the boxing fixed in 76bc6c3 put back into RIBLT passed 3 of 3 runs under coverage. Bytes per call, measured on main at 8fcd286:
+
+|                                          | bytes per call |
+| ---------------------------------------- | -------------- |
+| clean HLL, MinHash, Top-K, DDSketch      | 0.000 to 0.003 |
+| clean RIBLT, amortised window growth     | 0.20           |
+| clean `fuse.has`, keys of varying length | 0.45           |
+| 76bc6c3's boxing put back, RIBLT         | 7 to 16        |
+| one object per call                      | 16             |
 
 Fuse `has` has its own gate, `tests/fuse/allocation.test.ts`, in the same project and on Node 24 only. Its 64-bit hash words sit past 2^30, so a module-level `let` or an argument to a call V8 does not inline boxes them; `fmix64` and `positionsInto` read them from the `R64` scratch in `core/hasher.ts` instead, and `mulhi64` is built from `reduce` so no 64-bit multiply takes them as arguments. Before: 56 to 64 bytes/op. Node 22 still allocates 16 bytes/op with the same code, because whether its TurboFan inlines the mix into `has` varies run to run.
 
