@@ -85,3 +85,16 @@ test("adding after the first symbol is rejected", () => {
     encoder.add("late");
   }).toThrow(ParamError);
 });
+
+// A repeated key leaves its cells at count 2 with zero sums, which never peel,
+// so the peer would read frames forever.
+test("an encoder holding a key twice refuses its first frame", () => {
+  const encoder = RibltEncoder.from(["x", "y", "x"]);
+
+  expect(() => encoder.take(1)).toThrow(ParamError);
+  expect(() => encoder.take(1)).toThrow(/distinct/);
+  expect(() => RibltEncoder.from(["x", "y", "x"]).stream(1).next()).toThrow(
+    /distinct/,
+  );
+  expect(RibltEncoder.from(["x", "y"]).take(1).length).toBeGreaterThan(0);
+});

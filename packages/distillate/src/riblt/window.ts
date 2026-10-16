@@ -1,4 +1,5 @@
 import { R64 } from "../core/hasher.js";
+import { ParamError } from "../core/params.js";
 import { checksum, nextIndex } from "./mapping.js";
 
 /**
@@ -40,6 +41,30 @@ export class CodingWindow {
     while (index < from) index = nextIndex(this.#state, at, index);
     this.#next[at] = index;
     this.#siftUp(at);
+  }
+
+  /**
+   * Throws unless every symbol is distinct. Two equal symbols cancel in the
+   * sums but add in the count, so their cells never peel and a decode never
+   * finishes. Sorts the pairs as one 64-bit word each, so nothing is boxed.
+   *
+   * @throws {@link ParamError} If two symbols are equal.
+   */
+  assertDistinct(seed: number): void {
+    const size = this.#size;
+    const words = new Uint32Array(2 * size);
+    for (let i = 0; i < size; i++) {
+      words[2 * i] = this.#lo[i] ?? 0;
+      words[2 * i + 1] = this.#hi[i] ?? 0;
+    }
+    new BigUint64Array(words.buffer).sort();
+    for (let i = 2; i < 2 * size; i += 2) {
+      if (words[i] === words[i - 2] && words[i + 1] === words[i - 1]) {
+        throw new ParamError(
+          `keys must be distinct: two keys hash alike under seed ${String(seed)}, a repeated key or a 64-bit collision; deduplicate them, or pick another seed`,
+        );
+      }
+    }
   }
 
   /**

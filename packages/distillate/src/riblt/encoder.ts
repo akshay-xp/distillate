@@ -93,6 +93,7 @@ export class RibltEncoder {
    */
   take(n: number): Uint8Array {
     assertPositiveInt(n, "n");
+    if (this.#index === 0) this.#window.assertDistinct(this.#seed);
     return writeSymbols(this.#seed, this.#index, n, (out) => {
       this.#next(out);
     });
