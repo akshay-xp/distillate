@@ -82,7 +82,10 @@ export const ALLOCATION_LIMIT = 2;
 export interface Allocation {
   /** Collections that began inside the measured window. */
   collections: number;
-  /** Young-generation bytes the window allocated, per call. */
+  /**
+   * Young-generation bytes the window allocated, per call. NaN when a
+   * collection began inside it: the memory it freed would read as less.
+   */
   bytesPerCall: number;
 }
 
@@ -205,6 +208,7 @@ export async function measureAllocation(
   observer.disconnect();
   return {
     collections,
-    bytesPerCall: (after - before - calibration) / ops,
+    bytesPerCall:
+      collections > 0 ? Number.NaN : (after - before - calibration) / ops,
   };
 }
