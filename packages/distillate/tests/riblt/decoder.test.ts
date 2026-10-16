@@ -226,3 +226,14 @@ describe("a frame the decoder cannot use is rejected and changes nothing", () =>
     expectDecodes(encoder, decoder);
   });
 });
+
+// A repeated local key never peels, so the decode would never finish.
+test("a decoder holding a key twice refuses its first frame unchanged", () => {
+  const decoder = RibltDecoder.from(["x", "x", "y"]);
+  const frame = RibltEncoder.from(["y"]).take(4);
+
+  expect(() => decoder.push(frame)).toThrow(ParamError);
+  // Again the duplicate, not "frames must arrive in order": nothing applied.
+  expect(() => decoder.push(frame)).toThrow(/distinct/);
+  expect(decoder.decoded).toBe(false);
+});
