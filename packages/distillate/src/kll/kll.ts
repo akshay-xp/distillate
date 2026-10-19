@@ -157,6 +157,41 @@ export class KllSketch {
   }
 
   /**
+   * The cumulative distribution at `splits`: the fraction of the stream at or
+   * below each, then `1` for everything, each within the rank error.
+   *
+   * @param splits - Strictly increasing numbers, none `NaN`.
+   * @returns `splits.length + 1` fractions; all `NaN` while empty.
+   * @throws {@link ParamError} when `splits` are not strictly increasing or
+   * hold `NaN`.
+   */
+  cdf(splits: readonly number[]): number[] {
+    splits.forEach((split, i) => {
+      if (Number.isNaN(split) || (i > 0 && !(split > (splits[i - 1] ?? 0)))) {
+        throw new ParamError(
+          `splits must be strictly increasing and not NaN, got ${String(splits)}`,
+        );
+      }
+    });
+    if (this.#n === 0) return [...splits, 0].map(() => Number.NaN);
+    return [...splits.map((split) => this.rank(split)), 1];
+  }
+
+  /**
+   * The mass between `splits`: the fraction of the stream at or below the
+   * first, then in each interval up to the next, then above the last.
+   *
+   * @param splits - Strictly increasing numbers, none `NaN`.
+   * @returns `splits.length + 1` fractions summing to `1`; all `NaN` while
+   * empty.
+   * @throws {@link ParamError} as {@link KllSketch.cdf} does.
+   */
+  pmf(splits: readonly number[]): number[] {
+    const cdf = this.cdf(splits);
+    return cdf.map((c, i) => c - (i === 0 ? 0 : (cdf[i - 1] ?? 0)));
+  }
+
+  /**
    * Records a value.
    *
    * @param value - Any number but `NaN`; infinities and `-0` are ordered as
