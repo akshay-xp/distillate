@@ -116,3 +116,23 @@ describe("frame type 14", () => {
     expect(decoded.numLevels).toBeGreaterThan(1);
   });
 });
+
+describe("equals and JSON", () => {
+  const stream = shuffled(10_000);
+
+  test("equals holds for the same stream and seed, and only then", () => {
+    const a = sketchOf(stream, 200, 7);
+    expect(a.equals(sketchOf(stream, 200, 7))).toBe(true);
+    expect(a.equals(sketchOf(stream, 200, 8))).toBe(false);
+    expect(a.equals(sketchOf(stream, 100, 7))).toBe(false);
+    const more = sketchOf(stream, 200, 7);
+    more.add(1);
+    expect(a.equals(more)).toBe(false);
+  });
+
+  test("a sketch round-trips through JSON", () => {
+    const s = sketchOf(stream, 200, 7);
+    const restored = KllSketch.fromJSON(JSON.parse(JSON.stringify(s)));
+    expect(restored.equals(s)).toBe(true);
+  });
+});

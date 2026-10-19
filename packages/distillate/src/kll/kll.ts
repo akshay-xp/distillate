@@ -2,9 +2,13 @@ import { assertUint32, ParamError } from "../core/params.js";
 import {
   assertBodyLength,
   assertMinBodyLength,
+  bytesEqual,
+  type FilterJSON,
   FORMAT_VERSION,
+  fromJSONEnvelope,
   readHeader,
   SerializationError,
+  toJSONEnvelope,
   UnknownHashVariantError,
   writeFrame,
 } from "../core/serialize.js";
@@ -183,6 +187,37 @@ export class KllSketch {
         }
       },
     );
+  }
+
+  /**
+   * Tests structural equality: `true` when `other` serializes to identical
+   * bytes, meaning the same `k`, generator state, counts and items.
+   *
+   * @param other - The sketch to compare against.
+   * @returns `true` if the two sketches are byte-for-byte identical.
+   */
+  equals(other: KllSketch): boolean {
+    return bytesEqual(this.toBytes(), other.toBytes());
+  }
+
+  /**
+   * Serializes the sketch to a JSON-safe envelope wrapping
+   * {@link KllSketch.toBytes}.
+   *
+   * @returns The envelope, readable by {@link KllSketch.fromJSON}.
+   */
+  toJSON(): FilterJSON {
+    return toJSONEnvelope(this.toBytes());
+  }
+
+  /**
+   * Restores a sketch from its {@link KllSketch.toJSON} envelope.
+   *
+   * @param value - The parsed envelope.
+   * @returns The reconstructed sketch.
+   */
+  static fromJSON(value: unknown): KllSketch {
+    return KllSketch.fromBytes(fromJSONEnvelope(value));
   }
 
   /** Items the top level holds. */
