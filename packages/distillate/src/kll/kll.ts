@@ -25,9 +25,10 @@ export interface KllParams {
 export class KllSketch {
   readonly #k: number;
   // Level h occupies #items[#levels[h], #levels[h + 1]); an item there stands
-  // for 2^h values of the stream.
+  // for 2^h values of the stream. Level 0 grows downward into the free space
+  // at the front, so the sketch is full when #levels[0] reaches 0.
   #items: Float64Array;
-  #levels: number[] = [0, 0];
+  #levels: number[];
   #n = 0;
   #min = Number.NaN;
   #max = Number.NaN;
@@ -46,6 +47,7 @@ export class KllSketch {
     if (seed !== undefined) assertUint32(seed, "seed");
     this.#k = k;
     this.#items = new Float64Array(k);
+    this.#levels = [k, k];
   }
 
   /**
@@ -118,7 +120,13 @@ export class KllSketch {
       throw new ParamError(`q must be in [0, 1], got ${String(q)}`);
     }
     if (this.#n === 0) return Number.NaN;
-    return this.#items[0] ?? Number.NaN;
+    if (q === 0) return this.#min;
+    if (q === 1) return this.#max;
+    const rank = Math.floor(q * (this.#n - 1));
+    const { items, cumulative } = this.#sortedView();
+    let i = 0;
+    while ((cumulative[i] ?? 0) <= rank) i++;
+    return items[i] ?? this.#max;
   }
 
   /** {@link KllSketch.quantile} for each of `qs`, in order. */
@@ -133,7 +141,57 @@ export class KllSketch {
    * @returns The rank in `[0, 1]`, or `NaN` when the sketch is empty.
    */
   rank(x: number): number {
+    if (Number.isNaN(x)) throw new ParamError("x must not be NaN");
     if (this.#n === 0) return Number.NaN;
-    return x >= this.#max ? 1 : 0;
+    const items = this.#items;
+    const levels = this.#levels;
+    let atOrBelow = 0;
+    for (let h = 0; h + 1 < levels.length; h++) {
+      let below = 0;
+      for (let i = levels[h] ?? 0; i < (levels[h + 1] ?? 0); i++) {
+        if ((items[i] ?? 0) <= x) below++;
+      }
+      atOrBelow += below * 2 ** h;
+    }
+    return atOrBelow / this.#n;
+  }
+
+  /**
+   * Records a value.
+   *
+   * @param value - Any number but `NaN`; infinities and `-0` are ordered as
+   * numbers.
+   * @throws {@link ParamError} when `value` is `NaN`. Nothing is recorded.
+   */
+  add(value: number): void {
+    if (Number.isNaN(value)) throw new ParamError("value must not be NaN");
+    const at = (this.#levels[0] ?? 0) - 1;
+    this.#items[at] = value;
+    this.#levels[0] = at;
+    this.#n++;
+    if (!(value >= this.#min)) this.#min = value;
+    if (!(value <= this.#max)) this.#max = value;
+  }
+
+  // Every item in ascending order, with the stream weight at or below it.
+  #sortedView(): { items: Float64Array; cumulative: Float64Array } {
+    const levels = this.#levels;
+    const start = levels[0] ?? 0;
+    const retained = this.retained;
+    const order = Array.from({ length: retained }, (_, i) => start + i);
+    const source = this.#items;
+    order.sort((a, b) => (source[a] ?? 0) - (source[b] ?? 0));
+    const items = new Float64Array(retained);
+    const cumulative = new Float64Array(retained);
+    let total = 0;
+    for (let i = 0; i < retained; i++) {
+      const at = order[i] ?? 0;
+      let h = 0;
+      while ((levels[h + 1] ?? 0) <= at) h++;
+      total += 2 ** h;
+      items[i] = source[at] ?? 0;
+      cumulative[i] = total;
+    }
+    return { items, cumulative };
   }
 }

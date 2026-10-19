@@ -44,3 +44,45 @@ describe("construction", () => {
     }
   });
 });
+
+// 150 values from 50 distinct integers, each repeated, in a fixed scrambled
+// order: below k = 200, so nothing has compacted.
+const scrambled = Array.from({ length: 150 }, (_, i) => (i * 37) % 50);
+const sortedValues = [...scrambled].sort((a, b) => a - b);
+
+describe("exact below k", () => {
+  test("quantiles and ranks match a sorted array, repeats included", () => {
+    const sketch = new KllSketch();
+    for (const v of scrambled) sketch.add(v);
+    expect(sketch.count).toBe(150);
+    expect(sketch.min).toBe(0);
+    expect(sketch.max).toBe(49);
+
+    const qs = Array.from({ length: 101 }, (_, i) => i / 100);
+    for (const q of qs) {
+      expect(sketch.quantile(q), `q ${String(q)}`).toBe(
+        sortedValues[Math.floor(q * 149)],
+      );
+    }
+    expect(sketch.quantiles(qs)).toEqual(qs.map((q) => sketch.quantile(q)));
+
+    for (const x of [-1, ...new Set(sortedValues), 50]) {
+      const atOrBelow = sortedValues.filter((v) => v <= x).length;
+      expect(sketch.rank(x), `x ${String(x)}`).toBe(atOrBelow / 150);
+    }
+  });
+
+  test("refuses NaN, and orders infinities and signed zeros", () => {
+    const sketch = new KllSketch();
+    expect(() => {
+      sketch.add(Number.NaN);
+    }).toThrow(ParamError);
+    expect(sketch.isEmpty).toBe(true);
+    for (const v of [-Infinity, Infinity, -0, 0]) sketch.add(v);
+    expect(sketch.min).toBe(-Infinity);
+    expect(sketch.max).toBe(Infinity);
+    expect(sketch.rank(0)).toBe(3 / 4);
+    expect(sketch.rank(-0)).toBe(3 / 4);
+    expect(() => sketch.rank(Number.NaN)).toThrow(ParamError);
+  });
+});
