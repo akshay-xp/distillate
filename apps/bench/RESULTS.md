@@ -19,6 +19,11 @@ unreleased build that adds `distillate/riblt` on top of 0.16.0, against
 `ribbit-riblt@1.1.1` and `bloom-filters@3.0.4`. Every other section keeps the
 numbers it was published with.
 
+The Theta section was measured on 2026-10-19, on the same machine, from the
+unreleased build that adds `distillate/theta` on top of 0.17.0. No other JS
+library ships a Theta sketch, so it compares with distillate's own HyperLogLog
+and an exact `Set`. Every other section keeps the numbers it was published with.
+
 All filters are configured at the same target FPR (1%) and measured by identical code.
 See [METHODOLOGY.md](./METHODOLOGY.md) for how these benches are run.
 
@@ -338,6 +343,31 @@ Bundle sizes are measured, not quoted: everything both sides need, bundled by es
 | distillate/riblt | 5.0 KB              |
 | ribbit-riblt     | 2.2 KB              |
 | bloom-filters    | 37.4 KB             |
+
+## Theta
+
+Two sets of 1M keys each, sharing a fraction of them (`overlap`). distillate's Theta sketch at k = 4096 answers the intersection and the difference (keys in the first set, not the second) directly. HyperLogLog can only union, so distillate's at p = 16 estimates them by inclusion-exclusion: `|A| + |B| - |A ∪ B|`, and `|A ∪ B| - |B|`. Its frame is the larger of the two, so the comparison never leans on Theta holding more. An exact `Set` gives the truth and its own cost. No other JS library ships a Theta sketch.
+
+Each error is the mean absolute relative error over 10 seeds, since one run of a sampled estimate says little. `add` is every key added over the time spent building both sets, across every seed. `set operations` is the median time of one union, one intersection and one difference, each counted. `size` is one sketch's DSTL frame. Each library runs in its own process.
+
+| Library          | overlap | add           | set operations | intersection error | difference error | size    |
+| ---------------- | ------- | ------------- | -------------- | ------------------ | ---------------- | ------- |
+| distillate/theta | 1%      | 39.27 M ops/s | 1.26 ms        | 14.14%             | 0.99%            | 32.0 KB |
+| distillate/hll   | 1%      | 38.42 M ops/s | 1.35 ms        | 56.30%             | 0.74%            | 48.0 KB |
+| Set              | 1%      | 19.44 M ops/s | 173 ms         | 0.00%              | 0.00%            | n/a     |
+| distillate/theta | 10%     | 38.36 M ops/s | 1.22 ms        | 3.46%              | 1.26%            | 32.0 KB |
+| distillate/hll   | 10%     | 37.41 M ops/s | 1.32 ms        | 4.10%              | 0.61%            | 48.0 KB |
+| Set              | 10%     | 18.88 M ops/s | 168 ms         | 0.00%              | 0.00%            | n/a     |
+| distillate/theta | 50%     | 39.95 M ops/s | 1.21 ms        | 1.68%              | 2.43%            | 32.0 KB |
+| distillate/hll   | 50%     | 39.49 M ops/s | 1.24 ms        | 0.76%              | 0.80%            | 48.0 KB |
+| Set              | 50%     | 18.51 M ops/s | 126 ms         | 0.00%              | 0.00%            | n/a     |
+
+Bundle sizes are measured, not quoted: each import bundled by esbuild for the browser, minified and gzipped.
+
+| Library          | sketch |
+| ---------------- | ------ |
+| distillate/theta | 4.9 KB |
+| distillate/hll   | 4.9 KB |
 
 ## Throughput (n = 100k)
 
