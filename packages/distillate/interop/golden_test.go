@@ -2257,15 +2257,38 @@ func parseTheta(f frame) (theta, error) {
 	if len(f.body) < thetaParams {
 		return theta{}, fmt.Errorf("body of %d bytes is shorter than the params block", len(f.body))
 	}
+	for at := 20; at < thetaParams; at++ {
+		if f.body[at] != 0 {
+			return theta{}, fmt.Errorf("params padding at byte %d is not zero", at)
+		}
+	}
 	th := theta{
 		seed:  le.Uint32(f.body),
 		k:     le.Uint32(f.body[4:]),
 		theta: le.Uint64(f.body[8:]),
 		count: le.Uint32(f.body[16:]),
 	}
+	if th.k < 16 || th.k > 1<<26 || th.k&(th.k-1) != 0 {
+		return theta{}, fmt.Errorf("k %d is not a power of two in the range [16, 2^26]", th.k)
+	}
+	if want := thetaParams + 8*int(th.count); len(f.body) != want {
+		return theta{}, fmt.Errorf("body of %d bytes disagrees with count %d (want %d)", len(f.body), th.count, want)
+	}
+	if th.theta < 1 || th.theta > thetaExact {
+		return theta{}, fmt.Errorf("theta %d is outside [1, 2^53]", th.theta)
+	}
+	if th.count > th.k {
+		return theta{}, fmt.Errorf("count %d is more than k %d keeps", th.count, th.k)
+	}
 	th.hashes = make([]uint64, th.count)
+	previous := uint64(0)
 	for i := range th.hashes {
-		th.hashes[i] = le.Uint64(f.body[thetaParams+8*i:])
+		h := le.Uint64(f.body[thetaParams+8*i:])
+		if h <= previous || h >= th.theta {
+			return theta{}, fmt.Errorf("hash %d is not strictly ascending in [1, theta)", i)
+		}
+		th.hashes[i] = h
+		previous = h
 	}
 	return th, nil
 }
@@ -2337,5 +2360,69 @@ func TestTheta(t *testing.T) {
 	}
 	if !seeded {
 		t.Error("no theta fixture carries a non-zero seed")
+	}
+}
+
+func TestThetaDamaged(t *testing.T) {
+	e := find(t, "theta")
+
+	short := frameOf(t, e)
+	if _, err := readFrame(short[:len(short)-1]); err == nil || !strings.Contains(err.Error(), "body length") {
+		t.Errorf("truncated frame: want a body length error, got %v", err)
+	}
+
+	stale := frameOf(t, e)
+	stale[headerSize+thetaParams]++
+	if _, err := readFrame(stale); err == nil || !strings.Contains(err.Error(), "CRC") {
+		t.Errorf("altered hash: want a CRC error, got %v", err)
+	}
+
+	// Resealed, each mutation gets past the trailer and must be caught by the
+	// params and sample checks alone.
+	mutated := func(at int, put func(b []byte)) []byte {
+		b := frameOf(t, e)
+		put(b[headerSize+at:])
+		return reseal(b)
+	}
+	count := int(le.Uint32(frameOf(t, e)[headerSize+16:]))
+	last := thetaParams + 8*(count-1)
+	bound := le.Uint64(frameOf(t, e)[headerSize+8:])
+
+	// k 16 holding 17 ascending hashes: self-consistent in length, but more
+	// than any canonical sample keeps.
+	over := make([]byte, thetaParams+8*17)
+	le.PutUint32(over[4:], 16)
+	le.PutUint64(over[8:], thetaExact)
+	le.PutUint32(over[16:], 17)
+	for i := range 17 {
+		le.PutUint64(over[thetaParams+8*i:], uint64(i+1))
+	}
+
+	cases := []struct {
+		name, want string
+		frame      []byte
+	}{
+		{"padding byte set", "padding", mutated(20, func(b []byte) { b[0] = 1 })},
+		{"k 100", "range", mutated(4, func(b []byte) { le.PutUint32(b, 100) })},
+		{"k 8", "range", mutated(4, func(b []byte) { le.PutUint32(b, 8) })},
+		{"count the body cannot hold", "disagrees", mutated(16, func(b []byte) { le.PutUint32(b, uint32(count+1)) })},
+		{"theta 0", "theta", mutated(8, func(b []byte) { le.PutUint64(b, 0) })},
+		{"theta above 2^53", "theta", mutated(8, func(b []byte) { le.PutUint64(b, thetaExact+2) })},
+		{"hashes swapped", "ascending", mutated(thetaParams, func(b []byte) {
+			first := le.Uint64(b)
+			le.PutUint64(b, le.Uint64(b[8:]))
+			le.PutUint64(b[8:], first)
+		})},
+		{"hash at theta", "ascending", mutated(last, func(b []byte) { le.PutUint64(b, bound) })},
+		{"more hashes than k", "count", writeFrame(13, over[:thetaParams], over[thetaParams:])},
+	}
+	for _, c := range cases {
+		f, err := readFrame(c.frame)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if _, err := parseTheta(f); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: want an error mentioning %q, got %v", c.name, c.want, err)
+		}
 	}
 }
