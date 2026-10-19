@@ -3,10 +3,12 @@ import { BloomFilter } from "distillate/bloom";
 import { CountMinSketch } from "distillate/countmin";
 import { CuckooFilter, CuckooFullError } from "distillate/cuckoo";
 import { DDSketch, denseStore } from "distillate/ddsketch";
+import { HyperLogLog } from "distillate/hll";
 import { BinaryFuse8, BinaryFuseBuildError } from "distillate/fuse";
 import { MinHash } from "distillate/minhash";
 import { RibltDecoder, RibltEncoder } from "distillate/riblt";
 import { ScalableBloomFilter } from "distillate/scalable";
+import { ThetaSketch } from "distillate/theta";
 import { TopK } from "distillate/topk";
 
 import { RATE_MESSAGE, toNumber } from "../../lib/form.js";
@@ -197,6 +199,37 @@ export interface ReconcileReport {
 
 export type ReconcileResult = ReconcileReport | { ok: false; message: string };
 
+/** One count three ways: the union, the intersection and A without B. */
+export interface SegmentCounts<T> {
+  union: T;
+  intersection: T;
+  difference: T;
+}
+
+/** A Theta estimate and its range at two standard deviations. */
+export interface Bounded {
+  estimate: number;
+  low: number;
+  high: number;
+}
+
+/** Two segments of the page's keys, sharing a fraction of them. */
+export interface SegmentsReport {
+  ok: true;
+  sizeA: number;
+  sizeB: number;
+  k: number;
+  p: number;
+  /** False while the union holds no more than k keys: Theta then counts. */
+  estimating: boolean;
+  exact: SegmentCounts<number>;
+  theta: SegmentCounts<Bounded>;
+  /** HyperLogLog only unions, so these come by inclusion-exclusion. */
+  hll: SegmentCounts<number>;
+}
+
+export type SegmentsResult = SegmentsReport | { ok: false; message: string };
+
 export type RemoveResult =
   | {
       ok: true;
@@ -243,6 +276,9 @@ const SIDE_MESSAGE = "Choose set A or set B to record into.";
 const SET_MESSAGE = `Each set holds at most ${MAX_KEYS.toLocaleString("en-US")} items, and this one would be past that. The playground keeps both sets exactly in your browser, so it stops there.`;
 
 const GROW_MESSAGE = `Keys to add must be a whole number of at least 1, and the total held must stay at or under ${MAX_KEYS.toLocaleString("en-US")}. The playground builds real filters in your browser, so it stops there.`;
+
+const SEGMENTS_MESSAGE =
+  "The overlap must be a fraction from 0 to 1 of the keys the two segments share.";
 
 const RECONCILE_MESSAGE =
   "The difference must be a whole number from 0 to the number of keys the page holds: the client can lack at most every one of them.";
@@ -315,6 +351,15 @@ export function latencies(count: number): number[] {
 // Top-K returns keys as the bytes it stored; the page shows them as text.
 const decoder = new TextDecoder();
 const utf8 = new TextEncoder();
+
+/**
+ * The segment sketches' size. Fixed rather than sized from the page's target,
+ * for SIMILARITY_K's reason: a 0.001 target would ask Theta for k = 2^20. At
+ * k 4096 the default 10,000 keys are past exact, so the bounds mean something;
+ * HyperLogLog at p 16 is the bench's, a frame at least Theta's.
+ */
+const SEGMENT_K = 4096;
+const SEGMENT_P = 16;
 
 /** Symbols per frame, the RIBLT guide's suggestion. */
 const RECONCILE_FRAME = 64;
@@ -806,6 +851,70 @@ export class Playground {
       decoded,
       serverOnly: server.filter((k) => remote.has(RibltDecoder.hashOf(k))),
       clientOnly: client.local(),
+    };
+  }
+
+  /**
+   * Two segments: the page's keys, and as many again of which the first
+   * `round(overlap * n)` are the page's and the rest are new. Each call builds
+   * the sketches afresh, since a sketch cannot take keys back out.
+   */
+  segments(overlap: unknown): SegmentsResult {
+    const fraction = toNumber(overlap);
+    if (!(fraction >= 0 && fraction <= 1)) {
+      return { ok: false, message: SEGMENTS_MESSAGE };
+    }
+    const a = this.#keys;
+    const shared = Math.round(fraction * a.length);
+    const b = a.slice(0, shared);
+    for (let i = 0; b.length < a.length; i += 1) {
+      const key = `segment-${String(i)}`;
+      if (!this.#inserted.has(key)) b.push(key);
+    }
+
+    const thetaA = new ThetaSketch({ k: SEGMENT_K });
+    const thetaB = new ThetaSketch({ k: SEGMENT_K });
+    const hllA = new HyperLogLog({ p: SEGMENT_P });
+    const hllB = new HyperLogLog({ p: SEGMENT_P });
+    for (const key of a) {
+      thetaA.add(key);
+      hllA.add(key);
+    }
+    for (const key of b) {
+      thetaB.add(key);
+      hllB.add(key);
+    }
+
+    const bounded = (sketch: ThetaSketch): Bounded => ({
+      estimate: sketch.count(),
+      low: sketch.lowerBound(2),
+      high: sketch.upperBound(2),
+    });
+    const union = thetaA.union(thetaB);
+    const hllUnion = hllA.union(hllB).count();
+    const countB = hllB.count();
+    return {
+      ok: true,
+      sizeA: a.length,
+      sizeB: b.length,
+      k: SEGMENT_K,
+      p: SEGMENT_P,
+      estimating: union.isEstimating,
+      exact: {
+        union: a.length + b.length - shared,
+        intersection: shared,
+        difference: a.length - shared,
+      },
+      theta: {
+        union: bounded(union),
+        intersection: bounded(thetaA.intersect(thetaB)),
+        difference: bounded(thetaA.difference(thetaB)),
+      },
+      hll: {
+        union: hllUnion,
+        intersection: hllA.count() + countB - hllUnion,
+        difference: hllUnion - countB,
+      },
     };
   }
 

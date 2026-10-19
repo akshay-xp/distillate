@@ -823,3 +823,61 @@ test.each<[string, unknown, number]>([
   expect(result.ok).toBe(false);
   if (!result.ok) expect(result.message).toContain("whole number");
 });
+
+const OPS = ["union", "intersection", "difference"] as const;
+
+test("two segments compare exactly, by Theta with bounds, and by HLL inclusion-exclusion", () => {
+  const result = built().segments(0.1);
+  if (!result.ok) throw new Error(result.message);
+
+  expect(result).toMatchObject({
+    sizeA: 10_000,
+    sizeB: 10_000,
+    k: 4096,
+    p: 16,
+    estimating: true,
+    exact: { union: 19_000, intersection: 1_000, difference: 9_000 },
+  });
+  for (const op of OPS) {
+    const { estimate, low, high } = result.theta[op];
+    expect(low, op).toBeLessThanOrEqual(estimate);
+    expect(estimate, op).toBeLessThanOrEqual(high);
+    expect(low, op).toBeLessThanOrEqual(result.exact[op]);
+    expect(result.exact[op], op).toBeLessThanOrEqual(high);
+    expect(Number.isFinite(result.hll[op]), op).toBe(true);
+  }
+});
+
+test("below k keys Theta is exact and its bounds collapse onto the count", () => {
+  const result = built(1_000).segments(0.5);
+  if (!result.ok) throw new Error(result.message);
+
+  expect(result.estimating).toBe(false);
+  for (const op of OPS) {
+    expect(result.theta[op], op).toEqual({
+      estimate: result.exact[op],
+      low: result.exact[op],
+      high: result.exact[op],
+    });
+  }
+});
+
+test("disjoint segments read zero, with an upper bound above it", () => {
+  const result = built().segments(0);
+  if (!result.ok) throw new Error(result.message);
+
+  expect(result.exact.intersection).toBe(0);
+  expect(result.theta.intersection.low).toBe(0);
+  expect(result.theta.intersection.high).toBeGreaterThan(0);
+});
+
+test.each<[string, unknown]>([
+  ["a negative overlap", -0.1],
+  ["an overlap above one", 1.5],
+  ["text", "x"],
+])("comparing segments at %s is refused with a message", (_, overlap) => {
+  const result = built().segments(overlap);
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.message).toContain("overlap");
+});
