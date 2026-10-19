@@ -106,7 +106,7 @@ func find(t *testing.T, name string) entry {
 	return entry{}
 }
 
-var typeOf = map[string]byte{"bloom": 1, "blocked": 2, "fuse8": 3, "fuse16": 4, "hll": 5, "scalable": 6, "cuckoo": 7, "countmin": 8, "topk": 9, "ddsketch": 10, "minhash": 11, "riblt": 12}
+var typeOf = map[string]byte{"bloom": 1, "blocked": 2, "fuse8": 3, "fuse16": 4, "hll": 5, "scalable": 6, "cuckoo": 7, "countmin": 8, "topk": 9, "ddsketch": 10, "minhash": 11, "riblt": 12, "theta": 13}
 
 func TestFrames(t *testing.T) {
 	for _, e := range golden(t) {
@@ -2234,5 +2234,108 @@ func TestRibltDamaged(t *testing.T) {
 		if _, err := parseRiblt(f); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: want an error mentioning %q, got %v", c.name, c.want, err)
 		}
+	}
+}
+
+// Theta, frame type 13: seed (u32), k (u32), theta (u64), count (u32), four
+// bytes of padding, then count hashes (u64), strictly ascending in [1, theta).
+// A key's hash is its murmur words as (w1 >> 11) << 32 | w0, 53 bits. Only the
+// canonical sample is stored: the k smallest hashes with theta the next, or
+// every hash with theta 2^53 while there are no more than k.
+type theta struct {
+	seed, k, count uint32
+	theta          uint64
+	hashes         []uint64
+}
+
+const (
+	thetaParams = 24
+	thetaExact  = uint64(1) << 53
+)
+
+func parseTheta(f frame) (theta, error) {
+	if len(f.body) < thetaParams {
+		return theta{}, fmt.Errorf("body of %d bytes is shorter than the params block", len(f.body))
+	}
+	th := theta{
+		seed:  le.Uint32(f.body),
+		k:     le.Uint32(f.body[4:]),
+		theta: le.Uint64(f.body[8:]),
+		count: le.Uint32(f.body[16:]),
+	}
+	th.hashes = make([]uint64, th.count)
+	for i := range th.hashes {
+		th.hashes[i] = le.Uint64(f.body[thetaParams+8*i:])
+	}
+	return th, nil
+}
+
+// buildTheta derives the canonical sample from the keys alone: every distinct
+// non-zero hash, sorted, cut to the k smallest with theta the next.
+func buildTheta(k, seed uint32, keys []string) []byte {
+	seen := map[uint64]bool{}
+	var hashes []uint64
+	for _, key := range keys {
+		w := murmur3x86_128([]byte(key), seed)
+		h := uint64(w[1]>>11)<<32 | uint64(w[0])
+		if h != 0 && !seen[h] {
+			seen[h] = true
+			hashes = append(hashes, h)
+		}
+	}
+	sort.Slice(hashes, func(i, j int) bool { return hashes[i] < hashes[j] })
+	bound := thetaExact
+	if len(hashes) > int(k) {
+		bound = hashes[k]
+		hashes = hashes[:k]
+	}
+	params := make([]byte, thetaParams)
+	le.PutUint32(params, seed)
+	le.PutUint32(params[4:], k)
+	le.PutUint64(params[8:], bound)
+	le.PutUint32(params[16:], uint32(len(hashes)))
+	payload := make([]byte, 8*len(hashes))
+	for i, h := range hashes {
+		le.PutUint64(payload[8*i:], h)
+	}
+	return writeFrame(13, params, payload)
+}
+
+func TestTheta(t *testing.T) {
+	seeded := false
+	for _, e := range golden(t) {
+		if e.Kind != "theta" {
+			continue
+		}
+		f, err := readFrame(frameOf(t, e))
+		if err != nil {
+			t.Fatal(err)
+		}
+		th, err := parseTheta(f)
+		if err != nil {
+			t.Fatalf("%s: %v", e.Name, err)
+		}
+		if int(th.k) != e.K || th.seed != e.Seed {
+			t.Errorf("%s: k %d seed %d, recipe says k %d seed %d", e.Name, th.k, th.seed, e.K, e.Seed)
+		}
+		seeded = seeded || th.seed != 0
+		exact := th.theta == thetaExact
+		switch e.Name {
+		case "theta":
+			if exact || th.count != th.k {
+				t.Errorf("theta: theta %d count %d, want estimating with count k", th.theta, th.count)
+			}
+		case "theta-small":
+			if !exact || th.count != 5 {
+				t.Errorf("theta-small: theta %d count %d, want exact with count 5", th.theta, th.count)
+			}
+		}
+		rebuilt := buildTheta(th.k, th.seed, e.Keys)
+		if golden := frameOf(t, e); !bytes.Equal(rebuilt, golden) {
+			t.Errorf("%s: rebuilt frame differs:\n got %x\nwant %x", e.Name, rebuilt, golden)
+		}
+	}
+	if !seeded {
+		t.Error("no theta fixture carries a non-zero seed")
 	}
 }
