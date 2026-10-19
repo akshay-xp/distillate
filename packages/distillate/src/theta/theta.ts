@@ -2,12 +2,39 @@ import type { BytesLike } from "../core/bytes.js";
 import { type Hash128, hash128KeyInto } from "../core/hasher.js";
 import { forEachItem } from "../core/iterable.js";
 import { assertUint32, ParamError } from "../core/params.js";
+import {
+  assertBodyLength,
+  assertMinBodyLength,
+  assertParamsPadding,
+  type FilterJSON,
+  FORMAT_VERSION,
+  fromJSONEnvelope,
+  HASH_MURMUR128,
+  readHeader,
+  SerializationError,
+  toJSONEnvelope,
+  UnknownHashVariantError,
+  writeFrame,
+} from "../core/serialize.js";
 import { thetaLowerBound, thetaUpperBound } from "./bounds.js";
 import { THETA_MAX_K, THETA_MIN_K, thetaSizing } from "./sizing.js";
 
 // Hashes are 53-bit integers, so they and theta compare as plain doubles.
 const HASH_RANGE = 2 ** 53;
 const MIN_CAPACITY = 32;
+
+/** DSTL frame type for a Theta sketch. */
+const TYPE = 13;
+
+/**
+ * Body layout: seed (u32 LE) | k (u32 LE) | theta (u64 LE) | count (u32 LE) |
+ * 4 bytes padding | count hashes (u64 LE), strictly ascending, each in
+ * [1, theta). Params occupy 20 bytes; the block is padded to 24 so the hashes
+ * start at frame offset 40, where a typed u64 view can sit. Only the canonical
+ * sample is written, so equal key sets give equal bytes.
+ */
+const PARAMS_SIZE = 24;
+const PARAMS_FIELDS_END = 20;
 
 /** Construction parameters for a {@link ThetaSketch}. */
 export interface ThetaParams {
@@ -98,6 +125,95 @@ export class ThetaSketch {
       sketch.add(key);
     });
     return sketch;
+  }
+
+  /**
+   * Restores a sketch from {@link ThetaSketch.toBytes}. It takes keys and
+   * set operations like the sketch it was written from.
+   *
+   * @param bytes - The serialized sketch.
+   * @returns The reconstructed sketch.
+   */
+  static fromBytes(bytes: Uint8Array): ThetaSketch {
+    const { type, flags, body } = readHeader(bytes);
+    if (type !== TYPE) {
+      throw new SerializationError(
+        `expected DSTL type ${String(TYPE)}, got ${String(type)}`,
+      );
+    }
+    if ((flags & 0x0f) !== HASH_MURMUR128) {
+      throw new UnknownHashVariantError(
+        `unsupported hash variant ${String(flags & 0x0f)}`,
+      );
+    }
+    assertMinBodyLength(body.length, PARAMS_SIZE, "theta");
+    assertParamsPadding(body, PARAMS_FIELDS_END, PARAMS_SIZE, "theta");
+    const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
+    const seed = view.getUint32(0, true);
+    const k = view.getUint32(4, true);
+    const theta = readU64(view, 8);
+    const count = view.getUint32(16, true);
+    assertBodyLength(body.length, PARAMS_SIZE + 8 * count, "theta");
+    const hashes = new Float64Array(count);
+    for (let i = 0; i < count; i++) {
+      hashes[i] = readU64(view, PARAMS_SIZE + 8 * i);
+    }
+    try {
+      return ThetaSketch.#sampled(k, seed, theta, hashes, count);
+    } catch (err) {
+      // A k the body agrees with can still be one the constructor refuses,
+      // and a caller decoding a frame should see one error family.
+      if (err instanceof ParamError) {
+        throw new SerializationError(`theta: ${err.message}`);
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Serializes the sketch's canonical sample to a portable little-endian
+   * byte layout.
+   *
+   * @returns The serialized sketch, readable by {@link ThetaSketch.fromBytes}.
+   */
+  toBytes(): Uint8Array {
+    const theta = this.#canonical();
+    const count = this.retained;
+    const sorted = this.#sorted;
+    return writeFrame(
+      { version: FORMAT_VERSION, type: TYPE, flags: HASH_MURMUR128 },
+      PARAMS_SIZE,
+      8 * count,
+      (_, dv) => {
+        dv.setUint32(0, this.#seed, true);
+        dv.setUint32(4, this.#k, true);
+        writeU64(dv, 8, theta);
+        dv.setUint32(16, count, true);
+        for (let i = 0; i < count; i++) {
+          writeU64(dv, PARAMS_SIZE + 8 * i, sorted[i] ?? 0);
+        }
+      },
+    );
+  }
+
+  /**
+   * Serializes the sketch to a JSON-safe envelope wrapping
+   * {@link ThetaSketch.toBytes}.
+   *
+   * @returns The envelope, readable by {@link ThetaSketch.fromJSON}.
+   */
+  toJSON(): FilterJSON {
+    return toJSONEnvelope(this.toBytes());
+  }
+
+  /**
+   * Restores a sketch from its {@link ThetaSketch.toJSON} envelope.
+   *
+   * @param value - The parsed envelope.
+   * @returns The reconstructed sketch.
+   */
+  static fromJSON(value: unknown): ThetaSketch {
+    return ThetaSketch.fromBytes(fromJSONEnvelope(value));
   }
 
   /** Hashes kept once the sketch is estimating. */
@@ -433,4 +549,15 @@ function select(a: Float64Array, n: number, k: number): void {
     else if (k >= i) lo = i;
     else return;
   }
+}
+
+// A hash or theta, an integer of at most 53 bits, as a u64. ToUint32 takes the
+// value mod 2^32, so `>>> 0` is the low word even above 2^32.
+function writeU64(dv: DataView, at: number, value: number): void {
+  dv.setUint32(at, value >>> 0, true);
+  dv.setUint32(at + 4, Math.floor(value / 2 ** 32), true);
+}
+
+function readU64(view: DataView, at: number): number {
+  return view.getUint32(at + 4, true) * 2 ** 32 + view.getUint32(at, true);
 }
