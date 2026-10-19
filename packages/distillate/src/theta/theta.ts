@@ -188,6 +188,51 @@ export class ThetaSketch {
   }
 
   /**
+   * Merges two sketches, giving a sketch of the keys either has seen. Both are
+   * left untouched.
+   *
+   * The result keeps the smaller `k`, as HLL keeps the coarser precision:
+   * with the larger, a union cut to a small `k` before a third sketch joins
+   * would differ from one cut after, and grouping would change the answer.
+   *
+   * @param other - The sketch to merge with; must share this one's seed.
+   * @returns A new sketch of the union, which takes keys and further operations.
+   * @throws {@link ParamError} if the seeds differ, since the same key would
+   * then hash differently on each side.
+   */
+  union(other: ThetaSketch): ThetaSketch {
+    if (other.#seed !== this.#seed) {
+      throw new ParamError(
+        `cannot merge sketches with different seeds, got ${String(this.#seed)} and ${String(other.#seed)}`,
+      );
+    }
+    let theta = Math.min(this.#canonical(), other.#canonical());
+    const k = Math.min(this.#k, other.#k);
+    const a = this.#sorted;
+    const b = other.#sorted;
+    const aEnd = this.retained;
+    const bEnd = other.retained;
+    const out = new Float64Array(k);
+    let i = 0;
+    let j = 0;
+    let count = 0;
+    while (i < aEnd || j < bEnd) {
+      const x = i < aEnd ? (a[i] ?? 0) : HASH_RANGE;
+      const y = j < bEnd ? (b[j] ?? 0) : HASH_RANGE;
+      const hash = x < y ? x : y;
+      if (x === hash) i++;
+      if (y === hash) j++;
+      if (hash >= theta) break;
+      if (count === k) {
+        theta = hash;
+        break;
+      }
+      out[count++] = hash;
+    }
+    return ThetaSketch.#sampled(k, this.#seed, theta, out, count);
+  }
+
+  /**
    * Whether two sketches hold the same canonical sample at the same `k` and
    * seed. The order keys arrived in does not enter into it.
    *
@@ -204,6 +249,33 @@ export class ThetaSketch {
       if (mine[i] !== theirs[i]) return false;
     }
     return true;
+  }
+
+  // Settles the canonical sample into the front of #sorted and returns its
+  // theta, as a raw hash bound.
+  #canonical(): number {
+    this.#settle();
+    return this.#canonTheta;
+  }
+
+  // A sketch holding exactly `hashes[0..count)` below `theta`. A set
+  // operation keeps at most k hashes, so the table fits at half load.
+  static #sampled(
+    k: number,
+    seed: number,
+    theta: number,
+    hashes: Float64Array,
+    count: number,
+  ): ThetaSketch {
+    const sketch = new ThetaSketch({ k, seed });
+    let capacity = MIN_CAPACITY;
+    while (capacity < 2 * count) capacity *= 2;
+    const table = new Float64Array(capacity);
+    for (let i = 0; i < count; i++) place(table, hashes[i] ?? 0);
+    sketch.#table = table;
+    sketch.#size = count;
+    sketch.#theta = theta;
+    return sketch;
   }
 
   // Copies the live hashes to the front of #sorted, unordered.
