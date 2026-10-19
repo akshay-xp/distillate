@@ -26,6 +26,7 @@ import {
 } from "../dist/ddsketch/index.js";
 import { fromProtobuf, toProtobuf } from "../dist/ddsketch/protobuf/index.js";
 import { MinHash, MinHashLSH, minHashSizing } from "../dist/minhash/index.js";
+import { ThetaSketch } from "../dist/theta/index.js";
 import { RibltDecoder, RibltEncoder } from "../dist/riblt/index.js";
 
 if (typeof VERSION !== "string") {
@@ -129,6 +130,22 @@ if (candidates !== "a,b") {
   process.exit(1);
 }
 
+const thA = ThetaSketch.from(["a", "b", "c"], 0.05);
+const thB = ThetaSketch.from(["b", "c", "d"], 0.05);
+const thCounts = [
+  thA.union(thB).count(),
+  thA.intersect(thB).count(),
+  thA.difference(thB).count(),
+].join(",");
+if (thCounts !== "4,2,1") {
+  console.error(`smoke: Theta union, intersect, difference gave ${thCounts}`);
+  process.exit(1);
+}
+if (!ThetaSketch.fromBytes(thA.toBytes()).equals(thA)) {
+  console.error("smoke: Theta round-trip through toBytes lost state");
+  process.exit(1);
+}
+
 // Cross-runtime byte identity: every runtime must produce the exact committed
 // golden frame for a fixed key set, not merely import and run.
 const golden = JSON.parse(
@@ -204,6 +221,11 @@ const rebuild = ({
       });
     case "minhash": {
       const sketch = new MinHash({ k, seed });
+      for (const key of keys) sketch.add(key);
+      return sketch;
+    }
+    case "theta": {
+      const sketch = new ThetaSketch({ k, seed });
       for (const key of keys) sketch.add(key);
       return sketch;
     }
@@ -389,5 +411,5 @@ if (walked.join() !== "1,5" || at !== stream.length) {
 }
 
 console.log(
-  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo + distillate/countmin + distillate/topk + distillate/ddsketch + distillate/ddsketch/protobuf + distillate/minhash + distillate/riblt work (filters, sketches, sizing helpers, frame walk, growth, delete, counting, heavy hitters, quantiles, similarity, reconciliation), toBytes byte-identical to golden`,
+  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo + distillate/countmin + distillate/topk + distillate/ddsketch + distillate/ddsketch/protobuf + distillate/minhash + distillate/riblt + distillate/theta work (filters, sketches, sizing helpers, frame walk, growth, delete, counting, heavy hitters, quantiles, similarity, reconciliation, set operations), toBytes byte-identical to golden`,
 );
