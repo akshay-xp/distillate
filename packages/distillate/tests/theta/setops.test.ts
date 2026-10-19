@@ -39,3 +39,22 @@ describe("union", () => {
     expect(union.count()).toBe(1001);
   });
 });
+
+describe("union order and grouping", () => {
+  // Mixed k, and a and c cut before b's larger sample joins: with the larger
+  // k kept, (a ∪ b) ∪ c and a ∪ (b ∪ c) would cut at different points.
+  test("give the same sketch, across k", () => {
+    const a = sketchOf(range(0, 50_000), 256);
+    const b = sketchOf(range(30_000, 80_000), 1024);
+    const c = sketchOf(range(60_000, 110_000), 256);
+    const left = a.union(b).union(c);
+    const right = a.union(b.union(c));
+    const rotated = c.union(a).union(b);
+    expect(left.equals(right)).toBe(true);
+    expect(left.equals(rotated)).toBe(true);
+    for (const union of [left, right, rotated]) {
+      expect(union.k).toBe(256);
+      expect(Math.abs(union.count() / 110_000 - 1)).toBeLessThan(3 / 16);
+    }
+  });
+});
