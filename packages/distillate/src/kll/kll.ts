@@ -210,6 +210,71 @@ export class KllSketch {
   }
 
   /**
+   * Merges two sketches into a new one that answers as a single sketch fed
+   * both streams would, within the rank error. Both are left untouched.
+   *
+   * The result keeps the smaller `k`, as HyperLogLog keeps the coarser
+   * precision, so a coarse sketch merged with a fine one has the coarse one's
+   * accuracy.
+   *
+   * @param other - The sketch to merge with.
+   * @returns A new sketch of both streams, which takes values and further
+   * unions.
+   */
+  union(other: KllSketch): KllSketch {
+    const result = new KllSketch({ k: Math.min(this.#k, other.#k) });
+    // A state of its own, so the result does not replay either input's coins.
+    if (this.#seeded && other.#seeded) {
+      result.#state = mix(this.#state ^ mix(other.#state));
+      result.#seeded = true;
+    }
+    result.#n = this.#n + other.#n;
+    // An empty side's min and max are NaN, which Math.min would carry.
+    if (this.#n === 0 || other.#n === 0) {
+      const full = this.#n === 0 ? other : this;
+      result.#min = full.#min;
+      result.#max = full.#max;
+    } else {
+      result.#min = Math.min(this.#min, other.#min);
+      result.#max = Math.max(this.#max, other.#max);
+    }
+
+    // Level by level: the two level 0s side by side, each higher level the
+    // two sorted runs merged. The result holds them at the back of a buffer
+    // of its full capacity, the free space in front, as add() keeps it.
+    const numLevels = Math.max(this.numLevels, other.numLevels);
+    const total = Math.max(
+      this.retained + other.retained,
+      totalCapacity(result.#k, numLevels),
+    );
+    const items = new Float64Array(total);
+    const levels = new Array<number>(numLevels + 1).fill(total);
+    let end = total;
+    for (let h = numLevels - 1; h >= 0; h--) {
+      const a = this.#level(h);
+      const b = other.#level(h);
+      const beg = end - a.length - b.length;
+      if (h === 0) {
+        items.set(a, beg);
+        items.set(b, beg + a.length);
+      } else {
+        mergeInto(items, beg, a, b);
+      }
+      levels[h] = beg;
+      end = beg;
+    }
+    result.#items = items;
+    result.#levels = levels;
+    return result;
+  }
+
+  // Level h's items, empty past the top.
+  #level(h: number): Float64Array {
+    if (h + 1 >= this.#levels.length) return new Float64Array(0);
+    return this.#items.subarray(this.#levels[h], this.#levels[h + 1]);
+  }
+
+  /**
    * Records a value.
    *
    * @param value - Any number but `NaN`; infinities and `-0` are ordered as
@@ -420,4 +485,22 @@ function swap(a: Float64Array, i: number, j: number): void {
   const t = a[i] ?? 0;
   a[i] = a[j] ?? 0;
   a[j] = t;
+}
+
+// Writes the merge of sorted runs a and b to out from index at.
+function mergeInto(
+  out: Float64Array,
+  at: number,
+  a: Float64Array,
+  b: Float64Array,
+): void {
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    if (j >= b.length || (i < a.length && (a[i] ?? 0) <= (b[j] ?? 0))) {
+      out[at++] = a[i++] ?? 0;
+    } else {
+      out[at++] = b[j++] ?? 0;
+    }
+  }
 }
