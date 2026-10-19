@@ -154,9 +154,29 @@ export class ThetaSketch {
     const theta = readU64(view, 8);
     const count = view.getUint32(16, true);
     assertBodyLength(body.length, PARAMS_SIZE + 8 * count, "theta");
+    if (theta < 1 || theta > HASH_RANGE) {
+      throw new SerializationError(
+        `theta: theta ${String(theta)} is outside [1, 2^53]`,
+      );
+    }
+    if (count > k) {
+      throw new SerializationError(
+        `theta: ${String(count)} hashes is more than k = ${String(k)} keeps`,
+      );
+    }
+    // Strictly ascending, from 1 up to theta: a canonical sample, so a
+    // decoded sketch answers as the one that wrote it.
     const hashes = new Float64Array(count);
+    let previous = 0;
     for (let i = 0; i < count; i++) {
-      hashes[i] = readU64(view, PARAMS_SIZE + 8 * i);
+      const hash = readU64(view, PARAMS_SIZE + 8 * i);
+      if (hash <= previous || hash >= theta) {
+        throw new SerializationError(
+          `theta: hash ${String(i)} is not strictly ascending in [1, theta)`,
+        );
+      }
+      hashes[i] = hash;
+      previous = hash;
     }
     try {
       return ThetaSketch.#sampled(k, seed, theta, hashes, count);
