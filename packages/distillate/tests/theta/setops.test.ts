@@ -82,3 +82,29 @@ describe("intersect", () => {
     );
   });
 });
+
+describe("difference", () => {
+  test("is the sketch of the keys only this side holds", () => {
+    const a = sketchOf(A);
+    const b = sketchOf(B);
+    const onlyA = a.difference(b);
+    expect(onlyA.equals(sketchOf(range(0, 400)))).toBe(true);
+    expect(onlyA.count()).toBe(400);
+    expect(b.difference(a).count()).toBe(400);
+  });
+
+  test("chains with the other operations, and the result takes more keys", () => {
+    const c = sketchOf(range(2000, 2100));
+    const d = sketchOf(range(450, 500));
+    const result = sketchOf(A).intersect(sketchOf(B)).union(c).difference(d);
+    expect(result.count()).toBe(250);
+    result.add("key:5000");
+    expect(result.count()).toBe(251);
+  });
+
+  test("refuses a sketch with a different seed", () => {
+    expect(() => sketchOf(A).difference(sketchOf(B, 1024, 1))).toThrow(
+      ParamError,
+    );
+  });
+});
