@@ -58,3 +58,27 @@ describe("union order and grouping", () => {
     }
   });
 });
+
+describe("intersect", () => {
+  test("is the sketch of the keys both sets hold", () => {
+    const both = sketchOf(A).intersect(sketchOf(B));
+    expect(both.equals(sketchOf(range(400, 600)))).toBe(true);
+    expect(both.count()).toBe(200);
+  });
+
+  test("of disjoint sets reads zero, with an upper bound above it", () => {
+    const a = sketchOf(range(0, 100_000), 256);
+    const b = sketchOf(range(100_000, 200_000), 256);
+    const both = a.intersect(b);
+    expect(both.count()).toBe(0);
+    expect(both.isEstimating).toBe(true);
+    expect(both.lowerBound(2)).toBe(0);
+    expect(both.upperBound(2)).toBeGreaterThan(0);
+  });
+
+  test("refuses a sketch with a different seed", () => {
+    expect(() => sketchOf(A).intersect(sketchOf(B, 1024, 1))).toThrow(
+      ParamError,
+    );
+  });
+});

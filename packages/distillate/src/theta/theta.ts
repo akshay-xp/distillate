@@ -201,11 +201,7 @@ export class ThetaSketch {
    * then hash differently on each side.
    */
   union(other: ThetaSketch): ThetaSketch {
-    if (other.#seed !== this.#seed) {
-      throw new ParamError(
-        `cannot merge sketches with different seeds, got ${String(this.#seed)} and ${String(other.#seed)}`,
-      );
-    }
+    this.#assertSameSeed(other, "merge");
     let theta = Math.min(this.#canonical(), other.#canonical());
     const k = Math.min(this.#k, other.#k);
     const a = this.#sorted;
@@ -233,6 +229,42 @@ export class ThetaSketch {
   }
 
   /**
+   * Intersects two sketches, giving a sketch of the keys both have seen. Both
+   * are left untouched. Two disjoint sets read `0`, with an upper bound above
+   * it: a sample cannot rule out a small overlap.
+   *
+   * @param other - The sketch to intersect with; must share this one's seed.
+   * @returns A new sketch of the intersection, at the smaller `k`.
+   * @throws {@link ParamError} if the seeds differ.
+   */
+  intersect(other: ThetaSketch): ThetaSketch {
+    this.#assertSameSeed(other, "intersect");
+    const theta = Math.min(this.#canonical(), other.#canonical());
+    const k = Math.min(this.#k, other.#k);
+    const a = this.#sorted;
+    const b = other.#sorted;
+    const aEnd = this.retained;
+    const bEnd = other.retained;
+    const out = new Float64Array(Math.min(aEnd, bEnd));
+    let i = 0;
+    let j = 0;
+    let count = 0;
+    while (i < aEnd && j < bEnd) {
+      const x = a[i] ?? 0;
+      const y = b[j] ?? 0;
+      if (x >= theta || y >= theta) break;
+      if (x < y) i++;
+      else if (y < x) j++;
+      else {
+        out[count++] = x;
+        i++;
+        j++;
+      }
+    }
+    return ThetaSketch.#sampled(k, this.#seed, theta, out, count);
+  }
+
+  /**
    * Whether two sketches hold the same canonical sample at the same `k` and
    * seed. The order keys arrived in does not enter into it.
    *
@@ -249,6 +281,14 @@ export class ThetaSketch {
       if (mine[i] !== theirs[i]) return false;
     }
     return true;
+  }
+
+  #assertSameSeed(other: ThetaSketch, verb: string): void {
+    if (other.#seed !== this.#seed) {
+      throw new ParamError(
+        `cannot ${verb} sketches with different seeds, got ${String(this.#seed)} and ${String(other.#seed)}`,
+      );
+    }
   }
 
   // Settles the canonical sample into the front of #sorted and returns its
