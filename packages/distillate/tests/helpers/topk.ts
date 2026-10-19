@@ -61,7 +61,8 @@ export function allocatedBy<T>(run: () => T): { value: T; bytes: number } {
 }
 
 /**
- * Bytes of `Int32Array` and `Uint32Array` constructed while `run` runs,
+ * Bytes of `Int32Array`, `Uint32Array` and `Float64Array` constructed while
+ * `run` runs,
  * whether or not they survive it. A buffer used and dropped inside a call can
  * be collected before the call returns, so {@link allocatedBy} misses it;
  * counting construction catches the peak instead.
@@ -71,7 +72,7 @@ export function typedArrayBytesDuring<T>(run: () => T): {
   bytes: number;
 } {
   const globals = globalThis as unknown as Record<string, unknown>;
-  const originals = { Int32Array, Uint32Array };
+  const originals = { Int32Array, Uint32Array, Float64Array };
   let bytes = 0;
   for (const [name, ctor] of Object.entries(originals)) {
     globals[name] = new Proxy(ctor, {
