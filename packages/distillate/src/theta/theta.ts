@@ -21,6 +21,17 @@ export interface ThetaParams {
  * A Theta sketch: counts distinct keys exactly up to `k`, and past that
  * estimates from the `k` smallest key hashes, within about `1 / sqrt(k)`.
  *
+ * Hashes live in a table of up to `2k` slots. Once it is full to 3/4, a
+ * quickselect keeps the `k` smallest and lowers theta to the next, so a key
+ * hashing above theta is rejected without touching the table (QuickSelect, as
+ * in Apache DataSketches).
+ *
+ * When those rebuilds run depends on the order keys arrive in, so the table
+ * itself does not. Every rebuild's theta is the (k+1)-th smallest hash seen so
+ * far, never below the true one, so the table always holds the true `k`
+ * smallest. Every read goes through that canonical sample: the `k` smallest
+ * hashes, theta the next. Equal key sets then answer alike whatever the order.
+ *
  * @example
  * ```ts
  * const sketch = ThetaSketch.create(0.02);
@@ -34,7 +45,12 @@ export class ThetaSketch {
   #table = new Float64Array(MIN_CAPACITY);
   #size = 0;
   // Hashes at or above theta are not sampled.
-  readonly #theta = HASH_RANGE;
+  #theta = HASH_RANGE;
+  // The live hashes, sorted: the canonical sample is the first min(size, k).
+  // Also the rebuild's quickselect space, which leaves it stale.
+  #sorted = new Float64Array(0);
+  #stale = true;
+  #canonTheta = HASH_RANGE;
   // Reused across add() so hashing a key allocates nothing per call.
   readonly #scratch: Hash128 = { w0: 0, w1: 0, w2: 0, w3: 0 };
 
@@ -96,12 +112,13 @@ export class ThetaSketch {
 
   /** Fraction of the hash range sampled, in (0, 1]; `1` while exact. */
   get theta(): number {
-    return this.#theta / HASH_RANGE;
+    this.#settle();
+    return this.#canonTheta / HASH_RANGE;
   }
 
-  /** Hashes the estimate is computed from. */
+  /** Hashes the estimate is computed from, at most `k`. */
   get retained(): number {
-    return this.#size;
+    return Math.min(this.#size, this.#k);
   }
 
   /** Whether no key has been added. */
@@ -111,7 +128,7 @@ export class ThetaSketch {
 
   /** Whether `count()` estimates rather than counts. */
   get isEstimating(): boolean {
-    return this.#theta < HASH_RANGE;
+    return this.#size > this.#k || this.#theta < HASH_RANGE;
   }
 
   /**
@@ -136,7 +153,13 @@ export class ThetaSketch {
       slot = (slot + 1) & mask;
     }
     table[slot] = hash;
-    if (++this.#size * 2 > table.length) this.#resize(table.length * 2);
+    this.#stale = true;
+    const size = ++this.#size;
+    if (table.length < 2 * this.#k) {
+      if (size * 2 > table.length) this.#resize(table.length * 2);
+    } else if (size * 4 > table.length * 3) {
+      this.#rebuild();
+    }
   }
 
   /**
@@ -145,7 +168,7 @@ export class ThetaSketch {
    * @returns The distinct count, or its estimate.
    */
   count(): number {
-    return this.#size / this.theta;
+    return this.retained / this.theta;
   }
 
   /**
@@ -153,7 +176,7 @@ export class ThetaSketch {
    * @returns A lower bound on the distinct count; `count()` while exact.
    */
   lowerBound(sd: number): number {
-    return thetaLowerBound(this.#size, this.theta, sd);
+    return thetaLowerBound(this.retained, this.theta, sd);
   }
 
   /**
@@ -161,20 +184,93 @@ export class ThetaSketch {
    * @returns An upper bound on the distinct count; `count()` while exact.
    */
   upperBound(sd: number): number {
-    return thetaUpperBound(this.#size, this.theta, sd);
+    return thetaUpperBound(this.retained, this.theta, sd);
+  }
+
+  // Copies the live hashes to the front of #sorted, unordered.
+  #gather(): Float64Array {
+    if (this.#sorted.length < this.#size) {
+      this.#sorted = new Float64Array(this.#size);
+    }
+    const sorted = this.#sorted;
+    const table = this.#table;
+    let at = 0;
+    // eslint-disable-next-line @typescript-eslint/prefer-for-of -- for...of is the allocation this avoids
+    for (let i = 0; i < table.length; i++) {
+      const hash = table[i] ?? 0;
+      if (hash !== 0) sorted[at++] = hash;
+    }
+    return sorted;
+  }
+
+  #settle(): void {
+    if (!this.#stale) return;
+    const size = this.#size;
+    const sorted = this.#gather();
+    sorted.subarray(0, size).sort();
+    this.#canonTheta =
+      size > this.#k ? (sorted[this.#k] ?? HASH_RANGE) : this.#theta;
+    this.#stale = false;
+  }
+
+  // Keeps the k smallest hashes and lowers theta to the (k+1)-th. The table
+  // is refilled from #sorted, which needs no second buffer: once select() has
+  // run, the k kept hashes sit at its front and nothing else is read from it.
+  #rebuild(): void {
+    const k = this.#k;
+    const sorted = this.#gather();
+    select(sorted, this.#size, k);
+    this.#theta = sorted[k] ?? HASH_RANGE;
+    const table = this.#table;
+    table.fill(0);
+    for (let i = 0; i < k; i++) place(table, sorted[i] ?? 0);
+    this.#size = k;
+    this.#stale = true;
   }
 
   #resize(capacity: number): void {
-    const old = this.#table;
     const table = new Float64Array(capacity);
-    const mask = capacity - 1;
-    for (const hash of old) {
-      if (hash === 0) continue;
-      // The low bits of a hash are its w0's, the slot add() would pick.
-      let slot = hash % capacity;
-      while (table[slot] !== 0) slot = (slot + 1) & mask;
-      table[slot] = hash;
-    }
+    const size = this.#size;
+    const sorted = this.#gather();
+    for (let i = 0; i < size; i++) place(table, sorted[i] ?? 0);
     this.#table = table;
+  }
+}
+
+// Files a hash at the slot add() would pick: the low bits of a hash are its
+// w0's, and the table's length is a power of two below 2^32.
+function place(table: Float64Array, hash: number): void {
+  const mask = table.length - 1;
+  let slot = hash % table.length;
+  while (table[slot] !== 0) slot = (slot + 1) & mask;
+  table[slot] = hash;
+}
+
+// Rearranges a[0..n) so that a[k] holds the value of rank k, with smaller
+// values before it and larger after: Wirth's selection, median-of-three pivot.
+function select(a: Float64Array, n: number, k: number): void {
+  let lo = 0;
+  let hi = n - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    const x = a[lo] ?? 0;
+    const y = a[mid] ?? 0;
+    const z = a[hi] ?? 0;
+    const pivot =
+      x < y ? (y < z ? y : x < z ? z : x) : x < z ? x : y < z ? z : y;
+    let i = lo;
+    let j = hi;
+    while (i <= j) {
+      while ((a[i] ?? 0) < pivot) i++;
+      while ((a[j] ?? 0) > pivot) j--;
+      if (i <= j) {
+        const t = a[i] ?? 0;
+        a[i++] = a[j] ?? 0;
+        a[j--] = t;
+      }
+    }
+    if (k <= j) hi = j;
+    else if (k >= i) lo = i;
+    else return;
   }
 }

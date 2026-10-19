@@ -51,3 +51,26 @@ describe("exact mode", () => {
     expect(sketch.upperBound(2)).toBe(1000);
   });
 });
+
+describe("past k", () => {
+  test("samples below theta and estimates within the error, bounds included", () => {
+    const sketch = new ThetaSketch({ k: 256 });
+    for (const key of keys("big", 100_000)) sketch.add(key);
+    expect(sketch.isEstimating).toBe(true);
+    expect(sketch.theta).toBeLessThan(1);
+    expect(sketch.retained).toBe(256);
+    expect(Math.abs(sketch.count() / 100_000 - 1)).toBeLessThan(3 / 16);
+    expect(sketch.lowerBound(3)).toBeLessThanOrEqual(100_000);
+    expect(sketch.upperBound(3)).toBeGreaterThanOrEqual(100_000);
+  });
+
+  test("is exact at k distinct keys and estimates at one more", () => {
+    const sketch = new ThetaSketch({ k: 256 });
+    for (const key of keys("edge", 256)) sketch.add(key);
+    expect(sketch.isEstimating).toBe(false);
+    expect(sketch.count()).toBe(256);
+    sketch.add("edge:256");
+    expect(sketch.isEstimating).toBe(true);
+    expect(sketch.retained).toBe(256);
+  });
+});
