@@ -1,5 +1,9 @@
 import { assertUint32, ParamError } from "../core/params.js";
+import { mix, nextState } from "./random.js";
 import { KLL_MAX_K, KLL_MIN_K, kllRankError, kllSizing } from "./sizing.js";
+
+// No level holds fewer than this many items, however deep below the top.
+const MIN_LEVEL_CAPACITY = 8;
 
 /** Construction parameters for a {@link KllSketch}. */
 export interface KllParams {
@@ -32,6 +36,10 @@ export class KllSketch {
   #n = 0;
   #min = Number.NaN;
   #max = Number.NaN;
+  // The coin-flip generator's state, drawn at the first compaction when no
+  // seed was given.
+  #state = 0;
+  #seeded: boolean;
 
   /**
    * Creates a sketch at an explicit `k`.
@@ -48,6 +56,8 @@ export class KllSketch {
     this.#k = k;
     this.#items = new Float64Array(k);
     this.#levels = [k, k];
+    this.#seeded = seed !== undefined;
+    this.#state = seed ?? 0;
   }
 
   /**
@@ -146,12 +156,20 @@ export class KllSketch {
     const items = this.#items;
     const levels = this.#levels;
     let atOrBelow = 0;
-    for (let h = 0; h + 1 < levels.length; h++) {
-      let below = 0;
-      for (let i = levels[h] ?? 0; i < (levels[h + 1] ?? 0); i++) {
-        if ((items[i] ?? 0) <= x) below++;
+    for (let i = levels[0] ?? 0; i < (levels[1] ?? 0); i++) {
+      if ((items[i] ?? 0) <= x) atOrBelow++;
+    }
+    // Levels above 0 are sorted: a binary search finds the first item past x.
+    for (let h = 1; h + 1 < levels.length; h++) {
+      const beg = levels[h] ?? 0;
+      let lo = beg;
+      let hi = levels[h + 1] ?? 0;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if ((items[mid] ?? 0) <= x) lo = mid + 1;
+        else hi = mid;
       }
-      atOrBelow += below * 2 ** h;
+      atOrBelow += (lo - beg) * 2 ** h;
     }
     return atOrBelow / this.#n;
   }
@@ -203,6 +221,7 @@ export class KllSketch {
   add(value: number, count = 1): void {
     if (Number.isNaN(value)) throw new ParamError("value must not be NaN");
     if (count === 1) {
+      if (this.#levels[0] === 0) this.#compact();
       const at = (this.#levels[0] ?? 0) - 1;
       this.#items[at] = value;
       this.#levels[0] = at;
@@ -230,8 +249,9 @@ export class KllSketch {
   // Places value in level h at its sorted position, adding levels up to h.
   // Everything in front of that position moves one slot into the free space.
   #insert(value: number, h: number): void {
+    while (this.numLevels <= h) this.#addTopLevel();
+    if (this.#levels[0] === 0) this.#compact();
     const levels = this.#levels;
-    while (levels.length - 1 <= h) levels.push(levels.at(-1) ?? 0);
     const items = this.#items;
     let at = levels[h] ?? 0;
     const end = levels[h + 1] ?? 0;
@@ -241,6 +261,83 @@ export class KllSketch {
     items.copyWithin(front - 1, front, at);
     items[at - 1] = value;
     for (let i = 0; i <= h; i++) levels[i] = (levels[i] ?? 0) - 1;
+  }
+
+  // Halves the lowest level at or over its capacity into the level above,
+  // freeing space at the front of #items. Called only when it is full.
+  #compact(): void {
+    const k = this.#k;
+    let h = 0;
+    for (; h + 1 < this.numLevels; h++) {
+      const size = (this.#levels[h + 1] ?? 0) - (this.#levels[h] ?? 0);
+      if (size >= levelCapacity(k, this.numLevels, h)) break;
+    }
+    if (h + 1 === this.numLevels) this.#addTopLevel();
+
+    const items = this.#items;
+    const levels = this.#levels;
+    const rawBeg = levels[h] ?? 0;
+    const rawEnd = levels[h + 1] ?? 0;
+    const popAbove = (levels[h + 2] ?? 0) - rawEnd;
+    const odd = (rawEnd - rawBeg) % 2;
+    // An odd item out stays behind at level h.
+    const adjBeg = rawBeg + odd;
+    const half = (rawEnd - adjBeg) / 2;
+    if (h === 0) items.subarray(adjBeg, rawEnd).sort();
+
+    // Keep every second item from a random offset, packed to the front of
+    // the range, then merge them with level h + 1. The merge writes from
+    // adjBeg + half, never past an item of either run it has yet to read.
+    const offset = this.#coin();
+    for (let i = 0; i < half; i++) {
+      items[adjBeg + i] = items[adjBeg + 2 * i + offset] ?? 0;
+    }
+    let a = adjBeg;
+    let b = rawEnd;
+    const aEnd = adjBeg + half;
+    const bEnd = rawEnd + popAbove;
+    for (let c = aEnd; c < bEnd; c++) {
+      if (b >= bEnd || (a < aEnd && (items[a] ?? 0) <= (items[b] ?? 0))) {
+        items[c] = items[a++] ?? 0;
+      } else {
+        items[c] = items[b++] ?? 0;
+      }
+    }
+
+    levels[h + 1] = aEnd;
+    if (odd === 1) items[aEnd - 1] = items[rawBeg] ?? 0;
+    levels[h] = aEnd - odd;
+    // The levels below h move up into the space the halving freed.
+    const front = levels[0] ?? 0;
+    if (h > 0) {
+      items.copyWithin(front + half, front, rawBeg);
+      for (let i = 0; i < h; i++) levels[i] = (levels[i] ?? 0) + half;
+    }
+  }
+
+  // Adds an empty level on top. Capacities shift down a level, so #items
+  // grows to the new total, with the free space at the front.
+  #addTopLevel(): void {
+    const levels = this.#levels;
+    levels.push(levels.at(-1) ?? 0);
+    const total = totalCapacity(this.#k, this.numLevels);
+    const grow = total - this.#items.length;
+    const items = new Float64Array(total);
+    items.set(this.#items, grow);
+    this.#items = items;
+    for (let i = 0; i < levels.length; i++) levels[i] = (levels[i] ?? 0) + grow;
+  }
+
+  // A fair 0 or 1 from the seeded generator.
+  #coin(): number {
+    if (!this.#seeded) {
+      // Drawn here rather than in the constructor: Cloudflare Workers refuse
+      // random values at module scope, where a sketch is commonly created.
+      this.#state = crypto.getRandomValues(new Uint32Array(1))[0] ?? 0;
+      this.#seeded = true;
+    }
+    this.#state = nextState(this.#state);
+    return mix(this.#state) >>> 31;
   }
 
   // Every item in ascending order, with the stream weight at or below it.
@@ -264,4 +361,17 @@ export class KllSketch {
     }
     return { items, cumulative };
   }
+}
+
+// Items level h of numLevels may hold: k at the top, shrinking by 2/3 per
+// level below it, never under MIN_LEVEL_CAPACITY.
+function levelCapacity(k: number, numLevels: number, h: number): number {
+  const depth = numLevels - h - 1;
+  return Math.max(MIN_LEVEL_CAPACITY, Math.ceil(k * (2 / 3) ** depth));
+}
+
+function totalCapacity(k: number, numLevels: number): number {
+  let total = 0;
+  for (let h = 0; h < numLevels; h++) total += levelCapacity(k, numLevels, h);
+  return total;
 }

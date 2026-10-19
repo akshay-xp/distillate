@@ -160,3 +160,82 @@ describe("weighted adds", () => {
     expect(sketch.isEmpty).toBe(true);
   });
 });
+
+// 0 to n - 1 in a fixed shuffled order, from a full-period LCG step.
+function shuffled(n: number): number[] {
+  const values = Array.from({ length: n }, (_, i) => i);
+  let state = 12345;
+  for (let i = n - 1; i > 0; i--) {
+    state = (Math.imul(state, 1_103_515_245) + 12_345) >>> 0;
+    const j = state % (i + 1);
+    [values[i], values[j]] = [values[j] ?? 0, values[i] ?? 0];
+  }
+  return values;
+}
+
+// The largest |rank(quantile(q)) - q| over q = 0.01 to 0.99, against the
+// exact rank of each answer in a stream whose sorted form is `sorted`.
+function worstRankError(sketch: KllSketch, sorted: readonly number[]): number {
+  let worst = 0;
+  for (let i = 1; i <= 99; i++) {
+    const q = i / 100;
+    const value = sketch.quantile(q);
+    let below = 0;
+    while (below < sorted.length && (sorted[below] ?? 0) <= value) below++;
+    worst = Math.max(worst, Math.abs(below / sorted.length - q));
+  }
+  return worst;
+}
+
+describe("past k", () => {
+  const n = 100_000;
+  const stream = shuffled(n);
+  const sorted = Array.from({ length: n }, (_, i) => i);
+
+  test("answers within the CDF bound, with count, min and max exact", () => {
+    for (let seed = 1; seed <= 5; seed++) {
+      const sketch = new KllSketch({ seed });
+      for (const v of stream) sketch.add(v);
+      expect(sketch.count).toBe(n);
+      expect(sketch.min).toBe(0);
+      expect(sketch.max).toBe(n - 1);
+      expect(
+        worstRankError(sketch, sorted),
+        `seed ${String(seed)}`,
+      ).toBeLessThanOrEqual(sketch.normalizedRankError(true));
+    }
+  });
+
+  test("holds at most 3k + 8 per level items, in about log2(n) levels", () => {
+    const sketch = new KllSketch({ seed: 1 });
+    let added = 0;
+    for (const target of [1e3, 1e4, 1e5, 1e6]) {
+      for (; added < target; added++) sketch.add((added * 7919) % 1_000_003);
+      expect(sketch.retained).toBeLessThanOrEqual(
+        3 * 200 + 8 * sketch.numLevels,
+      );
+      expect(sketch.numLevels).toBeLessThanOrEqual(
+        Math.ceil(Math.log2(target)) + 1,
+      );
+    }
+  });
+
+  test("weighted adds stay within the bound", () => {
+    const sketch = new KllSketch({ seed: 3 });
+    for (let i = 0; i < 10_000; i++) sketch.add(i % 100, 7);
+    expect(sketch.count).toBe(70_000);
+    const exact = Array.from({ length: 100 }, (_, v) => v).flatMap((v) =>
+      Array<number>(700).fill(v),
+    );
+    expect(worstRankError(sketch, exact)).toBeLessThanOrEqual(
+      sketch.normalizedRankError(true),
+    );
+  });
+
+  test("an unseeded sketch draws its own seed and compacts", () => {
+    const sketch = new KllSketch();
+    for (let i = 0; i < 10_000; i++) sketch.add(i);
+    expect(sketch.count).toBe(10_000);
+    expect(sketch.numLevels).toBeGreaterThan(1);
+  });
+});
