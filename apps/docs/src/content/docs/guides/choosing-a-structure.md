@@ -1,6 +1,6 @@
 ---
 title: Choosing a structure
-description: A decision matrix mapping each membership workload onto the filter that fits it, the sketches for counting, frequency, percentiles and similarity, and what is not shipped yet.
+description: A decision matrix mapping each membership workload onto the filter that fits it, the sketches for counting, set operations, frequency, percentiles and similarity, and what is not shipped yet.
 ---
 
 First, which question are you asking?
@@ -9,6 +9,9 @@ First, which question are you asking?
 - **"How many distinct keys have I seen?"** A cardinality sketch:
   [HyperLogLog](/guides/hll/). No filter can answer this, and no sketch can
   answer the first.
+- **"How many are in both, or in one but not the other?"** A set-operations
+  sketch: [Theta](/guides/theta/). It counts distinct keys like HyperLogLog,
+  and its sketches also intersect and subtract, which HyperLogLog's cannot.
 - **"How many times have I seen this key?"** A frequency sketch:
   [Count-Min](/guides/countmin/). It attributes a number to a key you name,
   which neither a filter nor HyperLogLog can do.
@@ -47,6 +50,7 @@ questions and the choice is usually forced:
 | Very low FPR (1e-4 or below)              | [Binary Fuse 16](/guides/fuse/)                                                 |
 | Migrating from `bloom-filters`            | [Classic Bloom](/guides/bloom/)                                                 |
 | Counting distinct keys, not membership    | [HyperLogLog](/guides/hll/)                                                     |
+| Distinct counts to intersect or subtract  | [Theta](/guides/theta/)                                                         |
 | Counting how often each key appears       | [Count-Min](/guides/countmin/)                                                  |
 | Finding the most frequent keys            | [Top-K](/guides/topk/)                                                          |
 | Latency or size percentiles               | [DDSketch](/guides/ddsketch/)                                                   |
@@ -58,7 +62,7 @@ information-theoretic floor of `log2(1/epsilon)` bits per key: 6.64 bits/key at
 a 1% FPR, 9.97 at 0.1%. A sketch has no per-key cost to state, its size being
 fixed before it sees a key: by precision for HyperLogLog, by the error bound
 for Count-Min and Top-K, by the accuracy and the range of values for DDSketch,
-by the slot count for MinHash.
+by the slot count for MinHash, by `k` for Theta.
 
 ## What ships today
 
@@ -72,6 +76,17 @@ per-shard rollups combine without double-counting the overlap.
 Reach for it for distinct users, distinct IPs, distinct cache keys, and any
 other "how many different" question. It cannot tell you whether it saw a
 particular key; nothing in a sketch records membership.
+
+### [Theta](/guides/theta/) (`distillate/theta`)
+
+Not a filter. Counts distinct keys, and its sketches combine by union,
+intersection and difference, so "users in both segments" or "in one but not
+the other" is answered from sketches stored apart. Exact up to `k` keys (4096
+by default), within about `1 / sqrt(k)` past that, with lower and upper bounds.
+
+Reach for it over HyperLogLog when counts will be intersected or subtracted
+later: HyperLogLog is smaller, but an overlap estimated from its unions drowns
+in their error when the overlap is small.
 
 ### [Top-K](/guides/topk/) (`distillate/topk`)
 

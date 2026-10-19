@@ -61,3 +61,14 @@ test("the sidebar links the Theta guide", () => {
     '{ label: "Theta", link: "/guides/theta/" }',
   );
 });
+
+test("the choosing guide routes the set-operations question to Theta", () => {
+  const page = read("../src/content/docs/guides/choosing-a-structure.md");
+  expect(section(page, "Decision matrix")).toContain("[Theta](/guides/theta/)");
+  expect(section(page, "What ships today")).toContain(
+    "### [Theta](/guides/theta/) (`distillate/theta`)",
+  );
+  // The question list at the top is where a reader is sent first.
+  expect(page.slice(0, page.indexOf("## "))).toContain("/guides/theta/");
+  expect(section(page, "What is not shipped yet")).not.toContain("Theta");
+});
