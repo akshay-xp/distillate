@@ -8,7 +8,7 @@ Static and mutable filters have honestly different lifecycles, and sketches answ
 
 - Mutable: `add` (and sometimes `delete`) after construction. Bloom, Blocked Bloom, Counting Bloom, Scalable Bloom, Cuckoo.
 - Static: `build(keys)` once, then immutable and queried. Binary Fuse, XOR. Smaller and faster; can fail-and-retry on build.
-- Sketches: `add` then ask an aggregate question rather than a membership one. HyperLogLog (cardinality), Count-Min (frequency of a named key), Top-K (heavy hitters), DDSketch (quantiles of numbers, not keys) and MinHash (similarity of two sets).
+- Sketches: `add` then ask an aggregate question rather than a membership one. HyperLogLog (cardinality), Count-Min (frequency of a named key), Top-K (heavy hitters), DDSketch (quantiles of numbers, not keys), MinHash (similarity of two sets) and Theta (cardinality that also intersects and subtracts).
 - Reconciliation: two parties, one set each, and the exact keys that differ. RIBLT.
 
 ### Why a sketch is not a `Filter`
@@ -71,7 +71,39 @@ interface SimilaritySketch extends Sketch<SimilaritySketch> {
   jaccard(other: SimilaritySketch): number; // within standardError of the truth
   readonly standardError: number; // 0.5 / sqrt(k), the worst case at J = 0.5
 }
+
+// Cardinality that combines both ways; an estimate comes with its bounds
+interface SetSketch extends Sketch<SetSketch> {
+  count(): number; // exact up to k keys, within about 1 / sqrt(k) past it
+  intersect(other: SetSketch): SetSketch;
+  difference(other: SetSketch): SetSketch;
+  lowerBound(sd: 1 | 2 | 3): number;
+  upperBound(sd: 1 | 2 | 3): number;
+}
 ```
+
+Theta is a QuickSelect sketch, as in Apache DataSketches: a linear-probing
+`Float64Array` table of up to `2k` hashes, rebuilt at 3/4 load by a quickselect
+that keeps the `k` smallest and lowers `theta` to the next. Every read goes
+through a canonical sample instead, the `k` smallest hashes with `theta` the
+next: when rebuilds run depends on arrival order, but each rebuild's `theta` is
+at least the true (k+1)-th smallest, so the table always holds the true `k`
+smallest and the canonical sample is order-free. `equals`, `count`, the bounds,
+the set operations and frame type 13 all read it, cached until the next `add`.
+
+- Hashes are 53 bits, `(w1 >>> 11) * 2^32 + w0`, so they and `theta` compare
+  as doubles: no BigInt, no lane pairs.
+- A set operation keeps the smaller `k`. With the larger, unions grouped
+  differently cut their samples at different points and disagree; with the
+  smaller every grouping gives the same sketch. HLL's union keeps the coarser
+  precision for the same reason.
+- Bounds are Poisson (Garwood, by Wilson-Hilferty chi-square quantiles), pulled
+  toward the estimate by `sqrt(1 - p)` to correct to binomial, never below the
+  retained count. Measured coverage is about 70%, 95.7% and 99.8% at 1, 2, 3 sd.
+- Memory while updating is 28 B per `k` (112 KiB at 4096): the table, plus the
+  sorted canonical buffer the rebuild reuses as its quickselect space.
+- Rebuilds are logarithmic in stream length, so the allocation probe guards
+  the per-key path rather than the rebuild.
 
 MinHash's index, `MinHashLSH`, is not a sketch: it holds keys under band hashes of
 sketches and answers `query(sketch)` with candidate keys. It lives on the sketch's
@@ -141,6 +173,8 @@ src/
                     # (a bucket per next index, far symbols refiled as the buckets
                     # double), mapping.ts (checksum, xoroshiro64** index sequence),
                     # frame.ts (frame type 12, columns)
+  theta/            # Theta: theta.ts (frame type 13, QuickSelect table, canonical
+                    # sample, set operations), bounds.ts, sizing.ts for thetaSizing
   frame/            # distillate/frame: readFrameAt for walking a stream of frames
   index.ts          # root barrel (VERSION only)
 ```
