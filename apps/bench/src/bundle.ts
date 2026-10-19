@@ -122,3 +122,26 @@ export async function ribltBundles(): Promise<ReconcileBundleRow[]> {
     },
   ];
 }
+
+export interface SetCountBundleRow {
+  name: string;
+  bytes: number;
+}
+
+/** The sketch each library counts and combines with. */
+export async function thetaBundles(): Promise<SetCountBundleRow[]> {
+  return [
+    {
+      name: "distillate/theta",
+      bytes: await bundleSize(
+        'import { ThetaSketch } from "distillate/theta"; globalThis.x = ThetaSketch;',
+      ),
+    },
+    {
+      name: "distillate/hll",
+      bytes: await bundleSize(
+        'import { HyperLogLog } from "distillate/hll"; globalThis.x = HyperLogLog;',
+      ),
+    },
+  ];
+}

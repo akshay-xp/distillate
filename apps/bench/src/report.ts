@@ -21,8 +21,18 @@ import { COUNTMIN_KEY_COUNTS, countMinAdapters } from "./countmin.js";
 import type { CountMinRow } from "./countmin.js";
 import { TOPK_EVENT_COUNTS, topKAdapters } from "./topk.js";
 import type { TopKRow } from "./topk.js";
-import { ddSketchBundles, minHashBundles, ribltBundles } from "./bundle.js";
-import type { BundleRow, LshBundleRow, ReconcileBundleRow } from "./bundle.js";
+import {
+  ddSketchBundles,
+  minHashBundles,
+  ribltBundles,
+  thetaBundles,
+} from "./bundle.js";
+import type {
+  BundleRow,
+  LshBundleRow,
+  ReconcileBundleRow,
+  SetCountBundleRow,
+} from "./bundle.js";
 import {
   RIBLT_CASES,
   RIBLT_TIMED_PASSES,
@@ -30,6 +40,15 @@ import {
   reconcileAdapters,
 } from "./riblt.js";
 import type { RibltRow } from "./riblt.js";
+import {
+  setCountAdapters,
+  THETA_HLL_P,
+  THETA_K,
+  THETA_OVERLAPS,
+  THETA_SEEDS,
+  THETA_SET_SIZE,
+} from "./theta.js";
+import type { ThetaRow } from "./theta.js";
 import {
   lshAdapters,
   MINHASH_K,
@@ -219,6 +238,33 @@ export function ribltBundleTable(rows: ReconcileBundleRow[]): string {
   return [header, ...body].join("\n");
 }
 
+// Set operations on a sketch run well under a millisecond, where `duration`'s
+// whole milliseconds would read 0.
+function fineDuration(ms: number): string {
+  return ms < 10 ? `${ms.toFixed(2)} ms` : duration(ms);
+}
+
+const percent = (v: number): string => `${(v * 100).toFixed(2)}%`;
+
+export function thetaTable(rows: ThetaRow[]): string {
+  const header =
+    "| Library | overlap | add | set operations | intersection error | difference error | size |\n" +
+    "| --- | --- | --- | --- | --- | --- | --- |";
+  const body = rows.map((r) => {
+    const size = r.bytes === null ? "n/a" : `${(r.bytes / 1024).toFixed(1)} KB`;
+    return `| ${r.name} | ${String(Math.round(r.overlap * 100))}% | ${ops(r.addOpsPerSec)} | ${fineDuration(r.setOpsMs)} | ${percent(r.intersectionError)} | ${percent(r.differenceError)} | ${size} |`;
+  });
+  return [header, ...body].join("\n");
+}
+
+export function thetaBundleTable(rows: SetCountBundleRow[]): string {
+  const header = "| Library | sketch |\n| --- | --- |";
+  const body = rows.map(
+    (r) => `| ${r.name} | ${(r.bytes / 1024).toFixed(1)} KB |`,
+  );
+  return [header, ...body].join("\n");
+}
+
 export interface ResultsOptions {
   banner: string;
   version: string;
@@ -238,6 +284,8 @@ export interface ResultsOptions {
   minHashLshTable?: string;
   minHashBundleTable?: string;
   ribltTable?: string;
+  thetaTable?: string;
+  thetaBundleTable?: string;
   ribltBundleTable?: string;
   keyLengthTable?: string;
 }
@@ -397,6 +445,23 @@ export function minHashSection(
   ];
 }
 
+export function thetaSection(table: string, bundles: string): string[] {
+  return [
+    "## Theta",
+    "",
+    `Two sets of ${capacityLabel(THETA_SET_SIZE)} keys each, sharing a fraction of them (\`overlap\`). distillate's Theta sketch at k = ${String(THETA_K)} answers the intersection and the difference (keys in the first set, not the second) directly. HyperLogLog can only union, so distillate's at p = ${String(THETA_HLL_P)} estimates them by inclusion-exclusion: \`|A| + |B| - |A ∪ B|\`, and \`|A ∪ B| - |B|\`. Its frame is the larger of the two, so the comparison never leans on Theta holding more. An exact \`Set\` gives the truth and its own cost. No other JS library ships a Theta sketch.`,
+    "",
+    `Each error is the mean absolute relative error over ${String(THETA_SEEDS)} seeds, since one run of a sampled estimate says little. \`add\` is every key added over the time spent building both sets, across every seed. \`set operations\` is the median time of one union, one intersection and one difference, each counted. \`size\` is one sketch's DSTL frame. Each library runs in its own process.`,
+    "",
+    table,
+    "",
+    "Bundle sizes are measured, not quoted: each import bundled by esbuild for the browser, minified and gzipped.",
+    "",
+    bundles,
+    "",
+  ];
+}
+
 export function ribltSection(table: string, bundles: string): string[] {
   return [
     "## RIBLT",
@@ -475,6 +540,9 @@ export function renderResults(opts: ResultsOptions): string {
       : []),
     ...(opts.ribltTable
       ? ribltSection(opts.ribltTable, opts.ribltBundleTable ?? "")
+      : []),
+    ...(opts.thetaTable
+      ? thetaSection(opts.thetaTable, opts.thetaBundleTable ?? "")
       : []),
     `## Throughput (n = ${capacityLabel(opts.throughputCapacity)})`,
     "",
@@ -566,6 +634,15 @@ async function main(): Promise<void> {
   );
   const rbBundles = ribltBundleTable(await ribltBundles());
 
+  const thTable = thetaTable(
+    isolatedRows<ThetaRow>("theta", names(setCountAdapters), [
+      THETA_SET_SIZE,
+      THETA_OVERLAPS,
+      THETA_SEEDS,
+    ]),
+  );
+  const thBundles = thetaBundleTable(await thetaBundles());
+
   console.log(banner);
   console.log("\n" + spaceTable);
   console.log("\n" + cardTable);
@@ -580,6 +657,8 @@ async function main(): Promise<void> {
   console.log("\n" + mhBundles);
   console.log("\n" + rbTable);
   console.log("\n" + rbBundles);
+  console.log("\n" + thTable);
+  console.log("\n" + thBundles);
   console.log("\n" + tput);
   console.log("\n" + klTable);
 
@@ -602,6 +681,8 @@ async function main(): Promise<void> {
     minHashBundleTable: mhBundles,
     ribltTable: rbTable,
     ribltBundleTable: rbBundles,
+    thetaTable: thTable,
+    thetaBundleTable: thBundles,
     throughputTable: tput,
     keyLengthTable: klTable,
   });

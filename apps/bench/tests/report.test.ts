@@ -15,6 +15,7 @@ import type { BundleRow, LshBundleRow } from "../src/bundle.js";
 import type { DDSketchRow } from "../src/ddsketch.js";
 import type { LshRow, MinHashRow } from "../src/minhash.js";
 import type { RibltRow } from "../src/riblt.js";
+import type { ThetaRow } from "../src/theta.js";
 import {
   cardinalityTable,
   countMinTable,
@@ -32,6 +33,9 @@ import {
   ddSketchBundleTable,
   scalableTable,
   spaceAccuracyTable,
+  thetaBundleTable,
+  thetaSection,
+  thetaTable,
   throughputTable,
 } from "../src/report.js";
 
@@ -1067,5 +1071,76 @@ test("the riblt section states its method and carries both tables", () => {
   });
   const at = md.indexOf("## RIBLT");
   expect(at).toBeGreaterThan(md.indexOf("## MinHash"));
+  expect(at).toBeLessThan(md.indexOf("## Throughput"));
+});
+
+test("the theta table renders each library's cost and its error against the truth", () => {
+  const rows: ThetaRow[] = [
+    {
+      name: "distillate/theta",
+      overlap: 0.01,
+      addOpsPerSec: 55_100_000,
+      setOpsMs: 1.2,
+      intersectionError: 0.034,
+      differenceError: 0.009,
+      bytes: 32_812,
+    },
+    {
+      name: "Set",
+      overlap: 0.5,
+      addOpsPerSec: 9_000_000,
+      setOpsMs: 210,
+      intersectionError: 0,
+      differenceError: 0,
+      bytes: null,
+    },
+  ];
+  const table = thetaTable(rows);
+
+  expect(table.split("\n")[0]).toBe(
+    "| Library | overlap | add | set operations | intersection error | difference error | size |",
+  );
+  expect(table).toContain(
+    "| distillate/theta | 1% | 55.10 M ops/s | 1.20 ms | 3.40% | 0.90% | 32.0 KB |",
+  );
+  expect(table).toContain(
+    "| Set | 50% | 9.00 M ops/s | 210 ms | 0.00% | 0.00% | n/a |",
+  );
+});
+
+test("the theta section states its method and carries both tables", () => {
+  const bundles = thetaBundleTable([
+    { name: "distillate/theta", bytes: 7936 },
+    { name: "distillate/hll", bytes: 6000 },
+  ]);
+  expect(bundles).toContain("| distillate/theta | 7.8 KB |");
+
+  const section = thetaSection("THETA_TBL", bundles).join("\n");
+  expect(section.startsWith("## Theta")).toBe(true);
+  for (const phrase of [
+    "inclusion-exclusion",
+    "p = 16",
+    "k = 4096",
+    "10 seeds",
+    "THETA_TBL",
+    bundles,
+  ]) {
+    expect(section, phrase).toContain(phrase);
+  }
+
+  const md = renderResults({
+    banner: "distillate-bench | node v24 | arm64 | Apple M1 | 8 cores",
+    version: "0.17.0",
+    date: "2026-10-19",
+    targetFpr: 0.01,
+    throughputCapacity: 100_000,
+    spaceTable: "SPACE_TBL",
+    throughputTable: "TPUT_TBL",
+    ribltTable: "RIBLT_TBL",
+    thetaTable: "THETA_TBL",
+    thetaBundleTable: bundles,
+  });
+  const at = md.indexOf("## Theta");
+  expect(at).toBeGreaterThan(md.indexOf("## RIBLT"));
   expect(at).toBeLessThan(md.indexOf("## Throughput"));
 });
