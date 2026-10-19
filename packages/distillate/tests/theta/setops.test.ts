@@ -133,4 +133,29 @@ describe("memory", () => {
     // A 32-slot table (256 B) and 16 hashes (128 B).
     expect(bytes).toBeLessThan(1024);
   });
+
+  test.each<[string, (x: ThetaSketch, y: ThetaSketch) => ThetaSketch]>([
+    ["union", (x, y) => x.union(y)],
+    ["intersect", (x, y) => x.intersect(y)],
+    ["difference", (x, y) => x.difference(y)],
+  ])("%s gives a result read without allocating", (_, operate) => {
+    const x = sketchOf(range(0, 100_000), 4096);
+    const y = sketchOf(range(50_000, 150_000), 4096);
+    x.count();
+    y.count();
+    const result = operate(x, y);
+    expect(allocatedBy(() => result.count()).bytes).toBe(0);
+  });
+
+  // The result keeps its merge output as its sample, which later adds and
+  // rebuilds must be able to outgrow.
+  test("a result that is read, takes keys and joins another union matches the streamed sketch", () => {
+    const u = sketchOf(range(0, 30_000), 256).union(
+      sketchOf(range(20_000, 50_000), 256),
+    );
+    u.count();
+    for (const key of range(50_000, 60_000)) u.add(key);
+    const joined = u.union(sketchOf(range(55_000, 70_000), 256));
+    expect(joined.equals(sketchOf(range(0, 70_000), 256))).toBe(true);
+  });
 });
