@@ -354,7 +354,7 @@ export class ThetaSketch {
     const b = other.#sorted;
     const aEnd = this.retained;
     const bEnd = other.retained;
-    const out = new Float64Array(k);
+    const out = new Float64Array(Math.min(k, aEnd + bEnd));
     let i = 0;
     let j = 0;
     let count = 0;
