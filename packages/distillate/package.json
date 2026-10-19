@@ -135,6 +135,14 @@
       "import": "./dist/riblt/index.js",
       "require": "./dist/riblt/index.cjs"
     },
+    "./theta": {
+      "types": {
+        "import": "./dist/theta/index.d.ts",
+        "require": "./dist/theta/index.d.cts"
+      },
+      "import": "./dist/theta/index.js",
+      "require": "./dist/theta/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",

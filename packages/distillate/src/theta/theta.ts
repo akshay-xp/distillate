@@ -308,16 +308,26 @@ export class ThetaSketch {
   }
 
   /**
+   * A lower bound on the distinct count, at `sd` standard deviations. Over
+   * many sketches the two bounds together hold about as often as a normal
+   * interval of that width: 68%, 95% and 99.7%.
+   *
    * @param sd - Standard deviations: `1`, `2` or `3`.
-   * @returns A lower bound on the distinct count; `count()` while exact.
+   * @returns The bound; `count()` while exact.
+   * @throws {@link ParamError} for any other `sd`.
    */
   lowerBound(sd: number): number {
     return thetaLowerBound(this.retained, this.theta, sd);
   }
 
   /**
+   * An upper bound on the distinct count, at `sd` standard deviations. Over
+   * many sketches the two bounds together hold about as often as a normal
+   * interval of that width: 68%, 95% and 99.7%.
+   *
    * @param sd - Standard deviations: `1`, `2` or `3`.
-   * @returns An upper bound on the distinct count; `count()` while exact.
+   * @returns The bound; `count()` while exact.
+   * @throws {@link ParamError} for any other `sd`.
    */
   upperBound(sd: number): number {
     return thetaUpperBound(this.retained, this.theta, sd);
