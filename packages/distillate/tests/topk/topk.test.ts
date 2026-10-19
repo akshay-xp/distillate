@@ -6,7 +6,8 @@ import { ParamError } from "../../src/core/params.js";
 import { topKPurgeWidth, topKSizing } from "../../src/topk/sizing.js";
 import { TopK, TopKOverflowError } from "../../src/topk/topk.js";
 import { zipfStream } from "../helpers/frequency.js";
-import { allocatedBy, HUGE, SMALL } from "../helpers/topk.js";
+import { allocatedBy, SMALL } from "../helpers/memory.js";
+import { HUGE } from "../helpers/topk.js";
 
 test("create builds a sketch with the capacity the sizing solved for", () => {
   const sketch = TopK.create(0.01);

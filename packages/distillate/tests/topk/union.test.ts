@@ -7,12 +7,8 @@ import {
   TopKParamMismatchError,
 } from "../../src/topk/topk.js";
 import { truthOf, zipfStream } from "../helpers/frequency.js";
-import {
-  expectOneSided,
-  HUGE,
-  SMALL,
-  typedArrayBytesDuring,
-} from "../helpers/topk.js";
+import { SMALL, typedArrayBytesDuring } from "../helpers/memory.js";
+import { expectOneSided, HUGE } from "../helpers/topk.js";
 
 // The error names both capacities, which says which side to rebuild.
 test("a union across a differing capacity is refused", () => {

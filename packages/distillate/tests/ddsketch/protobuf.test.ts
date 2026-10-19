@@ -32,7 +32,7 @@ import { rng } from "../helpers/frequency.js";
 import { readFrameBins } from "../helpers/ddsketch-frame.js";
 import { expectWithin } from "../helpers/quantile.js";
 import fixture from "../fixtures/ddsketch/protobuf.go.json" with { type: "json" };
-import { allocatedBy } from "../helpers/topk.js";
+import { allocatedBy } from "../helpers/memory.js";
 
 interface ProtoCase {
   name: string;

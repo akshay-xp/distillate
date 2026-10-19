@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
 import { ThetaSketch } from "../../src/theta/theta.js";
-import { SMALL, typedArrayBytesDuring } from "../helpers/topk.js";
+import { SMALL, typedArrayBytesDuring } from "../helpers/memory.js";
 
 // Keys `from` to `to - 1`.
 const range = (from: number, to: number): string[] =>

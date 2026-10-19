@@ -10,7 +10,7 @@ import {
   writeHeader,
 } from "../../src/core/serialize.js";
 import { ThetaSketch } from "../../src/theta/theta.js";
-import { typedArrayBytesDuring } from "../helpers/topk.js";
+import { typedArrayBytesDuring } from "../helpers/memory.js";
 
 const BODY = 16;
 const HASHES = BODY + 24;
