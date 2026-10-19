@@ -74,3 +74,46 @@ describe("past k", () => {
     expect(sketch.retained).toBe(256);
   });
 });
+
+describe("equals", () => {
+  // Seeded Fisher-Yates, so the shuffle is the same every run.
+  function shuffled(items: string[], seed: number): string[] {
+    const out = items.slice();
+    let state = seed;
+    for (let i = out.length - 1; i > 0; i--) {
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+      const j = state % (i + 1);
+      const t = out[i] ?? "";
+      out[i] = out[j] ?? "";
+      out[j] = t;
+    }
+    return out;
+  }
+
+  function sketchOf(items: readonly string[], k = 256, seed = 0): ThetaSketch {
+    const sketch = new ThetaSketch({ k, seed });
+    for (const item of items) sketch.add(item);
+    return sketch;
+  }
+
+  test("insertion order never changes the sketch, estimating or exact", () => {
+    for (const n of [20_000, 200]) {
+      const items = keys("order", n);
+      const forward = sketchOf(items);
+      const backward = sketchOf(items.slice().reverse());
+      const mixed = sketchOf(shuffled(items, 7));
+      expect(forward.equals(backward)).toBe(true);
+      expect(forward.equals(mixed)).toBe(true);
+      expect(backward.count()).toBe(forward.count());
+      expect(mixed.count()).toBe(forward.count());
+    }
+  });
+
+  test("a different key set, seed or k is unequal", () => {
+    const items = keys("diff", 200);
+    const base = sketchOf(items);
+    expect(base.equals(sketchOf([...items, "extra"]))).toBe(false);
+    expect(base.equals(sketchOf(items, 256, 1))).toBe(false);
+    expect(base.equals(sketchOf(items, 512))).toBe(false);
+  });
+});

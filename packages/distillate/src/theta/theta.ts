@@ -187,6 +187,25 @@ export class ThetaSketch {
     return thetaUpperBound(this.retained, this.theta, sd);
   }
 
+  /**
+   * Whether two sketches hold the same canonical sample at the same `k` and
+   * seed. The order keys arrived in does not enter into it.
+   *
+   * @param other - The sketch to compare against.
+   * @returns `true` if the two would answer every query identically.
+   */
+  equals(other: ThetaSketch): boolean {
+    if (other.#k !== this.#k || other.#seed !== this.#seed) return false;
+    const retained = this.retained;
+    if (other.retained !== retained || other.theta !== this.theta) return false;
+    const mine = this.#sorted;
+    const theirs = other.#sorted;
+    for (let i = 0; i < retained; i++) {
+      if (mine[i] !== theirs[i]) return false;
+    }
+    return true;
+  }
+
   // Copies the live hashes to the front of #sorted, unordered.
   #gather(): Float64Array {
     if (this.#sorted.length < this.#size) {
