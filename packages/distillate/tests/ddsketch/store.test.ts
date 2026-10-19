@@ -10,7 +10,7 @@ import {
   type Store,
 } from "../../src/ddsketch/store.js";
 import { lognormalValues } from "../helpers/quantile.js";
-import { allocatedBy } from "../helpers/topk.js";
+import { allocatedBy } from "../helpers/memory.js";
 
 function binsOf(store: Store): [number, number][] {
   const out: [number, number][] = [];

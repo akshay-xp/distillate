@@ -1,0 +1,50 @@
+import { setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
+
+/** The most a sketch holding a handful of keys may allocate, whatever its capacity. */
+export const SMALL = 1024 * 1024;
+
+setFlagsFromString("--expose-gc");
+const gc = runInNewContext("gc") as () => void;
+
+/**
+ * Bytes of `ArrayBuffer` memory `run` leaves allocated. Each test file runs in
+ * its own process, so nothing outside the file moves this figure; collecting
+ * first keeps an earlier test's garbage from being freed mid-measure and
+ * cancelling out what `run` allocates.
+ */
+export function allocatedBy<T>(run: () => T): { value: T; bytes: number } {
+  gc();
+  const before = process.memoryUsage().arrayBuffers;
+  const value = run();
+  return { value, bytes: process.memoryUsage().arrayBuffers - before };
+}
+
+/**
+ * Bytes of `Int32Array`, `Uint32Array` and `Float64Array` constructed while
+ * `run` runs, whether or not they survive it. A buffer used and dropped inside
+ * a call can be collected before the call returns, so {@link allocatedBy}
+ * misses it; counting construction catches the peak instead.
+ */
+export function typedArrayBytesDuring<T>(run: () => T): {
+  value: T;
+  bytes: number;
+} {
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const originals = { Int32Array, Uint32Array, Float64Array };
+  let bytes = 0;
+  for (const [name, ctor] of Object.entries(originals)) {
+    globals[name] = new Proxy(ctor, {
+      construct(target, args: unknown[]) {
+        const made = Reflect.construct(target, args) as Int32Array;
+        bytes += made.byteLength;
+        return made;
+      },
+    });
+  }
+  try {
+    return { value: run(), bytes };
+  } finally {
+    Object.assign(globals, originals);
+  }
+}

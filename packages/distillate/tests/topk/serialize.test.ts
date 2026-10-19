@@ -12,7 +12,8 @@ import {
 } from "../../src/core/serialize.js";
 import { TopK, TopKOverflowError } from "../../src/topk/topk.js";
 import { zipfStream } from "../helpers/frequency.js";
-import { allocatedBy, HUGE, SMALL } from "../helpers/topk.js";
+import { allocatedBy, SMALL } from "../helpers/memory.js";
+import { HUGE } from "../helpers/topk.js";
 
 const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 
