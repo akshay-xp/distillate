@@ -149,6 +149,7 @@ const NUMERALS = [
   "nine",
   "ten",
   "eleven",
+  "twelve",
 ];
 
 /** The structures the hash-variant section lists, and the count it claims. */
@@ -541,7 +542,7 @@ test("the layout table names type 11 as MinHash", () => {
   expect(reserved).not.toContain("MinHash");
 });
 
-test("the layout table names type 12 as RIBLT and reserves from 13", () => {
+test("the layout table names type 12 as RIBLT", () => {
   const { types, reserved } = typeRows();
   const named = new Map(
     [...types.matchAll(/(\d+)=([A-Za-z0-9]+)/g)].map(([, n, name]) => [
@@ -551,7 +552,6 @@ test("the layout table names type 12 as RIBLT and reserves from 13", () => {
   );
 
   expect(named.get(12)).toBe("RIBLT");
-  expect(reserved).toContain("13+");
   expect(reserved).not.toContain("RIBLT");
 });
 
@@ -732,6 +732,77 @@ describe.each(["ddsketch", "ddsketch-collapsed"])(
       expect(total).toBe(values.length);
       // The two fixtures cover both forms between them.
       expect(forms[0]).toBe(name === "ddsketch-collapsed");
+    });
+  },
+);
+
+test("the layout table names type 13 as Theta and reserves from 14", () => {
+  const { types, reserved } = typeRows();
+  const named = new Map(
+    [...types.matchAll(/(\d+)=([A-Za-z0-9]+)/g)].map(([, n, name]) => [
+      Number(n),
+      name,
+    ]),
+  );
+
+  expect(named.get(13)).toBe("Theta");
+  expect(reserved).toContain("14+");
+  expect(reserved).not.toContain("Theta");
+});
+
+test("the hash variant section lists Theta among the variant 0 writers", () => {
+  expect(hashVariant().families).toContain("Theta");
+});
+
+const thetaSection = (): string =>
+  sectionFrom(
+    "Theta (type 13), little-endian",
+    "\n### ",
+    "serialization.md has no Theta section",
+  );
+
+test("the Theta section states the hash rule, the canonical sample and what a reader rejects", () => {
+  const section = thetaSection();
+  for (const phrase of [
+    "(w1 >>> 11) * 2^32 + w0",
+    "strictly ascending",
+    "canonical",
+    "A reader rejects",
+  ]) {
+    expect(section, phrase).toContain(phrase);
+  }
+});
+
+// Decoded from the page's offsets alone, so a wrong row fails here rather
+// than in the Go reader.
+describe.each<[string, number, number, boolean]>([
+  ["theta", 7, 16, true],
+  ["theta-small", 0, 5, false],
+])(
+  "the documented Theta layout decodes the golden %s frame",
+  (name, seed, count, estimating) => {
+    test("seed, k, theta, count, padding and every hash", () => {
+      const rows = paramsTable("Theta (type 13), little-endian");
+      const body = frameBody(golden(name).frame);
+      const at = (field: string): number => rows.get(field)?.offset ?? NaN;
+      const u64 = (offset: number): number =>
+        body.getUint32(offset + 4, true) * 2 ** 32 +
+        body.getUint32(offset, true);
+
+      expect(body.getUint32(at("seed"), true)).toBe(seed);
+      expect(body.getUint32(at("k"), true)).toBe(16);
+      const theta = u64(at("theta"));
+      expect(theta < 2 ** 53).toBe(estimating);
+      expect(body.getUint32(at("count"), true)).toBe(count);
+      expect(body.getUint32(at("reserved"), true)).toBe(0);
+      expect(body.byteLength).toBe(at("hashes") + 8 * count);
+      let previous = 0;
+      for (let i = 0; i < count; i++) {
+        const hash = u64(at("hashes") + 8 * i);
+        expect(hash).toBeGreaterThan(previous);
+        expect(hash).toBeLessThan(theta);
+        previous = hash;
+      }
     });
   },
 );

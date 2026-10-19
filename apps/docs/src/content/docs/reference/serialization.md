@@ -11,8 +11,8 @@ Versioned, self-describing, little-endian binary format. Spec'd here so Rust/Go 
 Offset  Size  Field
 0       4     Magic "DSTL" (0x44 53 54 4C)
 4       1     Format version (u8)         # bump on incompatible layout change
-5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog 6=ScalableBloom 7=Cuckoo 8=CountMin 9=TopK 10=DDSketch 11=MinHash 12=RIBLT
-                                          # (13+ reserved: CountingBloom, ...)
+5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog 6=ScalableBloom 7=Cuckoo 8=CountMin 9=TopK 10=DDSketch 11=MinHash 12=RIBLT 13=Theta
+                                          # (14+ reserved: CountingBloom, ...)
 6       1     Flags (u8)                  # bit0-3 hash variant, bit4-7 reserved (must be 0)
 7       1     Reserved (u8)               # must be 0
 8       4     Body length (u32)           # bytes of body, excluding header and CRC
@@ -342,11 +342,37 @@ A reader rejects:
 
 A decoder also refuses a frame whose `seed` differs from its own, or whose `start` is not the next index it expects; both are faults in how frames reached it, not in the bytes.
 
+Theta (type 13), little-endian. A distinct-count sketch that also intersects and subtracts: every key hash below `theta`, at most `k` of them, from which the count is `count / (theta / 2^53)`.
+
+```
+Offset        Size         Field
+0             4            seed: hash seed (u32)
+4             4            k: hashes kept once estimating (u32), a power of two from 16 to 2^26
+8             8            theta: sampling bound (u64), 1 to 2^53; 2^53 means every hash was kept
+16            4            count: hashes stored (u32), at most k
+20            4            reserved (0)
+24            8 * count    hashes: the stored hashes (u64), strictly ascending, each in [1, theta)
+```
+
+The params end at 20, padded so the hashes sit 8-byte aligned at frame offset 40. A key is hashed once (see [hash variant](#hash-variant-flags-nibble)) to `(w1 >>> 11) * 2^32 + w0`, an integer below `2^53`.
+
+Only the canonical sample is stored: the `k` smallest hashes seen, with `theta` the next one, or every hash and `theta = 2^53` while there are no more than `k`. A sketch in memory may hold more between rebuilds, but which it holds depends on the order keys arrived in; the canonical sample does not, so two sketches of the same keys and params write identical bytes.
+
+Combining two frames of identical `seed`, informatively: take `theta` as the smaller of the two and `k` as the smaller. A union keeps the hashes in either below `theta`, and if more than `k` remain, keeps the `k` smallest and lowers `theta` to the next; an intersection keeps the hashes in both below `theta`; a difference keeps the first frame's hashes below `theta` that the second lacks. Taking the smaller `k` is what makes any grouping of unions give the same frame.
+
+A reader rejects:
+
+- a body shorter than the 24-byte params block, or nonzero reserved bytes;
+- a `k` that is not a power of two from 16 to 2^26;
+- a body length other than `24 + 8 * count`;
+- a `theta` of 0 or above `2^53`, or a `count` above `k`;
+- hashes that are not strictly ascending, or one that is 0 or not below `theta`.
+
 ### Hash variant (flags nibble)
 
 Bits 0-3 of the flags byte name the complete scheme that turns a key into stored bits: the hash **and the index mapping** from its output to positions, not the hash alone. A change to any component takes a new variant, even when the hash itself is unchanged, because a reader that recognises the old variant would otherwise read every stored frame at the wrong positions with no error. Version 5 uses one scheme for every structure:
 
-- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog, Scalable, Cuckoo, Count-Min, Top-K, DDSketch, MinHash, RIBLT) with the index mapping below. Top-K and DDSketch write and require `0`, though no hash reaches their frames
+- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog, Scalable, Cuckoo, Count-Min, Top-K, DDSketch, MinHash, RIBLT, Theta) with the index mapping below. Top-K and DDSketch write and require `0`, though no hash reaches their frames
 
 Variant `0` covers:
 
@@ -363,10 +389,11 @@ Variant `0` covers:
 - **DDSketch:** no hash. It records values, not keys, and the mapping that bins them is named by the frame's own `mapping` byte and `gamma`, so a change to it is a new mapping code rather than a new variant.
 - **MinHash:** slot `reduce(w0, k)` by Lemire multiply-shift; value `w1`, clamped to `0xfffffffe`. Densification probes slot `i`'s borrow sequence as `reduce(fmix32((i * 0x9e3779b1) ^ (attempt * 0x85ebca6b) ^ seed), k)` for `attempt = 1, 2, ...`, each product mod `2^32`; it is computed on read and never stored, but two readers must agree on it to agree on an estimate.
 - **RIBLT:** a key's symbol is `w1:w0` (`w1` high). Its checksum is MurmurHash3's `fmix64` of the symbol XOR `0x9e3779b97f4a7c15`, a function of the symbol alone. The symbol reaches index 0 and then each next index `last + ceil((last + 1.5) * (1 / sqrt(u) - 1))`, where `u = (x + 0.5) / 2^32` and `x` is the next output of xoroshiro64** seeded with the checksum's low and high words. Two peers must agree on all of it, or no prefix of the stream decodes.
+- **Theta:** a key's hash is `(w1 >>> 11) * 2^32 + w0`, the top 21 bits of `w1` above `w0`: an integer below `2^53`, so it and theta compare exactly as doubles. A hash of 0 is dropped. Which slot of its table a sketch keeps a hash in is not stored.
 
 This is the case Guava hit: `MURMUR128_MITZ_32` and `MURMUR128_MITZ_64` use the same hash and differ only in how its 128 bits map to indices, yet the change still needed a new `Strategy` ordinal because the stored bits differ. Guava's ordinal covers the whole strategy, and this nibble does too.
 
-All eleven structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header and version 5 only the params padding; neither touched the hash.
+All twelve structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header and version 5 only the params padding; neither touched the hash.
 
 That version 3 bump (rather than a flags-only change) was deliberate: the version-2 Fuse reader had no variant check and would silently misread a version-3 frame, so bumping the version made it reject on the version byte instead.
 
