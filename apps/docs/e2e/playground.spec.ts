@@ -660,3 +660,32 @@ test("the reconciliation panel decodes a difference and runs again at any d", as
   );
   expect(errors).toEqual([]);
 });
+
+test("the segments panel sets Theta beside exact and HyperLogLog at any overlap", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  const panel = page.locator("[data-pg-theta]");
+  const cell = (op: string, column: string) =>
+    panel.locator(`[data-th='${op}-${column}']`);
+  await expect(cell("union", "exact")).toHaveText("19,000");
+  await expect(cell("intersection", "exact")).toHaveText("1,000");
+  await expect(cell("difference", "exact")).toHaveText("9,000");
+  for (const op of ["union", "intersection", "difference"]) {
+    await expect(cell(op, "theta")).toHaveText(/^[\d,]+ \([\d,]+ to [\d,]+\)$/);
+    await expect(cell(op, "hll")).toHaveText(/^-?[\d,]+$/);
+  }
+
+  const slider = page.locator("[data-pg-segments] input[name='overlap']");
+  await slider.fill("0");
+  await expect(cell("intersection", "exact")).toHaveText("0");
+  await expect(cell("intersection", "theta")).toHaveText(/^0 \(0 to [\d,]+\)$/);
+
+  // Without JavaScript the form could only submit to nowhere.
+  expect(await page.content()).toMatch(
+    /<noscript><style>[^<]*\[data-pg-segments\]/,
+  );
+  expect(errors).toEqual([]);
+});

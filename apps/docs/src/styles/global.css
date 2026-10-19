@@ -272,6 +272,10 @@ layout this project does not control.
     font-family: var(--sl-font-mono);
     font-variant-numeric: tabular-nums;
   }
+  /* A range in a narrow cell breaks before it, never inside it. */
+  .dstl-nowrap {
+    white-space: nowrap;
+  }
   .dstl-subpath {
     display: block;
     font-weight: 400;

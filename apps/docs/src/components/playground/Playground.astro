@@ -22,6 +22,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     [data-pg-values],
     [data-pg-sets],
     [data-pg-reconcile],
+    [data-pg-segments],
     [data-pg-query],
     [data-pg-status],
     [data-pg-results],
@@ -500,6 +501,84 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   </p>
 </section>
 
+<section class="dstl-panel" data-pg-theta>
+  <h3>How many two segments share, from a sketch of each</h3>
+
+  <p class="dstl-hint">
+    A Theta sketch counts distinct keys, and two of them combine by union,
+    intersection and difference, so overlaps are answered from sketches kept
+    apart. Segment A is the keys above; segment B holds as many, sharing the
+    fraction you pick and making up the rest from keys of its own. Each is
+    sketched at k = 4096, beside a HyperLogLog at p = 16, which can only union
+    and so estimates the rest by inclusion-exclusion.
+  </p>
+
+  <form class="dstl-form-stack" data-pg-segments novalidate>
+    <div class="dstl-field">
+      <label for="pg-segments-overlap">
+        Overlap:{" "}
+        <output for="pg-segments-overlap" data-th="overlap">
+          10
+        </output>
+        %
+      </label>
+      <input
+        id="pg-segments-overlap"
+        name="overlap"
+        type="range"
+        min="0"
+        max="100"
+        step="1"
+        value="10"
+      />
+    </div>
+  </form>
+
+  <table class="dstl-table">
+    <thead>
+      <tr>
+        <th scope="col">Count</th>
+        <th scope="col">Exact</th>
+        <th scope="col">Theta, 2 sd</th>
+        <th scope="col">
+          <abbr title="HyperLogLog">HLL</abbr>
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th scope="row">A or B</th>
+        <td data-th="union-exact"></td>
+        <td data-th="union-theta">
+          <span data-th="union-estimate"></span>{" "}
+          <span class="dstl-nowrap" data-th="union-range"></span>
+        </td>
+        <td data-th="union-hll"></td>
+      </tr>
+      <tr>
+        <th scope="row">A and B</th>
+        <td data-th="intersection-exact"></td>
+        <td data-th="intersection-theta">
+          <span data-th="intersection-estimate"></span>{" "}
+          <span class="dstl-nowrap" data-th="intersection-range"></span>
+        </td>
+        <td data-th="intersection-hll"></td>
+      </tr>
+      <tr>
+        <th scope="row">A, not B</th>
+        <td data-th="difference-exact"></td>
+        <td data-th="difference-theta">
+          <span data-th="difference-estimate"></span>{" "}
+          <span class="dstl-nowrap" data-th="difference-range"></span>
+        </td>
+        <td data-th="difference-hll"></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="dstl-hint" data-th="note"></p>
+</section>
+
 <div data-pg-notes>
   <p class="dstl-hint">
     <strong>A false positive is the filter working, not a bug.</strong> These
@@ -529,6 +608,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     StructureKey,
     QuantileReport,
     ReconcileReport,
+    SegmentsReport,
     SimilarityReport,
     TopKReport,
   } from "./engine.js";
@@ -745,6 +825,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     renderQuantiles(current.quantiles());
     renderSimilarity(current.similarity());
     reconcile();
+    compareSegments();
   }
 
   /** The key the sketch panel is currently pointed at. */
@@ -843,6 +924,43 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
       set(structure, "verdict", verdicts[structure]);
   }
 
+  const segmentsForm =
+    document.querySelector<HTMLFormElement>("[data-pg-segments]");
+
+  const whole = (n: number): string => Math.round(n).toLocaleString("en-US");
+
+  function renderSegments(report: SegmentsReport): void {
+    const fields: Record<string, string> = {};
+    for (const op of ["union", "intersection", "difference"] as const) {
+      const { estimate, low, high } = report.theta[op];
+      fields[`${op}-exact`] = whole(report.exact[op]);
+      fields[`${op}-estimate`] = whole(estimate);
+      fields[`${op}-range`] = `(${whole(low)} to ${whole(high)})`;
+      fields[`${op}-hll`] = whole(report.hll[op]);
+    }
+    fields.note = report.estimating
+      ? "Past k keys Theta samples, and the true count sits inside its range almost every time. Inclusion-exclusion carries the error of the whole union, so a small overlap drowns in it: drag the overlap towards 0 and watch."
+      : "The two segments hold no more than k keys between them, so Theta counts them exactly and its range is the count itself. Build with more keys to see it sample.";
+    for (const [field, text] of Object.entries(fields)) {
+      const target = document.querySelector(`[data-th='${field}']`);
+      if (target) target.textContent = text;
+    }
+  }
+
+  function compareSegments(): void {
+    if (!segmentsForm || !current) return;
+    const percent = Number(new FormData(segmentsForm).get("overlap"));
+    const output = segmentsForm.querySelector("output");
+    if (output) output.textContent = String(percent);
+    const result = current.segments(percent / 100);
+    if (!result.ok) {
+      if (status) status.textContent = result.message;
+      return;
+    }
+    if (status) status.textContent = "";
+    renderSegments(result);
+  }
+
   function onSubmit(target: HTMLFormElement | null, run: () => void): void {
     target?.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -859,6 +977,10 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   onSubmit(valuesForm, recordValue);
   onSubmit(setsForm, recordSetItem);
   onSubmit(reconcileForm, reconcile);
+  onSubmit(segmentsForm, compareSegments);
+  segmentsForm
+    ?.querySelector<HTMLInputElement>("input[name='overlap']")
+    ?.addEventListener("input", compareSegments);
   reconcileForm
     ?.querySelector<HTMLInputElement>("input[name='d']")
     ?.addEventListener("input", (event) => {
