@@ -16,6 +16,7 @@ import { DDSketch } from "../../src/ddsketch/ddsketch.js";
 import { logMapping } from "../../src/ddsketch/mapping.js";
 import { collapsingLowestStore } from "../../src/ddsketch/store.js";
 import { ScalableBloomFilter } from "../../src/scalable/scalable.js";
+import { KllSketch } from "../../src/kll/kll.js";
 import { ThetaSketch } from "../../src/theta/theta.js";
 import { TopK } from "../../src/topk/topk.js";
 import goldenJson from "../fixtures/golden.json" with { type: "json" };
@@ -115,6 +116,12 @@ const build = (entry: GoldenEntry): Serializable => {
       for (const key of keys) sketch.add(key);
       return sketch;
     }
+    case "kll": {
+      const { values = [], k, seed } = entry;
+      const sketch = new KllSketch(seed === undefined ? { k } : { k, seed });
+      for (const value of values) sketch.add(value);
+      return sketch;
+    }
     default:
       throw new Error(`unknown kind ${kind}`);
   }
@@ -146,6 +153,8 @@ const parse = (kind: string, bytes: Uint8Array): Serializable => {
       return MinHash.fromBytes(bytes);
     case "theta":
       return ThetaSketch.fromBytes(bytes);
+    case "kll":
+      return KllSketch.fromBytes(bytes);
     default:
       throw new Error(`unknown kind ${kind}`);
   }
@@ -185,6 +194,8 @@ describe.each(structures)("golden fixture $name", (entry) => {
       expect(parsed.equals(build(entry) as MinHash)).toBe(true);
     } else if (parsed instanceof ThetaSketch) {
       expect(parsed.equals(build(entry) as ThetaSketch)).toBe(true);
+    } else if (parsed instanceof KllSketch) {
+      expect(parsed.equals(build(entry) as KllSketch)).toBe(true);
     } else {
       // A deleted key may still answer true (a false positive), so only the
       // keys still held are asserted.

@@ -16,6 +16,7 @@ import { DDSketch } from "../src/ddsketch/ddsketch.js";
 import { logMapping } from "../src/ddsketch/mapping.js";
 import { collapsingLowestStore } from "../src/ddsketch/store.js";
 import { ScalableBloomFilter } from "../src/scalable/scalable.js";
+import { KllSketch } from "../src/kll/kll.js";
 import { ThetaSketch } from "../src/theta/theta.js";
 import { TopK } from "../src/topk/topk.js";
 
@@ -113,6 +114,14 @@ const bytes = (entry: Entry): Uint8Array => {
       const { k, seed } = entry;
       const sketch = new ThetaSketch({ k, seed });
       for (const key of keys) sketch.add(key);
+      return sketch.toBytes();
+    }
+    case "kll": {
+      // Values, not keys. A seed makes a compacting recipe reproducible; the
+      // exact fixture leaves it out, so the frame pins an unseeded sketch.
+      const { values = [], k, seed } = entry;
+      const sketch = new KllSketch(seed === undefined ? { k } : { k, seed });
+      for (const value of values) sketch.add(value);
       return sketch.toBytes();
     }
     case "riblt": {
