@@ -1,3 +1,5 @@
+import { getHeapSpaceStatistics } from "node:v8";
+
 import { expect, test } from "vitest";
 
 import { BloomFilter } from "../../src/bloom/bloom.js";
@@ -119,6 +121,39 @@ test("measureAllocation reads no bytes from a window that collected", async () =
 
   expect(result.collections).toBeGreaterThan(0);
   expect(result.bytesPerCall).toBeNaN();
+});
+
+// What failed CI. V8 empties the young generation on a task once it is about
+// 80% full, so a window could open with it most of the way there, and a clean
+// window allocating the rest then collected. Here the window opens after the
+// young generation is filled to 70%, and allocates half of one.
+test("measureAllocation does not charge a window for what the young generation already held", async () => {
+  const young = () =>
+    getHeapSpaceStatistics().find((s) => s.space_name === "new_space");
+  const used = (): number => young()?.space_used_size ?? 0;
+  const capacity = used() + (young()?.space_available_size ?? 0);
+  const sink: unknown[] = new Array<unknown>(64);
+  let calls = 0;
+  const allocate = (): void => {
+    sink[++calls & 63] = new Array<number>(30);
+  };
+  // What a call costs depends on pointer compression, so it is measured; a
+  // scavenge in between reads as less, and that reading is retaken.
+  let perCall = 0;
+  while (perCall <= 0) {
+    const before = used();
+    for (let i = 0; i < 1000; i++) allocate();
+    perCall = (used() - before) / 1000;
+  }
+  while (used() < 0.7 * capacity) allocate();
+
+  const result = await measureAllocation(
+    allocate,
+    Math.floor(capacity / 2 / perCall),
+    0,
+  );
+
+  expect(result.collections).toBe(0);
 });
 
 // A loop allocates while V8 is still optimising it, and that is not the loop's
