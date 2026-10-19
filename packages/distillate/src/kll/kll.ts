@@ -2,6 +2,7 @@ import { assertUint32, ParamError } from "../core/params.js";
 import {
   assertBodyLength,
   assertMinBodyLength,
+  assertParamsPadding,
   bytesEqual,
   type FilterJSON,
   FORMAT_VERSION,
@@ -24,6 +25,8 @@ const TYPE = 14;
 const NO_HASH = 0;
 const ITEM_F64 = 0;
 const FLAG_SEEDED = 1;
+// Weights reach 2^53 by level 53, past which n is no longer a safe integer.
+const MAX_LEVELS = 64;
 
 /**
  * Body layout: item type (u8, 0 = f64) | flags (u8, bit 0 seeded) | k (u16) |
@@ -125,29 +128,86 @@ export class KllSketch {
     assertMinBodyLength(body.length, LEVEL_SIZES_AT, "kll");
     const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
     const numLevels = view.getUint32(32, true);
-    assertMinBodyLength(body.length, paramsSize(numLevels), "kll");
+    if (numLevels < 1 || numLevels > MAX_LEVELS) {
+      throw invalid(
+        `${String(numLevels)} levels is outside [1, ${String(MAX_LEVELS)}]`,
+      );
+    }
+    const payload = paramsSize(numLevels);
+    assertMinBodyLength(body.length, payload, "kll");
     const sizes = Array.from({ length: numLevels }, (_, h) =>
       view.getUint32(LEVEL_SIZES_AT + 4 * h, true),
     );
     const retained = sizes.reduce((a, b) => a + b, 0);
-    const payload = paramsSize(numLevels);
     assertBodyLength(body.length, payload + 8 * retained, "kll");
+    assertParamsPadding(body, LEVEL_SIZES_AT + 4 * numLevels, payload, "kll");
 
-    const k = view.getUint16(2, true);
-    const sketch = new KllSketch({ k });
-    sketch.#seeded = (view.getUint8(1) & FLAG_SEEDED) !== 0;
-    sketch.#state = view.getUint32(4, true);
-    sketch.#n = view.getUint32(12, true) * 2 ** 32 + view.getUint32(8, true);
-    sketch.#min = view.getFloat64(16, true);
-    sketch.#max = view.getFloat64(24, true);
-    const total = totalCapacity(k, numLevels);
-    const items = new Float64Array(total);
-    const front = total - retained;
-    for (let i = 0; i < retained; i++) {
-      items[front + i] = view.getFloat64(payload + 8 * i, true);
+    if (view.getUint8(0) !== ITEM_F64) {
+      throw invalid(`unknown item type ${String(view.getUint8(0))}`);
     }
-    const levels = [front];
-    for (const size of sizes) levels.push((levels.at(-1) ?? 0) + size);
+    const flagByte = view.getUint8(1);
+    if ((flagByte & ~FLAG_SEEDED) !== 0) {
+      throw invalid(`reserved flag bits set in ${String(flagByte)}`);
+    }
+    const seeded = flagByte === FLAG_SEEDED;
+    const state = view.getUint32(4, true);
+    if (!seeded && state !== 0) {
+      throw invalid("an unseeded sketch carries a generator state");
+    }
+    const k = view.getUint16(2, true);
+    let sketch: KllSketch;
+    try {
+      sketch = new KllSketch({ k });
+    } catch (err) {
+      // A k the body agrees with can still be one the constructor refuses,
+      // and a caller decoding a frame should see one error family.
+      if (err instanceof ParamError) throw invalid(err.message);
+      throw err;
+    }
+    const n = view.getUint32(12, true) * 2 ** 32 + view.getUint32(8, true);
+    // Compaction turns 2m items of weight w into m of weight 2w, so the
+    // weights always sum to n exactly.
+    const weight = sizes.reduce((sum, size, h) => sum + size * 2 ** h, 0);
+    if (!Number.isSafeInteger(n) || weight !== n) {
+      throw invalid(`n ${String(n)} disagrees with the level weights`);
+    }
+    const total = totalCapacity(k, numLevels);
+    if (retained > total) {
+      throw invalid(`${String(retained)} items exceed the capacity at k`);
+    }
+    const min = view.getFloat64(16, true);
+    const max = view.getFloat64(24, true);
+    if (n === 0 ? !(Number.isNaN(min) && Number.isNaN(max)) : !(min <= max)) {
+      throw invalid(
+        `min ${String(min)} and max ${String(max)} are inconsistent`,
+      );
+    }
+
+    const items = new Float64Array(total);
+    const levels = [total - retained];
+    let at = 0;
+    for (let h = 0; h < numLevels; h++) {
+      const base = levels[h] ?? 0;
+      let previous = -Infinity;
+      for (let i = 0; i < (sizes[h] ?? 0); i++, at++) {
+        const item = view.getFloat64(payload + 8 * at, true);
+        if (!(item >= min && item <= max)) {
+          throw invalid(`item ${String(at)} is NaN or outside [min, max]`);
+        }
+        // Every level but 0 is held in ascending order.
+        if (h > 0 && item < previous) {
+          throw invalid(`level ${String(h)} is not ascending`);
+        }
+        previous = item;
+        items[base + i] = item;
+      }
+      levels.push(base + (sizes[h] ?? 0));
+    }
+    sketch.#seeded = seeded;
+    sketch.#state = state;
+    sketch.#n = n;
+    sketch.#min = min;
+    sketch.#max = max;
     sketch.#items = items;
     sketch.#levels = levels;
     return sketch;
@@ -679,4 +739,8 @@ function mergeInto(
       out[at++] = b[j++] ?? 0;
     }
   }
+}
+
+function invalid(message: string): SerializationError {
+  return new SerializationError(`kll: ${message}`);
 }

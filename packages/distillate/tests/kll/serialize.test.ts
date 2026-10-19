@@ -1,5 +1,13 @@
 import { describe, expect, test } from "vitest";
 
+import { crc32 } from "../../src/core/crc32.js";
+import {
+  FORMAT_VERSION,
+  SerializationError,
+  TruncatedError,
+  UnknownHashVariantError,
+  writeHeader,
+} from "../../src/core/serialize.js";
 import { KllSketch } from "../../src/kll/kll.js";
 import { shuffled } from "../helpers/kll.js";
 
@@ -134,5 +142,165 @@ describe("equals and JSON", () => {
     const s = sketchOf(stream, 200, 7);
     const restored = KllSketch.fromJSON(JSON.parse(JSON.stringify(s)));
     expect(restored.equals(s)).toBe(true);
+  });
+});
+
+describe("fromBytes rejects", () => {
+  // Recomputes the trailer so a mutation reaches the check under test instead
+  // of stopping at ChecksumError.
+  const resealed = (frame: Uint8Array): Uint8Array => {
+    new DataView(frame.buffer, frame.byteOffset).setUint32(
+      frame.length - 4,
+      crc32(frame.subarray(0, frame.length - 4)),
+      true,
+    );
+    return frame;
+  };
+  const payloadOf = (v: DataView): number =>
+    BODY + Math.ceil((36 + 4 * v.getUint32(BODY + 32, true)) / 8) * 8;
+  const sizeOf = (v: DataView, h: number): number =>
+    v.getUint32(BODY + 36 + 4 * h, true);
+
+  const lies: [string, (frame: Uint8Array, v: DataView) => void][] = [
+    ["another structure type", (f) => (f[5] = 13)],
+    [
+      "an unknown item type",
+      (_, v) => {
+        v.setUint8(BODY, 1);
+      },
+    ],
+    [
+      "a reserved flag bit",
+      (_, v) => {
+        v.setUint8(BODY + 1, 1 | 2);
+      },
+    ],
+    [
+      "a state while unseeded",
+      (_, v) => {
+        v.setUint8(BODY + 1, 0);
+      },
+    ],
+    [
+      "a k below 8",
+      (_, v) => {
+        v.setUint16(BODY + 2, 7, true);
+      },
+    ],
+    [
+      "no levels",
+      (_, v) => {
+        v.setUint32(BODY + 32, 0, true);
+      },
+    ],
+    [
+      "65 levels",
+      (_, v) => {
+        v.setUint32(BODY + 32, 65, true);
+      },
+    ],
+    [
+      "level sizes the body disagrees with",
+      (_, v) => {
+        v.setUint32(BODY + 36, sizeOf(v, 0) + 1, true);
+      },
+    ],
+    [
+      "an n the level weights disagree with",
+      (_, v) => {
+        v.setUint32(BODY + 8, v.getUint32(BODY + 8, true) + 1, true);
+      },
+    ],
+    [
+      "level 1 out of order",
+      (_, v) => {
+        const at = payloadOf(v) + 8 * sizeOf(v, 0);
+        const first = v.getFloat64(at, true);
+        v.setFloat64(at, v.getFloat64(at + 8, true), true);
+        v.setFloat64(at + 8, first, true);
+      },
+    ],
+    [
+      "a NaN item",
+      (_, v) => {
+        v.setFloat64(payloadOf(v), Number.NaN, true);
+      },
+    ],
+    [
+      "a min above an item",
+      (_, v) => {
+        v.setFloat64(BODY + 16, 1e12, true);
+      },
+    ],
+    [
+      "a max below an item",
+      (_, v) => {
+        v.setFloat64(BODY + 24, -1e12, true);
+      },
+    ],
+  ];
+
+  test.each(lies)("%s", (_, mutate) => {
+    const frame = sketchOf(shuffled(10_000), 200, 3).toBytes();
+    mutate(frame, new DataView(frame.buffer, frame.byteOffset));
+    expect(() => KllSketch.fromBytes(resealed(frame))).toThrow(
+      SerializationError,
+    );
+  });
+
+  test("nonzero padding after the level sizes", () => {
+    // 201 values at k 200 compact once: two levels, so 44 bytes of params
+    // padded to 48.
+    const frame = sketchOf(shuffled(201), 200, 3).toBytes();
+    const v = new DataView(frame.buffer, frame.byteOffset);
+    expect(v.getUint32(BODY + 32, true)).toBe(2);
+    v.setUint8(BODY + 44, 1);
+    expect(() => KllSketch.fromBytes(resealed(frame))).toThrow(
+      SerializationError,
+    );
+  });
+
+  test("an empty frame with a min other than NaN", () => {
+    const frame = new KllSketch().toBytes();
+    new DataView(frame.buffer, frame.byteOffset).setFloat64(BODY + 16, 0, true);
+    expect(() => KllSketch.fromBytes(resealed(frame))).toThrow(
+      SerializationError,
+    );
+  });
+
+  test("more items than k leaves room for", () => {
+    // Nine items of weight 1 on one level at k 8: consistent in every other
+    // respect, but the level holds at most eight.
+    const body = new Uint8Array(40 + 8 * 9);
+    const v = new DataView(body.buffer);
+    v.setUint16(2, 8, true);
+    v.setUint32(8, 9, true);
+    v.setFloat64(16, 0, true);
+    v.setFloat64(24, 8, true);
+    v.setUint32(32, 1, true);
+    v.setUint32(36, 9, true);
+    for (let i = 0; i < 9; i++) v.setFloat64(40 + 8 * i, i, true);
+    const frame = writeHeader(
+      { version: FORMAT_VERSION, type: 14, flags: 0 },
+      body,
+    );
+    expect(() => KllSketch.fromBytes(frame)).toThrow(SerializationError);
+  });
+
+  test("a hash variant other than 0", () => {
+    const frame = sketchOf([1, 2, 3]).toBytes();
+    frame[6] = 1;
+    expect(() => KllSketch.fromBytes(resealed(frame))).toThrow(
+      UnknownHashVariantError,
+    );
+  });
+
+  test("every truncated prefix, as truncated", () => {
+    const frame = sketchOf(shuffled(10_000), 200, 3).toBytes();
+    for (let n = 0; n < frame.length; n++) {
+      expect(() => KllSketch.fromBytes(frame.subarray(0, n))).toThrow(
+        TruncatedError,
+      );
+    }
   });
 });
