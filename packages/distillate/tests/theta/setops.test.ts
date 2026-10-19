@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
 import { ThetaSketch } from "../../src/theta/theta.js";
+import { allocatedBy, SMALL } from "../helpers/topk.js";
 
 // Keys `from` to `to - 1`.
 const range = (from: number, to: number): string[] =>
@@ -106,5 +107,17 @@ describe("difference", () => {
     expect(() => sketchOf(A).difference(sketchOf(B, 1024, 1))).toThrow(
       ParamError,
     );
+  });
+});
+
+describe("memory", () => {
+  test("a union allocates for the hashes its inputs hold, not for k", () => {
+    const a = sketchOf(["a", "b", "c"], 2 ** 26);
+    const b = sketchOf(["d"], 2 ** 26);
+    a.count();
+    b.count();
+    const { value: union, bytes } = allocatedBy(() => a.union(b));
+    expect(union.count()).toBe(4);
+    expect(bytes).toBeLessThan(SMALL);
   });
 });
