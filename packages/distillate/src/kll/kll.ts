@@ -1,9 +1,36 @@
 import { assertUint32, ParamError } from "../core/params.js";
+import {
+  assertBodyLength,
+  assertMinBodyLength,
+  FORMAT_VERSION,
+  readHeader,
+  SerializationError,
+  UnknownHashVariantError,
+  writeFrame,
+} from "../core/serialize.js";
 import { mix, nextState } from "./random.js";
 import { KLL_MAX_K, KLL_MIN_K, kllRankError, kllSizing } from "./sizing.js";
 
 // No level holds fewer than this many items, however deep below the top.
 const MIN_LEVEL_CAPACITY = 8;
+
+/** DSTL frame type for a KLL sketch. */
+const TYPE = 14;
+// KLL compares values and hashes nothing, so its hash variant is 0.
+const NO_HASH = 0;
+const ITEM_F64 = 0;
+const FLAG_SEEDED = 1;
+
+/**
+ * Body layout: item type (u8, 0 = f64) | flags (u8, bit 0 seeded) | k (u16) |
+ * generator state (u32) | n (u64) | min (f64) | max (f64) | L (u32) | items
+ * per level (u32 x L, level 0 first) | zero padding to a multiple of 8 | items
+ * (f64), level 0 first, each level in held order: level 0 as it arrived, the
+ * rest ascending. All little-endian.
+ */
+const LEVEL_SIZES_AT = 36;
+const paramsSize = (numLevels: number): number =>
+  Math.ceil((LEVEL_SIZES_AT + 4 * numLevels) / 8) * 8;
 
 /** Construction parameters for a {@link KllSketch}. */
 export interface KllParams {
@@ -68,6 +95,94 @@ export class KllSketch {
    */
   static create(rankError: number): KllSketch {
     return new KllSketch(kllSizing(rankError));
+  }
+
+  /**
+   * Restores a sketch from {@link KllSketch.toBytes}. It goes on taking values
+   * and flipping the coins the sketch that wrote it would have.
+   *
+   * @param bytes - The serialized sketch.
+   * @returns The reconstructed sketch.
+   * @throws {@link SerializationError} when the frame is malformed or not a
+   * KLL sketch.
+   */
+  static fromBytes(bytes: Uint8Array): KllSketch {
+    const { type, flags, body } = readHeader(bytes);
+    if (type !== TYPE) {
+      throw new SerializationError(
+        `expected DSTL type ${String(TYPE)}, got ${String(type)}`,
+      );
+    }
+    if ((flags & 0x0f) !== NO_HASH) {
+      throw new UnknownHashVariantError(
+        `kll hashes nothing, so its hash variant must be 0, got ${String(flags & 0x0f)}`,
+      );
+    }
+    assertMinBodyLength(body.length, LEVEL_SIZES_AT, "kll");
+    const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
+    const numLevels = view.getUint32(32, true);
+    assertMinBodyLength(body.length, paramsSize(numLevels), "kll");
+    const sizes = Array.from({ length: numLevels }, (_, h) =>
+      view.getUint32(LEVEL_SIZES_AT + 4 * h, true),
+    );
+    const retained = sizes.reduce((a, b) => a + b, 0);
+    const payload = paramsSize(numLevels);
+    assertBodyLength(body.length, payload + 8 * retained, "kll");
+
+    const k = view.getUint16(2, true);
+    const sketch = new KllSketch({ k });
+    sketch.#seeded = (view.getUint8(1) & FLAG_SEEDED) !== 0;
+    sketch.#state = view.getUint32(4, true);
+    sketch.#n = view.getUint32(12, true) * 2 ** 32 + view.getUint32(8, true);
+    sketch.#min = view.getFloat64(16, true);
+    sketch.#max = view.getFloat64(24, true);
+    const total = totalCapacity(k, numLevels);
+    const items = new Float64Array(total);
+    const front = total - retained;
+    for (let i = 0; i < retained; i++) {
+      items[front + i] = view.getFloat64(payload + 8 * i, true);
+    }
+    const levels = [front];
+    for (const size of sizes) levels.push((levels.at(-1) ?? 0) + size);
+    sketch.#items = items;
+    sketch.#levels = levels;
+    return sketch;
+  }
+
+  /**
+   * Serializes the sketch, generator state included, to a portable
+   * little-endian byte layout.
+   *
+   * @returns The serialized sketch, readable by {@link KllSketch.fromBytes}.
+   */
+  toBytes(): Uint8Array {
+    const numLevels = this.numLevels;
+    const params = paramsSize(numLevels);
+    const front = this.#levels[0] ?? 0;
+    const retained = this.retained;
+    return writeFrame(
+      { version: FORMAT_VERSION, type: TYPE, flags: NO_HASH },
+      params,
+      8 * retained,
+      (_, view) => {
+        view.setUint8(0, ITEM_F64);
+        view.setUint8(1, this.#seeded ? FLAG_SEEDED : 0);
+        view.setUint16(2, this.#k, true);
+        view.setUint32(4, this.#state, true);
+        view.setUint32(8, this.#n >>> 0, true);
+        view.setUint32(12, Math.floor(this.#n / 2 ** 32), true);
+        view.setFloat64(16, this.#min, true);
+        view.setFloat64(24, this.#max, true);
+        view.setUint32(32, numLevels, true);
+        for (let h = 0; h < numLevels; h++) {
+          const size = (this.#levels[h + 1] ?? 0) - (this.#levels[h] ?? 0);
+          view.setUint32(LEVEL_SIZES_AT + 4 * h, size, true);
+        }
+        for (let i = 0; i < retained; i++) {
+          view.setFloat64(params + 8 * i, this.#items[front + i] ?? 0, true);
+        }
+      },
+    );
   }
 
   /** Items the top level holds. */
