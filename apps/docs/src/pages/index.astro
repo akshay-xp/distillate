@@ -18,7 +18,7 @@ const x = "https://x.com/akshay_x_p";
 const docsStart = "/start/what-is-an-amq-filter/";
 const playground = "/start/playground/";
 const description =
-  "Probabilistic data structures for JavaScript: AMQ filters and HyperLogLog, zero dependencies, sized by a target you set.";
+  "Probabilistic data structures for JavaScript: AMQ filters, sketches and set reconciliation, zero dependencies, sized by a target you set.";
 ---
 
 <!doctype html>
@@ -362,6 +362,69 @@ const description =
             <div class="fact">
               <p class="headline-stat">&le;1%</p>
               <p class="stat-label">of total, over</p>
+            </div>
+          </div>
+        </div>
+        <div class="sketch-wide">
+          <div>
+            <span class="tag">Sketch, not a filter</span>
+            <p class="subpath2">
+              <a href="/guides/ddsketch/">
+                distillate/ddsketch<span class="arrow">&rarr;</span>
+              </a>
+            </p>
+            <h3>DDSketch</h3>
+          </div>
+          <div class="facts">
+            <div class="fact">
+              <p class="headline-stat">&le;1%</p>
+              <p class="stat-label">relative error</p>
+            </div>
+            <div class="fact">
+              <p class="headline-stat">exact</p>
+              <p class="stat-label">merges</p>
+            </div>
+          </div>
+        </div>
+        <div class="sketch-wide">
+          <div>
+            <span class="tag">Sketch, not a filter</span>
+            <p class="subpath2">
+              <a href="/guides/minhash/">
+                distillate/minhash<span class="arrow">&rarr;</span>
+              </a>
+            </p>
+            <h3>MinHash</h3>
+          </div>
+          <div class="facts">
+            <div class="fact">
+              <p class="headline-stat">540 B</p>
+              <p class="stat-label">signature, k=128</p>
+            </div>
+            <div class="fact">
+              <p class="headline-stat">&le;0.044</p>
+              <p class="stat-label">std error</p>
+            </div>
+          </div>
+        </div>
+        <div class="sketch-wide">
+          <div>
+            <span class="tag">Reconciliation, not a filter</span>
+            <p class="subpath2">
+              <a href="/guides/riblt/">
+                distillate/riblt<span class="arrow">&rarr;</span>
+              </a>
+            </p>
+            <h3>RIBLT</h3>
+          </div>
+          <div class="facts">
+            <div class="fact">
+              <p class="headline-stat">~27 B</p>
+              <p class="stat-label">per differing key</p>
+            </div>
+            <div class="fact">
+              <p class="headline-stat">exact</p>
+              <p class="stat-label">difference</p>
             </div>
           </div>
         </div>
