@@ -17,6 +17,10 @@ const SDS = [1, 2, 3] as const;
 // 0.4%, so a per-cell 99% fails sound bounds by chance. Pooled, it is about
 // 0.1%, and one cell whose bounds broke outright still costs the pool 6%.
 //
+// Sets stop at 10^5 keys. Error follows n / k, and 10^5 is already 24 times
+// the largest k: at 10^6 the counts and set operations measured the same, but
+// a 10^6 count cell runs past the 30 s test timeout under coverage.
+//
 // Trials vary the seed over fixed keys. Keys are 12-byte buffers (cell, part,
 // index) written into one reused array; they only need to be distinct.
 const key = new Uint8Array(12);
@@ -54,8 +58,11 @@ function checkCell(sketches: readonly ThetaSketch[], truth: number): number {
     (3 * sd) / Math.sqrt(estimates.length),
   );
   for (const sketch of sketches) {
-    SDS.forEach((sd, i) => {
-      if (sketch.lowerBound(sd) <= truth && truth <= sketch.upperBound(sd)) {
+    SDS.forEach((level, i) => {
+      if (
+        sketch.lowerBound(level) <= truth &&
+        truth <= sketch.upperBound(level)
+      ) {
         covered[i] = (covered[i] ?? 0) + 1;
       }
     });
@@ -71,9 +78,9 @@ function checkCell(sketches: readonly ThetaSketch[], truth: number): number {
 
 test.each<[number, number]>([
   [256, 10_000],
-  [256, 1_000_000],
+  [256, 100_000],
   [4096, 10_000],
-  [4096, 1_000_000],
+  [4096, 100_000],
 ])(
   "a count at k %i of %i keys is unbiased and within 1.1 / sqrt(k)",
   (k, n) => {
@@ -84,6 +91,41 @@ test.each<[number, number]>([
     });
 
     expect(checkCell(sketches, n)).toBeLessThanOrEqual(1.1 / Math.sqrt(k));
+  },
+);
+
+// Two sets of 10^5 keys sharing a fraction of them. Each side is its own keys unioned with the shared ones, which
+// equals adding them all, so the shared part is hashed once per trial.
+test.each<[number, number]>([
+  [256, 0.01],
+  [256, 0.1],
+  [256, 0.5],
+  [4096, 0.01],
+  [4096, 0.1],
+  [4096, 0.5],
+])(
+  "at k %i and overlap %f, intersection and difference are unbiased",
+  (k, fraction) => {
+    const n = 100_000;
+    const shared = Math.round(fraction * n);
+    const cell = k * 100 + Math.round(fraction * 100);
+    const both: ThetaSketch[] = [];
+    const onlyA: ThetaSketch[] = [];
+    for (let seed = 0; seed < TRIALS; seed++) {
+      const common = new ThetaSketch({ k, seed });
+      const a = new ThetaSketch({ k, seed });
+      const b = new ThetaSketch({ k, seed });
+      fill(common, cell, 0, shared);
+      fill(a, cell, 1, n - shared);
+      fill(b, cell, 2, n - shared);
+      const setA = a.union(common);
+      const setB = b.union(common);
+      both.push(setA.intersect(setB));
+      onlyA.push(setA.difference(setB));
+    }
+
+    checkCell(both, shared);
+    checkCell(onlyA, n - shared);
   },
 );
 
