@@ -16,6 +16,7 @@ import { DDSketch } from "../src/ddsketch/ddsketch.js";
 import { logMapping } from "../src/ddsketch/mapping.js";
 import { collapsingLowestStore } from "../src/ddsketch/store.js";
 import { ScalableBloomFilter } from "../src/scalable/scalable.js";
+import { ThetaSketch } from "../src/theta/theta.js";
 import { TopK } from "../src/topk/topk.js";
 
 interface Entry {
@@ -105,6 +106,12 @@ const bytes = (entry: Entry): Uint8Array => {
     case "minhash": {
       const { k, seed } = entry;
       const sketch = new MinHash({ k, seed });
+      for (const key of keys) sketch.add(key);
+      return sketch.toBytes();
+    }
+    case "theta": {
+      const { k, seed } = entry;
+      const sketch = new ThetaSketch({ k, seed });
       for (const key of keys) sketch.add(key);
       return sketch.toBytes();
     }
