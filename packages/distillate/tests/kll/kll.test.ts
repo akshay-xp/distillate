@@ -125,3 +125,38 @@ describe("cdf and pmf", () => {
     ]);
   });
 });
+
+describe("weighted adds", () => {
+  test("answer as repeated adds while nothing has compacted", () => {
+    const weighted = new KllSketch();
+    weighted.add(5, 6);
+    weighted.add(1, 1);
+    weighted.add(9, 3);
+    const repeated = new KllSketch();
+    for (const v of [5, 5, 5, 5, 5, 5, 1, 9, 9, 9]) repeated.add(v);
+
+    expect(weighted.count).toBe(10);
+    expect(weighted.min).toBe(repeated.min);
+    expect(weighted.max).toBe(repeated.max);
+    for (let i = 0; i <= 20; i++) {
+      const q = i / 20;
+      expect(weighted.quantile(q), `q ${String(q)}`).toBe(repeated.quantile(q));
+    }
+    for (const x of [0, 1, 5, 9, 10]) {
+      expect(weighted.rank(x), `x ${String(x)}`).toBe(repeated.rank(x));
+    }
+    // 6 is 110 in binary, so one item each at levels 1 and 2.
+    expect(weighted.numLevels).toBe(3);
+    expect(weighted.retained).toBe(5);
+  });
+
+  test("refuse a count that is not a positive safe integer", () => {
+    const sketch = new KllSketch();
+    for (const count of [0, -1, 1.5, Number.NaN, 2 ** 53]) {
+      expect(() => {
+        sketch.add(1, count);
+      }).toThrow(ParamError);
+    }
+    expect(sketch.isEmpty).toBe(true);
+  });
+});
