@@ -420,13 +420,13 @@ export class ThetaSketch {
    */
   difference(other: ThetaSketch): ThetaSketch {
     this.#assertSameSeed(other, "subtract");
-    const theta = Math.min(this.#canonical(), other.#canonical());
+    let theta = Math.min(this.#canonical(), other.#canonical());
     const k = Math.min(this.#k, other.#k);
     const a = this.#sorted;
     const b = other.#sorted;
     const aEnd = this.retained;
     const bEnd = other.retained;
-    const out = new Float64Array(aEnd);
+    const out = new Float64Array(Math.min(k, aEnd));
     let j = 0;
     let count = 0;
     for (let i = 0; i < aEnd; i++) {
@@ -434,6 +434,10 @@ export class ThetaSketch {
       if (x >= theta) break;
       while (j < bEnd && (b[j] ?? 0) < x) j++;
       if (j < bEnd && b[j] === x) continue;
+      if (count === k) {
+        theta = x;
+        break;
+      }
       out[count++] = x;
     }
     return ThetaSketch.#sampled(k, this.#seed, theta, out, count);
