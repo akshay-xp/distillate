@@ -17,9 +17,11 @@ const SDS = [1, 2, 3] as const;
 // 0.4%, so a per-cell 99% fails sound bounds by chance. Pooled, it is about
 // 0.1%, and one cell whose bounds broke outright still costs the pool 6%.
 //
-// Sets stop at 10^5 keys. Error follows n / k, and 10^5 is already 24 times
-// the largest k: at 10^6 the counts and set operations measured the same, but
-// a 10^6 count cell runs past the 30 s test timeout under coverage.
+// Sets stay small. Error follows n / k, and every cell is several times past
+// the largest k: counts reach 4 * 10^4 keys (10k), each set of a pair 2 * 10^4
+// (5k). At 10^5 and 10^6 the verdicts were the same, but under coverage on a
+// CI runner a 10^5 count cell took 20 s and a 10^5 pair cell up to 44 s,
+// against a 30 s test timeout.
 //
 // Trials vary the seed over fixed keys. Keys are 12-byte buffers (cell, part,
 // index) written into one reused array; they only need to be distinct.
@@ -78,9 +80,9 @@ function checkCell(sketches: readonly ThetaSketch[], truth: number): number {
 
 test.each<[number, number]>([
   [256, 10_000],
-  [256, 100_000],
+  [256, 40_000],
   [4096, 10_000],
-  [4096, 100_000],
+  [4096, 40_000],
 ])(
   "a count at k %i of %i keys is unbiased and within 1.1 / sqrt(k)",
   (k, n) => {
@@ -94,7 +96,7 @@ test.each<[number, number]>([
   },
 );
 
-// Two sets of 10^5 keys sharing a fraction of them. Each side is its own keys unioned with the shared ones, which
+// Two sets of 2 * 10^4 keys sharing a fraction of them. Each side is its own keys unioned with the shared ones, which
 // equals adding them all, so the shared part is hashed once per trial.
 test.each<[number, number]>([
   [256, 0.01],
@@ -106,7 +108,7 @@ test.each<[number, number]>([
 ])(
   "at k %i and overlap %f, intersection and difference are unbiased",
   (k, fraction) => {
-    const n = 100_000;
+    const n = 20_000;
     const shared = Math.round(fraction * n);
     const cell = k * 100 + Math.round(fraction * 100);
     const both: ThetaSketch[] = [];
