@@ -10,6 +10,7 @@ import {
   writeHeader,
 } from "../../src/core/serialize.js";
 import { ThetaSketch } from "../../src/theta/theta.js";
+import { allocatedBy } from "../helpers/topk.js";
 
 const BODY = 16;
 const HASHES = BODY + 24;
@@ -79,6 +80,15 @@ test("a decoded sketch takes more keys", () => {
   );
   restored.add("x:200");
   expect(restored.count()).toBe(201);
+});
+
+test("a decoded sketch is read without allocating beyond the decode", () => {
+  const bytes = sketchOf(keys("x", 100_000), 4096).toBytes();
+  const decode = allocatedBy(() => ThetaSketch.fromBytes(bytes)).bytes;
+  const decodeAndRead = allocatedBy(() =>
+    ThetaSketch.fromBytes(bytes).count(),
+  ).bytes;
+  expect(decodeAndRead).toBeLessThanOrEqual(decode);
 });
 
 test("a sketch round-trips through JSON", () => {

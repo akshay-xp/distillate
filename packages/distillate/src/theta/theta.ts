@@ -75,7 +75,7 @@ export class ThetaSketch {
   #theta = HASH_RANGE;
   // The live hashes, sorted: the canonical sample is the first min(size, k).
   // Also the rebuild's quickselect space, which leaves it stale.
-  #sorted = new Float64Array(0);
+  #sorted: Float64Array = new Float64Array(0);
   #stale = true;
   #canonTheta = HASH_RANGE;
   // Reused across add() so hashing a key allocates nothing per call.
@@ -477,8 +477,9 @@ export class ThetaSketch {
     return this.#canonTheta;
   }
 
-  // A sketch holding exactly `hashes[0..count)` below `theta`. A set
-  // operation keeps at most k hashes, so the table fits at half load.
+  // A sketch holding exactly `hashes[0..count)` below `theta`. Every caller
+  // passes at most k hashes, strictly ascending: already the canonical sample,
+  // so it is adopted as #sorted and the first read neither sorts nor copies.
   static #sampled(
     k: number,
     seed: number,
@@ -494,6 +495,9 @@ export class ThetaSketch {
     sketch.#table = table;
     sketch.#size = count;
     sketch.#theta = theta;
+    sketch.#sorted = hashes;
+    sketch.#canonTheta = theta;
+    sketch.#stale = false;
     return sketch;
   }
 
