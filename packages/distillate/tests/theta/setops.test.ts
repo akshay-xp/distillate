@@ -1,8 +1,8 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { ParamError } from "../../src/core/params.js";
 import { ThetaSketch } from "../../src/theta/theta.js";
-import { allocatedBy, SMALL } from "../helpers/topk.js";
+import { SMALL, typedArrayBytesDuring } from "../helpers/topk.js";
 
 // Keys `from` to `to - 1`.
 const range = (from: number, to: number): string[] =>
@@ -116,7 +116,7 @@ describe("memory", () => {
     const b = sketchOf(["d"], 2 ** 26);
     a.count();
     b.count();
-    const { value: union, bytes } = allocatedBy(() => a.union(b));
+    const { value: union, bytes } = typedArrayBytesDuring(() => a.union(b));
     expect(union.count()).toBe(4);
     expect(bytes).toBeLessThan(SMALL);
   });
@@ -128,7 +128,9 @@ describe("memory", () => {
     const b = sketchOf(range(0, 5), 16);
     a.count();
     b.count();
-    const { value: onlyA, bytes } = allocatedBy(() => a.difference(b));
+    const { value: onlyA, bytes } = typedArrayBytesDuring(() =>
+      a.difference(b),
+    );
     expect(onlyA.equals(sketchOf(range(5, 6000), 16))).toBe(true);
     // A 32-slot table (256 B) and 16 hashes (128 B).
     expect(bytes).toBeLessThan(1024);
@@ -138,13 +140,16 @@ describe("memory", () => {
     ["union", (x, y) => x.union(y)],
     ["intersect", (x, y) => x.intersect(y)],
     ["difference", (x, y) => x.difference(y)],
-  ])("%s gives a result read without allocating", (_, operate) => {
+  ])("%s gives a result read without allocating or sorting", (_, operate) => {
     const x = sketchOf(range(0, 100_000), 4096);
     const y = sketchOf(range(50_000, 150_000), 4096);
     x.count();
     y.count();
     const result = operate(x, y);
-    expect(allocatedBy(() => result.count()).bytes).toBe(0);
+    const sort = vi.spyOn(Float64Array.prototype, "sort");
+    expect(typedArrayBytesDuring(() => result.count()).bytes).toBe(0);
+    expect(sort).not.toHaveBeenCalled();
+    sort.mockRestore();
   });
 
   // The result keeps its merge output as its sample, which later adds and

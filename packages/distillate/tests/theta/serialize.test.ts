@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 
 import { crc32 } from "../../src/core/crc32.js";
 import {
@@ -10,7 +10,7 @@ import {
   writeHeader,
 } from "../../src/core/serialize.js";
 import { ThetaSketch } from "../../src/theta/theta.js";
-import { allocatedBy } from "../helpers/topk.js";
+import { typedArrayBytesDuring } from "../helpers/topk.js";
 
 const BODY = 16;
 const HASHES = BODY + 24;
@@ -82,13 +82,14 @@ test("a decoded sketch takes more keys", () => {
   expect(restored.count()).toBe(201);
 });
 
-test("a decoded sketch is read without allocating beyond the decode", () => {
-  const bytes = sketchOf(keys("x", 100_000), 4096).toBytes();
-  const decode = allocatedBy(() => ThetaSketch.fromBytes(bytes)).bytes;
-  const decodeAndRead = allocatedBy(() =>
-    ThetaSketch.fromBytes(bytes).count(),
-  ).bytes;
-  expect(decodeAndRead).toBeLessThanOrEqual(decode);
+test("a decoded sketch is read without allocating or sorting", () => {
+  const decoded = ThetaSketch.fromBytes(
+    sketchOf(keys("x", 100_000), 4096).toBytes(),
+  );
+  const sort = vi.spyOn(Float64Array.prototype, "sort");
+  expect(typedArrayBytesDuring(() => decoded.count()).bytes).toBe(0);
+  expect(sort).not.toHaveBeenCalled();
+  sort.mockRestore();
 });
 
 test("a sketch round-trips through JSON", () => {
