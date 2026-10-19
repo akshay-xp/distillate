@@ -8,6 +8,7 @@ const PROBES = [
   "tests/minhash/allocation.test.ts",
   "tests/riblt/allocation.test.ts",
   "tests/theta/allocation.test.ts",
+  "tests/kll/allocation.test.ts",
 ];
 
 const shared = {

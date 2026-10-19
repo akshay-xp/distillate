@@ -283,7 +283,7 @@ export class KllSketch {
     // An odd item out stays behind at level h.
     const adjBeg = rawBeg + odd;
     const half = (rawEnd - adjBeg) / 2;
-    if (h === 0) items.subarray(adjBeg, rawEnd).sort();
+    if (h === 0) sortRange(items, adjBeg, rawEnd);
 
     // Keep every second item from a random offset, packed to the front of
     // the range, then merge them with level h + 1. The merge writes from
@@ -374,4 +374,50 @@ function totalCapacity(k: number, numLevels: number): number {
   let total = 0;
   for (let h = 0; h < numLevels; h++) total += levelCapacity(k, numLevels, h);
   return total;
+}
+
+// Sorts a[lo, hi) ascending in place. A subarray view and its sort() would do
+// the same, but the view is an allocation per compaction.
+function sortRange(a: Float64Array, lo: number, hi: number): void {
+  while (hi - lo > 16) {
+    // Median of three to the middle, then a Hoare partition around it.
+    const mid = (lo + hi) >>> 1;
+    const last = hi - 1;
+    if ((a[mid] ?? 0) < (a[lo] ?? 0)) swap(a, mid, lo);
+    if ((a[last] ?? 0) < (a[lo] ?? 0)) swap(a, last, lo);
+    if ((a[last] ?? 0) < (a[mid] ?? 0)) swap(a, last, mid);
+    const pivot = a[mid] ?? 0;
+    let i = lo;
+    let j = last;
+    for (;;) {
+      while ((a[i] ?? 0) < pivot) i++;
+      while ((a[j] ?? 0) > pivot) j--;
+      if (i >= j) break;
+      swap(a, i++, j--);
+    }
+    // Recurse into the smaller side, loop on the larger: stack depth stays
+    // logarithmic.
+    if (j + 1 - lo < hi - (j + 1)) {
+      sortRange(a, lo, j + 1);
+      lo = j + 1;
+    } else {
+      sortRange(a, j + 1, hi);
+      hi = j + 1;
+    }
+  }
+  for (let i = lo + 1; i < hi; i++) {
+    const v = a[i] ?? 0;
+    let j = i - 1;
+    while (j >= lo && (a[j] ?? 0) > v) {
+      a[j + 1] = a[j] ?? 0;
+      j--;
+    }
+    a[j + 1] = v;
+  }
+}
+
+function swap(a: Float64Array, i: number, j: number): void {
+  const t = a[i] ?? 0;
+  a[i] = a[j] ?? 0;
+  a[j] = t;
 }
