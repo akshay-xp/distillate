@@ -42,26 +42,28 @@ Every push runs a CI smoke matrix that imports the built package on Node 22/24, 
 
 Each structure ships as its own subpath, so you only bundle what you import.
 
-| Import                | Structure      | Answers             | Use for                                                  |
-| --------------------- | -------------- | ------------------- | -------------------------------------------------------- |
-| `distillate/bloom`    | Classic Bloom  | seen this key?      | Familiar default, migration from `bloom-filters`         |
-| `distillate/scalable` | Scalable Bloom | seen this key?      | Key count unknown or growing; keeps its FPR bound        |
-| `distillate/blocked`  | Blocked Bloom  | seen this key?      | Faster lookups and a lower FPR for a small space premium |
-| `distillate/fuse`     | Binary Fuse    | seen this key?      | Static set built once and queried a lot; least space     |
-| `distillate/cuckoo`   | Cuckoo         | seen this key?      | Keys come and go; the one filter with delete             |
-| `distillate/hll`      | HyperLogLog    | how many distinct?  | Counting distinct users, IPs, or keys in fixed space     |
-| `distillate/countmin` | Count-Min      | how many times?     | Counting events per key in fixed space                   |
-| `distillate/topk`     | Top-K          | which are heaviest? | Finding the most frequent keys in fixed space            |
-| `distillate/ddsketch` | DDSketch       | what is the p99?    | Latency and size percentiles, mergeable, in fixed space  |
-| `distillate/minhash`  | MinHash        | how similar?        | Near-duplicate documents and set overlap, with an index  |
-| `distillate/riblt`    | RIBLT          | which keys differ?  | Syncing two sets that mostly agree, exactly              |
+| Import                | Structure      | Answers             | Use for                                                   |
+| --------------------- | -------------- | ------------------- | --------------------------------------------------------- |
+| `distillate/bloom`    | Classic Bloom  | seen this key?      | Familiar default, migration from `bloom-filters`          |
+| `distillate/scalable` | Scalable Bloom | seen this key?      | Key count unknown or growing; keeps its FPR bound         |
+| `distillate/blocked`  | Blocked Bloom  | seen this key?      | Faster lookups and a lower FPR for a small space premium  |
+| `distillate/fuse`     | Binary Fuse    | seen this key?      | Static set built once and queried a lot; least space      |
+| `distillate/cuckoo`   | Cuckoo         | seen this key?      | Keys come and go; the one filter with delete              |
+| `distillate/hll`      | HyperLogLog    | how many distinct?  | Counting distinct users, IPs, or keys in fixed space      |
+| `distillate/countmin` | Count-Min      | how many times?     | Counting events per key in fixed space                    |
+| `distillate/topk`     | Top-K          | which are heaviest? | Finding the most frequent keys in fixed space             |
+| `distillate/ddsketch` | DDSketch       | what is the p99?    | Latency and size percentiles, mergeable, in fixed space   |
+| `distillate/minhash`  | MinHash        | how similar?        | Near-duplicate documents and set overlap, with an index   |
+| `distillate/riblt`    | RIBLT          | which keys differ?  | Syncing two sets that mostly agree, exactly               |
+| `distillate/theta`    | Theta          | how many, in both?  | Distinct counts to intersect and subtract across segments |
 
 The filters are mutable except Binary Fuse, which is built once from the whole
-key set. HyperLogLog, Count-Min, Top-K, DDSketch and MinHash are sketches rather
-than filters: none reports whether it saw any particular key. HyperLogLog counts
-distinct keys, Count-Min counts how often each key appeared, Top-K reports which
-keys appeared most, DDSketch reports quantiles of numbers rather than keys, and
-MinHash estimates how much two sets overlap. RIBLT is neither: it reconciles
+key set. HyperLogLog, Count-Min, Top-K, DDSketch, MinHash and Theta are sketches
+rather than filters: none reports whether it saw any particular key. HyperLogLog
+counts distinct keys, Count-Min counts how often each key appeared, Top-K
+reports which keys appeared most, DDSketch reports quantiles of numbers rather
+than keys, MinHash estimates how much two sets overlap, and Theta counts
+distinct keys in a union, intersection or difference of sets. RIBLT is neither: it reconciles
 two peers' sets, finding exactly the keys each side alone holds.
 
 ### Classic Bloom (`distillate/bloom`)
@@ -285,6 +287,25 @@ client.remote().length; // 2
 `take(n)` is the next `n` symbols as one `Uint8Array` frame to send. `remote()` reports the other side's keys as 64-bit hashes; that side resolves them with `RibltDecoder.hashOf`. Keys must be distinct, and both peers must share a `seed`.
 
 Also: `add`, `stream`, `decoded`, `RibltDecoder.hashOf`.
+
+### Theta (`distillate/theta`)
+
+A **sketch** of a set that counts its distinct keys and combines with others by union, intersection and difference, so "how many did A and B" or "A but not B" is answered from stored sketches. It is exact up to `k` distinct keys and within about `1 / sqrt(k)` past that, with bounds that say how far off a count may be. Full API, choosing it over HyperLogLog, and the limits: [Theta guide](https://distillate.akxp.net/guides/theta/).
+
+```ts
+import { ThetaSketch } from "distillate/theta";
+
+const monday = ThetaSketch.from(["alice", "bob", "carol"], 0.02);
+const tuesday = ThetaSketch.from(["bob", "carol", "dave"], 0.02);
+
+monday.union(tuesday).count(); // 4
+monday.intersect(tuesday).count(); // 2
+monday.difference(tuesday).count(); // 1
+```
+
+Past `k` keys, `lowerBound(sd)` and `upperBound(sd)` bracket the estimate at 1, 2 or 3 standard deviations. Set operations need a shared `seed`, and keep the smaller `k` of the two.
+
+Also: `create`, `add`, `equals`, `isEstimating`, `theta`, `toBytes` / `fromBytes`, `toJSON` / `fromJSON`, `thetaSizing`.
 
 ## Performance
 
