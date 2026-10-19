@@ -2,7 +2,8 @@
 import { bench, do_not_optimize } from "mitata";
 import * as os from "node:os";
 import { performance, PerformanceObserver } from "node:perf_hooks";
-import { getHeapSpaceStatistics } from "node:v8";
+import { getHeapSpaceStatistics, setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
 
 export interface Queryable {
   has(key: string): boolean;
@@ -15,6 +16,21 @@ const MAX_SETTLE_TICKS = 20;
 // Calls made before the count starts, to let V8 optimise the loop. Ten times
 // the ~50k measured to be enough even with coverage instrumentation on.
 const WARMUP_CALLS = 500_000;
+
+type Gc = (options?: { type: "minor" }) => void;
+let gc: Gc | undefined;
+
+// Empties the young generation: the first scavenge moves survivors within it,
+// the second promotes them. gc is exposed on first use, so a benchmark that
+// imports the harness for anything else runs with V8's flags untouched.
+function emptyYoungGeneration(): void {
+  if (gc === undefined) {
+    setFlagsFromString("--expose-gc");
+    gc = runInNewContext("gc") as Gc;
+  }
+  gc({ type: "minor" });
+  gc({ type: "minor" });
+}
 
 function runtime(): string {
   const versions = process.versions as Record<string, string | undefined>;
@@ -134,10 +150,14 @@ function youngBytes(): number {
  *   failed CI: an `add()` allocating nothing read a stable 40.006 bytes/op, and
  *   passed on rerun with no code change.
  *
- * Deliberately does not force `global.gc()`. Collecting either side of the
- * window measures surviving heap instead of allocation, which reports nothing
- * for a loop churning garbage and would miss the regression this exists to
- * catch.
+ * The young generation is emptied just before the window, never after it.
+ * V8 only empties it on a task once it is about 80% full, so a window could
+ * open with it most of the way there, and the few KB a clean window allocates
+ * would then collect: the probes failed CI that way at random. Opened empty, a
+ * window collects only once it has itself allocated a whole young generation,
+ * so a collection means the call allocates. Collecting after the window would
+ * measure surviving heap instead of allocation, which reports nothing for a
+ * loop churning garbage and would miss the regression this exists to catch.
  *
  * One window is measured and reported as it stands. Repeating and taking the
  * best was tried, and it is the wrong shape: it hides a caller whose loop V8
@@ -194,6 +214,7 @@ export async function measureAllocation(
 
   await settle();
   collections = 0;
+  emptyYoungGeneration();
 
   // Two reads back to back measure what a read itself allocates.
   const idle = youngBytes();
