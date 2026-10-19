@@ -142,6 +142,13 @@ const lies: [string, Mutation, new (...args: never[]) => Error][] = [
     SerializationError,
   ],
   [
+    "k 300, which holds the count but is no power of two",
+    (_, v) => {
+      v.setUint32(BODY + 4, 300, true);
+    },
+    SerializationError,
+  ],
+  [
     "a count the body cannot hold",
     (_, v) => {
       v.setUint32(BODY + 16, v.getUint32(BODY + 16, true) + 1, true);
