@@ -32,18 +32,18 @@ and a frame that will not decode.
 | [`ReservedBitsError`](/api/bloom/classes/reservedbitserror/)                             | `fromBytes`                                               | A newer frame sets reserved header bits               |
 | [`ChecksumError`](/api/bloom/classes/checksumerror/)                                     | `fromBytes`                                               | CRC32 does not match                                  |
 
-The seven serialization errors are exported from all eleven structure subpaths
+The seven serialization errors are exported from all twelve structure subpaths
 (`distillate/bloom`, `distillate/blocked`, `distillate/fuse`, `distillate/hll`,
 `distillate/scalable`, `distillate/cuckoo`, `distillate/countmin`,
-`distillate/topk`, `distillate/ddsketch`, `distillate/minhash` and
-`distillate/riblt`);
+`distillate/topk`, `distillate/ddsketch`, `distillate/minhash`,
+`distillate/riblt` and `distillate/theta`);
 `distillate/frame` exports the six a frame read can throw (all but
 `UnknownHashVariantError`). The rest are exported from the subpath of the
 structure that throws them, except `ParamError`, which is exported from
 `distillate/bloom`, `distillate/blocked`, `distillate/hll`,
 `distillate/scalable`, `distillate/cuckoo`, `distillate/countmin`,
-`distillate/topk`, `distillate/ddsketch`, `distillate/minhash` and
-`distillate/riblt`.
+`distillate/topk`, `distillate/ddsketch`, `distillate/minhash`,
+`distillate/riblt` and `distillate/theta`.
 
 ## Parameter errors
 
