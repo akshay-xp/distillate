@@ -120,4 +120,17 @@ describe("memory", () => {
     expect(union.count()).toBe(4);
     expect(bytes).toBeLessThan(SMALL);
   });
+
+  // b is exact, so its theta is the whole range and all of a's 4096 retained
+  // hashes survive the cut by theta; only k may cut them to 16.
+  test("a mixed-k difference holds at most the smaller k", () => {
+    const a = sketchOf(range(0, 6000), 4096);
+    const b = sketchOf(range(0, 5), 16);
+    a.count();
+    b.count();
+    const { value: onlyA, bytes } = allocatedBy(() => a.difference(b));
+    expect(onlyA.equals(sketchOf(range(5, 6000), 16))).toBe(true);
+    // A 32-slot table (256 B) and 16 hashes (128 B).
+    expect(bytes).toBeLessThan(1024);
+  });
 });
