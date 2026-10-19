@@ -265,6 +265,7 @@ export class KllSketch {
     }
     result.#items = items;
     result.#levels = levels;
+    result.#compress();
     return result;
   }
 
@@ -331,14 +332,37 @@ export class KllSketch {
   // Halves the lowest level at or over its capacity into the level above,
   // freeing space at the front of #items. Called only when it is full.
   #compact(): void {
-    const k = this.#k;
+    this.#compactLevel(this.#lowestFullLevel());
+  }
+
+  // Compacts until the items fit the capacity at this k, then moves them into
+  // a buffer of exactly that size, as add() expects. A union starts over it.
+  #compress(): void {
+    while (this.retained > totalCapacity(this.#k, this.numLevels)) {
+      this.#compactLevel(this.#lowestFullLevel());
+    }
+    const total = totalCapacity(this.#k, this.numLevels);
+    const front = this.#levels[0] ?? 0;
+    const shift = total - this.#items.length;
+    const items = new Float64Array(total);
+    items.set(this.#items.subarray(front), front + shift);
+    this.#items = items;
+    this.#levels = this.#levels.map((at) => at + shift);
+  }
+
+  // The lowest level at or over its capacity, or the top if none is.
+  #lowestFullLevel(): number {
     let h = 0;
     for (; h + 1 < this.numLevels; h++) {
       const size = (this.#levels[h + 1] ?? 0) - (this.#levels[h] ?? 0);
-      if (size >= levelCapacity(k, this.numLevels, h)) break;
+      if (size >= levelCapacity(this.#k, this.numLevels, h)) break;
     }
-    if (h + 1 === this.numLevels) this.#addTopLevel();
+    return h;
+  }
 
+  // Halves level h into the level above, adding a level when h is the top.
+  #compactLevel(h: number): void {
+    if (h + 1 === this.numLevels) this.#addTopLevel();
     const items = this.#items;
     const levels = this.#levels;
     const rawBeg = levels[h] ?? 0;
@@ -387,6 +411,8 @@ export class KllSketch {
     levels.push(levels.at(-1) ?? 0);
     const total = totalCapacity(this.#k, this.numLevels);
     const grow = total - this.#items.length;
+    // A union's buffer can already be larger; #compress() trims it after.
+    if (grow <= 0) return;
     const items = new Float64Array(total);
     items.set(this.#items, grow);
     this.#items = items;
