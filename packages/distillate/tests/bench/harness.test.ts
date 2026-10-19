@@ -90,10 +90,9 @@ test("measureAllocation tells an allocating loop from a flat one", async () => {
   expect(total).toBeGreaterThanOrEqual(1_000_000);
 });
 
-// Too little garbage to fill the young generation, so usually no collection,
-// but every call still allocates an object: the shape a collection count
-// cannot see. Outside the allocation project the young generation is not
-// pinned, so a window can still collect; that one is retried.
+// Too little garbage to fill the young generation, so no collection, but
+// every call still allocates an object: the shape a collection count cannot
+// see.
 test("measureAllocation reports bytes a loop allocates without a collection", async () => {
   const sink: object[] = [];
   let calls = 0;
@@ -101,10 +100,7 @@ test("measureAllocation reports bytes a loop allocates without a collection", as
     if (++calls % 1000 === 0) sink.length = 0;
     sink.push({ a: calls });
   };
-  let result = await measureAllocation(allocate, 5000);
-  for (let attempt = 1; attempt < 5 && result.collections > 0; attempt++) {
-    result = await measureAllocation(allocate, 5000);
-  }
+  const result = await measureAllocation(allocate, 5000);
 
   expect(result.collections).toBe(0);
   expect(result.bytesPerCall).toBeGreaterThanOrEqual(12);
