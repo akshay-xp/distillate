@@ -196,16 +196,51 @@ export class KllSketch {
    *
    * @param value - Any number but `NaN`; infinities and `-0` are ordered as
    * numbers.
-   * @throws {@link ParamError} when `value` is `NaN`. Nothing is recorded.
+   * @param count - How many times to record it; a positive safe integer.
+   * @throws {@link ParamError} when `value` is `NaN` or `count` is not a
+   * positive safe integer. Nothing is recorded.
    */
-  add(value: number): void {
+  add(value: number, count = 1): void {
     if (Number.isNaN(value)) throw new ParamError("value must not be NaN");
-    const at = (this.#levels[0] ?? 0) - 1;
-    this.#items[at] = value;
-    this.#levels[0] = at;
-    this.#n++;
+    if (count === 1) {
+      const at = (this.#levels[0] ?? 0) - 1;
+      this.#items[at] = value;
+      this.#levels[0] = at;
+    } else {
+      if (!Number.isSafeInteger(count) || count < 1) {
+        throw new ParamError(
+          `count must be a positive safe integer, got ${String(count)}`,
+        );
+      }
+      // One item per set bit: bit h of count is 2^h values, which is what an
+      // item at level h stands for.
+      for (
+        let h = 0, rest = count;
+        rest > 0;
+        h++, rest = Math.floor(rest / 2)
+      ) {
+        if (rest % 2 === 1) this.#insert(value, h);
+      }
+    }
+    this.#n += count;
     if (!(value >= this.#min)) this.#min = value;
     if (!(value <= this.#max)) this.#max = value;
+  }
+
+  // Places value in level h at its sorted position, adding levels up to h.
+  // Everything in front of that position moves one slot into the free space.
+  #insert(value: number, h: number): void {
+    const levels = this.#levels;
+    while (levels.length - 1 <= h) levels.push(levels.at(-1) ?? 0);
+    const items = this.#items;
+    let at = levels[h] ?? 0;
+    const end = levels[h + 1] ?? 0;
+    // Level 0 is unsorted, so anywhere in it will do.
+    if (h > 0) while (at < end && (items[at] ?? 0) < value) at++;
+    const front = levels[0] ?? 0;
+    items.copyWithin(front - 1, front, at);
+    items[at - 1] = value;
+    for (let i = 0; i <= h; i++) levels[i] = (levels[i] ?? 0) - 1;
   }
 
   // Every item in ascending order, with the stream weight at or below it.
