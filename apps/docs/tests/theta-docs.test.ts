@@ -29,10 +29,15 @@ test("the Theta guide covers what a reader needs to choose and use it", () => {
     "Set operations",
     "Read the bounds",
     "Persist it",
+    "Measured",
     "Limits",
   ]) {
     section(page, heading);
   }
+
+  const measured = section(page, "Measured");
+  expect(measured).toContain("RESULTS");
+  expect(measured).toContain("inclusion-exclusion");
 
   const pick = section(page, "When to pick it");
   expect(pick).toContain("HyperLogLog");

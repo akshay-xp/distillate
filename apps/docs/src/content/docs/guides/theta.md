@@ -131,6 +131,28 @@ and a restored sketch takes more keys and set operations. At the default `k`
 a full frame is 32,812 bytes. `toJSON` and `fromJSON` wrap the same bytes. The
 layout is [frame type 13](/reference/serialization/).
 
+## Measured
+
+From the [bench results](https://github.com/akshay-xp/distillate/blob/main/apps/bench/RESULTS.md#theta),
+two sets of 1M keys each on an Apple M5, errors averaged over 10 seeds, against
+distillate's own HyperLogLog at `p = 16` estimating by inclusion-exclusion. Its
+frame is 48 KB against Theta's 32 KB at the default `k`. Errors and sizes
+reproduce anywhere; the timings do not.
+
+| overlap | Theta intersection error | HyperLogLog intersection error |
+| ------- | ------------------------ | ------------------------------ |
+| 1%      | 14.1%                    | 56.3%                          |
+| 10%     | 3.5%                     | 4.1%                           |
+| 50%     | 1.7%                     | 0.8%                           |
+
+The smaller the overlap, the more Theta wins: inclusion-exclusion's error
+follows the union, so at 1% it is four times Theta's. At a 50% overlap, and on
+every difference, HyperLogLog at that precision is the more accurate, because
+`p = 16` resolves the union to about 0.4% where `k = 4096` gives about 1.6%.
+Both add keys at about 39 M ops/s, and an intersection, union and difference
+together take about 1.2 ms. An exact `Set` adds at about 19 M ops/s and takes
+126 to 173 ms for the same set operations, and holds every key.
+
 ## Limits
 
 While it takes keys, a sketch holds a table of up to `2k` hashes and a sorted
