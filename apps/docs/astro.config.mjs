@@ -135,6 +135,7 @@ export default defineConfig({
             { label: "DDSketch", link: "/guides/ddsketch/" },
             { label: "MinHash", link: "/guides/minhash/" },
             { label: "RIBLT", link: "/guides/riblt/" },
+            { label: "Theta", link: "/guides/theta/" },
             { label: "Sizing and tuning FPR", link: "/guides/sizing/" },
             {
               label: "Sizing calculator",
