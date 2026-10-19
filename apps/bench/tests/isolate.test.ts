@@ -126,3 +126,15 @@ test("the riblt job resolves each reconciler by name", () => {
     runIsolated("riblt", "no-such-reconciler", [[[1000, 10]]]),
   ).toThrow(/no-such-reconciler/);
 });
+
+test("the theta job resolves each library by name", () => {
+  const rows = runIsolated<{ name: string }>("theta", "distillate/hll", [
+    2000,
+    [0.1],
+    1,
+  ]);
+  expect(rows.rows.map((r) => r.name)).toEqual(["distillate/hll"]);
+  expect(() =>
+    runIsolated("theta", "no-such-library", [2000, [0.1], 1]),
+  ).toThrow(/no-such-library/);
+});
