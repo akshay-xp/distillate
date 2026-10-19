@@ -265,6 +265,35 @@ export class ThetaSketch {
   }
 
   /**
+   * Subtracts a sketch from this one, giving a sketch of the keys this one has
+   * seen and the other has not. Both are left untouched.
+   *
+   * @param other - The sketch to subtract; must share this one's seed.
+   * @returns A new sketch of the difference, at the smaller `k`.
+   * @throws {@link ParamError} if the seeds differ.
+   */
+  difference(other: ThetaSketch): ThetaSketch {
+    this.#assertSameSeed(other, "subtract");
+    const theta = Math.min(this.#canonical(), other.#canonical());
+    const k = Math.min(this.#k, other.#k);
+    const a = this.#sorted;
+    const b = other.#sorted;
+    const aEnd = this.retained;
+    const bEnd = other.retained;
+    const out = new Float64Array(aEnd);
+    let j = 0;
+    let count = 0;
+    for (let i = 0; i < aEnd; i++) {
+      const x = a[i] ?? 0;
+      if (x >= theta) break;
+      while (j < bEnd && (b[j] ?? 0) < x) j++;
+      if (j < bEnd && b[j] === x) continue;
+      out[count++] = x;
+    }
+    return ThetaSketch.#sampled(k, this.#seed, theta, out, count);
+  }
+
+  /**
    * Whether two sketches hold the same canonical sample at the same `k` and
    * seed. The order keys arrived in does not enter into it.
    *
