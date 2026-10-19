@@ -86,3 +86,42 @@ describe("exact below k", () => {
     expect(() => sketch.rank(Number.NaN)).toThrow(ParamError);
   });
 });
+
+describe("cdf and pmf", () => {
+  const oneToTen = (): KllSketch => {
+    const sketch = new KllSketch();
+    for (let v = 1; v <= 10; v++) sketch.add(v);
+    return sketch;
+  };
+
+  test("give the fraction at or below each split, and between them", () => {
+    const sketch = oneToTen();
+    expect(sketch.cdf([3, 7])).toEqual([0.3, 0.7, 1]);
+    const pmf = sketch.pmf([3, 7]);
+    [0.3, 0.4, 0.3].forEach((p, i) => {
+      expect(pmf[i]).toBeCloseTo(p, 12);
+    });
+    expect(sketch.cdf([])).toEqual([1]);
+    expect(sketch.pmf([])).toEqual([1]);
+  });
+
+  test("refuse splits that are not strictly increasing or hold NaN", () => {
+    const sketch = oneToTen();
+    for (const splits of [
+      [3, 3],
+      [5, 2],
+      [1, Number.NaN],
+    ]) {
+      expect(() => sketch.cdf(splits)).toThrow(ParamError);
+      expect(() => sketch.pmf(splits)).toThrow(ParamError);
+    }
+  });
+
+  test("read NaN while empty", () => {
+    expect(new KllSketch().cdf([1, 2])).toEqual([
+      Number.NaN,
+      Number.NaN,
+      Number.NaN,
+    ]);
+  });
+});
