@@ -308,6 +308,25 @@ Past `k` keys, `lowerBound(sd)` and `upperBound(sd)` bracket the estimate at 1, 
 
 Also: `create`, `add`, `equals`, `isEstimating`, `theta`, `toBytes` / `fromBytes`, `toJSON` / `fromJSON`, `thetaSizing`.
 
+### KLL (`distillate/kll`)
+
+A **sketch** of numbers whose error is bounded in rank: every rank and quantile it reports is within about 1.33% of the stream's positions at the default `k`, whatever the values, in memory fixed by `k` alone. It answers "what share of requests met the SLO?", which DDSketch cannot guarantee; DDSketch stays the choice for extreme tails. Full API, choosing between the two, and the limits: [KLL guide](https://distillate.akxp.net/guides/kll/).
+
+```ts
+import { KllSketch } from "distillate/kll";
+
+const latency = new KllSketch({ seed: 1 });
+for (let ms = 1; ms <= 1000; ms++) latency.add(ms);
+
+latency.rank(200); // ~0.196: the share at or under 200 ms
+latency.quantile(0.99); // ~990
+latency.max; // 1000
+```
+
+Without a `seed`, each sketch draws its own, which keeps merged shards independent; pass one when runs must repeat byte for byte. A union keeps the smaller `k` of the two.
+
+Also: `create`, `add(value, count)`, `quantiles`, `cdf`, `pmf`, `count`, `min`, `union`, `normalizedRankError`, `equals`, `toBytes` / `fromBytes`, `toJSON` / `fromJSON`, `kllSizing`.
+
 ## Performance
 
 Classic Bloom head-to-head at a **matched 1% false-positive rate** over the same 100k keys, measured by identical code (cross-library harness, node v24.14.1, Apple M5):
