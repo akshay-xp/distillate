@@ -5,6 +5,8 @@ import {
   TRACKED,
   appendRows,
   downloadsRow,
+  recorded,
+  retryDelay,
   githubRow,
   npmRows,
 } from "./ranks.js";
@@ -13,13 +15,20 @@ import {
 // but answers 429 to a burst, without a Retry-After, so it is paced too.
 const GITHUB_SPACING_MS = 2_100;
 const NPM_SPACING_MS = 1_500;
-const RETRY_MS = [30_000, 60_000, 120_000];
 const DEPTH = 250;
 
 const path = process.argv[2];
 if (!path) throw new Error("usage: track <csv path>");
 const date = new Date().toISOString().slice(0, 10);
 const token = process.env.GITHUB_TOKEN;
+
+// One run per date: a manual dispatch on a day the schedule also runs would
+// otherwise double that day's rows. A failed run writes nothing, so a rerun
+// after one still records.
+if (recorded(path, date)) {
+  console.log(`${date} is already recorded in ${path}`);
+  process.exit(0);
+}
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -31,12 +40,15 @@ async function json(
   for (let attempt = 0; ; attempt++) {
     const response = await fetch(url, { headers });
     if (response.ok) return response.json();
-    const wait = RETRY_MS[attempt];
-    if (response.status !== 429 || wait === undefined) {
+    const wait = retryDelay(
+      response.status,
+      response.headers.get("retry-after"),
+      attempt,
+    );
+    if (wait === undefined) {
       throw new Error(`${String(response.status)} from ${url}`);
     }
-    const after = Number(response.headers.get("retry-after"));
-    await sleep(after > 0 ? after * 1000 : wait);
+    await sleep(wait);
   }
 }
 

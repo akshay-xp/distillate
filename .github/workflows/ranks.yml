@@ -43,6 +43,8 @@ jobs:
       - name: Commit and push
         run: |
           git -C ranks-data add ranks.csv
+          # A date already recorded adds nothing, so there is nothing to push.
+          if git -C ranks-data diff --cached --quiet; then exit 0; fi
           git -C ranks-data \
             -c user.name="github-actions[bot]" \
             -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \

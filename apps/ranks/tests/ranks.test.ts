@@ -11,6 +11,8 @@ import {
   TRACKED,
   appendRows,
   downloadsRow,
+  recorded,
+  retryDelay,
   githubRow,
   npmRows,
 } from "../src/ranks.js";
@@ -160,5 +162,47 @@ describe("appendRows", () => {
     for (const value of [...QUERIES, ...TRACKED]) {
       expect(value).not.toMatch(/[,"]/);
     }
+  });
+});
+
+describe("retryDelay", () => {
+  test("backs off on a 429, honouring Retry-After when given", () => {
+    expect(retryDelay(429, null, 0)).toBe(30_000);
+    expect(retryDelay(429, null, 2)).toBe(120_000);
+    expect(retryDelay(429, "7", 0)).toBe(7_000);
+  });
+
+  // GitHub's secondary rate limit answers 403 with a Retry-After; a 403
+  // without one is a real refusal, such as a bad token, and must fail.
+  test("retries a 403 only when it carries Retry-After", () => {
+    expect(retryDelay(403, "60", 0)).toBe(60_000);
+    expect(retryDelay(403, null, 0)).toBeUndefined();
+  });
+
+  test("gives up after three retries, and never retries other failures", () => {
+    expect(retryDelay(429, null, 3)).toBeUndefined();
+    expect(retryDelay(500, "5", 0)).toBeUndefined();
+  });
+});
+
+describe("recorded", () => {
+  test("tells whether the CSV already holds rows for a date", () => {
+    const path = join(mkdtempSync(join(tmpdir(), "ranks-")), "ranks.csv");
+    expect(recorded(path, "2026-10-21")).toBe(false);
+
+    appendRows(path, [
+      {
+        date: "2026-10-21",
+        source: "downloads",
+        query: "",
+        name: "distillate",
+        rank: "",
+        score: "",
+        downloads: "606",
+      },
+    ]);
+
+    expect(recorded(path, "2026-10-21")).toBe(true);
+    expect(recorded(path, "2026-10-22")).toBe(false);
   });
 });
