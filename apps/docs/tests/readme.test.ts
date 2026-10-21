@@ -145,3 +145,33 @@ test("the npm description names every structure, within 300 characters", () => {
   }
   expect(pkg.description.length).toBeLessThan(300);
 });
+
+const ROOT_README = fileURLToPath(
+  new URL("../../../README.md", import.meta.url),
+);
+
+/** The `## Structures` table: its header row through its last row. */
+function structuresTable(md: string): string {
+  const section = md.slice(md.indexOf("## Structures"));
+  const table = section.slice(section.indexOf("| Import"));
+  return table.slice(0, table.search(/\n(?!\|)/));
+}
+
+// GitHub shows the root README and npm the package's, so both lead with every
+// structure, and the root carries the package's table rather than its own.
+test("the root README carries the package README's structures table", () => {
+  const table = structuresTable(readFileSync(README, "utf8"));
+  expect(table).toContain("`distillate/kll`");
+
+  expect(readFileSync(ROOT_README, "utf8")).toContain(table);
+});
+
+test("neither README still says it is filters only", () => {
+  for (const path of [README, ROOT_README]) {
+    const md = readFileSync(path, "utf8");
+    expect(md, path).not.toContain("opens with a family of membership filters");
+    expect(md, path).not.toContain(
+      "approximate-membership filters (Bloom, Blocked Bloom, Binary Fuse)",
+    );
+  }
+});

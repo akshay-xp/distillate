@@ -4,13 +4,22 @@
 [![npm](https://img.shields.io/npm/v/distillate)](https://www.npmjs.com/package/distillate)
 [![license](https://img.shields.io/npm/l/distillate)](./LICENSE)
 
-Probabilistic data structures for JavaScript: space-efficient, approximate answers with tunable error and zero false negatives. TypeScript-first, zero dependencies, and the right structure per workload. It opens with a family of membership filters and is built to grow into other sketches.
+Probabilistic data structures for JavaScript and TypeScript: approximate answers with a bounded, tunable error, in a fraction of the space an exact answer needs. Membership filters (Bloom, Cuckoo, Binary Fuse), cardinality (HyperLogLog, Theta), frequency (Count-Min, Top-K), quantiles (KLL, DDSketch), similarity (MinHash) and set reconciliation (RIBLT), with zero dependencies and the right structure per workload.
 
 > **Pre-release (0.x).** The published structures are correct, tested, and benchmarked, but the public API may still change before `1.0`. Pin a version if you depend on it.
 
 ## Why
 
-An approximate-membership query (AMQ) filter answers "is this in the set?" with a tunable false-positive rate and **zero false negatives**, in a fraction of the space of storing the set itself.
+Each structure trades a bounded error for space fixed by the error you choose, not by the size of the data:
+
+- **Have I seen this key?** Filters, with a tunable false-positive rate and **zero false negatives**.
+- **How many distinct keys?** Cardinality sketches, about 0.8% error in 12 KiB whether the count is a thousand or a billion.
+- **How often, and which keys most?** Frequency sketches whose estimates never fall below the truth.
+- **What is the p99, or what share is under x?** Quantile sketches, bounded in value (DDSketch) or in rank (KLL).
+- **How similar are two sets?** MinHash signatures, with an index for near-duplicates.
+- **Which keys do two peers not share?** Set reconciliation, at a cost that follows the difference.
+
+And every structure keeps the same promises:
 
 - **Runs anywhere**: Node, Bun, Deno, browsers, Cloudflare/Vercel edge.
 - **Correct**: no false negatives, property-tested.
