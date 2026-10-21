@@ -111,3 +111,18 @@ test.each(
     checkCell(sketches, ascending(n));
   },
 );
+
+// The issue's criterion, against the published 99% bounds: at most 1% of
+// trials over, plus three binomial standard deviations of slack.
+test.each([
+  ["single ranks", single, 16 * SEEDS * SINGLE_QS.length],
+  ["CDFs", cdf, 16 * SEEDS],
+] as const)(
+  "%s exceed the published bound on at most 1% of trials, pooled",
+  (_, { trials, exceeded }, expected) => {
+    expect(trials).toBe(expected);
+    expect(exceeded).toBeLessThanOrEqual(
+      0.01 * trials + 3 * Math.sqrt(trials * 0.01 * 0.99),
+    );
+  },
+);
