@@ -700,6 +700,24 @@ test("the build seeds KLL and reports its quantiles and ranks beside exact", () 
   expect(built().ranks()).toEqual(report);
 });
 
+test("recording values moves KLL with DDSketch over the same stream", () => {
+  const pg = built();
+  expect(pg.recordValue(5000, 100).ok).toBe(true);
+
+  const report = pg.ranks();
+  const stream = [...latencies(KEYS), ...Array<number>(100).fill(5000)];
+  expect(report.count).toBe(KEYS + 100);
+  expect(report.quantiles[3]?.exact).toBe(5000);
+  expect(report.ranks[3]?.exact).toBe(
+    stream.filter((v) => v <= 500).length / stream.length,
+  );
+  for (const row of report.quantiles) {
+    expect(row.kllRankError, String(row.q)).toBeLessThanOrEqual(
+      report.rankError,
+    );
+  }
+});
+
 // The sketch records nothing before it throws, and the exact map is updated
 // only after it accepts, so a refusal leaves the two in step.
 test.each<[string, unknown, unknown]>([
@@ -713,12 +731,14 @@ test.each<[string, unknown, unknown]>([
 ])("recording %s is refused and changes nothing", (_, value, count) => {
   const pg = built();
   const before = pg.quantiles();
+  const ranksBefore = pg.ranks();
 
   const result = pg.recordValue(value, count);
 
   expect(result.ok).toBe(false);
   if (!result.ok) expect(result.message).not.toBe("");
   expect(pg.quantiles()).toEqual(before);
+  expect(pg.ranks()).toEqual(ranksBefore);
 });
 
 /** Set B as the build seeds it: n keys starting halfway through set A. */

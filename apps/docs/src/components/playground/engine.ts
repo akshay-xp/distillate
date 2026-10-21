@@ -790,8 +790,8 @@ export class Playground {
   }
 
   /**
-   * Records `count` occurrences of `value` in the quantile sketch. What the
-   * sketch cannot index it refuses itself, in its own words.
+   * Records `count` occurrences of `value` in both quantile sketches. What
+   * DDSketch cannot index it refuses itself, in its own words.
    */
   recordValue(value: unknown, count: unknown): ValueResult {
     const v = toNumber(value);
@@ -805,6 +805,9 @@ export class Playground {
     } catch (error) {
       return { ok: false, message: toMessage(error) };
     }
+    // After DDSketch accepts: KLL refuses only NaN, which is refused above,
+    // so the two sketches and the tally stay in step.
+    this.#filters.kll.add(v, n);
     this.#tally(v, n);
     return { ok: true, count: sketch.count };
   }
