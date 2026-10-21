@@ -1,11 +1,15 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { describe, expect, test } from "vitest";
 
 import {
   QUERIES,
   REPO,
+  type Row,
   TRACKED,
+  appendRows,
   downloadsRow,
   githubRow,
   npmRows,
@@ -120,5 +124,41 @@ describe("downloadsRow", () => {
     );
 
     expect(row.downloads).toBe("");
+  });
+});
+
+describe("appendRows", () => {
+  const row = (query: string, rank: string): Row => ({
+    date: "2026-10-21",
+    source: "npm",
+    query,
+    name: "distillate",
+    rank,
+    score: "",
+    downloads: "",
+  });
+
+  test("writes the header once, then appends rows only", () => {
+    const path = join(mkdtempSync(join(tmpdir(), "ranks-")), "ranks.csv");
+
+    appendRows(path, [row("hyperloglog", ""), row("sketch", "7")]);
+    appendRows(path, [row("minhash", "3")]);
+
+    expect(readFileSync(path, "utf8")).toBe(
+      [
+        "date,source,query,name,rank,score,downloads",
+        "2026-10-21,npm,hyperloglog,distillate,,,",
+        "2026-10-21,npm,sketch,distillate,7,,",
+        "2026-10-21,npm,minhash,distillate,3,,",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  // Values are written unquoted, which holds only while none can hold either.
+  test("no query or tracked name holds a comma or quote", () => {
+    for (const value of [...QUERIES, ...TRACKED]) {
+      expect(value).not.toMatch(/[,"]/);
+    }
   });
 });
