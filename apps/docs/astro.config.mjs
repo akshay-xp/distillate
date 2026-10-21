@@ -133,6 +133,7 @@ export default defineConfig({
             { label: "Count-Min", link: "/guides/countmin/" },
             { label: "Top-K", link: "/guides/topk/" },
             { label: "DDSketch", link: "/guides/ddsketch/" },
+            { label: "KLL", link: "/guides/kll/" },
             { label: "MinHash", link: "/guides/minhash/" },
             { label: "RIBLT", link: "/guides/riblt/" },
             { label: "Theta", link: "/guides/theta/" },
