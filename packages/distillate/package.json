@@ -1,7 +1,7 @@
 {
   "name": "distillate",
   "version": "0.19.0",
-  "description": "Probabilistic data structures for JavaScript and TypeScript: Bloom, Cuckoo and Binary Fuse filters, HyperLogLog and Theta cardinality, Count-Min and Top-K frequency, KLL and DDSketch quantiles, MinHash similarity and RIBLT set reconciliation. Zero dependencies, runs everywhere.",
+  "description": "Probabilistic data structures for JavaScript and TypeScript: Bloom filter (scalable, blocked), Cuckoo filter, Binary Fuse filter (an xor filter), HyperLogLog, Theta sketch, Count-Min sketch, Top-K, KLL sketch, DDSketch quantile sketch, MinHash and RIBLT set reconciliation. Zero dependencies.",
   "keywords": [
     "probabilistic-data-structures",
     "probabilistic",
