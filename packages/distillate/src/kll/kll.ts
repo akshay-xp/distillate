@@ -337,22 +337,33 @@ export class KllSketch {
    * @throws {@link ParamError} when `q` is outside `[0, 1]`.
    */
   quantile(q: number): number {
-    if (!(q >= 0 && q <= 1)) {
-      throw new ParamError(`q must be in [0, 1], got ${String(q)}`);
-    }
-    if (this.#n === 0) return Number.NaN;
-    if (q === 0) return this.#min;
-    if (q === 1) return this.#max;
-    const rank = Math.floor(q * (this.#n - 1));
-    const { items, cumulative } = this.#sortedView();
-    let i = 0;
-    while ((cumulative[i] ?? 0) <= rank) i++;
-    return items[i] ?? this.#max;
+    return this.quantiles([q])[0] ?? Number.NaN;
   }
 
   /** {@link KllSketch.quantile} for each of `qs`, in order. */
   quantiles(qs: readonly number[]): number[] {
-    return qs.map((q) => this.quantile(q));
+    for (const q of qs) {
+      if (!(q >= 0 && q <= 1)) {
+        throw new ParamError(`q must be in [0, 1], got ${String(q)}`);
+      }
+    }
+    // Sorting the items is the whole cost of a query, so the qs share a view.
+    let view: { items: Float64Array; cumulative: Float64Array } | undefined;
+    return qs.map((q) => {
+      if (this.#n === 0) return Number.NaN;
+      if (q === 0) return this.#min;
+      if (q === 1) return this.#max;
+      const { items, cumulative } = (view ??= this.#sortedView());
+      const rank = Math.floor(q * (this.#n - 1));
+      let lo = 0;
+      let hi = cumulative.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if ((cumulative[mid] ?? 0) <= rank) lo = mid + 1;
+        else hi = mid;
+      }
+      return items[lo] ?? this.#max;
+    });
   }
 
   /**

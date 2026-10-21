@@ -213,4 +213,28 @@ describe("past k", () => {
     expect(sketch.count).toBe(10_000);
     expect(sketch.numLevels).toBeGreaterThan(1);
   });
+
+  // Sorting the items is the whole cost of a query, so a batch must sort once.
+  // Timed against one query rather than the wall clock: a sort per q shows as
+  // a ratio of about 99, one shared sort as about 1. Each keeps its fastest of 3.
+  test("quantiles costs about what one quantile does", () => {
+    const sketch = new KllSketch({ seed: 1 });
+    for (const v of stream) sketch.add(v);
+    const qs = Array.from({ length: 99 }, (_, i) => (i + 1) / 100);
+    const fastest = (query: () => void): number => {
+      let best = Infinity;
+      for (let run = 0; run < 3; run++) {
+        const start = performance.now();
+        query();
+        best = Math.min(best, performance.now() - start);
+      }
+      return best;
+    };
+
+    const ratio =
+      fastest(() => sketch.quantiles(qs)) / fastest(() => sketch.quantile(0.5));
+
+    expect(ratio).toBeLessThan(10);
+    expect(sketch.quantiles(qs)).toEqual(qs.map((q) => sketch.quantile(q)));
+  });
 });
