@@ -2497,6 +2497,141 @@ func encodeKll(s kll) []byte {
 	return writeFrame(14, params, payload)
 }
 
+// kllCapacity is the items level h of numLevels may hold: k at the top,
+// shrinking by 2/3 per level below, never under 8.
+func kllCapacity(k uint16, numLevels, h int) int {
+	return max(8, int(math.Ceil(float64(k)*math.Pow(2.0/3, float64(numLevels-h-1)))))
+}
+
+func kllTotalCapacity(k uint16, numLevels int) int {
+	total := 0
+	for h := range numLevels {
+		total += kllCapacity(k, numLevels, h)
+	}
+	return total
+}
+
+// kllBuilder replays add() as kll.ts runs it: one buffer of items, level 0
+// growing downward from levels[0], full when levels[0] reaches 0. levels holds
+// numLevels + 1 boundaries.
+type kllBuilder struct {
+	k      uint16
+	state  uint32
+	items  []float64
+	levels []int
+}
+
+func (b *kllBuilder) numLevels() int { return len(b.levels) - 1 }
+
+// coin steps the splitmix32 state and takes the top bit of its mix.
+func (b *kllBuilder) coin() int {
+	b.state += 0x9e3779b9
+	return int(fmix32(b.state) >> 31)
+}
+
+func (b *kllBuilder) add(v float64) {
+	if b.levels[0] == 0 {
+		b.compactLevel(b.lowestFullLevel())
+	}
+	b.levels[0]--
+	b.items[b.levels[0]] = v
+}
+
+func (b *kllBuilder) lowestFullLevel() int {
+	h := 0
+	for ; h+1 < b.numLevels(); h++ {
+		if b.levels[h+1]-b.levels[h] >= kllCapacity(b.k, b.numLevels(), h) {
+			break
+		}
+	}
+	return h
+}
+
+// addTopLevel shifts every capacity down a level, so the buffer grows to the
+// new total with the free space at the front.
+func (b *kllBuilder) addTopLevel() {
+	b.levels = append(b.levels, b.levels[len(b.levels)-1])
+	grow := kllTotalCapacity(b.k, b.numLevels()) - len(b.items)
+	if grow <= 0 {
+		return
+	}
+	b.items = append(make([]float64, grow), b.items...)
+	for i := range b.levels {
+		b.levels[i] += grow
+	}
+}
+
+// compactLevel halves level h into the level above: an odd item stays
+// behind, every second item from a random offset is merged upward, and the
+// levels below h move up into the space freed.
+func (b *kllBuilder) compactLevel(h int) {
+	if h+1 == b.numLevels() {
+		b.addTopLevel()
+	}
+	items, levels := b.items, b.levels
+	rawBeg, rawEnd := levels[h], levels[h+1]
+	popAbove := levels[h+2] - rawEnd
+	odd := (rawEnd - rawBeg) % 2
+	adjBeg := rawBeg + odd
+	half := (rawEnd - adjBeg) / 2
+	if h == 0 {
+		sort.Float64s(items[adjBeg:rawEnd])
+	}
+	offset := b.coin()
+	for i := range half {
+		items[adjBeg+i] = items[adjBeg+2*i+offset]
+	}
+	a, c := adjBeg, rawEnd
+	aEnd, cEnd := adjBeg+half, rawEnd+popAbove
+	for out := aEnd; out < cEnd; out++ {
+		if c >= cEnd || (a < aEnd && items[a] <= items[c]) {
+			items[out] = items[a]
+			a++
+		} else {
+			items[out] = items[c]
+			c++
+		}
+	}
+	levels[h+1] = aEnd
+	if odd == 1 {
+		items[aEnd-1] = items[rawBeg]
+	}
+	levels[h] = aEnd - odd
+	if h > 0 {
+		front := levels[0]
+		copy(items[front+half:], items[front:rawBeg])
+		for i := range h {
+			levels[i] += half
+		}
+	}
+}
+
+// buildKll replays values into a sketch at k from seed, as new KllSketch({ k,
+// seed }) fed them one add() at a time would hold it.
+func buildKll(k uint16, seed uint32, seeded bool, values []float64) []byte {
+	b := kllBuilder{k: k, state: seed, items: make([]float64, k), levels: []int{int(k), int(k)}}
+	s := kll{k: k, min: math.NaN(), max: math.NaN()}
+	for _, v := range values {
+		b.add(v)
+		s.n++
+		if !(v >= s.min) {
+			s.min = v
+		}
+		if !(v <= s.max) {
+			s.max = v
+		}
+	}
+	if seeded {
+		s.flags = 1
+		s.state = b.state
+	}
+	for h := range b.numLevels() {
+		s.sizes = append(s.sizes, uint32(b.levels[h+1]-b.levels[h]))
+	}
+	s.items = b.items[b.levels[0]:b.levels[b.numLevels()]]
+	return encodeKll(s)
+}
+
 func TestKll(t *testing.T) {
 	for _, e := range golden(t) {
 		if e.Kind != "kll" {
@@ -2543,6 +2678,10 @@ func TestKll(t *testing.T) {
 		}
 		if rebuilt := encodeKll(s); !bytes.Equal(rebuilt, golden) {
 			t.Errorf("%s: re-encoded frame differs:\n got %x\nwant %x", e.Name, rebuilt, golden)
+		}
+		// kll-small never compacts, so its unseeded recipe replays too.
+		if replayed := buildKll(uint16(e.K), e.Seed, e.Seed != 0, e.Values); !bytes.Equal(replayed, golden) {
+			t.Errorf("%s: replayed frame differs:\n got %x\nwant %x", e.Name, replayed, golden)
 		}
 	}
 }
