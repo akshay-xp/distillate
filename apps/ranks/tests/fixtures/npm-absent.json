@@ -1,0 +1,114 @@
+{
+  "objects": [
+    {
+      "package": {
+        "name": "hyperloglog"
+      },
+      "score": {
+        "final": 557.9588
+      },
+      "downloads": {
+        "weekly": 18
+      }
+    },
+    {
+      "package": {
+        "name": "hyperloglog-lite"
+      },
+      "score": {
+        "final": 422.84763
+      },
+      "downloads": {
+        "weekly": 3562
+      }
+    },
+    {
+      "package": {
+        "name": "bloom-filters"
+      },
+      "score": {
+        "final": 367.08575
+      },
+      "downloads": {
+        "weekly": 260559
+      }
+    },
+    {
+      "package": {
+        "name": "mongo-hyperloglog"
+      },
+      "score": {
+        "final": 224.23943
+      },
+      "downloads": {
+        "weekly": 21
+      }
+    },
+    {
+      "package": {
+        "name": "hll"
+      },
+      "score": {
+        "final": 206.8295
+      },
+      "downloads": {
+        "weekly": 19
+      }
+    },
+    {
+      "package": {
+        "name": "fission-bloom-filters"
+      },
+      "score": {
+        "final": 167.13693
+      },
+      "downloads": {
+        "weekly": 264
+      }
+    },
+    {
+      "package": {
+        "name": "node-hll"
+      },
+      "score": {
+        "final": 140.94998
+      },
+      "downloads": {
+        "weekly": 11
+      }
+    },
+    {
+      "package": {
+        "name": "@zakkster/lite-sketch"
+      },
+      "score": {
+        "final": 136.01396
+      },
+      "downloads": {
+        "weekly": 29
+      }
+    },
+    {
+      "package": {
+        "name": "hyperloglog32"
+      },
+      "score": {
+        "final": 126.436134
+      },
+      "downloads": {
+        "weekly": 9
+      }
+    },
+    {
+      "package": {
+        "name": "distinct-value-counter"
+      },
+      "score": {
+        "final": 124.35379
+      },
+      "downloads": {
+        "weekly": 12
+      }
+    }
+  ]
+}
