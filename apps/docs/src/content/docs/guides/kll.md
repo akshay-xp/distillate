@@ -124,7 +124,9 @@ sketches byte for byte.
 
 The frame carries the generator state, so a decoded sketch flips the same
 coins the original would have: fed the same values, the two write the same
-bytes.
+bytes. Without a `seed`, a sketch draws its generator state at its
+first compaction, so one decoded before that draws its own, and the two part
+ways from there.
 
 ## Measured
 

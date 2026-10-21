@@ -77,6 +77,8 @@ test("the KLL guide covers what a reader needs to choose and use it", () => {
     "fromBytes",
     "generator state",
     "/reference/serialization/",
+    "first compaction",
+    "seed",
   ]) {
     expect(persist, phrase).toContain(phrase);
   }
