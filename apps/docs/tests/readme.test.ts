@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { HyperLogLog } from "distillate/hll";
 import { expect, test } from "vitest";
 
+import { QUERIES } from "../../ranks/src/ranks.js";
 import { runClaims } from "../src/claims.js";
 import { extractSamples } from "../src/samples.js";
 
@@ -127,21 +128,15 @@ test("every structure subpath has its search name among the npm keywords", () =>
   expect(new Set(pkg.keywords).size).toBe(pkg.keywords.length);
 });
 
-test("the npm description names every structure, within 300 characters", () => {
-  for (const structure of [
-    "Bloom",
-    "Cuckoo",
-    "Binary Fuse",
-    "HyperLogLog",
-    "Theta",
-    "Count-Min",
-    "Top-K",
-    "KLL",
-    "DDSketch",
-    "MinHash",
-    "RIBLT",
-  ]) {
-    expect(pkg.description).toContain(structure);
+// npm search does not stem: "bloom filters" and "bloom filter" return
+// different results. So every word of every tracked query must appear in the
+// description as typed, singular included. The queries are the tracker's own.
+test("the npm description holds every word of every tracked search query", () => {
+  const words = new Set(pkg.description.toLowerCase().match(/[a-z0-9]+/g));
+  for (const query of [...QUERIES, "xor filter"]) {
+    for (const word of query.match(/[a-z0-9]+/g) ?? []) {
+      expect(words, `"${word}" of "${query}"`).toContain(word);
+    }
   }
   expect(pkg.description.length).toBeLessThan(300);
 });
