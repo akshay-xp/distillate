@@ -59,11 +59,16 @@ interface CardinalitySketch extends Sketch<CardinalitySketch> {
   readonly standardError: number; // analytic, for reporting
 }
 
-// Values, not keys: DDSketch takes numbers and hashes nothing, so add differs
+// Values, not keys: DDSketch and KLL take numbers and hash nothing, so add
+// differs. Each states its bound in its own terms: DDSketch's relativeAccuracy
+// is relative to the value, KLL's normalizedRankError() a share of count.
 interface QuantileSketch extends Omit<Sketch<QuantileSketch>, "add"> {
   add(value: number, count?: number): void;
-  quantile(q: number): number; // within relativeAccuracy of the true value
-  readonly relativeAccuracy: number;
+  quantile(q: number): number; // within the sketch's bound
+  quantiles(qs: readonly number[]): number[];
+  readonly count: number;
+  readonly min: number;
+  readonly max: number;
 }
 
 // Two sets at once: the question is about a pair, so the answer takes one
@@ -104,6 +109,32 @@ the set operations and frame type 13 all read it, cached until the next `add`.
   sorted canonical buffer the rebuild reuses as its quickselect space.
 - Rebuilds are logarithmic in stream length, so the allocation probe guards
   the per-key path rather than the rebuild.
+
+KLL is classic KLL (Karnin, Lang and Liberty) in the Apache DataSketches layout:
+one `Float64Array` of items in levels, where an item at level `h` stands for
+`2^h` values, with level 0 growing downward and the sketch full when it reaches
+index 0. Level capacity is `max(8, ceil(k * (2/3)^depth))`, so the buffer stays
+within `3k + 8L` items for `L` levels whatever `n` is. A full sketch compacts
+its lowest level at capacity: sorts it (level 0 only; the rest are held
+sorted), keeps every second item from a random offset, and merges them into the
+level above, all in place, so `add` allocates nothing in steady state.
+
+- The offset comes from a splitmix32 generator held by the sketch, its whole
+  state one u32. Unseeded, it draws a seed at its first compaction rather than
+  in the constructor: Cloudflare Workers refuse random values at module scope.
+  A fixed default seed would correlate shards' coins, which the merge bound
+  assumes independent.
+- `union` concatenates levels into a sketch at the smaller `k` and compresses
+  it with the same compaction, so the bound holds through any merge tree.
+  Feeding items one by one through `add` was rejected: O(k^2) per merge.
+- Frame type 14 carries the generator state, so a decoded sketch continues as
+  the original would, and an item-type byte (0 = f64) leaving room for generic
+  items without a format change.
+- The 99% bounds are DataSketches' published fits, `2.296 / k^0.9723` for one
+  rank and `2.446 / k^0.9433` for a whole CDF. They are loose here: the
+  accuracy gate holds each cell's 99th-percentile CDF error to 0.75 of the
+  bound (measured worst 0.55), since the published bound alone passes a sketch
+  with every capacity halved.
 
 MinHash's index, `MinHashLSH`, is not a sketch: it holds keys under band hashes of
 sketches and answers `query(sketch)` with candidate keys. It lives on the sketch's
