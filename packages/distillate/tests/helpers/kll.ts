@@ -1,4 +1,4 @@
-import { type KllSketch } from "../../src/kll/kll.js";
+import { KllSketch } from "../../src/kll/kll.js";
 
 // 0 to n - 1 in a fixed shuffled order, from a full-period LCG step.
 export function shuffled(n: number): number[] {
@@ -61,3 +61,18 @@ function countBelow(
   }
   return lo;
 }
+
+// Shards merged pairwise down to one.
+export const balanced = (shards: readonly KllSketch[]): KllSketch =>
+  shards.length === 1
+    ? (shards[0] ?? new KllSketch())
+    : balanced(shards.slice(0, shards.length / 2)).union(
+        balanced(shards.slice(shards.length / 2)),
+      );
+
+// The ways a binary union can fold a list of shards.
+export const mergeShapes: [string, (shards: KllSketch[]) => KllSketch][] = [
+  ["left-deep chain", (s) => s.reduce((acc, x) => acc.union(x))],
+  ["right-deep chain", (s) => s.reduceRight((acc, x) => x.union(acc))],
+  ["balanced tree", balanced],
+];
