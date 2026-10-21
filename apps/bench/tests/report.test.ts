@@ -15,6 +15,7 @@ import type { BundleRow, LshBundleRow } from "../src/bundle.js";
 import type { DDSketchRow } from "../src/ddsketch.js";
 import type { LshRow, MinHashRow } from "../src/minhash.js";
 import type { RibltRow } from "../src/riblt.js";
+import type { KllRow } from "../src/kll.js";
 import type { ThetaRow } from "../src/theta.js";
 import {
   cardinalityTable,
@@ -33,6 +34,9 @@ import {
   ddSketchBundleTable,
   scalableTable,
   spaceAccuracyTable,
+  kllBundleTable,
+  kllSection,
+  kllTable,
   thetaBundleTable,
   thetaSection,
   thetaTable,
@@ -1142,5 +1146,77 @@ test("the theta section states its method and carries both tables", () => {
   });
   const at = md.indexOf("## Theta");
   expect(at).toBeGreaterThan(md.indexOf("## RIBLT"));
+  expect(at).toBeLessThan(md.indexOf("## Throughput"));
+});
+
+test("the kll table renders each library's cost and its rank error", () => {
+  const rows: KllRow[] = [
+    {
+      name: "distillate/kll",
+      distribution: "lognormal",
+      addOpsPerSec: 45_200_000,
+      mergeMs: 0.12,
+      bytes: 5228,
+      rankErrors: [0.0042, 0.0018, 0.0003],
+    },
+    {
+      name: "Array",
+      distribution: "ascending",
+      addOpsPerSec: 90_000_000,
+      mergeMs: 12,
+      bytes: 8_000_000,
+      rankErrors: [0, 0, 0],
+    },
+  ];
+  const table = kllTable(rows);
+
+  expect(table.split("\n")[0]).toBe(
+    "| Library | distribution | add | merge | size | rank error p50 | p99 | p99.9 |",
+  );
+  expect(table).toContain(
+    "| distillate/kll | lognormal | 45.20 M ops/s | 0.12 ms | 5.1 KB | 0.42% | 0.18% | 0.03% |",
+  );
+  expect(table).toContain(
+    "| Array | ascending | 90.00 M ops/s | 12 ms | 7.6 MB | 0.00% | 0.00% | 0.00% |",
+  );
+});
+
+test("the kll section states its method and carries both tables", () => {
+  const bundles = kllBundleTable([
+    { name: "distillate/kll", bytes: 5000 },
+    { name: "tdigest", bytes: 4000 },
+  ]);
+  expect(bundles).toContain("| distillate/kll | 4.9 KB |");
+
+  const section = kllSection("KLL_TBL", bundles).join("\n");
+  expect(section.startsWith("## KLL")).toBe(true);
+  for (const phrase of [
+    "tdigest",
+    "DDSketch at 1%",
+    "1M values",
+    "10 seeds",
+    "in rank, not value",
+    "[DDSketch section](#ddsketch)",
+    "its own process",
+    "KLL_TBL",
+    bundles,
+  ]) {
+    expect(section, phrase).toContain(phrase);
+  }
+
+  const md = renderResults({
+    banner: "distillate-bench | node v24 | arm64 | Apple M1 | 8 cores",
+    version: "0.18.0",
+    date: "2026-10-21",
+    targetFpr: 0.01,
+    throughputCapacity: 100_000,
+    spaceTable: "SPACE_TBL",
+    throughputTable: "TPUT_TBL",
+    thetaTable: "THETA_TBL",
+    kllTable: "KLL_TBL",
+    kllBundleTable: bundles,
+  });
+  const at = md.indexOf("## KLL");
+  expect(at).toBeGreaterThan(md.indexOf("## Theta"));
   expect(at).toBeLessThan(md.indexOf("## Throughput"));
 });

@@ -23,6 +23,7 @@ import { TOPK_EVENT_COUNTS, topKAdapters } from "./topk.js";
 import type { TopKRow } from "./topk.js";
 import {
   ddSketchBundles,
+  kllBundles,
   minHashBundles,
   ribltBundles,
   thetaBundles,
@@ -30,6 +31,7 @@ import {
 import type {
   BundleRow,
   LshBundleRow,
+  QuantileBundleRow,
   ReconcileBundleRow,
   SetCountBundleRow,
 } from "./bundle.js";
@@ -49,6 +51,8 @@ import {
   THETA_SET_SIZE,
 } from "./theta.js";
 import type { ThetaRow } from "./theta.js";
+import { KLL_DISTRIBUTIONS, KLL_N, KLL_SEEDS, rankAdapters } from "./kll.js";
+import type { KllRow } from "./kll.js";
 import {
   lshAdapters,
   MINHASH_K,
@@ -265,6 +269,29 @@ export function thetaBundleTable(rows: SetCountBundleRow[]): string {
   return [header, ...body].join("\n");
 }
 
+// A size in KB, or in MB once it passes 1024 KB.
+function size(bytes: number): string {
+  const kb = bytes / 1024;
+  return kb < 1024 ? `${kb.toFixed(1)} KB` : `${(kb / 1024).toFixed(1)} MB`;
+}
+
+export function kllTable(rows: KllRow[]): string {
+  const header =
+    "| Library | distribution | add | merge | size | rank error p50 | p99 | p99.9 |\n" +
+    "| --- | --- | --- | --- | --- | --- | --- | --- |";
+  const body = rows.map(
+    (r) =>
+      `| ${r.name} | ${r.distribution} | ${ops(r.addOpsPerSec)} | ${fineDuration(r.mergeMs)} | ${size(r.bytes)} | ${r.rankErrors.map(percent).join(" | ")} |`,
+  );
+  return [header, ...body].join("\n");
+}
+
+export function kllBundleTable(rows: QuantileBundleRow[]): string {
+  const header = "| Library | sketch |\n| --- | --- |";
+  const body = rows.map((r) => `| ${r.name} | ${size(r.bytes)} |`);
+  return [header, ...body].join("\n");
+}
+
 export interface ResultsOptions {
   banner: string;
   version: string;
@@ -286,6 +313,8 @@ export interface ResultsOptions {
   ribltTable?: string;
   thetaTable?: string;
   thetaBundleTable?: string;
+  kllTable?: string;
+  kllBundleTable?: string;
   ribltBundleTable?: string;
   keyLengthTable?: string;
 }
@@ -462,6 +491,23 @@ export function thetaSection(table: string, bundles: string): string[] {
   ];
 }
 
+export function kllSection(table: string, bundles: string): string[] {
+  return [
+    "## KLL",
+    "",
+    `${capacityLabel(KLL_N)} values per run, on three distributions: \`uniform\`, \`lognormal\` (shaped like latencies) and \`ascending\`, the sorted order that stresses a t-digest's centroids. distillate's KLL at its default k = 200 is compared with distillate's DDSketch at 1% and with \`tdigest\`, the most-downloaded t-digest on npm, each at its defaults, and with an exact sorted \`Array\`, which gives the truth and its own cost.`,
+    "",
+    `Each error is the rank error of \`quantile(q)\`: how far the answer's position in the sorted stream sits from \`floor(q * (n - 1))\`, as a share of \`n\`, averaged over ${String(KLL_SEEDS)} seeds. DDSketch is scored here in rank, not value; its relative error on values is in the [DDSketch section](#ddsketch). \`add\` is every value added over the time spent adding. \`merge\` is the median time to union two sketches of \`n\` values each into a new one. \`size\` is what a user would store: the DSTL frame for distillate, the centroids as JSON for \`tdigest\`, which has no serialization, and 8 bytes a value for the array. Each library runs in its own process.`,
+    "",
+    table,
+    "",
+    "Bundle sizes are measured, not quoted: each import bundled by esbuild for the browser, minified and gzipped.",
+    "",
+    bundles,
+    "",
+  ];
+}
+
 export function ribltSection(table: string, bundles: string): string[] {
   return [
     "## RIBLT",
@@ -543,6 +589,9 @@ export function renderResults(opts: ResultsOptions): string {
       : []),
     ...(opts.thetaTable
       ? thetaSection(opts.thetaTable, opts.thetaBundleTable ?? "")
+      : []),
+    ...(opts.kllTable
+      ? kllSection(opts.kllTable, opts.kllBundleTable ?? "")
       : []),
     `## Throughput (n = ${capacityLabel(opts.throughputCapacity)})`,
     "",
@@ -643,6 +692,15 @@ async function main(): Promise<void> {
   );
   const thBundles = thetaBundleTable(await thetaBundles());
 
+  const kTable = kllTable(
+    isolatedRows<KllRow>("kll", names(rankAdapters), [
+      KLL_N,
+      KLL_DISTRIBUTIONS,
+      KLL_SEEDS,
+    ]),
+  );
+  const kBundles = kllBundleTable(await kllBundles());
+
   console.log(banner);
   console.log("\n" + spaceTable);
   console.log("\n" + cardTable);
@@ -659,6 +717,8 @@ async function main(): Promise<void> {
   console.log("\n" + rbBundles);
   console.log("\n" + thTable);
   console.log("\n" + thBundles);
+  console.log("\n" + kTable);
+  console.log("\n" + kBundles);
   console.log("\n" + tput);
   console.log("\n" + klTable);
 
@@ -683,6 +743,8 @@ async function main(): Promise<void> {
     ribltBundleTable: rbBundles,
     thetaTable: thTable,
     thetaBundleTable: thBundles,
+    kllTable: kTable,
+    kllBundleTable: kBundles,
     throughputTable: tput,
     keyLengthTable: klTable,
   });
