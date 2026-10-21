@@ -48,6 +48,7 @@ jobs:
           name: dist
           path: packages/distillate/dist/
       - run: pnpm typecheck
+      - run: pnpm --filter distillate-ranks test
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm coverage
