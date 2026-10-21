@@ -56,6 +56,7 @@ Each structure ships as its own subpath, so you only bundle what you import.
 | `distillate/minhash`  | MinHash        | how similar?        | Near-duplicate documents and set overlap, with an index   |
 | `distillate/riblt`    | RIBLT          | which keys differ?  | Syncing two sets that mostly agree, exactly               |
 | `distillate/theta`    | Theta          | how many, in both?  | Distinct counts to intersect and subtract across segments |
+| `distillate/kll`      | KLL            | what rank is x?     | Ranks, CDFs and SLO fractions with a rank error bound     |
 
 The filters are mutable except Binary Fuse, which is built once from the whole
 key set. HyperLogLog, Count-Min, Top-K, DDSketch, MinHash and Theta are sketches
