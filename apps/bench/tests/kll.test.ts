@@ -14,6 +14,7 @@ test("the bench compares KLL with DDSketch, tdigest and an exact array", () => {
     "distillate/kll",
     "distillate/ddsketch",
     "tdigest",
+    "tdigest (delta = 0.1)",
     "Array",
   ]);
   expect(KLL_DISTRIBUTIONS).toEqual(["uniform", "lognormal", "ascending"]);

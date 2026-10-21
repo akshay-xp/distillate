@@ -1174,10 +1174,10 @@ test("the kll table renders each library's cost and its rank error", () => {
     "| Library | distribution | add | merge | size | rank error p50 | p99 | p99.9 |",
   );
   expect(table).toContain(
-    "| distillate/kll | lognormal | 45.20 M ops/s | 0.12 ms | 5.1 KB | 0.42% | 0.18% | 0.03% |",
+    "| distillate/kll | lognormal | 45.20 M ops/s | 0.12 ms | 5.1 KB | 0.420% | 0.180% | 0.030% |",
   );
   expect(table).toContain(
-    "| Array | ascending | 90.00 M ops/s | 12 ms | 7.6 MB | 0.00% | 0.00% | 0.00% |",
+    "| Array | ascending | 90.00 M ops/s | 12 ms | 7.6 MB | 0.000% | 0.000% | 0.000% |",
   );
 });
 
@@ -1193,6 +1193,7 @@ test("the kll section states its method and carries both tables", () => {
   for (const phrase of [
     "tdigest",
     "DDSketch at 1%",
+    "`delta = 0.1`",
     "1M values",
     "10 seeds",
     "in rank, not value",
