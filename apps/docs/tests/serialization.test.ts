@@ -832,10 +832,28 @@ test("the KLL section states the item type, the generator state, the level order
     "generator state",
     "level 0 first",
     "Σ size_h · 2^h",
+    "newest first",
     "A reader rejects",
   ]) {
     expect(section, phrase).toContain(phrase);
   }
+  expect(section).not.toContain("arrival order");
+});
+
+test("the golden kll-small frame holds level 0 newest first", () => {
+  const rows = paramsTable(KLL_HEADING);
+  const all = JSON.parse(readFileSync(GOLDEN, "utf8")) as (Fixture & {
+    values?: number[];
+  })[];
+  const fixture = all.find((g) => g.name === "kll-small");
+  if (!fixture) throw new Error("golden.json has no kll-small fixture");
+  const body = frameBody(Buffer.from(fixture.frame, "base64"));
+  const values = fixture.values ?? [];
+  const levels = body.getUint32(rows.get("levels")?.offset ?? NaN, true);
+  expect(levels).toBe(1);
+  const itemsAt = Math.ceil((36 + 4 * levels) / 8) * 8;
+  const held = values.map((_, i) => body.getFloat64(itemsAt + 8 * i, true));
+  expect(held).toEqual([...values].reverse());
 });
 
 // Decoded from the page's offsets alone, so a wrong row fails here rather

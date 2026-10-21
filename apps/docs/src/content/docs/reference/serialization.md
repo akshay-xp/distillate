@@ -385,7 +385,7 @@ Offset           Size          Field
 align8(36 + 4L)  8 * retained  items: f64, level 0 first, retained = Σ sizes
 ```
 
-`align8(x)` rounds `x` up to a multiple of 8. Level 0 is held in arrival order; every level above it is ascending. Every compaction halves a level and promotes the survivors one level up at twice the weight, so `n = Σ size_h · 2^h` holds exactly, and a reader checks it.
+`align8(x)` rounds `x` up to a multiple of 8. Level 0 is unsorted: each value is written in front of the last, so it reads newest first, and a compaction leaves its odd item out at the end. Every level above it is ascending. Every compaction halves a level and promotes the survivors one level up at twice the weight, so `n = Σ size_h · 2^h` holds exactly, and a reader checks it.
 
 The generator state is a splitmix32 state: a compaction steps it by `0x9e3779b9` mod `2^32` and keeps the odd-offset half when the top bit of murmur3's `fmix32` of the new state is set. It is carried so a decoded sketch flips the same coins the original would have, and a seeded sketch fed the same stream writes the same bytes. An unseeded sketch draws its seed at its first compaction and is flagged seeded from then on.
 
