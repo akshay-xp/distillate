@@ -442,8 +442,11 @@ export class KllSketch {
    * @param other - The sketch to merge with.
    * @returns A new sketch of both streams, which takes values and further
    * unions.
+   * @throws {@link ParamError} when the merged count would pass
+   * `Number.MAX_SAFE_INTEGER`.
    */
   union(other: KllSketch): KllSketch {
+    assertSafeTotal(this.#n + other.#n);
     const result = new KllSketch({ k: Math.min(this.#k, other.#k) });
     // A state of its own, so the result does not replay either input's coins.
     if (this.#seeded && other.#seeded) {
@@ -503,11 +506,13 @@ export class KllSketch {
    * @param value - Any number but `NaN`; infinities and `-0` are ordered as
    * numbers.
    * @param count - How many times to record it; a positive safe integer.
-   * @throws {@link ParamError} when `value` is `NaN` or `count` is not a
-   * positive safe integer. Nothing is recorded.
+   * @throws {@link ParamError} when `value` is `NaN`, `count` is not a
+   * positive safe integer, or the count would pass `Number.MAX_SAFE_INTEGER`.
+   * Nothing is recorded.
    */
   add(value: number, count = 1): void {
     if (Number.isNaN(value)) throw new ParamError("value must not be NaN");
+    assertSafeTotal(this.#n + count);
     if (count === 1) {
       if (this.#levels[0] === 0) this.#compact();
       const at = (this.#levels[0] ?? 0) - 1;
@@ -750,6 +755,16 @@ function mergeInto(
     } else {
       out[at++] = b[j++] ?? 0;
     }
+  }
+}
+
+// Past 2^53 - 1 the count loses precision and fromBytes refuses it, so the
+// sketch would write a frame its own reader rejects.
+function assertSafeTotal(total: number): void {
+  if (total > Number.MAX_SAFE_INTEGER) {
+    throw new ParamError(
+      `the count would pass ${String(Number.MAX_SAFE_INTEGER)}`,
+    );
   }
 }
 

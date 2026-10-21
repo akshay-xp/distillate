@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 
+import { ParamError } from "../../src/core/params.js";
 import { KllSketch } from "../../src/kll/kll.js";
 import {
   balanced,
@@ -148,5 +149,25 @@ describe("union past capacity", () => {
         more.normalizedRankError(true),
       );
     });
+  });
+});
+
+describe("union at the safe-integer limit", () => {
+  const sketchOf = (count: number): KllSketch => {
+    const sketch = new KllSketch();
+    sketch.add(1, count);
+    return sketch;
+  };
+
+  test("refuses a count past 2^53 - 1, which fromBytes would refuse", () => {
+    expect(() => sketchOf(2 ** 52).union(sketchOf(2 ** 52))).toThrow(
+      ParamError,
+    );
+  });
+
+  test("reaches 2^53 - 1 exactly, in a frame that reads back", () => {
+    const merged = sketchOf(2 ** 52).union(sketchOf(2 ** 52 - 1));
+    expect(merged.count).toBe(Number.MAX_SAFE_INTEGER);
+    expect(KllSketch.fromBytes(merged.toBytes()).equals(merged)).toBe(true);
   });
 });

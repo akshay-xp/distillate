@@ -160,6 +160,21 @@ describe("weighted adds", () => {
     }
     expect(sketch.isEmpty).toBe(true);
   });
+
+  test("refuse to carry the count past 2^53 - 1, which fromBytes would refuse", () => {
+    const sketch = new KllSketch();
+    sketch.add(1, Number.MAX_SAFE_INTEGER);
+    expect(() => {
+      sketch.add(2);
+    }).toThrow(ParamError);
+    expect(() => {
+      sketch.add(2, 2);
+    }).toThrow(ParamError);
+
+    expect(sketch.count).toBe(Number.MAX_SAFE_INTEGER);
+    expect(sketch.max).toBe(1);
+    expect(KllSketch.fromBytes(sketch.toBytes()).equals(sketch)).toBe(true);
+  });
 });
 
 describe("past k", () => {
