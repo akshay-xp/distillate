@@ -47,8 +47,9 @@ The usual alternative is t-digest. It is widely deployed and accurate in
 practice, but its error has no proven bound, so there is no figure to promise or
 to test against. DDSketch's bound holds by construction and is gated in this
 library's CI. Its guarantee is also the right one for latencies: an error
-relative to the value stays meaningful at p99.9, where an error in rank, as KLL
-gives, does not.
+relative to the value stays meaningful at p99.9, where an error in rank, as
+[KLL](/guides/kll/) gives, does not; see
+[KLL or DDSketch](/guides/choosing-a-structure/#kll-or-ddsketch).
 
 DDSketch answers questions about values. For counting distinct keys, or how
 often a key appears, see [choosing a structure](/guides/choosing-a-structure/).

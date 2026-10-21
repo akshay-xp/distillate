@@ -1,6 +1,6 @@
 ---
 title: Choosing a structure
-description: A decision matrix mapping each membership workload onto the filter that fits it, the sketches for counting, set operations, frequency, percentiles and similarity, and what is not shipped yet.
+description: A decision matrix mapping each membership workload onto the filter that fits it, the sketches for counting, set operations, frequency, percentiles, ranks and similarity, and what is not shipped yet.
 ---
 
 First, which question are you asking?
@@ -21,6 +21,10 @@ First, which question are you asking?
 - **"What is the p99 of these values?"** A quantile sketch:
   [DDSketch](/guides/ddsketch/). It takes numbers rather than keys, and every
   quantile it reports is within a relative error of the true value.
+- **"What share of values are at or below x?"** A rank sketch:
+  [KLL](/guides/kll/). Every rank and quantile it reports is within a bounded
+  share of the stream, whatever the values. See
+  [KLL or DDSketch](#kll-or-ddsketch).
 - **"How similar are these two sets?"** A similarity sketch:
   [MinHash](/guides/minhash/). It compares two sets at once, and its index
   finds near-duplicates among many without comparing every pair.
@@ -40,29 +44,30 @@ questions and the choice is usually forced:
 
 ## Decision matrix
 
-| Workload                                  | Use                                                                             |
-| ----------------------------------------- | ------------------------------------------------------------------------------- |
-| Static set, built once, queried a lot     | [Binary Fuse 8](/guides/fuse/) (Fuse 16 for a lower FPR)                        |
-| Squeeze every bit, static, RAM-bound      | Ribbon/BuRR **(not yet available)**                                             |
-| Streaming inserts, speed-first, no delete | [Blocked Bloom](/guides/blocked/)                                               |
-| Inserts and deletes                       | [Cuckoo](/guides/cuckoo/)                                                       |
-| Unbounded growth, `n` unknown             | [Scalable Bloom](/guides/scalable/); InfiniFilter/Aleph **(not yet available)** |
-| Very low FPR (1e-4 or below)              | [Binary Fuse 16](/guides/fuse/)                                                 |
-| Migrating from `bloom-filters`            | [Classic Bloom](/guides/bloom/)                                                 |
-| Counting distinct keys, not membership    | [HyperLogLog](/guides/hll/)                                                     |
-| Distinct counts to intersect or subtract  | [Theta](/guides/theta/)                                                         |
-| Counting how often each key appears       | [Count-Min](/guides/countmin/)                                                  |
-| Finding the most frequent keys            | [Top-K](/guides/topk/)                                                          |
-| Latency or size percentiles               | [DDSketch](/guides/ddsketch/)                                                   |
-| Near-duplicates, or how much sets overlap | [MinHash](/guides/minhash/)                                                     |
-| Syncing two sets that mostly agree        | [RIBLT](/guides/riblt/)                                                         |
+| Workload                                   | Use                                                                             |
+| ------------------------------------------ | ------------------------------------------------------------------------------- |
+| Static set, built once, queried a lot      | [Binary Fuse 8](/guides/fuse/) (Fuse 16 for a lower FPR)                        |
+| Squeeze every bit, static, RAM-bound       | Ribbon/BuRR **(not yet available)**                                             |
+| Streaming inserts, speed-first, no delete  | [Blocked Bloom](/guides/blocked/)                                               |
+| Inserts and deletes                        | [Cuckoo](/guides/cuckoo/)                                                       |
+| Unbounded growth, `n` unknown              | [Scalable Bloom](/guides/scalable/); InfiniFilter/Aleph **(not yet available)** |
+| Very low FPR (1e-4 or below)               | [Binary Fuse 16](/guides/fuse/)                                                 |
+| Migrating from `bloom-filters`             | [Classic Bloom](/guides/bloom/)                                                 |
+| Counting distinct keys, not membership     | [HyperLogLog](/guides/hll/)                                                     |
+| Distinct counts to intersect or subtract   | [Theta](/guides/theta/)                                                         |
+| Counting how often each key appears        | [Count-Min](/guides/countmin/)                                                  |
+| Finding the most frequent keys             | [Top-K](/guides/topk/)                                                          |
+| Latency or size percentiles                | [DDSketch](/guides/ddsketch/)                                                   |
+| Ranks, CDFs or the share under a threshold | [KLL](/guides/kll/)                                                             |
+| Near-duplicates, or how much sets overlap  | [MinHash](/guides/minhash/)                                                     |
+| Syncing two sets that mostly agree         | [RIBLT](/guides/riblt/)                                                         |
 
 For the filters, space below is stated as overhead over the
 information-theoretic floor of `log2(1/epsilon)` bits per key: 6.64 bits/key at
 a 1% FPR, 9.97 at 0.1%. A sketch has no per-key cost to state, its size being
 fixed before it sees a key: by precision for HyperLogLog, by the error bound
 for Count-Min and Top-K, by the accuracy and the range of values for DDSketch,
-by the slot count for MinHash, by `k` for Theta.
+by the slot count for MinHash, by `k` for Theta and KLL.
 
 ## What ships today
 
@@ -110,6 +115,16 @@ exchange.
 
 Reach for it for request latencies, payload sizes, queue depths: any "what is
 the p99" question over a stream you cannot keep in full.
+
+### [KLL](/guides/kll/) (`distillate/kll`)
+
+Not keyed either: records numbers and reports any rank or quantile within a
+share of the stream, about 1.33% at the default `k`, whatever the values. Its
+memory is fixed by `k` alone, about 5 KiB at the default, with no range of
+values to cover. Merges keep the bound through any tree of unions.
+
+Reach for it for the share of requests under an SLO, a CDF of a stream, or
+quantiles of values whose range you cannot bound in advance.
 
 ### [MinHash](/guides/minhash/) (`distillate/minhash`)
 
@@ -190,6 +205,25 @@ leaves the filter unchanged rather than dropping a key.
 Reach for it when keys leave the set as well as join it: expiring sessions,
 revoked tokens, evicted cache entries. Delete only keys you added; a delete of a
 key that was never added can remove another key's fingerprint.
+
+## KLL or DDSketch
+
+Both take numbers, answer quantiles and merge. They differ in what their error
+is measured in.
+
+- [DDSketch](/guides/ddsketch/) bounds the error **relative** to the value: a
+  p99.9 of 2,000 ms is reported within 1%, between 1,980 and 2,020 ms. The
+  tails stay tight, but it answers ranks ("what share is under 200 ms?") with
+  no guarantee, and its size grows with the range of magnitudes it sees.
+- [KLL](/guides/kll/) bounds the error in **rank**: every answer is within
+  about 1.33% of the stream's positions at the default `k`. An SLO fraction or
+  a CDF is guaranteed, on any distribution, in memory fixed by `k`. In the
+  tails, 1.33% of the stream can be the whole tail, so its p99.9 can land
+  anywhere in the top 1.4%.
+
+Pick DDSketch for latency percentiles, above all the extreme ones. Pick KLL for
+SLO compliance, CDFs and histograms, or values with no natural scale. Nothing
+stops you keeping both on one stream.
 
 ## What is not shipped yet
 
