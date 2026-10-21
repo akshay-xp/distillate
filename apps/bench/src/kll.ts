@@ -102,6 +102,12 @@ export const rankAdapters: RankAdapter[] = [
     create: () => ddSketchOf(DDSketch.create(0.01)),
   },
   { name: "tdigest", create: () => tDigestOf(new TDigest()) },
+  // Its centroids at this delta store about as many bytes as KLL at k 200, so
+  // accuracy is also compared at matched size.
+  {
+    name: "tdigest (delta = 0.1)",
+    create: () => tDigestOf(new TDigest(0.1)),
+  },
   { name: "Array", create: () => arrayOf([]) },
 ];
 

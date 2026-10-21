@@ -281,7 +281,7 @@ export function kllTable(rows: KllRow[]): string {
     "| --- | --- | --- | --- | --- | --- | --- | --- |";
   const body = rows.map(
     (r) =>
-      `| ${r.name} | ${r.distribution} | ${ops(r.addOpsPerSec)} | ${fineDuration(r.mergeMs)} | ${size(r.bytes)} | ${r.rankErrors.map(percent).join(" | ")} |`,
+      `| ${r.name} | ${r.distribution} | ${ops(r.addOpsPerSec)} | ${fineDuration(r.mergeMs)} | ${size(r.bytes)} | ${r.rankErrors.map((e) => `${(e * 100).toFixed(3)}%`).join(" | ")} |`,
   );
   return [header, ...body].join("\n");
 }
@@ -495,7 +495,7 @@ export function kllSection(table: string, bundles: string): string[] {
   return [
     "## KLL",
     "",
-    `${capacityLabel(KLL_N)} values per run, on three distributions: \`uniform\`, \`lognormal\` (shaped like latencies) and \`ascending\`, the sorted order that stresses a t-digest's centroids. distillate's KLL at its default k = 200 is compared with distillate's DDSketch at 1% and with \`tdigest\`, the most-downloaded t-digest on npm, each at its defaults, and with an exact sorted \`Array\`, which gives the truth and its own cost.`,
+    `${capacityLabel(KLL_N)} values per run, on three distributions: \`uniform\`, \`lognormal\` (shaped like latencies) and \`ascending\`, the sorted order that stresses a t-digest's centroids. distillate's KLL at its default k = 200 is compared with distillate's DDSketch at 1% and with \`tdigest\`, the most-downloaded t-digest on npm, each at its defaults, and with an exact sorted \`Array\`, which gives the truth and its own cost. \`tdigest\` runs again at \`delta = 0.1\`, where its stored centroids come to about KLL's size, so accuracy is also compared at matched size rather than only between defaults.`,
     "",
     `Each error is the rank error of \`quantile(q)\`: how far the answer's position in the sorted stream sits from \`floor(q * (n - 1))\`, as a share of \`n\`, averaged over ${String(KLL_SEEDS)} seeds. DDSketch is scored here in rank, not value; its relative error on values is in the [DDSketch section](#ddsketch). \`add\` is every value added over the time spent adding. \`merge\` is the median time to union two sketches of \`n\` values each into a new one. \`size\` is what a user would store: the DSTL frame for distillate, the centroids as JSON for \`tdigest\`, which has no serialization, and 8 bytes a value for the array. Each library runs in its own process.`,
     "",
