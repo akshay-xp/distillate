@@ -6,6 +6,8 @@ import { cardinalityAdapters, cardinalityRows } from "./cardinality.js";
 import { countMinAdapters, countMinRows } from "./countmin.js";
 import { cuckooAdapters, cuckooRows } from "./cuckoo.js";
 import { ddSketchAdapters, ddSketchRows } from "./ddsketch.js";
+import { kllRows, rankAdapters } from "./kll.js";
+import type { Distribution } from "./kll.js";
 import { keyLengthRows } from "./keylength.js";
 import {
   lshAdapters,
@@ -76,6 +78,8 @@ const JOBS: Record<string, Job> = {
     ribltRows(cases, only(reconcileAdapters, name, "riblt")),
   theta: (name, [n, overlaps, seeds]: [number, number[], number]) =>
     thetaRows(n, overlaps, seeds, only(setCountAdapters, name, "theta")),
+  kll: (name, [n, distributions, seeds]: [number, Distribution[], number]) =>
+    kllRows(n, distributions, seeds, only(rankAdapters, name, "kll")),
 };
 
 const SELF = fileURLToPath(import.meta.url);

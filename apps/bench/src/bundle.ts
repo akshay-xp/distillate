@@ -145,3 +145,32 @@ export async function thetaBundles(): Promise<SetCountBundleRow[]> {
     },
   ];
 }
+
+export interface QuantileBundleRow {
+  name: string;
+  bytes: number;
+}
+
+/** The quantile sketch each library ranks values with. */
+export async function kllBundles(): Promise<QuantileBundleRow[]> {
+  return [
+    {
+      name: "distillate/kll",
+      bytes: await bundleSize(
+        'import { KllSketch } from "distillate/kll"; globalThis.x = KllSketch;',
+      ),
+    },
+    {
+      name: "distillate/ddsketch",
+      bytes: await bundleSize(
+        'import { DDSketch } from "distillate/ddsketch"; globalThis.x = DDSketch;',
+      ),
+    },
+    {
+      name: "tdigest",
+      bytes: await bundleSize(
+        'import { TDigest } from "tdigest"; globalThis.x = TDigest;',
+      ),
+    },
+  ];
+}
