@@ -4,6 +4,7 @@ import { CountMinSketch } from "distillate/countmin";
 import { CuckooFilter, CuckooFullError } from "distillate/cuckoo";
 import { DDSketch, denseStore } from "distillate/ddsketch";
 import { HyperLogLog } from "distillate/hll";
+import { KllSketch } from "distillate/kll";
 import { BinaryFuse8, BinaryFuseBuildError } from "distillate/fuse";
 import { MinHash } from "distillate/minhash";
 import { RibltDecoder, RibltEncoder } from "distillate/riblt";
@@ -98,6 +99,34 @@ export interface QuantileReport {
   /** Values recorded so far. */
   count: number;
   relativeAccuracy: number;
+}
+
+/** One quantile from KLL, beside DDSketch's and the exact value. */
+export interface RankQuantileRow {
+  q: number;
+  /** The value at rank `floor(q * (count - 1))` of everything recorded. */
+  exact: number;
+  kll: number;
+  ddsketch: number;
+  /** How far KLL's answer sits from that rank, as a share of the count. */
+  kllRankError: number;
+}
+
+/** The share of values at or below `x`, exact and from KLL. */
+export interface RankRow {
+  x: number;
+  exact: number;
+  kll: number;
+}
+
+export interface RankReport {
+  quantiles: RankQuantileRow[];
+  ranks: RankRow[];
+  /** Values recorded so far. */
+  count: number;
+  k: number;
+  /** KLL's single-rank error at 99% confidence, as a share of the count. */
+  rankError: number;
 }
 
 export interface SimilarityReport {
@@ -325,6 +354,14 @@ function similaritySketch(items: readonly string[]): MinHash {
 /** The quantiles the panel shows. */
 const QUANTILES = [0.5, 0.9, 0.99, 0.999];
 
+/** The latencies, in milliseconds, the rank panel asks the share under. */
+const RANK_THRESHOLDS = [50, 100, 200, 500];
+
+// A fixed seed, so every build of the page shows the same answers. KLL keeps
+// its default k rather than following the page's target: kllSizing refuses
+// targets that need k past 65535, which every other structure accepts.
+const KLL_SEED = 1;
+
 /**
  * `count` lognormal latencies in milliseconds, median 100, from a fixed seed
  * so every build of the page shows the same quantiles.
@@ -373,6 +410,7 @@ interface Filters {
   scalable: ScalableBloomFilter;
   cuckoo: CuckooFilter;
   ddsketch: DDSketch;
+  kll: KllSketch;
   minhashA: MinHash;
   minhashB: MinHash;
 }
@@ -401,6 +439,44 @@ function describe(
 
 // The first value whose running count passes `rank`, over [value, count]
 // pairs in ascending value order.
+function kllOf(values: readonly number[]): KllSketch {
+  const sketch = new KllSketch({ seed: KLL_SEED });
+  for (const value of values) sketch.add(value);
+  return sketch;
+}
+
+/** How many values `inPrefix` holds for, of a tally sorted by value. */
+function countWhile(
+  values: readonly [number, number][],
+  inPrefix: (value: number) => boolean,
+): number {
+  let running = 0;
+  for (const [value, count] of values) {
+    if (!inPrefix(value)) break;
+    running += count;
+  }
+  return running;
+}
+
+/**
+ * How far `answer` for `q` sits from the true q-quantile, as a share of
+ * `total`: the distance from floor(q * (total - 1)) to the ranks `answer`
+ * holds, zero inside them.
+ */
+function rankErrorOf(
+  values: readonly [number, number][],
+  total: number,
+  answer: number,
+  q: number,
+): number {
+  const target = Math.floor(q * (total - 1));
+  const below = countWhile(values, (v) => v < answer);
+  const atOrBelow = countWhile(values, (v) => v <= answer);
+  if (target < below) return (below - target) / total;
+  if (target >= atOrBelow) return (target - atOrBelow + 1) / total;
+  return 0;
+}
+
 function exactAt(values: readonly [number, number][], rank: number): number {
   let running = 0;
   for (const [value, count] of values) {
@@ -499,6 +575,7 @@ export class Playground {
         // dozens of orders of magnitude apart, and folding the low end would
         // break the band the panel promises. At most about 1 MB a sign at 1%.
         ddsketch: DDSketch.from(values, epsilon, { store: denseStore() }),
+        kll: kllOf(values),
         minhashA: similaritySketch(keys),
         minhashB: similaritySketch(setBKeys(n)),
       };
@@ -758,6 +835,33 @@ export class Playground {
       }),
       count: sketch.count,
       relativeAccuracy: accuracy,
+    };
+  }
+
+  /** KLL's quantiles beside DDSketch's and exact, and its ranks beside exact. */
+  ranks(): RankReport {
+    const { kll, ddsketch } = this.#filters;
+    const values = [...this.#values].sort((a, b) => a[0] - b[0]);
+    const total = kll.count;
+    return {
+      quantiles: QUANTILES.map((q) => {
+        const estimate = kll.quantile(q);
+        return {
+          q,
+          exact: exactAt(values, Math.floor(q * (total - 1))),
+          kll: estimate,
+          ddsketch: ddsketch.quantile(q),
+          kllRankError: rankErrorOf(values, total, estimate, q),
+        };
+      }),
+      ranks: RANK_THRESHOLDS.map((x) => ({
+        x,
+        exact: countWhile(values, (v) => v <= x) / total,
+        kll: kll.rank(x),
+      })),
+      count: total,
+      k: kll.k,
+      rankError: kll.normalizedRankError(),
     };
   }
 
