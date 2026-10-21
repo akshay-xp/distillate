@@ -138,3 +138,15 @@ test("the theta job resolves each library by name", () => {
     runIsolated("theta", "no-such-library", [2000, [0.1], 1]),
   ).toThrow(/no-such-library/);
 });
+
+test("the kll job resolves each library by name", () => {
+  const rows = runIsolated<{ name: string }>("kll", "tdigest", [
+    2000,
+    ["uniform"],
+    1,
+  ]);
+  expect(rows.rows.map((r) => r.name)).toEqual(["tdigest"]);
+  expect(() =>
+    runIsolated("kll", "no-such-library", [2000, ["uniform"], 1]),
+  ).toThrow(/no-such-library/);
+});

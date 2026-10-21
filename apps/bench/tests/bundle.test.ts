@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import {
   bundleSize,
   ddSketchBundles,
+  kllBundles,
   minHashBundles,
   ribltBundles,
 } from "../src/bundle.js";
@@ -49,6 +50,16 @@ test("each reconciler's bundle is measured", async () => {
     "distillate/riblt",
     "ribbit-riblt",
     "bloom-filters",
+  ]);
+  for (const r of rows) expect(r.bytes, r.name).toBeGreaterThan(0);
+});
+
+test("each quantile sketch's bundle is measured", async () => {
+  const rows = await kllBundles();
+  expect(rows.map((r) => r.name)).toEqual([
+    "distillate/kll",
+    "distillate/ddsketch",
+    "tdigest",
   ]);
   for (const r of rows) expect(r.bytes, r.name).toBeGreaterThan(0);
 });
