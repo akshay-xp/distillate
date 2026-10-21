@@ -1,0 +1,114 @@
+{
+  "objects": [
+    {
+      "package": {
+        "name": "@redis/bloom"
+      },
+      "score": {
+        "final": 740.3155
+      },
+      "downloads": {
+        "weekly": 7663403
+      }
+    },
+    {
+      "package": {
+        "name": "bloom-filters"
+      },
+      "score": {
+        "final": 642.0339
+      },
+      "downloads": {
+        "weekly": 260559
+      }
+    },
+    {
+      "package": {
+        "name": "@pacote/bloom-filter"
+      },
+      "score": {
+        "final": 325.26385
+      },
+      "downloads": {
+        "weekly": 272
+      }
+    },
+    {
+      "package": {
+        "name": "valkey-bloom"
+      },
+      "score": {
+        "final": 324.01178
+      },
+      "downloads": {
+        "weekly": 4740
+      }
+    },
+    {
+      "package": {
+        "name": "fission-bloom-filters"
+      },
+      "score": {
+        "final": 278.7972
+      },
+      "downloads": {
+        "weekly": 264
+      }
+    },
+    {
+      "package": {
+        "name": "distillate"
+      },
+      "score": {
+        "final": 260.0272
+      },
+      "downloads": {
+        "weekly": 606
+      }
+    },
+    {
+      "package": {
+        "name": "datalib-sketch"
+      },
+      "score": {
+        "final": 221.55386
+      },
+      "downloads": {
+        "weekly": 2
+      }
+    },
+    {
+      "package": {
+        "name": "statin-bun"
+      },
+      "score": {
+        "final": 169.8744
+      },
+      "downloads": {
+        "weekly": 7
+      }
+    },
+    {
+      "package": {
+        "name": "@haybarn/ext-bitfilters-h1-5-5"
+      },
+      "score": {
+        "final": 152.79654
+      },
+      "downloads": {
+        "weekly": 5
+      }
+    },
+    {
+      "package": {
+        "name": "@valkey/bloom"
+      },
+      "score": {
+        "final": 147.27255
+      },
+      "downloads": {
+        "weekly": 15
+      }
+    }
+  ]
+}
