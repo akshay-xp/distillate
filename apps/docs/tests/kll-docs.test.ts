@@ -80,3 +80,29 @@ test("the sidebar links the KLL guide", () => {
     '{ label: "KLL", link: "/guides/kll/" }',
   );
 });
+
+test("the choosing guide routes the rank question to KLL", () => {
+  const page = read("../src/content/docs/guides/choosing-a-structure.md");
+  // The question list at the top is where a reader is sent first.
+  expect(page.slice(0, page.indexOf("## "))).toContain("/guides/kll/");
+  expect(section(page, "Decision matrix")).toContain("[KLL](/guides/kll/)");
+  expect(section(page, "What ships today")).toContain(
+    "### [KLL](/guides/kll/) (`distillate/kll`)",
+  );
+  const versus = section(page, "KLL or DDSketch");
+  for (const phrase of [
+    "relative",
+    "rank",
+    "tails",
+    "SLO",
+    "[DDSketch](/guides/ddsketch/)",
+    "[KLL](/guides/kll/)",
+  ]) {
+    expect(versus, phrase).toContain(phrase);
+  }
+
+  const ddsketch = read("../src/content/docs/guides/ddsketch.md");
+  expect(section(ddsketch, "When to pick it")).toContain(
+    "/guides/choosing-a-structure/#kll-or-ddsketch",
+  );
+});
