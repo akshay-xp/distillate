@@ -126,6 +126,34 @@ The frame carries the generator state, so a decoded sketch flips the same
 coins the original would have: fed the same values, the two write the same
 bytes.
 
+## Measured
+
+From the [bench results](https://github.com/akshay-xp/distillate/blob/main/apps/bench/RESULTS.md#kll),
+1M latency-shaped (lognormal) values on an Apple M5, rank errors averaged over
+10 seeds, against DDSketch at 1% and `tdigest`, the most-downloaded t-digest on
+npm, at its defaults and at a size matched to KLL's. Errors and sizes reproduce
+anywhere; the timings do not.
+
+| Library                 | size    | p50    | p99    | p99.9  | add          | merge   |
+| ----------------------- | ------- | ------ | ------ | ------ | ------------ | ------- |
+| KLL, `k = 200`          | 4.9 KB  | 0.240% | 0.253% | 0.107% | 32.4 M ops/s | 0.04 ms |
+| DDSketch, 1%            | 3.6 KB  | 0.110% | 0.012% | 0.001% | 97.4 M ops/s | 0.02 ms |
+| t-digest, defaults      | 40.1 KB | 0.003% | 0.001% | 0.001% | 6.4 M ops/s  | 1.41 ms |
+| t-digest, `delta = 0.1` | 5.0 KB  | 0.044% | 0.009% | 0.001% | 8.0 M ops/s  | 0.24 ms |
+
+In practice t-digest is the more accurate, even at KLL's size: at the median it
+is about five times closer in rank there, and about eighty times closer at its
+defaults, for eight times the bytes. What it lacks is a bound. Nothing says how
+far off one of its answers may be, while KLL's error is proven and gated in
+this library's CI; every KLL error measured here is under a quarter of its
+1.33% bound. KLL adds values 4 to 35 times as fast as t-digest across the three
+distributions, and merges 4 to 80 times as fast. On a sorted stream, t-digest's
+adds fall to 1.5 to 1.8 M ops/s.
+
+DDSketch, built for values, is closer in rank on this latency-shaped stream
+too, most of all in the tail, and smaller. KLL's advantage over it is that its
+rank bound holds on any distribution; DDSketch's bound is on values.
+
 ## Limits
 
 - **Numbers only.** Values are stored as doubles. Any number but `NaN` is
