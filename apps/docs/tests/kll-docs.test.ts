@@ -106,3 +106,17 @@ test("the choosing guide routes the rank question to KLL", () => {
     "/guides/choosing-a-structure/#kll-or-ddsketch",
   );
 });
+
+test("the README shows the sketch", () => {
+  const readme = read("../../../packages/distillate/README.md");
+  const at = readme.indexOf("### KLL (`distillate/kll`)");
+  expect(at).toBeGreaterThan(-1);
+  const kll = readme.slice(at, readme.indexOf("\n## ", at));
+  for (const phrase of [
+    "rank(",
+    "quantile(",
+    "https://distillate.akxp.net/guides/kll/",
+  ]) {
+    expect(kll, phrase).toContain(phrase);
+  }
+});
