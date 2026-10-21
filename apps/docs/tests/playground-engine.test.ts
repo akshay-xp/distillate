@@ -3,6 +3,7 @@ import { bloomSizing } from "distillate/bloom";
 import { countMinSizing } from "distillate/countmin";
 import { BinaryFuse8, BinaryFuseBuildError } from "distillate/fuse";
 import { CuckooFilter } from "distillate/cuckoo";
+import { KllSketch } from "distillate/kll";
 import { MinHash } from "distillate/minhash";
 import { ScalableBloomFilter } from "distillate/scalable";
 import { expect, test } from "vitest";
@@ -668,6 +669,35 @@ test("recording values moves the quantiles and every band still holds", () => {
     expect(row.estimate, String(row.q)).toBeGreaterThanOrEqual(row.low);
     expect(row.estimate, String(row.q)).toBeLessThanOrEqual(row.high);
   }
+});
+
+// KLL answers over the same values as DDSketch, each quantile scored in rank
+// against the exact stream, and each rank against the exact share.
+test("the build seeds KLL and reports its quantiles and ranks beside exact", () => {
+  const pg = built();
+  const report = pg.ranks();
+  const sorted = latencies(KEYS).sort((a, b) => a - b);
+  const ddsketch = pg.quantiles();
+
+  expect(report.count).toBe(KEYS);
+  expect(report.k).toBe(200);
+  expect(report.rankError).toBe(new KllSketch().normalizedRankError());
+  expect(report.quantiles.map((r) => r.q)).toEqual([0.5, 0.9, 0.99, 0.999]);
+  expect(report.ranks.map((r) => r.x)).toEqual([50, 100, 200, 500]);
+  report.quantiles.forEach((row, i) => {
+    expect(row.exact).toBe(sorted[Math.floor(row.q * (KEYS - 1))]);
+    expect(row.ddsketch).toBe(ddsketch.rows[i]?.estimate);
+    expect(row.kllRankError, String(row.q)).toBeLessThanOrEqual(
+      report.rankError,
+    );
+  });
+  for (const row of report.ranks) {
+    expect(row.exact).toBe(sorted.filter((v) => v <= row.x).length / KEYS);
+    expect(Math.abs(row.kll - row.exact), String(row.x)).toBeLessThanOrEqual(
+      report.rankError,
+    );
+  }
+  expect(built().ranks()).toEqual(report);
 });
 
 // The sketch records nothing before it throws, and the exact map is updated
