@@ -2426,3 +2426,123 @@ func TestThetaDamaged(t *testing.T) {
 		}
 	}
 }
+
+// KLL, frame type 14: item type (u8, 0 = f64), flags (u8, bit 0 seeded), k
+// (u16), generator state (u32), n (u64), min and max (f64), L (u32), then L
+// level sizes (u32), zero padding to a multiple of 8, and the items (f64),
+// level 0 first: level 0 unsorted and newest first, the rest ascending.
+type kll struct {
+	itemType, flags byte
+	k               uint16
+	state           uint32
+	n               uint64
+	min, max        float64
+	sizes           []uint32
+	items           []float64
+}
+
+const kllSizesAt = 36
+
+func parseKll(f frame) (kll, error) {
+	if len(f.body) < kllSizesAt {
+		return kll{}, fmt.Errorf("body of %d bytes is shorter than the params block", len(f.body))
+	}
+	numLevels := int(le.Uint32(f.body[32:]))
+	itemsAt := padded8(kllSizesAt + 4*numLevels)
+	if len(f.body) < itemsAt {
+		return kll{}, fmt.Errorf("body of %d bytes cannot hold %d level sizes", len(f.body), numLevels)
+	}
+	s := kll{
+		itemType: f.body[0],
+		flags:    f.body[1],
+		k:        le.Uint16(f.body[2:]),
+		state:    le.Uint32(f.body[4:]),
+		n:        le.Uint64(f.body[8:]),
+		min:      math.Float64frombits(le.Uint64(f.body[16:])),
+		max:      math.Float64frombits(le.Uint64(f.body[24:])),
+		sizes:    make([]uint32, numLevels),
+	}
+	retained := 0
+	for h := range s.sizes {
+		s.sizes[h] = le.Uint32(f.body[kllSizesAt+4*h:])
+		retained += int(s.sizes[h])
+	}
+	if want := itemsAt + 8*retained; len(f.body) != want {
+		return kll{}, fmt.Errorf("body of %d bytes disagrees with %d items (want %d)", len(f.body), retained, want)
+	}
+	s.items = make([]float64, retained)
+	for i := range s.items {
+		s.items[i] = math.Float64frombits(le.Uint64(f.body[itemsAt+8*i:]))
+	}
+	return s, nil
+}
+
+func encodeKll(s kll) []byte {
+	params := make([]byte, padded8(kllSizesAt+4*len(s.sizes)))
+	params[0] = s.itemType
+	params[1] = s.flags
+	le.PutUint16(params[2:], s.k)
+	le.PutUint32(params[4:], s.state)
+	le.PutUint64(params[8:], s.n)
+	le.PutUint64(params[16:], math.Float64bits(s.min))
+	le.PutUint64(params[24:], math.Float64bits(s.max))
+	le.PutUint32(params[32:], uint32(len(s.sizes)))
+	for h, size := range s.sizes {
+		le.PutUint32(params[kllSizesAt+4*h:], size)
+	}
+	payload := make([]byte, 8*len(s.items))
+	for i, v := range s.items {
+		le.PutUint64(payload[8*i:], math.Float64bits(v))
+	}
+	return writeFrame(14, params, payload)
+}
+
+func TestKll(t *testing.T) {
+	for _, e := range golden(t) {
+		if e.Kind != "kll" {
+			continue
+		}
+		golden := frameOf(t, e)
+		f, err := readFrame(golden)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := parseKll(f)
+		if err != nil {
+			t.Fatalf("%s: %v", e.Name, err)
+		}
+		lo, hi := math.Inf(1), math.Inf(-1)
+		for _, v := range e.Values {
+			lo, hi = math.Min(lo, v), math.Max(hi, v)
+		}
+		if int(s.k) != e.K || s.n != uint64(len(e.Values)) || s.min != lo || s.max != hi {
+			t.Errorf("%s: k %d n %d min %v max %v, recipe says k %d n %d min %v max %v",
+				e.Name, s.k, s.n, s.min, s.max, e.K, len(e.Values), lo, hi)
+		}
+		weight := uint64(0)
+		for h, size := range s.sizes {
+			weight += uint64(size) << h
+		}
+		if weight != s.n {
+			t.Errorf("%s: level weights sum to %d, n is %d", e.Name, weight, s.n)
+		}
+		switch e.Name {
+		case "kll":
+			if s.flags != 1 || len(s.sizes) < 2 {
+				t.Errorf("kll: flags %d levels %d, want seeded and compacted", s.flags, len(s.sizes))
+			}
+		case "kll-small":
+			if s.flags != 0 || s.state != 0 || len(s.sizes) != 1 {
+				t.Errorf("kll-small: flags %d state %d levels %d, want unseeded and exact", s.flags, s.state, len(s.sizes))
+			}
+			for i, v := range e.Values {
+				if got := s.items[len(e.Values)-1-i]; got != v {
+					t.Errorf("kll-small: level 0 is not newest first: item %d is %v, want %v", len(e.Values)-1-i, got, v)
+				}
+			}
+		}
+		if rebuilt := encodeKll(s); !bytes.Equal(rebuilt, golden) {
+			t.Errorf("%s: re-encoded frame differs:\n got %x\nwant %x", e.Name, rebuilt, golden)
+		}
+	}
+}
