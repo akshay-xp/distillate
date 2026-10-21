@@ -24,6 +24,10 @@ unreleased build that adds `distillate/theta` on top of 0.17.0. No other JS
 library ships a Theta sketch, so it compares with distillate's own HyperLogLog
 and an exact `Set`. Every other section keeps the numbers it was published with.
 
+The KLL section was measured on 2026-10-21, on the same machine, from the
+unreleased build that adds `distillate/kll` on top of 0.18.0, against
+`tdigest@0.1.3`. Every other section keeps the numbers it was published with.
+
 All filters are configured at the same target FPR (1%) and measured by identical code.
 See [METHODOLOGY.md](./METHODOLOGY.md) for how these benches are run.
 
@@ -368,6 +372,38 @@ Bundle sizes are measured, not quoted: each import bundled by esbuild for the br
 | ---------------- | ------ |
 | distillate/theta | 4.9 KB |
 | distillate/hll   | 4.9 KB |
+
+## KLL
+
+1M values per run, on three distributions: `uniform`, `lognormal` (shaped like latencies) and `ascending`, the sorted order that stresses a t-digest's centroids. distillate's KLL at its default k = 200 is compared with distillate's DDSketch at 1% and with `tdigest`, the most-downloaded t-digest on npm, each at its defaults, and with an exact sorted `Array`, which gives the truth and its own cost. `tdigest` runs again at `delta = 0.1`, where its stored centroids come to about KLL's size, so accuracy is also compared at matched size rather than only between defaults.
+
+Each error is the rank error of `quantile(q)`: how far the answer's position in the sorted stream sits from `floor(q * (n - 1))`, as a share of `n`, averaged over 10 seeds. DDSketch is scored here in rank, not value; its relative error on values is in the [DDSketch section](#ddsketch). `add` is every value added over the time spent adding. `merge` is the median time to union two sketches of `n` values each into a new one. `size` is what a user would store: the DSTL frame for distillate, the centroids as JSON for `tdigest`, which has no serialization, and 8 bytes a value for the array. Each library runs in its own process.
+
+| Library               | distribution | add           | merge   | size    | rank error p50 | p99    | p99.9  |
+| --------------------- | ------------ | ------------- | ------- | ------- | -------------- | ------ | ------ |
+| distillate/kll        | uniform      | 31.45 M ops/s | 0.07 ms | 4.9 KB  | 0.216%         | 0.309% | 0.062% |
+| distillate/ddsketch   | uniform      | 96.94 M ops/s | 0.04 ms | 5.6 KB  | 0.199%         | 0.209% | 0.094% |
+| tdigest               | uniform      | 6.71 M ops/s  | 1.52 ms | 43.6 KB | 0.002%         | 0.001% | 0.001% |
+| tdigest (delta = 0.1) | uniform      | 8.07 M ops/s  | 0.27 ms | 5.2 KB  | 0.006%         | 0.002% | 0.001% |
+| Array                 | uniform      | 90.21 M ops/s | 7.28 ms | 7.6 MB  | 0.000%         | 0.000% | 0.000% |
+| distillate/kll        | lognormal    | 32.35 M ops/s | 0.04 ms | 4.9 KB  | 0.240%         | 0.253% | 0.107% |
+| distillate/ddsketch   | lognormal    | 97.41 M ops/s | 0.02 ms | 3.6 KB  | 0.110%         | 0.012% | 0.001% |
+| tdigest               | lognormal    | 6.44 M ops/s  | 1.41 ms | 40.1 KB | 0.003%         | 0.001% | 0.001% |
+| tdigest (delta = 0.1) | lognormal    | 7.96 M ops/s  | 0.24 ms | 5.0 KB  | 0.044%         | 0.009% | 0.001% |
+| Array                 | lognormal    | 85.27 M ops/s | 7.22 ms | 7.6 MB  | 0.000%         | 0.000% | 0.000% |
+| distillate/kll        | ascending    | 50.72 M ops/s | 0.03 ms | 4.9 KB  | 0.196%         | 0.008% | 0.001% |
+| distillate/ddsketch   | ascending    | 93.32 M ops/s | 0.01 ms | 4.3 KB  | 0.361%         | 0.072% | 0.003% |
+| tdigest               | ascending    | 1.46 M ops/s  | 2.46 ms | 45.1 KB | 0.003%         | 0.004% | 0.000% |
+| tdigest (delta = 0.1) | ascending    | 1.76 M ops/s  | 0.24 ms | 3.3 KB  | 0.001%         | 0.006% | 0.008% |
+| Array                 | ascending    | 88.42 M ops/s | 7.41 ms | 7.6 MB  | 0.000%         | 0.000% | 0.000% |
+
+Bundle sizes are measured, not quoted: each import bundled by esbuild for the browser, minified and gzipped.
+
+| Library             | sketch |
+| ------------------- | ------ |
+| distillate/kll      | 5.1 KB |
+| distillate/ddsketch | 7.2 KB |
+| tdigest             | 3.1 KB |
 
 ## Throughput (n = 100k)
 

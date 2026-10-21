@@ -25,9 +25,21 @@ test("the KLL guide covers what a reader needs to choose and use it", () => {
     "Union",
     "Seeds",
     "Persist it",
+    "Measured",
     "Limits",
   ]) {
     section(page, heading);
+  }
+  expect(page.indexOf("\n## Measured\n")).toBeGreaterThan(
+    page.indexOf("\n## Persist it\n"),
+  );
+  expect(page.indexOf("\n## Measured\n")).toBeLessThan(
+    page.indexOf("\n## Limits\n"),
+  );
+
+  const measured = section(page, "Measured");
+  for (const phrase of ["RESULTS.md#kll", "t-digest", "DDSketch"]) {
+    expect(measured, phrase).toContain(phrase);
   }
 
   const pick = section(page, "When to pick it");
