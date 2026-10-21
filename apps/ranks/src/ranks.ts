@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 
 /** Each structure's search name, plus the broader queries a newcomer types. */
 export const QUERIES = [
@@ -118,4 +118,33 @@ export function appendRows(path: string, rows: readonly Row[]): void {
   );
   if (!existsSync(path)) lines.unshift(CSV_HEADER);
   appendFileSync(path, lines.map((line) => `${line}\n`).join(""));
+}
+
+const RETRY_MS = [30_000, 60_000, 120_000];
+
+/**
+ * How long to wait before retrying a failed request, or undefined to give up.
+ * npm answers a burst with 429 and no Retry-After; GitHub's secondary rate
+ * limit answers 403 with one. A 403 without it is a real refusal.
+ */
+export function retryDelay(
+  status: number,
+  retryAfter: string | null,
+  attempt: number,
+): number | undefined {
+  const limited = status === 429 || (status === 403 && retryAfter !== null);
+  const backoff = RETRY_MS[attempt];
+  if (!limited || backoff === undefined) return undefined;
+  const seconds = Number(retryAfter);
+  return seconds > 0 ? seconds * 1000 : backoff;
+}
+
+/** Whether the CSV at path already holds rows for date. */
+export function recorded(path: string, date: string): boolean {
+  return (
+    existsSync(path) &&
+    readFileSync(path, "utf8")
+      .split("\n")
+      .some((line) => line.startsWith(`${date},`))
+  );
 }
