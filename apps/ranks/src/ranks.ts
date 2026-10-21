@@ -1,3 +1,5 @@
+import { appendFileSync, existsSync } from "node:fs";
+
 /** Each structure's search name, plus the broader queries a newcomer types. */
 export const QUERIES = [
   "bloom filter",
@@ -102,4 +104,18 @@ export function downloadsRow(
     downloads:
       status === 200 ? String((body as { downloads: number }).downloads) : "",
   };
+}
+
+export const CSV_HEADER = "date,source,query,name,rank,score,downloads";
+
+/**
+ * Appends rows to the CSV at path, writing the header first when the file is
+ * new. Values go in unquoted: queries and names are fixed and hold no comma.
+ */
+export function appendRows(path: string, rows: readonly Row[]): void {
+  const lines = rows.map((r) =>
+    [r.date, r.source, r.query, r.name, r.rank, r.score, r.downloads].join(","),
+  );
+  if (!existsSync(path)) lines.unshift(CSV_HEADER);
+  appendFileSync(path, lines.map((line) => `${line}\n`).join(""));
 }
