@@ -1,7 +1,12 @@
 import { describe, expect, test } from "vitest";
 
 import { KllSketch } from "../../src/kll/kll.js";
-import { shuffled, worstRankError } from "../helpers/kll.js";
+import {
+  balanced,
+  mergeShapes,
+  shuffled,
+  worstRankError,
+} from "../helpers/kll.js";
 
 // Every quantile on a 0.01 grid and every rank at the values and one either
 // side: what "answers alike" means here.
@@ -104,34 +109,28 @@ describe("union past capacity", () => {
       Array.from({ length: 16 }, (_, i) =>
         sketchOf(stream.slice(i * 10_000, (i + 1) * 10_000), 200, i + 1),
       );
-    const balanced = (s: KllSketch[]): KllSketch =>
-      s.length === 1
-        ? (s[0] ?? new KllSketch())
-        : balanced(s.slice(0, s.length / 2)).union(
-            balanced(s.slice(s.length / 2)),
-          );
-    const shapes: [string, (s: KllSketch[]) => KllSketch][] = [
-      ["left-deep chain", (s) => s.reduce((acc, x) => acc.union(x))],
-      ["right-deep chain", (s) => s.reduceRight((acc, x) => x.union(acc))],
-      ["balanced tree", balanced],
-    ];
 
-    test.each(shapes)("merged as a %s stay within the bound", (_, merge) => {
-      const union = merge(shards());
-      expect(union.count).toBe(n);
-      expect(union.min).toBe(0);
-      expect(union.max).toBe(n - 1);
-      expect(union.retained).toBeLessThanOrEqual(3 * 200 + 8 * union.numLevels);
-      for (const q of [0.25, 0.5, 0.75]) {
-        const below = Math.min(n, Math.floor(union.quantile(q)) + 1);
-        expect(Math.abs(below / n - q), `q ${String(q)}`).toBeLessThanOrEqual(
-          union.normalizedRankError(),
+    test.each(mergeShapes)(
+      "merged as a %s stay within the bound",
+      (_, merge) => {
+        const union = merge(shards());
+        expect(union.count).toBe(n);
+        expect(union.min).toBe(0);
+        expect(union.max).toBe(n - 1);
+        expect(union.retained).toBeLessThanOrEqual(
+          3 * 200 + 8 * union.numLevels,
         );
-      }
-      expect(worstRankError(union, ascending(n))).toBeLessThanOrEqual(
-        union.normalizedRankError(true),
-      );
-    });
+        for (const q of [0.25, 0.5, 0.75]) {
+          const below = Math.min(n, Math.floor(union.quantile(q)) + 1);
+          expect(Math.abs(below / n - q), `q ${String(q)}`).toBeLessThanOrEqual(
+            union.normalizedRankError(),
+          );
+        }
+        expect(worstRankError(union, ascending(n))).toBeLessThanOrEqual(
+          union.normalizedRankError(true),
+        );
+      },
+    );
 
     test("a merged result takes more values and further unions", () => {
       const union = balanced(shards());

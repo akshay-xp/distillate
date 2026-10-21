@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 
 import { KllSketch } from "../../src/kll/kll.js";
-import { rankError, shuffled } from "../helpers/kll.js";
+import { mergeShapes, rankError, shuffled } from "../helpers/kll.js";
 
 const K = 200;
 const SEEDS = 100;
@@ -79,3 +79,35 @@ test.each(
     [...values].sort((a, b) => a - b),
   );
 });
+
+// Each trial splits one shuffled stream into 16 shards with their own seeds
+// and merges them. A union that skipped compression would be no less
+// accurate, only unbounded, so every result's memory is held too.
+test.each(
+  mergeShapes.flatMap(([shape, merge]) =>
+    [10_000, 100_000].map((n): [string, number, typeof merge] => [
+      shape,
+      n,
+      merge,
+    ]),
+  ),
+)(
+  "a %s of 16 shards of %i values holds the calibrated bound",
+  (_, n, merge) => {
+    const values = shuffled(n);
+    const shard = n / 16;
+    const sketches = Array.from({ length: SEEDS }, (_, i) => {
+      const shards = Array.from({ length: 16 }, (_, j) => {
+        const sketch = new KllSketch({ k: K, seed: 100 * (i + 1) + j });
+        for (let v = j * shard; v < (j + 1) * shard; v++) {
+          sketch.add(values[v] ?? 0);
+        }
+        return sketch;
+      });
+      const union = merge(shards);
+      expect(union.retained).toBeLessThanOrEqual(3 * K + 8 * union.numLevels);
+      return union;
+    });
+    checkCell(sketches, ascending(n));
+  },
+);
