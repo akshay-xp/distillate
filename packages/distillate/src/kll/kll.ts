@@ -32,8 +32,9 @@ const MAX_LEVELS = 64;
  * Body layout: item type (u8, 0 = f64) | flags (u8, bit 0 seeded) | k (u16) |
  * generator state (u32) | n (u64) | min (f64) | max (f64) | L (u32) | items
  * per level (u32 x L, level 0 first) | zero padding to a multiple of 8 | items
- * (f64), level 0 first, each level in held order: level 0 as it arrived, the
- * rest ascending. All little-endian.
+ * (f64), level 0 first, each level in held order: level 0 unsorted, newest
+ * first with a compaction's odd item out at its end, the rest ascending. All
+ * little-endian.
  */
 const LEVEL_SIZES_AT = 36;
 const paramsSize = (numLevels: number): number =>
