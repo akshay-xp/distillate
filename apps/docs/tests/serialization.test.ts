@@ -150,6 +150,7 @@ const NUMERALS = [
   "ten",
   "eleven",
   "twelve",
+  "thirteen",
 ];
 
 /** The structures the hash-variant section lists, and the count it claims. */
@@ -736,18 +737,18 @@ describe.each(["ddsketch", "ddsketch-collapsed"])(
   },
 );
 
-test("the layout table names type 13 as Theta and reserves from 14", () => {
-  const { types, reserved } = typeRows();
-  const named = new Map(
-    [...types.matchAll(/(\d+)=([A-Za-z0-9]+)/g)].map(([, n, name]) => [
-      Number(n),
-      name,
-    ]),
+/** The structure types the layout table names, by number. */
+function namedTypes(): Map<number, string> {
+  return new Map(
+    [...typeRows().types.matchAll(/(\d+)=([A-Za-z0-9]+)/g)].map(
+      ([, n, name]) => [Number(n), name],
+    ),
   );
+}
 
-  expect(named.get(13)).toBe("Theta");
-  expect(reserved).toContain("14+");
-  expect(reserved).not.toContain("Theta");
+test("the layout table names type 13 as Theta", () => {
+  expect(namedTypes().get(13)).toBe("Theta");
+  expect(typeRows().reserved).not.toContain("Theta");
 });
 
 test("the hash variant section lists Theta among the variant 0 writers", () => {
@@ -802,6 +803,93 @@ describe.each<[string, number, number, boolean]>([
         expect(hash).toBeGreaterThan(previous);
         expect(hash).toBeLessThan(theta);
         previous = hash;
+      }
+    });
+  },
+);
+
+test("the layout table names type 14 as KLL and reserves from 15", () => {
+  expect(namedTypes().get(14)).toBe("KLL");
+  const { reserved } = typeRows();
+  expect(reserved).toContain("15+");
+  expect(reserved).not.toContain("KLL");
+});
+
+test("the hash variant section lists KLL among the variant 0 writers", () => {
+  expect(hashVariant().families).toContain("KLL");
+});
+
+const KLL_HEADING = "KLL (type 14), little-endian";
+
+test("the KLL section states the item type, the generator state, the level order and what a reader rejects", () => {
+  const section = sectionFrom(
+    KLL_HEADING,
+    "\n### ",
+    "serialization.md has no KLL section",
+  );
+  for (const phrase of [
+    "item type",
+    "generator state",
+    "level 0 first",
+    "Σ size_h · 2^h",
+    "A reader rejects",
+  ]) {
+    expect(section, phrase).toContain(phrase);
+  }
+});
+
+// Decoded from the page's offsets alone, so a wrong row fails here rather
+// than in the Go reader written from it.
+describe.each<[string, number, boolean]>([
+  ["kll", 8, true],
+  ["kll-small", 200, false],
+])(
+  "the documented KLL layout decodes the golden %s frame",
+  (name, k, seeded) => {
+    test("params, level sizes, padding and every item", () => {
+      const rows = paramsTable(KLL_HEADING);
+      const all = JSON.parse(readFileSync(GOLDEN, "utf8")) as (Fixture & {
+        values?: number[];
+      })[];
+      const fixture = all.find((g) => g.name === name);
+      if (!fixture) throw new Error(`golden.json has no ${name} fixture`);
+      const body = frameBody(Buffer.from(fixture.frame, "base64"));
+      const at = (field: string): number => rows.get(field)?.offset ?? NaN;
+      const values = fixture.values ?? [];
+
+      expect(body.getUint8(at("item"))).toBe(0);
+      expect(body.getUint8(at("flags"))).toBe(seeded ? 1 : 0);
+      expect(body.getUint16(at("k"), true)).toBe(k);
+      expect(body.getUint32(at("state"), true) !== 0).toBe(seeded);
+      const n =
+        body.getUint32(at("n") + 4, true) * 2 ** 32 +
+        body.getUint32(at("n"), true);
+      expect(n).toBe(values.length);
+      expect(body.getFloat64(at("min"), true)).toBe(Math.min(...values));
+      expect(body.getFloat64(at("max"), true)).toBe(Math.max(...values));
+
+      const levels = body.getUint32(at("levels"), true);
+      const sizes = Array.from({ length: levels }, (_, h) =>
+        body.getUint32(at("sizes") + 4 * h, true),
+      );
+      expect(sizes.reduce((sum, size, h) => sum + size * 2 ** h, 0)).toBe(n);
+
+      expect(rows.get("items")?.at).toBe("align8(36 + 4L)");
+      const itemsAt = Math.ceil((36 + 4 * levels) / 8) * 8;
+      for (let i = 36 + 4 * levels; i < itemsAt; i++) {
+        expect(body.getUint8(i)).toBe(0);
+      }
+      const retained = sizes.reduce((a, b) => a + b, 0);
+      expect(body.byteLength).toBe(itemsAt + 8 * retained);
+
+      let start = itemsAt + 8 * (sizes[0] ?? 0);
+      for (const size of sizes.slice(1)) {
+        for (let i = 1; i < size; i++) {
+          expect(body.getFloat64(start + 8 * i, true)).toBeGreaterThanOrEqual(
+            body.getFloat64(start + 8 * (i - 1), true),
+          );
+        }
+        start += 8 * size;
       }
     });
   },

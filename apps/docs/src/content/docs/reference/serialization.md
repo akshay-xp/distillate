@@ -11,8 +11,8 @@ Versioned, self-describing, little-endian binary format. Spec'd here so Rust/Go 
 Offset  Size  Field
 0       4     Magic "DSTL" (0x44 53 54 4C)
 4       1     Format version (u8)         # bump on incompatible layout change
-5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog 6=ScalableBloom 7=Cuckoo 8=CountMin 9=TopK 10=DDSketch 11=MinHash 12=RIBLT 13=Theta
-                                          # (14+ reserved: CountingBloom, ...)
+5       1     Structure type (u8)         # 1=Bloom 2=BlockedBloom 3=Fuse8 4=Fuse16 5=HyperLogLog 6=ScalableBloom 7=Cuckoo 8=CountMin 9=TopK 10=DDSketch 11=MinHash 12=RIBLT 13=Theta 14=KLL
+                                          # (15+ reserved: CountingBloom, ...)
 6       1     Flags (u8)                  # bit0-3 hash variant, bit4-7 reserved (must be 0)
 7       1     Reserved (u8)               # must be 0
 8       4     Body length (u32)           # bytes of body, excluding header and CRC
@@ -368,11 +368,43 @@ A reader rejects:
 - a `theta` of 0 or above `2^53`, or a `count` above `k`;
 - hashes that are not strictly ascending, or one that is 0 or not below `theta`.
 
+KLL (type 14), little-endian. A quantile sketch with a bound on rank error: items in levels, where an item at level `h` stands for `2^h` stream values.
+
+```
+Offset           Size          Field
+0                1             item type: 0 = f64; anything else is rejected
+1                1             flags: bit 0 seeded, bits 1-7 reserved (0)
+2                2             k: u16, 8 to 65535
+4                4             state: generator state (u32), 0 while unseeded
+8                8             n: stream count (u64), at most 2^53 - 1
+16               8             min: smallest value (f64), NaN when empty
+24               8             max: largest value (f64), NaN when empty
+32               4             levels: L (u32), 1 to 64
+36               4 * L         sizes: items per level (u32), level 0 first
+36 + 4L          to align8     padding: zero, so the items sit 8-byte aligned
+align8(36 + 4L)  8 * retained  items: f64, level 0 first, retained = Σ sizes
+```
+
+`align8(x)` rounds `x` up to a multiple of 8. Level 0 is held in arrival order; every level above it is ascending. Every compaction halves a level and promotes the survivors one level up at twice the weight, so `n = Σ size_h · 2^h` holds exactly, and a reader checks it.
+
+The generator state is a splitmix32 state: a compaction steps it by `0x9e3779b9` mod `2^32` and keeps the odd-offset half when the top bit of murmur3's `fmix32` of the new state is set. It is carried so a decoded sketch flips the same coins the original would have, and a seeded sketch fed the same stream writes the same bytes. An unseeded sketch draws its seed at its first compaction and is flagged seeded from then on.
+
+Combining two frames, informatively: the result takes the smaller `k`; each level is the two inputs' levels merged, then the lowest full level is compacted until the items fit. If both inputs are seeded, the result's state is `fmix32(a ^ fmix32(b))`, where `a` is the state of the sketch `union` is called on, so it replays neither input's coins; otherwise the result is unseeded.
+
+A reader rejects:
+
+- an item type other than 0, a reserved flag bit, or an unseeded frame with a nonzero state;
+- `L` outside 1 to 64, a body length other than `align8(36 + 4L) + 8 * retained`, or nonzero padding;
+- a `k` outside 8 to 65535, or more items than the level capacities at that `k` allow;
+- an `n` that is not a safe integer or disagrees with `Σ size_h · 2^h`;
+- a `min` above `max`, or an empty frame whose `min` and `max` are not both NaN;
+- an item that is NaN or outside `[min, max]`, or a level above 0 out of ascending order.
+
 ### Hash variant (flags nibble)
 
 Bits 0-3 of the flags byte name the complete scheme that turns a key into stored bits: the hash **and the index mapping** from its output to positions, not the hash alone. A change to any component takes a new variant, even when the hash itself is unchanged, because a reader that recognises the old variant would otherwise read every stored frame at the wrong positions with no error. Version 5 uses one scheme for every structure:
 
-- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog, Scalable, Cuckoo, Count-Min, Top-K, DDSketch, MinHash, RIBLT, Theta) with the index mapping below. Top-K and DDSketch write and require `0`, though no hash reaches their frames
+- `0` = murmur3_x86_128 (Bloom, Blocked, Fuse, HyperLogLog, Scalable, Cuckoo, Count-Min, Top-K, DDSketch, MinHash, RIBLT, Theta, KLL) with the index mapping below. Top-K, DDSketch and KLL write and require `0`, though no hash reaches their frames
 
 Variant `0` covers:
 
@@ -390,10 +422,11 @@ Variant `0` covers:
 - **MinHash:** slot `reduce(w0, k)` by Lemire multiply-shift; value `w1`, clamped to `0xfffffffe`. Densification probes slot `i`'s borrow sequence as `reduce(fmix32((i * 0x9e3779b1) ^ (attempt * 0x85ebca6b) ^ seed), k)` for `attempt = 1, 2, ...`, each product mod `2^32`; it is computed on read and never stored, but two readers must agree on it to agree on an estimate.
 - **RIBLT:** a key's symbol is `w1:w0` (`w1` high). Its checksum is MurmurHash3's `fmix64` of the symbol XOR `0x9e3779b97f4a7c15`, a function of the symbol alone. The symbol reaches index 0 and then each next index `last + ceil((last + 1.5) * (1 / sqrt(u) - 1))`, where `u = (x + 0.5) / 2^32` and `x` is the next output of xoroshiro64** seeded with the checksum's low and high words. Two peers must agree on all of it, or no prefix of the stream decodes.
 - **Theta:** a key's hash is `(w1 >>> 11) * 2^32 + w0`, the top 21 bits of `w1` above `w0`: an integer below `2^53`, so it and theta compare exactly as doubles. A hash of 0 is dropped. Which slot of its table a sketch keeps a hash in is not stored.
+- **KLL:** no hash. It records values, not keys, and keeps them in sorted order, so no stored byte depends on a hash.
 
 This is the case Guava hit: `MURMUR128_MITZ_32` and `MURMUR128_MITZ_64` use the same hash and differ only in how its 128 bits map to indices, yet the change still needed a new `Strategy` ordinal because the stored bits differ. Guava's ordinal covers the whole strategy, and this nibble does too.
 
-All twelve structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header and version 5 only the params padding; neither touched the hash.
+All thirteen structures write variant `0` and reject any other variant on read with `UnknownHashVariantError`. Version 3 unified the hash: at version 2 Bloom/Blocked used murmur3_x86_32 and Fuse used MurmurHash3_x64_128, which is no longer accepted. Version 4 changed only the frame header and version 5 only the params padding; neither touched the hash.
 
 That version 3 bump (rather than a flags-only change) was deliberate: the version-2 Fuse reader had no variant check and would silently misread a version-3 frame, so bumping the version made it reject on the version byte instead.
 
