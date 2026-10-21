@@ -1,0 +1,50 @@
+name: Ranks
+
+on:
+  schedule:
+    # Off the hour: GitHub delays or drops scheduled runs at busy times.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  record:
+    name: record
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The data lives on its own branch, so main never takes a commit from
+      # this job. The first run starts that branch with no history.
+      - name: Check out the ranks branch
+        run: |
+          if git ls-remote --exit-code --heads origin ranks >/dev/null; then
+            git fetch origin ranks
+            git worktree add ranks-data ranks
+          else
+            git worktree add --orphan -b ranks ranks-data
+          fi
+      - run: pnpm --filter distillate-ranks track "$GITHUB_WORKSPACE/ranks-data/ranks.csv"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Commit and push
+        run: |
+          git -C ranks-data add ranks.csv
+          git -C ranks-data \
+            -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "chore(ranks): record $(date -u +%F)"
+          git -C ranks-data push origin ranks
