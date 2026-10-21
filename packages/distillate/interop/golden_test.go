@@ -2448,6 +2448,9 @@ func parseKll(f frame) (kll, error) {
 		return kll{}, fmt.Errorf("body of %d bytes is shorter than the params block", len(f.body))
 	}
 	numLevels := int(le.Uint32(f.body[32:]))
+	if numLevels < 1 || numLevels > 64 {
+		return kll{}, fmt.Errorf("%d levels is outside [1, 64]", numLevels)
+	}
 	itemsAt := padded8(kllSizesAt + 4*numLevels)
 	if len(f.body) < itemsAt {
 		return kll{}, fmt.Errorf("body of %d bytes cannot hold %d level sizes", len(f.body), numLevels)
@@ -2470,9 +2473,53 @@ func parseKll(f frame) (kll, error) {
 	if want := itemsAt + 8*retained; len(f.body) != want {
 		return kll{}, fmt.Errorf("body of %d bytes disagrees with %d items (want %d)", len(f.body), retained, want)
 	}
+	for at := kllSizesAt + 4*numLevels; at < itemsAt; at++ {
+		if f.body[at] != 0 {
+			return kll{}, fmt.Errorf("params padding at byte %d is not zero", at)
+		}
+	}
+	if s.itemType != 0 {
+		return kll{}, fmt.Errorf("unknown item type %d", s.itemType)
+	}
+	if s.flags&^1 != 0 {
+		return kll{}, fmt.Errorf("reserved flag bits set in %d", s.flags)
+	}
+	if s.flags == 0 && s.state != 0 {
+		return kll{}, fmt.Errorf("an unseeded sketch carries a generator state")
+	}
+	if s.k < 8 {
+		return kll{}, fmt.Errorf("k %d is outside the range [8, 65535]", s.k)
+	}
+	weight := uint64(0)
+	for h, size := range s.sizes {
+		weight += uint64(size) << h
+	}
+	if s.n >= 1<<53 || weight != s.n {
+		return kll{}, fmt.Errorf("n %d disagrees with the level weights %d", s.n, weight)
+	}
+	if retained > kllTotalCapacity(s.k, numLevels) {
+		return kll{}, fmt.Errorf("%d items exceed the capacity at k %d", retained, s.k)
+	}
+	if s.n == 0 && !(math.IsNaN(s.min) && math.IsNaN(s.max)) || s.n > 0 && !(s.min <= s.max) {
+		return kll{}, fmt.Errorf("min, max %v, %v are inconsistent", s.min, s.max)
+	}
 	s.items = make([]float64, retained)
-	for i := range s.items {
-		s.items[i] = math.Float64frombits(le.Uint64(f.body[itemsAt+8*i:]))
+	at := 0
+	for h, size := range s.sizes {
+		previous := math.Inf(-1)
+		for range size {
+			v := math.Float64frombits(le.Uint64(f.body[itemsAt+8*at:]))
+			if !(v >= s.min && v <= s.max) {
+				return kll{}, fmt.Errorf("item %d is NaN or outside [min, max]", at)
+			}
+			// Every level but 0 is held in ascending order.
+			if h > 0 && v < previous {
+				return kll{}, fmt.Errorf("level %d is not ascending", h)
+			}
+			previous = v
+			s.items[at] = v
+			at++
+		}
 	}
 	return s, nil
 }
@@ -2654,13 +2701,6 @@ func TestKll(t *testing.T) {
 			t.Errorf("%s: k %d n %d min %v max %v, recipe says k %d n %d min %v max %v",
 				e.Name, s.k, s.n, s.min, s.max, e.K, len(e.Values), lo, hi)
 		}
-		weight := uint64(0)
-		for h, size := range s.sizes {
-			weight += uint64(size) << h
-		}
-		if weight != s.n {
-			t.Errorf("%s: level weights sum to %d, n is %d", e.Name, weight, s.n)
-		}
 		switch e.Name {
 		case "kll":
 			if s.flags != 1 || len(s.sizes) < 2 {
@@ -2682,6 +2722,84 @@ func TestKll(t *testing.T) {
 		// kll-small never compacts, so its unseeded recipe replays too.
 		if replayed := buildKll(uint16(e.K), e.Seed, e.Seed != 0, e.Values); !bytes.Equal(replayed, golden) {
 			t.Errorf("%s: replayed frame differs:\n got %x\nwant %x", e.Name, replayed, golden)
+		}
+	}
+}
+
+func TestKllDamaged(t *testing.T) {
+	e := find(t, "kll")
+
+	short := frameOf(t, e)
+	if _, err := readFrame(short[:len(short)-1]); err == nil || !strings.Contains(err.Error(), "body length") {
+		t.Errorf("truncated frame: want a body length error, got %v", err)
+	}
+
+	f, err := readFrame(frameOf(t, e))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := parseKll(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	itemsAt := padded8(kllSizesAt + 4*len(s.sizes))
+
+	stale := frameOf(t, e)
+	stale[headerSize+itemsAt]++
+	if _, err := readFrame(stale); err == nil || !strings.Contains(err.Error(), "CRC") {
+		t.Errorf("altered item: want a CRC error, got %v", err)
+	}
+
+	// Resealed, each mutation gets past the trailer and must be caught by the
+	// params and item checks alone.
+	mutated := func(at int, put func(b []byte)) []byte {
+		b := frameOf(t, e)
+		put(b[headerSize+at:])
+		return reseal(b)
+	}
+	putF64 := func(v float64) func(b []byte) {
+		return func(b []byte) { le.PutUint64(b, math.Float64bits(v)) }
+	}
+	// Level 2 is the first above 0 with two items to swap.
+	level2 := itemsAt + 8*int(s.sizes[0]+s.sizes[1])
+
+	// k 8 with one level of 9 items: consistent in length, weight and bounds,
+	// but one more than that level holds.
+	over := kll{k: 8, n: 9, min: 1, max: 9, sizes: []uint32{9}}
+	for v := range 9 {
+		over.items = append(over.items, float64(v+1))
+	}
+
+	cases := []struct {
+		name, want string
+		frame      []byte
+	}{
+		{"item type 1", "item type", mutated(0, func(b []byte) { b[0] = 1 })},
+		{"flag bit 1", "flag", mutated(1, func(b []byte) { b[0] = 3 })},
+		{"unseeded with a state", "state", mutated(1, func(b []byte) { b[0] = 0 })},
+		{"k 7", "range", mutated(2, func(b []byte) { le.PutUint16(b, 7) })},
+		{"no levels", "levels", mutated(32, func(b []byte) { le.PutUint32(b, 0) })},
+		{"65 levels", "levels", mutated(32, func(b []byte) { le.PutUint32(b, 65) })},
+		{"padding byte set", "padding", mutated(kllSizesAt+4*len(s.sizes), func(b []byte) { b[0] = 1 })},
+		{"level 0 one larger", "disagrees", mutated(kllSizesAt, func(b []byte) { le.PutUint32(b, s.sizes[0]+1) })},
+		{"n one more", "weights", mutated(8, func(b []byte) { le.PutUint64(b, s.n+1) })},
+		{"level 2 swapped", "ascending", mutated(level2, func(b []byte) {
+			first := le.Uint64(b)
+			le.PutUint64(b, le.Uint64(b[8:]))
+			le.PutUint64(b[8:], first)
+		})},
+		{"NaN item", "min, max", mutated(itemsAt, putF64(math.NaN()))},
+		{"min above the smallest", "min, max", mutated(16, putF64(50))},
+		{"max below the largest", "min, max", mutated(24, putF64(50))},
+		{"more items than k holds", "capacity", encodeKll(over)},
+	}
+	for _, c := range cases {
+		f, err := readFrame(c.frame)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if _, err := parseKll(f); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: want an error mentioning %q, got %v", c.name, c.want, err)
 		}
 	}
 }
