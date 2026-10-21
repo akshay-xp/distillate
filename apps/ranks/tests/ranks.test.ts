@@ -2,7 +2,14 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, test } from "vitest";
 
-import { QUERIES, TRACKED, npmRows } from "../src/ranks.js";
+import {
+  QUERIES,
+  REPO,
+  TRACKED,
+  downloadsRow,
+  githubRow,
+  npmRows,
+} from "../src/ranks.js";
 
 function fixture(name: string): unknown {
   return JSON.parse(
@@ -63,4 +70,55 @@ test("tracks 16 distinct queries and both packages", () => {
   expect(QUERIES).toContain("hyperloglog");
   expect(QUERIES).toContain("probabilistic data structures");
   expect(TRACKED).toEqual(["distillate", "@distillate/hyperloglog"]);
+});
+
+describe("githubRow", () => {
+  const names = fixture("github") as string[];
+
+  test("ranks the repo among the collected names", () => {
+    const withRepo = [...names.slice(0, 4), REPO, ...names.slice(4)];
+
+    expect(githubRow("2026-10-21", "sketch", withRepo)).toEqual({
+      date: "2026-10-21",
+      source: "github",
+      query: "sketch",
+      name: REPO,
+      rank: "5",
+      score: "",
+      downloads: "",
+    });
+  });
+
+  test("leaves the rank empty when the repo is not among them", () => {
+    const without = names.filter((n) => n !== REPO);
+
+    expect(githubRow("2026-10-21", "sketch", without).rank).toBe("");
+  });
+});
+
+describe("downloadsRow", () => {
+  test("records a package's weekly downloads", () => {
+    const body = fixture("downloads") as { downloads: number };
+
+    expect(downloadsRow("2026-10-21", "distillate", 200, body)).toEqual({
+      date: "2026-10-21",
+      source: "downloads",
+      query: "",
+      name: "distillate",
+      rank: "",
+      score: "",
+      downloads: String(body.downloads),
+    });
+  });
+
+  test("leaves downloads empty for a package npm does not know yet", () => {
+    const row = downloadsRow(
+      "2026-10-21",
+      "@distillate/hyperloglog",
+      404,
+      fixture("downloads-missing"),
+    );
+
+    expect(row.downloads).toBe("");
+  });
 });
