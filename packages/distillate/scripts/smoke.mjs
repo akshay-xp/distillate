@@ -27,6 +27,7 @@ import {
 import { fromProtobuf, toProtobuf } from "../dist/ddsketch/protobuf/index.js";
 import { MinHash, MinHashLSH, minHashSizing } from "../dist/minhash/index.js";
 import { ThetaSketch } from "../dist/theta/index.js";
+import { KllSketch } from "../dist/kll/index.js";
 import { RibltDecoder, RibltEncoder } from "../dist/riblt/index.js";
 
 if (typeof VERSION !== "string") {
@@ -146,6 +147,27 @@ if (!ThetaSketch.fromBytes(thA.toBytes()).equals(thA)) {
   process.exit(1);
 }
 
+const kllOf = (from, to) => {
+  const sketch = new KllSketch({ seed: 1 });
+  for (let v = from; v <= to; v++) sketch.add(v);
+  return sketch;
+};
+const kllAll = kllOf(1, 100);
+const kllAnswers = (s) => [s.quantile(0), s.quantile(1), s.rank(50)].join(",");
+if (kllAnswers(kllAll) !== "1,100,0.5") {
+  console.error(`smoke: KLL quantile and rank gave ${kllAnswers(kllAll)}`);
+  process.exit(1);
+}
+const kllUnion = kllOf(1, 50).union(kllOf(51, 100));
+if (kllAnswers(kllUnion) !== kllAnswers(kllAll)) {
+  console.error(`smoke: KLL union gave ${kllAnswers(kllUnion)}`);
+  process.exit(1);
+}
+if (!KllSketch.fromBytes(kllAll.toBytes()).equals(kllAll)) {
+  console.error("smoke: KLL round-trip through toBytes lost state");
+  process.exit(1);
+}
+
 // Cross-runtime byte identity: every runtime must produce the exact committed
 // golden frame for a fixed key set, not merely import and run.
 const golden = JSON.parse(
@@ -227,6 +249,11 @@ const rebuild = ({
     case "theta": {
       const sketch = new ThetaSketch({ k, seed });
       for (const key of keys) sketch.add(key);
+      return sketch;
+    }
+    case "kll": {
+      const sketch = new KllSketch({ k, seed });
+      for (const value of values) sketch.add(value);
       return sketch;
     }
     case "riblt": {
@@ -411,5 +438,5 @@ if (walked.join() !== "1,5" || at !== stream.length) {
 }
 
 console.log(
-  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo + distillate/countmin + distillate/topk + distillate/ddsketch + distillate/ddsketch/protobuf + distillate/minhash + distillate/riblt + distillate/theta work (filters, sketches, sizing helpers, frame walk, growth, delete, counting, heavy hitters, quantiles, similarity, reconciliation, set operations), toBytes byte-identical to golden`,
+  `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo + distillate/countmin + distillate/topk + distillate/ddsketch + distillate/ddsketch/protobuf + distillate/minhash + distillate/riblt + distillate/theta + distillate/kll work (filters, sketches, sizing helpers, frame walk, growth, delete, counting, heavy hitters, quantiles, similarity, reconciliation, set operations, ranks), toBytes byte-identical to golden`,
 );

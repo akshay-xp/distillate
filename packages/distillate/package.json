@@ -143,6 +143,14 @@
       "import": "./dist/theta/index.js",
       "require": "./dist/theta/index.cjs"
     },
+    "./kll": {
+      "types": {
+        "import": "./dist/kll/index.d.ts",
+        "require": "./dist/kll/index.d.cts"
+      },
+      "import": "./dist/kll/index.js",
+      "require": "./dist/kll/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",

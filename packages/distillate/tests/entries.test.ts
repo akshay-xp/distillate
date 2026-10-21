@@ -58,6 +58,7 @@ test("the package's own exports give every published entry, in order", () => {
     "minhash",
     "riblt",
     "theta",
+    "kll",
   ]);
   for (const { src } of entries) {
     expect(existsSync(`${pkgDir}/${src}`), src).toBe(true);
