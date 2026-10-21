@@ -130,25 +130,33 @@ bytes.
 
 From the [bench results](https://github.com/akshay-xp/distillate/blob/main/apps/bench/RESULTS.md#kll),
 1M latency-shaped (lognormal) values on an Apple M5, rank errors averaged over
-10 seeds, against DDSketch at 1% and `tdigest`, the most-downloaded t-digest on
-npm, at its defaults and at a size matched to KLL's. Errors and sizes reproduce
-anywhere; the timings do not.
+10 seeds, against DDSketch at 1% and the `tdigest` lib, the most-downloaded
+t-digest on npm, at its defaults and at a size matched to KLL's. No other JS
+library ships a KLL sketch. Errors and sizes reproduce anywhere; the timings do
+not.
 
-| Library                 | size    | p50    | p99    | p99.9  | add          | merge   |
-| ----------------------- | ------- | ------ | ------ | ------ | ------------ | ------- |
-| KLL, `k = 200`          | 4.9 KB  | 0.240% | 0.253% | 0.107% | 32.4 M ops/s | 0.04 ms |
-| DDSketch, 1%            | 3.6 KB  | 0.110% | 0.012% | 0.001% | 97.4 M ops/s | 0.02 ms |
-| t-digest, defaults      | 40.1 KB | 0.003% | 0.001% | 0.001% | 6.4 M ops/s  | 1.41 ms |
-| t-digest, `delta = 0.1` | 5.0 KB  | 0.044% | 0.009% | 0.001% | 8.0 M ops/s  | 0.24 ms |
+| Library                      | size    | p50    | p99    | p99.9  | add          | merge   |
+| ---------------------------- | ------- | ------ | ------ | ------ | ------------ | ------- |
+| KLL, `k = 200`               | 4.9 KB  | 0.240% | 0.253% | 0.107% | 32.4 M ops/s | 0.04 ms |
+| DDSketch, 1%                 | 3.6 KB  | 0.110% | 0.012% | 0.001% | 97.4 M ops/s | 0.02 ms |
+| `tdigest` lib, defaults      | 40.1 KB | 0.003% | 0.001% | 0.001% | 6.4 M ops/s  | 1.41 ms |
+| `tdigest` lib, `delta = 0.1` | 5.0 KB  | 0.044% | 0.009% | 0.001% | 8.0 M ops/s  | 0.24 ms |
 
-In practice t-digest is the more accurate, even at KLL's size: at the median it
-is about five times closer in rank there, and about eighty times closer at its
-defaults, for eight times the bytes. What it lacks is a bound. Nothing says how
-far off one of its answers may be, while KLL's error is proven and gated in
-this library's CI; every KLL error measured here is under a quarter of its
-1.33% bound. KLL adds values 4 to 35 times as fast as t-digest across the three
-distributions, and merges 4 to 80 times as fast. On a sorted stream, t-digest's
-adds fall to 1.5 to 1.8 M ops/s.
+The `tdigest` lib's size is its centroids as JSON, since it has no binary form;
+a binary encoding would take less than half that.
+
+In practice t-digest is the more accurate, even at KLL's size: at the median
+the `tdigest` lib is about five times closer in rank there, and about eighty
+times closer at its defaults, for eight times the bytes. What it lacks is a
+bound. Nothing says how far off one of its answers may be, while KLL's error is
+proven and gated in this library's CI; every KLL error measured here is under a
+quarter of its 1.33% bound.
+
+KLL adds values 4 to 35 times as fast as the `tdigest` lib across the three
+distributions, and merges 4 to 80 times as fast; on a sorted stream the lib's
+adds fall to 1.5 to 1.8 M ops/s. That gap is the lib's, an implementation of
+the original tree-based t-digest, not t-digest's: later merging t-digests add
+values far faster.
 
 DDSketch, built for values, is closer in rank on this latency-shaped stream
 too, most of all in the tail, and smaller. KLL's advantage over it is that its

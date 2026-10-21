@@ -12,4 +12,4 @@ Three behaviours worth knowing:
 - A union keeps the smaller `k` of its two inputs. Without a `seed`, each sketch draws its own at its first compaction rather than in the constructor, since Cloudflare Workers refuse random values at module scope; with one, the same stream gives the same bytes, and a decoded sketch continues as the original would.
 - Over `L` levels it holds at most `3k + 8L` items as doubles. At the default `k`, ten million values fit in a 5,228-byte frame.
 
-Measured against `tdigest` on 1M latency-shaped values: KLL added values about five times as fast and merged in 0.04 ms against 1.4 ms. `tdigest` was the more accurate in rank, even at KLL's size, but gives no bound.
+Measured against the `tdigest` lib, the most-downloaded t-digest on npm, on 1M latency-shaped values: KLL added values about five times as fast and merged in 0.04 ms against 1.4 ms, a gap that belongs to that lib's tree-based design rather than to t-digest. The `tdigest` lib was the more accurate in rank, even at KLL's size, but gives no bound. No other JS library ships a KLL sketch.
