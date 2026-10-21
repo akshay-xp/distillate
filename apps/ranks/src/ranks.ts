@@ -63,3 +63,43 @@ export function npmRows(date: string, query: string, body: unknown): Row[] {
     };
   });
 }
+
+/** The repo's row for GitHub search results gathered so far, by full name. */
+export function githubRow(
+  date: string,
+  query: string,
+  fullNames: readonly string[],
+): Row {
+  const at = fullNames.indexOf(REPO);
+  return {
+    date,
+    source: "github",
+    query,
+    name: REPO,
+    rank: at === -1 ? "" : String(at + 1),
+    score: "",
+    downloads: "",
+  };
+}
+
+/**
+ * A package's weekly downloads from npm's downloads API; empty on a 404, which
+ * is npm's answer for a package that has not been published yet.
+ */
+export function downloadsRow(
+  date: string,
+  name: string,
+  status: number,
+  body: unknown,
+): Row {
+  return {
+    date,
+    source: "downloads",
+    query: "",
+    name,
+    rank: "",
+    score: "",
+    downloads:
+      status === 200 ? String((body as { downloads: number }).downloads) : "",
+  };
+}
