@@ -356,6 +356,66 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
   </p>
 </section>
 
+<section class="dstl-panel" data-pg-kll>
+  <h3>What share is under a threshold</h3>
+
+  <p class="dstl-hint">
+    A KLL sketch answers <em>what share of values is at or below this one</em>,
+    and every quantile, within an error in rank that holds whatever the values
+    are. It holds the same latencies as the DDSketch above, and the form there
+    records into both. It keeps its default <code>k</code> and a fixed seed, so
+    every build shows the same answers.
+  </p>
+
+  <dl class="dstl-readout">
+    <div>
+      <dt>Recorded</dt>
+      <dd data-kll="count"></dd>
+    </div>
+    <div>
+      <dt>k</dt>
+      <dd data-kll="k"></dd>
+    </div>
+    <div>
+      <dt>Rank bound</dt>
+      <dd data-kll="bound"></dd>
+    </div>
+  </dl>
+
+  <table class="dstl-table">
+    <thead>
+      <tr>
+        <th scope="col">Quantile</th>
+        <th scope="col">Exact</th>
+        <th scope="col">KLL</th>
+        <th scope="col">DDSketch</th>
+        <th scope="col">KLL rank error</th>
+      </tr>
+    </thead>
+    <tbody data-kll="quantiles"></tbody>
+  </table>
+
+  <table class="dstl-table">
+    <thead>
+      <tr>
+        <th scope="col">Share</th>
+        <th scope="col">Exact</th>
+        <th scope="col">KLL</th>
+      </tr>
+    </thead>
+    <tbody data-kll="ranks"></tbody>
+  </table>
+
+  <p class="dstl-hint">
+    <strong>Every rank error stays under the bound.</strong> It is a share of
+    everything recorded, so an SLO question such as the share under 200 ms is
+    answered as well as the median. In the far tail a small share is a long way
+    in value: at p99.9 KLL can sit within a tenth of a percent in rank and still
+    read hundreds of milliseconds low, where DDSketch stays within its relative
+    accuracy.
+  </p>
+</section>
+
 <section class="dstl-panel" data-pg-minhash>
   <h3>How alike two sets are, from a sketch of each</h3>
 
@@ -607,6 +667,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     PlaygroundReport,
     StructureKey,
     QuantileReport,
+    RankReport,
     ReconcileReport,
     SegmentsReport,
     SimilarityReport,
@@ -717,6 +778,40 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     return value.toLocaleString("en-US", { maximumSignificantDigits: 4 });
   }
 
+  function percent(share: number): string {
+    return `${(share * 100).toFixed(2)}%`;
+  }
+
+  function renderRanks(report: RankReport): void {
+    const fields: Record<string, string> = {
+      count: report.count.toLocaleString("en-US"),
+      k: String(report.k),
+      bound: percent(report.rankError),
+    };
+    for (const [field, text] of Object.entries(fields)) {
+      const el = document.querySelector(`[data-kll='${field}']`);
+      if (el) el.textContent = text;
+    }
+    fillRows(
+      "[data-kll='quantiles']",
+      report.quantiles.map((r) => [
+        `p${String(r.q * 100)}`,
+        formatFigure(r.exact),
+        formatFigure(r.kll),
+        formatFigure(r.ddsketch),
+        percent(r.kllRankError),
+      ]),
+    );
+    fillRows(
+      "[data-kll='ranks']",
+      report.ranks.map((r) => [
+        `≤ ${String(r.x)} ms`,
+        percent(r.exact),
+        percent(r.kll),
+      ]),
+    );
+  }
+
   function renderSimilarity(report: SimilarityReport): void {
     const fields: Record<string, string> = {
       a: report.sizeA.toLocaleString("en-US"),
@@ -823,6 +918,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     renderHeaviest(current.heaviest(HEAVIEST));
     renderEstimate(current.estimate(recordKey()));
     renderQuantiles(current.quantiles());
+    renderRanks(current.ranks());
     renderSimilarity(current.similarity());
     reconcile();
     compareSegments();
@@ -899,6 +995,7 @@ const probes = PROBE_COUNT.toLocaleString("en-US");
     }
     if (status) status.textContent = "";
     renderQuantiles(current.quantiles());
+    renderRanks(current.ranks());
   }
 
   function recordSetItem(): void {

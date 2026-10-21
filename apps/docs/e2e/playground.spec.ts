@@ -583,6 +583,54 @@ test("the quantiles panel records a value and refuses one it cannot", async ({
   expect(errors).toEqual([]);
 });
 
+/** A table's body rows, as trimmed cell texts. */
+async function cells(table: ReturnType<Page["locator"]>): Promise<string[][]> {
+  return Promise.all(
+    (await table.locator("tbody tr").all()).map(async (row) =>
+      (await row.locator("td").allTextContents()).map((c) => c.trim()),
+    ),
+  );
+}
+
+test("the ranks panel shows KLL beside DDSketch and exact, and follows recorded values", async ({
+  page,
+}) => {
+  const errors = watchConsole(page);
+  await page.goto("/start/playground/");
+
+  const panel = page.locator("[data-pg-kll]");
+  const tables = panel.locator("table.dstl-table");
+  await expect(tables).toHaveCount(2);
+  const [quantiles, ranks] = [tables.nth(0), tables.nth(1)];
+  await expect(quantiles.locator("th[scope='col']")).toHaveCount(5);
+  await expect(ranks.locator("th[scope='col']")).toHaveCount(3);
+  await expect(quantiles.locator("tbody tr")).toHaveCount(4);
+  await expect(panel.locator("[data-kll='count']")).toHaveText("10,000");
+  await expect(panel.locator("[data-kll='k']")).toHaveText("200");
+  await expect(panel.locator("[data-kll='bound']")).toHaveText("1.33%");
+
+  const rows = await cells(quantiles);
+  expect(rows.map((r) => r[0])).toEqual(["p50", "p90", "p99", "p99.9"]);
+  for (const row of rows) {
+    expect(Number.parseFloat(row[4] ?? ""), row[0]).toBeLessThanOrEqual(1.33);
+  }
+  expect((await cells(ranks)).map((r) => r[0])).toEqual([
+    "≤ 50 ms",
+    "≤ 100 ms",
+    "≤ 200 ms",
+    "≤ 500 ms",
+  ]);
+
+  await addValue(page, "5000", "100");
+  await expect(panel.locator("[data-kll='count']")).toHaveText("10,100");
+  expect((await cells(quantiles))[3]?.[1]).toBe("5,000");
+
+  expect(await page.content()).toMatch(
+    /<noscript><style>[^<]*\[data-pg-values\]/,
+  );
+  expect(errors).toEqual([]);
+});
+
 /** The similarity panel's readout, by field. */
 async function similarity(page: Page): Promise<Record<string, string>> {
   const panel = page.locator("[data-pg-minhash]");
