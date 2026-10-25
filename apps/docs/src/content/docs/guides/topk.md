@@ -1,6 +1,9 @@
 ---
 title: Top-K
 description: A heavy-hitters sketch in bounded space. It lists the keys seen most often, never underestimates one it holds, and never loses one heavier than its error.
+head:
+  - tag: title
+    content: Top-K heavy hitters in JavaScript and TypeScript | distillate
 ---
 
 `distillate/topk` ships the Frequent Items sketch: Misra and Gries' counters

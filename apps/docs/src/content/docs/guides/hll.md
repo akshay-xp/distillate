@@ -1,6 +1,9 @@
 ---
 title: HyperLogLog
 description: Count distinct keys in space fixed by precision rather than by the answer, with exact counts while the set is small and merges that fold to the coarser precision.
+head:
+  - tag: title
+    content: HyperLogLog in JavaScript and TypeScript | distillate
 ---
 
 `distillate/hll` answers a different question from every filter in the lineup:

@@ -1,6 +1,9 @@
 ---
 title: Binary Fuse
 description: The most space-efficient filter in the lineup, built once from the whole key set and immutable afterwards, with a rate fixed by fingerprint width.
+head:
+  - tag: title
+    content: Binary Fuse filter in JavaScript and TypeScript | distillate
 ---
 
 `distillate/fuse` ships Binary Fuse 8 and 16, the best static AMQ filter

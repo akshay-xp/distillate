@@ -1,6 +1,9 @@
 ---
 title: DDSketch
 description: A quantile sketch whose every answer, p99.9 included, is within a relative error of the true value. Mergeable exactly, bounded in memory, and readable by Datadog.
+head:
+  - tag: title
+    content: DDSketch quantile sketch in JavaScript and TypeScript | distillate
 ---
 
 `distillate/ddsketch` ships DDSketch (Masson, Rim and Lee, VLDB 2019), the

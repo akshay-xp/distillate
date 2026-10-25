@@ -1,6 +1,9 @@
 ---
 title: Scalable Bloom
 description: A Bloom filter for a key count you cannot know up front. It grows by opening larger, tighter stages and keeps its false-positive rate under the target however many keys arrive.
+head:
+  - tag: title
+    content: Scalable Bloom filter in JavaScript and TypeScript | distillate
 ---
 
 `distillate/scalable` ships the scalable Bloom filter of Almeida et al.

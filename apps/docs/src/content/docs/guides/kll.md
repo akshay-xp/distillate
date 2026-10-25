@@ -1,6 +1,9 @@
 ---
 title: KLL
 description: A quantile sketch whose error is bounded in rank, so "what share of values are at or below x?" has a guaranteed answer, in memory fixed by k alone.
+head:
+  - tag: title
+    content: KLL sketch in JavaScript and TypeScript | distillate
 ---
 
 `distillate/kll` ships the KLL sketch (Karnin, Lang and Liberty), which answers

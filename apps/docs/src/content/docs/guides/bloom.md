@@ -1,6 +1,9 @@
 ---
 title: Classic Bloom
 description: The familiar Bloom filter, mutable and mergeable, fixed at 1.44 times the space floor. The migration target and the right pick at very low FPRs.
+head:
+  - tag: title
+    content: Bloom filter in JavaScript and TypeScript | distillate
 ---
 
 `distillate/bloom` ships the Bloom filter as published in 1970: a bit array
