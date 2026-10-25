@@ -1,6 +1,9 @@
 ---
 title: RIBLT
 description: Rateless set reconciliation that finds exactly which keys two peers do not share, sending about 27 bytes per differing key and no estimate of how many differ.
+head:
+  - tag: title
+    content: RIBLT set reconciliation in JavaScript and TypeScript | distillate
 ---
 
 `distillate/riblt` ships a rateless invertible Bloom lookup table (Yang, Gilad

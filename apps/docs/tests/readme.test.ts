@@ -7,30 +7,10 @@ import { expect, test } from "vitest";
 import { QUERIES } from "../../ranks/src/ranks.js";
 import { runClaims } from "../src/claims.js";
 import { extractSamples } from "../src/samples.js";
+import { pkg, SEARCH_NAME, structureSubpaths } from "./structures.js";
 
 const README = fileURLToPath(
   new URL("../../../packages/distillate/README.md", import.meta.url),
-);
-
-const pkg = JSON.parse(
-  readFileSync(
-    fileURLToPath(
-      new URL("../../../packages/distillate/package.json", import.meta.url),
-    ),
-    "utf8",
-  ),
-) as {
-  description: string;
-  keywords: string[];
-  exports: Record<string, unknown>;
-};
-
-// A nested subpath such as ./ddsketch/protobuf is a codec for the structure
-// above it, not a structure of its own.
-const structureSubpaths = Object.keys(pkg.exports).filter(
-  (key) =>
-    ![".", "./frame", "./package.json"].includes(key) &&
-    key.split("/").length === 2,
 );
 
 /** The keys a sample passes to `add`, in order, with duplicates kept. */
@@ -103,22 +83,6 @@ test("the README describes Cuckoo and no longer lists shipped structures as comi
 // npm search matches on name, keywords and description, and "distillate" holds
 // no query term, so each structure must be findable by the name people search.
 // Keyed by subpath, so the next structure cannot ship without a keyword.
-const SEARCH_NAME: Record<string, string> = {
-  "./bloom": "bloom-filter",
-  "./blocked": "blocked-bloom-filter",
-  "./scalable": "scalable-bloom-filter",
-  "./fuse": "binary-fuse-filter",
-  "./cuckoo": "cuckoo-filter",
-  "./hll": "hyperloglog",
-  "./theta": "theta-sketch",
-  "./countmin": "count-min-sketch",
-  "./topk": "top-k",
-  "./ddsketch": "ddsketch",
-  "./kll": "kll-sketch",
-  "./minhash": "minhash",
-  "./riblt": "riblt",
-};
-
 test("every structure subpath has its search name among the npm keywords", () => {
   for (const subpath of structureSubpaths) {
     const name = SEARCH_NAME[subpath];

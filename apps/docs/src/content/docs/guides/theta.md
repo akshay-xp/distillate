@@ -1,6 +1,9 @@
 ---
 title: Theta
 description: A distinct-count sketch that combines by union, intersection and difference, so overlaps between segments are answered from stored sketches.
+head:
+  - tag: title
+    content: Theta sketch in JavaScript and TypeScript | distillate
 ---
 
 `distillate/theta` ships the Theta sketch, which answers "how many distinct

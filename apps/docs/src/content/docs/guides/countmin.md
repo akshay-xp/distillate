@@ -1,6 +1,9 @@
 ---
 title: Count-Min
 description: A frequency sketch in fixed space. It answers how many times a key appeared, never below the truth, at most a chosen fraction of the total above it.
+head:
+  - tag: title
+    content: Count-Min sketch in JavaScript and TypeScript | distillate
 ---
 
 `distillate/countmin` ships the Count-Min sketch of Cormode and Muthukrishnan

@@ -1,6 +1,9 @@
 ---
 title: Blocked Bloom
 description: A split-block Bloom filter that touches one cache line per lookup, trading roughly 20 to 30 percent more space for markedly faster queries.
+head:
+  - tag: title
+    content: Blocked Bloom filter in JavaScript and TypeScript | distillate
 ---
 
 `distillate/blocked` ships a split-block Bloom filter. Classic Bloom scatters

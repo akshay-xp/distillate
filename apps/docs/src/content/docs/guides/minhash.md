@@ -1,6 +1,9 @@
 ---
 title: MinHash
 description: A similarity sketch that estimates how much two sets overlap from fixed-size signatures, with an LSH index that finds near-duplicates without comparing every pair.
+head:
+  - tag: title
+    content: MinHash and LSH in JavaScript and TypeScript | distillate
 ---
 
 `distillate/minhash` ships MinHash, which answers "how similar are these two

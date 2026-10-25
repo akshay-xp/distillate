@@ -1,6 +1,9 @@
 ---
 title: Cuckoo
 description: A membership filter you can delete from. Short fingerprints in buckets of four, each key in one of two buckets, and an add into a full filter that refuses rather than corrupts.
+head:
+  - tag: title
+    content: Cuckoo filter in JavaScript and TypeScript | distillate
 ---
 
 `distillate/cuckoo` ships the cuckoo filter of Fan, Andersen, Kaminsky and
