@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://distillate.akxp.net/sitemap-index.xml

@@ -19,3 +19,15 @@ function manifest(): Record<string, unknown> {
 test("the published homepage is the site the docs deploy to", () => {
   expect(manifest().homepage).toBe(site);
 });
+
+// Cloudflare serves a managed robots.txt with no rules and no sitemap unless
+// the origin has one, so crawlers other than the two consoles it is submitted
+// to would never learn where the sitemap is.
+test("robots.txt names the sitemap and blocks nothing", () => {
+  const robots = readFileSync(
+    fileURLToPath(new URL("../public/robots.txt", import.meta.url)),
+    "utf8",
+  );
+  expect(robots.split("\n")).toContain(`Sitemap: ${site}/sitemap-index.xml`);
+  expect(robots).not.toMatch(/^Disallow/m);
+});
