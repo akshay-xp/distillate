@@ -1,0 +1,36 @@
+name: KLL probe
+on:
+  push:
+    branches: [ci/kll-flake-probe]
+permissions:
+  contents: read
+jobs:
+  loop:
+    name: loop (node ${{ matrix.node }} shard ${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Loop
+        working-directory: packages/distillate
+        env:
+          PROBE_LOG: ${{ github.workspace }}/probe.log
+        run: |
+          for i in $(seq 1 300); do
+            pnpm exec vitest run --project allocation tests/kll/allocation.test.ts >/dev/null 2>&1 || echo "run $i errored"
+          done
+          wc -l "$PROBE_LOG"
+          cut -d' ' -f1,2 "$PROBE_LOG" | sort | uniq -c
+          grep -v '^first=0 second=0' "$PROBE_LOG" || true
+          awk '{sub("ms=","",$4); print $4}' "$PROBE_LOG" | sort -n | sed -n '1p;150p;300p'

@@ -184,7 +184,12 @@ export async function measureAllocation(
   let to = Infinity;
   const observer = new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
-      if (entry.startTime >= from && entry.startTime <= to) collections++;
+      if (entry.startTime >= from && entry.startTime <= to) {
+        collections++;
+        const detail = (entry as unknown as { detail: { kind: number; flags: number } }).detail;
+        const log = ((globalThis as unknown as { __gc?: string[] }).__gc ??= []);
+        log.push(`${String(detail.kind)}/${String(detail.flags)}@${(entry.startTime - from).toFixed(2)}+${entry.duration.toFixed(2)}of${(to - from).toFixed(2)}`);
+      }
     }
   });
   observer.observe({ entryTypes: ["gc"] });
