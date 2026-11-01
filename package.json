@@ -13,7 +13,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "coverage": "pnpm --filter distillate coverage",
-    "check": "pnpm --filter distillate check",
+    "check": "pnpm --filter distillate --filter @distillate/hyperloglog check",
     "api:report": "pnpm --filter distillate api:report",
     "api:check": "pnpm --filter distillate api:check",
     "docs:check": "pnpm --filter distillate docs:check",
