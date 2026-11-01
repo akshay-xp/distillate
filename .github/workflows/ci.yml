@@ -153,6 +153,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node }}
+      # No install in this job, so the wrapper finds distillate through this link.
+      - run: mkdir -p packages/hyperloglog/node_modules && ln -s ../../distillate packages/hyperloglog/node_modules/distillate
       - run: node packages/distillate/scripts/smoke.mjs
 
   smoke-bun:
@@ -166,6 +168,8 @@ jobs:
           name: dist
           path: packages/distillate/dist/
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      # No install in this job, so the wrapper finds distillate through this link.
+      - run: mkdir -p packages/hyperloglog/node_modules && ln -s ../../distillate packages/hyperloglog/node_modules/distillate
       - run: bun packages/distillate/scripts/smoke.mjs
 
   smoke-deno:
@@ -181,4 +185,6 @@ jobs:
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
         with:
           deno-version: v2.x
+      # No install in this job, so the wrapper finds distillate through this link.
+      - run: mkdir -p packages/hyperloglog/node_modules && ln -s ../../distillate packages/hyperloglog/node_modules/distillate
       - run: deno run --allow-read --allow-env packages/distillate/scripts/smoke.mjs
