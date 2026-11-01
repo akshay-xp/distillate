@@ -41,8 +41,15 @@
     "index.d.ts",
     "index.d.cts"
   ],
+  "scripts": {
+    "check": "publint --strict && attw --pack . --profile node16"
+  },
   "dependencies": {
     "distillate": "workspace:^"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "publint": "^0.3.24"
   },
   "engines": {
     "node": ">=22"

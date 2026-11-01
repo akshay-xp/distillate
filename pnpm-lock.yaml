@@ -205,6 +205,13 @@ importers:
       distillate:
         specifier: workspace:^
         version: link:../distillate
+    devDependencies:
+      '@arethetypeswrong/cli':
+        specifier: ^0.18.5
+        version: 0.18.5
+      publint:
+        specifier: ^0.3.24
+        version: 0.3.24
 
 packages:
 
