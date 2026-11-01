@@ -102,7 +102,12 @@ test("the npm description holds every word of every tracked search query", () =>
       expect(words, `"${word}" of "${query}"`).toContain(word);
     }
   }
-  expect(pkg.description.length).toBeLessThan(300);
+  // npm cuts a description at 255 characters, in search and on the package page.
+  expect(pkg.description.length).toBeLessThanOrEqual(255);
+  // Both left npm's results for their own query when the phrases left this text.
+  const description = pkg.description.toLowerCase();
+  expect(description).toContain("blocked bloom filter");
+  expect(description).toContain("scalable bloom filter");
 });
 
 const ROOT_README = fileURLToPath(
