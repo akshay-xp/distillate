@@ -1,6 +1,7 @@
 // Runtime smoke test: the built entries must import and work.
 // Run under each target runtime in CI (node / bun / deno).
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 
 import { VERSION } from "../dist/index.js";
 import {
@@ -29,6 +30,8 @@ import { MinHash, MinHashLSH, minHashSizing } from "../dist/minhash/index.js";
 import { ThetaSketch } from "../dist/theta/index.js";
 import { KllSketch } from "../dist/kll/index.js";
 import { RibltDecoder, RibltEncoder } from "../dist/riblt/index.js";
+import * as hllEsm from "../dist/hll/index.js";
+import * as wrapperEsm from "../../hyperloglog/index.js";
 
 if (typeof VERSION !== "string") {
   console.error(
@@ -440,3 +443,36 @@ if (walked.join() !== "1,5" || at !== stream.length) {
 console.log(
   `smoke ok: VERSION = ${VERSION}, distillate/bloom + distillate/blocked + distillate/fuse + distillate/hll + distillate/frame + distillate/scalable + distillate/cuckoo + distillate/countmin + distillate/topk + distillate/ddsketch + distillate/ddsketch/protobuf + distillate/minhash + distillate/riblt + distillate/theta + distillate/kll work (filters, sketches, sizing helpers, frame walk, growth, delete, counting, heavy hitters, quantiles, similarity, reconciliation, set operations, ranks), toBytes byte-identical to golden`,
 );
+
+// The wrapper must hand out distillate's own classes, not copies: a sketch from
+// one has to union with a sketch from the other.
+const require = createRequire(import.meta.url);
+const pairs = [
+  ["esm", wrapperEsm, hllEsm],
+  [
+    "cjs",
+    require("../../hyperloglog/index.cjs"),
+    require("../dist/hll/index.cjs"),
+  ],
+];
+for (const [format, wrapper, original] of pairs) {
+  const names = Object.keys(original).sort();
+  if (Object.keys(wrapper).sort().join() !== names.join()) {
+    console.error(
+      `smoke: wrapper ${format} exports differ from distillate/hll`,
+    );
+    process.exit(1);
+  }
+  for (const name of names) {
+    if (wrapper[name] !== original[name]) {
+      console.error(`smoke: wrapper ${format} ${name} is not distillate's own`);
+      process.exit(1);
+    }
+  }
+  const sketch = wrapper.HyperLogLog.create(0.01);
+  sketch.add("smoke");
+  if (sketch.count() !== 1) {
+    console.error(`smoke: wrapper ${format} HyperLogLog miscounted one key`);
+    process.exit(1);
+  }
+}

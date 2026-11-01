@@ -1,0 +1,50 @@
+{
+  "name": "@distillate/hyperloglog",
+  "version": "0.19.1",
+  "description": "HyperLogLog for JavaScript and TypeScript: count distinct keys in fixed space, with typed, mergeable, serializable sketches.",
+  "keywords": [
+    "hyperloglog",
+    "hll",
+    "cardinality",
+    "count-distinct",
+    "unique-count",
+    "sketch",
+    "probabilistic-data-structures",
+    "typescript"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akshay-xp/distillate.git",
+    "directory": "packages/hyperloglog"
+  },
+  "homepage": "https://distillate.akxp.net/guides/hll/",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": {
+        "import": "./index.d.ts",
+        "require": "./index.d.cts"
+      },
+      "import": "./index.js",
+      "require": "./index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./index.cjs",
+  "module": "./index.js",
+  "types": "./index.d.ts",
+  "files": [
+    "index.js",
+    "index.cjs",
+    "index.d.ts",
+    "index.d.cts"
+  ],
+  "dependencies": {
+    "distillate": "workspace:^"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
