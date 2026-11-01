@@ -1,6 +1,6 @@
 {
   "name": "@distillate/hyperloglog",
-  "version": "0.19.1",
+  "version": "0.19.2",
   "description": "HyperLogLog for JavaScript and TypeScript: count distinct keys in fixed space, with typed, mergeable, serializable sketches.",
   "keywords": [
     "hyperloglog",
