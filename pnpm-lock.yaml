@@ -118,6 +118,9 @@ importers:
       '@astrojs/check':
         specifier: ^0.9.10
         version: 0.9.10(prettier-plugin-astro@1.1.0(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(prettier@3.9.9))(prettier@3.9.9)(typescript@5.9.3)
+      '@distillate/hyperloglog':
+        specifier: workspace:*
+        version: link:../../packages/hyperloglog
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
