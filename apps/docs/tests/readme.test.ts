@@ -92,22 +92,17 @@ test("every structure subpath has its search name among the npm keywords", () =>
   expect(new Set(pkg.keywords).size).toBe(pkg.keywords.length);
 });
 
-// npm search does not stem: "bloom filters" and "bloom filter" return
-// different results. So every word of every tracked query must appear in the
-// description as typed, singular included. The queries are the tracker's own.
-test("the npm description holds every word of every tracked search query", () => {
-  const words = new Set(pkg.description.toLowerCase().match(/[a-z0-9]+/g));
+// npm search does not stem ("bloom filters" and "bloom filter" differ) and
+// rewards the exact phrase: each of "blocked bloom filter", "scalable bloom
+// filter" and "binary fuse filter" left npm's results for its own query while
+// its words stood apart here. So every tracked query appears as typed.
+test("the npm description holds every tracked search query as a phrase", () => {
+  const description = pkg.description.toLowerCase();
   for (const query of [...QUERIES, "xor filter"]) {
-    for (const word of query.match(/[a-z0-9]+/g) ?? []) {
-      expect(words, `"${word}" of "${query}"`).toContain(word);
-    }
+    expect(description, query).toContain(query);
   }
   // npm cuts a description at 255 characters, in search and on the package page.
   expect(pkg.description.length).toBeLessThanOrEqual(255);
-  // Both left npm's results for their own query when the phrases left this text.
-  const description = pkg.description.toLowerCase();
-  expect(description).toContain("blocked bloom filter");
-  expect(description).toContain("scalable bloom filter");
 });
 
 const ROOT_README = fileURLToPath(
