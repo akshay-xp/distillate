@@ -1,5 +1,11 @@
 # distillate
 
+## 0.19.3
+
+### Patch Changes
+
+- e76ad96: List "Binary Fuse filter" as one phrase in the npm description, so the package is found again by that search.
+
 ## 0.19.2
 
 ### Patch Changes
