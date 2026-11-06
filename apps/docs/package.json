@@ -13,21 +13,21 @@
     "links:check": "node scripts/check-links.mjs dist ../.."
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.42.7",
-    "astro": "^7.4.4",
+    "@astrojs/starlight": "^0.42.8",
+    "astro": "^7.4.5",
     "distillate": "workspace:*"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
     "@distillate/hyperloglog": "workspace:*",
     "@playwright/test": "^1.64.1",
-    "@tailwindcss/vite": "^4.3.3",
-    "starlight-typedoc": "^0.23.1",
-    "tailwindcss": "^4.3.3",
+    "@tailwindcss/vite": "^4.3.4",
+    "starlight-typedoc": "^0.23.2",
+    "tailwindcss": "^4.3.4",
     "typedoc": "^0.28.20",
     "typedoc-plugin-markdown": "^4.14.1",
     "typescript": "^5.9.3",
-    "vitest": "^5.0.5",
+    "vitest": "^5.1.0",
     "yaml": "^2.9.1"
   }
 }
