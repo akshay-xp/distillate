@@ -1049,3 +1049,53 @@ date,source,query,name,rank,score,downloads
 2026-11-11,github,quantile sketch,akshay-xp/distillate,35,,
 2026-11-11,downloads,,distillate,,,5678
 2026-11-11,downloads,,@distillate/hyperloglog,,,254
+2026-11-12,npm,bloom filter,distillate,15,276.473,5686
+2026-11-12,npm,bloom filter,@distillate/hyperloglog,,,
+2026-11-12,npm,blocked bloom filter,distillate,1,275.745,5686
+2026-11-12,npm,blocked bloom filter,@distillate/hyperloglog,,,
+2026-11-12,npm,scalable bloom filter,distillate,1,256.574,5686
+2026-11-12,npm,scalable bloom filter,@distillate/hyperloglog,,,
+2026-11-12,npm,cuckoo filter,distillate,2,216.899,5686
+2026-11-12,npm,cuckoo filter,@distillate/hyperloglog,,,
+2026-11-12,npm,binary fuse filter,distillate,1,244.442,5686
+2026-11-12,npm,binary fuse filter,@distillate/hyperloglog,,,
+2026-11-12,npm,hyperloglog,distillate,8,160.492,5686
+2026-11-12,npm,hyperloglog,@distillate/hyperloglog,4,262.142,270
+2026-11-12,npm,theta sketch,distillate,1,219.175,5686
+2026-11-12,npm,theta sketch,@distillate/hyperloglog,99,37.766,270
+2026-11-12,npm,count-min sketch,distillate,6,275.438,5686
+2026-11-12,npm,count-min sketch,@distillate/hyperloglog,56,54.308,270
+2026-11-12,npm,top-k,distillate,4,141.643,5686
+2026-11-12,npm,top-k,@distillate/hyperloglog,,,
+2026-11-12,npm,kll sketch,distillate,1,257.547,5686
+2026-11-12,npm,kll sketch,@distillate/hyperloglog,82,37.766,270
+2026-11-12,npm,ddsketch,distillate,3,173.977,5686
+2026-11-12,npm,ddsketch,@distillate/hyperloglog,,,
+2026-11-12,npm,minhash,distillate,5,173.908,5686
+2026-11-12,npm,minhash,@distillate/hyperloglog,,,
+2026-11-12,npm,riblt,distillate,3,162.777,5686
+2026-11-12,npm,riblt,@distillate/hyperloglog,,,
+2026-11-12,npm,probabilistic data structures,distillate,4,279.535,5686
+2026-11-12,npm,probabilistic data structures,@distillate/hyperloglog,,,
+2026-11-12,npm,sketch,distillate,44,198.473,5686
+2026-11-12,npm,sketch,@distillate/hyperloglog,,,
+2026-11-12,npm,quantile sketch,distillate,4,218.464,5686
+2026-11-12,npm,quantile sketch,@distillate/hyperloglog,128,37.766,270
+2026-11-12,github,bloom filter,akshay-xp/distillate,,,
+2026-11-12,github,blocked bloom filter,akshay-xp/distillate,14,,
+2026-11-12,github,scalable bloom filter,akshay-xp/distillate,61,,
+2026-11-12,github,cuckoo filter,akshay-xp/distillate,,,
+2026-11-12,github,binary fuse filter,akshay-xp/distillate,29,,
+2026-11-12,github,hyperloglog,akshay-xp/distillate,,,
+2026-11-12,github,theta sketch,akshay-xp/distillate,15,,
+2026-11-12,github,count-min sketch,akshay-xp/distillate,,,
+2026-11-12,github,top-k,akshay-xp/distillate,,,
+2026-11-12,github,kll sketch,akshay-xp/distillate,9,,
+2026-11-12,github,ddsketch,akshay-xp/distillate,50,,
+2026-11-12,github,minhash,akshay-xp/distillate,,,
+2026-11-12,github,riblt,akshay-xp/distillate,19,,
+2026-11-12,github,probabilistic data structures,akshay-xp/distillate,,,
+2026-11-12,github,sketch,akshay-xp/distillate,,,
+2026-11-12,github,quantile sketch,akshay-xp/distillate,35,,
+2026-11-12,downloads,,distillate,,,5686
+2026-11-12,downloads,,@distillate/hyperloglog,,,84
